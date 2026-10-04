@@ -1,0 +1,12 @@
+# Combat logs (large test data, never commit)
+Logs/
+*.txt.log
+
+# Rust
+/target/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
