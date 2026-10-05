@@ -1,0 +1,14 @@
+[package]
+name = "openlogs-index"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+memmap2.workspace = true
+openlogs-parser.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

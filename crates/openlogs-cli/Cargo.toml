@@ -1,0 +1,14 @@
+[package]
+name = "openlogs-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "openlogs-cli"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+openlogs-index.workspace = true
+serde_json.workspace = true
