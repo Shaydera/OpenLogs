@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/openlogs-parser", "crates/openlogs-index", "crates/openlogs-cli"]
+members = ["crates/openlogs-parser", "crates/openlogs-index", "crates/openlogs-cli", "crates/openlogs-gamedata"]
 
 [workspace.package]
 version = "0.1.0"
@@ -9,6 +9,7 @@ rust-version = "1.95"
 
 [workspace.dependencies]
 clap = { version = "4.5", features = ["derive"] }
+csv = "1.4"
 memchr = "2.7"
 memmap2 = "0.9"
 openlogs-index = { path = "crates/openlogs-index" }
@@ -17,3 +18,4 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
 thiserror = "2"
+ureq = "3"

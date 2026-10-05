@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "note": "Names for auto-detected phases (no phase config). intermission: the name of every detected intermission of the encounter; boss phases stay \"Phase n\". Ships empty: put a phase_names.json with your entries into the override folder, e.g. { \"encounter_id\": 3492, \"name\": \"Ula'tek\", \"intermission\": \"Boss submerged\" }.",
+  "encounters": []
+}
