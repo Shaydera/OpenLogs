@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/openlogs-parser", "crates/openlogs-index", "crates/openlogs-cli", "crates/openlogs-gamedata"]
+members = ["crates/openlogs-parser", "crates/openlogs-index", "crates/openlogs-cli", "crates/openlogs-analysis", "crates/openlogs-gamedata"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,6 +12,7 @@ clap = { version = "4.5", features = ["derive"] }
 csv = "1.4"
 memchr = "2.7"
 memmap2 = "0.9"
+openlogs-gamedata = { path = "crates/openlogs-gamedata" }
 openlogs-index = { path = "crates/openlogs-index" }
 openlogs-parser = { path = "crates/openlogs-parser" }
 serde = { version = "1", features = ["derive"] }
