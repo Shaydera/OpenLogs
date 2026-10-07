@@ -1,0 +1,336 @@
+.report-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+}
+.report-main {
+  flex: 999 1 640px;
+  min-width: 0;
+  position: relative;
+}
+.report-side {
+  flex: 1 1 420px;
+  min-width: 0;
+  overflow: hidden;
+}
+.panel-head.panel-head-report {
+  flex-wrap: nowrap;
+  gap: 16px;
+  height: 52px;
+  padding: 4px 16px 0;
+  box-sizing: border-box;
+}
+.report-title {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+}
+.report-title .h2 {
+  white-space: nowrap;
+}
+.report-hint {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.report-rows {
+  min-width: 680px;
+}
+/* A ranked player row; border-box, so the caption row fits as well. */
+.rrow {
+  display: grid;
+  grid-template-columns: 34px minmax(150px, 190px) minmax(160px, 1fr) 92px 84px 58px;
+  gap: 12px;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.rrow:hover {
+  background: var(--hover);
+}
+.rrow.rrow-sel {
+  background: var(--tile);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.rrow.rrow-nodelta {
+  grid-template-columns: 34px minmax(150px, 190px) minmax(160px, 1fr) 92px 58px;
+}
+.rrow.rrow-head {
+  min-height: 30px;
+  cursor: default;
+}
+.rrow.rrow-head:hover {
+  background: transparent;
+}
+.rrow-cap {
+  font-size: 11px;
+}
+.rrow-end {
+  text-align: right;
+}
+.rrow-rank {
+  color: var(--faint);
+}
+.rrow-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rrow-total {
+  width: 74px;
+  text-align: right;
+}
+.rrow-share {
+  text-align: right;
+  color: var(--muted);
+}
+.bar.bar-lg {
+  flex: 1;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--bar-track);
+}
+.bar.bar-lg > span {
+  border-radius: 3px;
+}
+.rrow .bar > span {
+  opacity: 0.85;
+}
+.delta-gain {
+  color: var(--support-text);
+}
+.delta-loss {
+  color: var(--wipe-text);
+}
+.delta-none {
+  color: var(--dash);
+}
+.value-text {
+  color: var(--text);
+}
+.panel-head.panel-head-side {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 16px 16px 12px;
+}
+.side-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.side-name {
+  display: block;
+  font-size: 22px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.side-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+/* The per-second value wraps together with its unit ("0.26M DPS" on the second line). */
+.side-rate {
+  white-space: nowrap;
+}
+.side-row {
+  display: grid;
+  grid-template-columns: 24px minmax(120px, 1fr) 86px 52px;
+  gap: 10px;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.side-row.side-row-head {
+  min-height: 28px;
+}
+.side-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.side-label {
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.side-label.side-label-other {
+  color: var(--muted);
+}
+.side-label.side-label-negative {
+  color: var(--wipe-text);
+}
+.side-note {
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.side-player {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.side-amount {
+  text-align: right;
+}
+.side-amount.side-amount-negative {
+  color: var(--wipe-text);
+}
+.side-share {
+  text-align: right;
+  color: var(--muted);
+}
+.bar.bar-thin {
+  height: 4px;
+  border-radius: 3px;
+  background: var(--bar-track);
+}
+.bar.bar-thin > span {
+  border-radius: 0;
+}
+.bar-fill-normal {
+  background: var(--faint);
+}
+.bar-fill-support {
+  background: var(--class-evoker);
+}
+.bar-fill-negative {
+  background: var(--wipe-tint-line);
+}
+/* A small tag after a name: PROC, DOT, SUPPORT. */
+.rtag {
+  font: 600 10px var(--font-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--tag-bg);
+  color: var(--muted);
+  margin-left: 6px;
+}
+.rtag.rtag-support {
+  background: var(--support-tint);
+  color: var(--support-text);
+}
+.side-section {
+  padding: 16px 16px 6px;
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+}
+.aug-given {
+  margin: 12px 16px 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--support-tint-soft);
+  border: 1px solid var(--support-tint-line);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.aug-given-amount {
+  color: var(--support-text);
+  font-weight: 600;
+}
+.aug-given-name {
+  color: var(--class-evoker);
+  font-weight: 600;
+}
+.aug-given-mode {
+  color: var(--accent-hover);
+}
+.aug-tip-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.aug-tip-head .player-name-text {
+  font-size: 14px;
+}
+.aug-tip-cap {
+  margin-left: auto;
+}
+.aug-tip-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+}
+.aug-tip-line.aug-tip-line-total {
+  border-top: 1px solid var(--neutral-fill);
+  margin-top: 4px;
+  padding-top: 7px;
+}
+.aug-tip-line-total .num {
+  font-weight: 500;
+}
+.aug-tip-label {
+  color: var(--text-soft);
+}
+.aug-tip-foot {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.aug-tip-mode {
+  color: var(--accent-hover);
+}
+/* Healing: Absorbs and Overheal between HPS and Share. */
+.report-rows.report-rows-heal {
+  min-width: 860px;
+}
+.rrow.rrow-heal {
+  grid-template-columns: 34px minmax(150px, 190px) minmax(160px, 1fr) 92px 84px 84px 84px 58px;
+}
+.rrow.rrow-heal-nodelta {
+  grid-template-columns: 34px minmax(150px, 190px) minmax(160px, 1fr) 92px 84px 84px 58px;
+}
+.dash {
+  color: var(--dash);
+}
+/* Damage Taken: the raid-wide ability list, laid out like the side panel rows. */
+.taken-rows {
+  min-width: 640px;
+}
+.taken-row {
+  display: grid;
+  grid-template-columns: 24px minmax(200px, 1fr) 92px 84px 64px 84px;
+  gap: 12px;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 16px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.taken-row:hover {
+  background: var(--hover);
+}
+.taken-row.taken-row-head {
+  min-height: 30px;
+}
+.taken-row.taken-row-head:hover {
+  background: transparent;
+}

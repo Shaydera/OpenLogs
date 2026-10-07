@@ -1,0 +1,188 @@
+.appbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 28px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--header);
+  color: var(--text);
+}
+.appbar-home {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.appbar-brand {
+  font: 700 20px var(--font-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.crumb-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.crumb-current {
+  color: var(--text);
+}
+.fight-title {
+  margin: 0;
+  font: 600 26px var(--font-label);
+}
+.fight-page {
+  max-width: 1440px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 18px 28px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+/* The pull header above the tabs: portrait, name and facts, the tab's key figures. */
+.fight-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: center;
+}
+.fight-id {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 320px;
+}
+.fight-name {
+  margin: 0;
+  font: 700 34px var(--font-label);
+  letter-spacing: 0.01em;
+}
+.fight-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+  color: var(--muted);
+}
+.fight-header .kpi-strip {
+  flex: 2 1 560px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+}
+/* A 44px target plus the 2px underline. */
+.tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 46px;
+  padding: 0 14px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  font: 500 14px var(--font-text);
+  cursor: pointer;
+}
+.tab:hover {
+  color: var(--text);
+}
+.tab.on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+/* KPI strip: one panel, figures divided by a line. */
+.kpi-strip {
+  display: flex;
+  flex-wrap: wrap;
+}
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  flex: 1 1 140px;
+  min-width: 130px;
+}
+.kpi + .kpi {
+  border-left: 1px solid var(--line);
+}
+.kpi b {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 22px;
+}
+.kpi-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+.kpi-strip-lg .kpi {
+  flex: 1 1 150px;
+  min-width: 150px;
+}
+.kpi-strip-lg .kpi b {
+  font-size: 24px;
+}
+.kpi-death {
+  color: var(--death);
+}
+.kpi-support {
+  color: var(--support-text);
+}
+.h2 {
+  margin: 0;
+  font: 600 20px var(--font-label);
+  letter-spacing: 0.02em;
+}
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+}
+/* Panels without a .panel-head row: the same inset as the head row. */
+.panel-pad {
+  padding: 14px 16px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+.legend li::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}

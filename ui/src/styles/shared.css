@@ -1,0 +1,278 @@
+/* Tab row with its right-end control. */
+.tabbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.tabbar .seg-wrap {
+  padding-bottom: 6px;
+}
+.tabbar .toggle {
+  padding-bottom: 2px;
+}
+/* The fight pages' smaller toggle; the start page keeps the larger .toggle. */
+.toggle.toggle-sm {
+  display: inline-flex;
+  gap: 8px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.toggle.toggle-sm input {
+  width: 16px;
+  height: 16px;
+}
+.seg-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.seg button {
+  font: 500 13px var(--font-text);
+  background: var(--panel);
+  color: var(--muted);
+  border: 0;
+  padding: 0 14px;
+  min-height: 40px;
+  cursor: pointer;
+}
+.seg button.on {
+  background: var(--accent-tint);
+  color: var(--accent-hover);
+}
+/* Report "Time range" panel: pills, plot with the brush, footer. */
+.range-panel {
+  padding: 12px 18px 12px;
+}
+.range-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.range-cap {
+  margin-right: 6px;
+}
+/* A saved range: its name and the × inside one pill. */
+.pill-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px 0 14px;
+}
+.pill-saved button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.pill-saved-name {
+  min-height: 34px;
+}
+/* A saved range outside this pull: it can still be deleted. */
+.pill-saved-name:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pill-saved-x {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  line-height: 1;
+}
+.pill-saved-x:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.pill:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.range-save {
+  margin-left: auto;
+  position: relative;
+}
+/* The name form of "+ Save range", in the tooltip style. */
+.range-popover {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--tile);
+  border: 1px solid var(--neutral-fill);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--shadow) 55%, transparent);
+  padding: 12px 14px;
+  font-size: 13px;
+}
+.range-popover:focus {
+  outline: none;
+}
+.range-popover .input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.range-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.range-plot {
+  position: relative;
+  height: 64px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--plot);
+  overflow: hidden;
+  cursor: crosshair;
+  user-select: none;
+}
+.range-plot svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.tl-dps {
+  fill: var(--dps-area);
+  fill-opacity: 0.75;
+}
+.tl-boss {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.range-dim {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--plot-dim);
+  pointer-events: none;
+}
+.range-brush {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.range-handle {
+  position: absolute;
+  top: 18px;
+  width: 6px;
+  height: 26px;
+  border-radius: 3px;
+  background: var(--accent);
+  pointer-events: auto;
+  cursor: ew-resize;
+}
+.range-handle-start {
+  left: -4px;
+}
+.range-handle-end {
+  right: -4px;
+}
+.range-handle:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+.range-foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.range-value {
+  color: var(--text);
+}
+.input {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font: 400 13px var(--font-text);
+  padding: 0 10px;
+  min-height: 36px;
+}
+/* Player cell: icon and name in the class colour. The name keeps the font size around it (side-panel
+   heads); rows set 14px. */
+.player-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 600;
+}
+.player-name-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:where(td, th, li, .rrow) .player-name-text {
+  font-size: 14px;
+}
+.dotted {
+  border-bottom: 1px dotted var(--neutral-text);
+  cursor: help;
+}
+.aug-tip {
+  position: absolute;
+  z-index: 5;
+  width: 320px;
+  background: var(--tile);
+  border: 1px solid var(--neutral-fill);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--shadow) 55%, transparent);
+  padding: 12px 14px;
+  font-size: 13px;
+  pointer-events: none;
+}
+.h3 {
+  font: 600 15px var(--font-label);
+  margin: 0;
+}
+.scroll-x {
+  overflow-x: auto;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.pull .chevron {
+  color: var(--faint);
+}
+
+.tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}

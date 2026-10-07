@@ -5,8 +5,18 @@ Logs/
 # Rust
 /target/
 
+# Node / UI
+node_modules/
+dist/
+
 # OS / IDE
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+
+# UI build output
+ui/dist/
+
+# Tauri generated schemas
+src-tauri/gen/

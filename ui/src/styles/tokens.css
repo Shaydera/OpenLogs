@@ -1,0 +1,111 @@
+/* Colour tokens: data colours (classes, kill/wipe, targets, …), then surfaces, text and the accent. */
+:root {
+  --font-label: 'Barlow Semi Condensed', sans-serif;
+  --font-text: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Game icon frame: 1px black border. */
+  --icon-edge: #000000;
+  /* Base of the dark veils (--plot-dim, --dialog-scrim) and of shadows (at 55%). */
+  --scrim: #08090c;
+  --shadow: #000000;
+}
+
+/* Data colours. */
+:root {
+  color-scheme: dark;
+  --kill: #4e9fe0;
+  --wipe: #d9853f;
+  --wipe-text: #f5a766;
+  --death: #f0877f;
+
+  /* Tinted backgrounds and borders of chips and selected filters. */
+  --kill-tint: #12283a;
+  --wipe-tint: #33210f;
+  --wipe-tint-line: #6b4520;
+  --death-tint: #3a1d1b;
+  --death-tint-line: #5a2b28;
+
+  /* Kill chip text on --kill-tint. */
+  --kill-chip: #7cc4fa;
+  /* Aug support: SUPPORT tag, gains, the "given" callout. */
+  --support-text: #6fd3bc;
+  --support-tint: #173029;
+  --support-tint-soft: #101a18;
+  --support-tint-line: #1f3a33;
+
+  /* Blizzard class colours; DK, DH, Shaman and Evoker brightened for text on dark. */
+  --class-warrior: #c69b6d;
+  --class-paladin: #f48cba;
+  --class-hunter: #aad372;
+  --class-rogue: #fff468;
+  --class-priest: #ffffff;
+  --class-deathknight: #e65a73;
+  --class-shaman: #3d95f0;
+  --class-mage: #3fc7eb;
+  --class-warlock: #8788ee;
+  --class-monk: #00ff98;
+  --class-druid: #ff7c0a;
+  --class-demonhunter: #bc66de;
+  --class-evoker: #3baa93;
+
+  /* Veils: outside the selected range on a plot, behind a dialog. */
+  --plot-dim: color-mix(in srgb, var(--scrim) 72%, transparent);
+  --dialog-scrim: color-mix(in srgb, var(--scrim) 72%, transparent);
+}
+
+/* Surfaces, text and the accent. */
+:root {
+  --bg: #0c0e12;
+  --header: #0f1116;
+  --panel: #13161c;
+  --panel-raised: #191d25;
+  --line: #222731;
+  --line-strong: #2e3440;
+  --line-soft: #1f242d;
+  --text: #ece7dc;
+  --text-soft: #c9cdd3;
+  --muted: #a0a7b2;
+  /* Dashes and the pull-list chevron; at least 4.5:1 on --panel and --panel-raised. */
+  --faint: #7d8592;
+  /* "None" dash of the report tables; 3:1 on --panel, a non-text symbol. */
+  --dash: #5e6672;
+  /* Links, the selected tab, primary buttons; tints for chips and selected filters. */
+  --accent: #e8913a;
+  --accent-hover: #f2a65a;
+  --on-accent: #1f1206;
+  --accent-line: #3e2f22;
+  --accent-tint: #312720;
+  --accent-tint-soft: #221f1e;
+  --accent-tint-line: #644527;
+  --hover: #171b22;
+  --hover-soft: #151920;
+  --tile: #1b1f27;
+  --neutral-tint: #1c1f26;
+  --neutral-text: #8a919c;
+  --neutral-fill: #3a404b;
+  --dropzone: #101318;
+  --icon-ring: #3a3f49;
+  --icon-tile: #232833;
+  /* Range plots, report bars, role pills. */
+  --plot: #0f1216;
+  --dps-area: #2b4a66;
+  --bar-track: #1a1e25;
+  --tag-bg: #1e2533;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-text);
+}
+
+a {
+  color: var(--accent);
+}
+
+a:hover {
+  color: var(--accent-hover);
+}

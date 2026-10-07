@@ -1,0 +1,258 @@
+/* Scrollbars in the palette, thin, on every scroller: the WebView draws a grey 15px bar otherwise. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-corner {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border: 2px solid var(--bg);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--neutral-fill);
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) var(--bg);
+  }
+}
+.cap {
+  font-family: var(--font-label);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: var(--muted);
+}
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.btn {
+  font: 500 14px var(--font-text);
+  color: var(--text);
+  background: var(--panel-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 0 16px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.btn:hover {
+  border-color: var(--accent);
+}
+.btn-accent {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.btn-accent:hover {
+  background: var(--accent-hover);
+}
+.logbtn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font-text);
+}
+.logbtn:hover {
+  background: var(--hover-soft);
+}
+.logbtn.on {
+  background: var(--panel-raised);
+  border-color: var(--accent-line);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+/* Border-box: a 44px target plus the 1px top border. */
+.pull {
+  display: grid;
+  grid-template-columns: 44px 92px 64px minmax(120px, 1fr) 70px 64px 20px;
+  align-items: center;
+  gap: 14px;
+  min-height: 45px;
+  padding: 0 14px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--text);
+  text-decoration: none;
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.pull:hover {
+  background: var(--hover);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 12px var(--font-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+  width: max-content;
+}
+.chip.kill {
+  background: var(--kill-tint);
+  color: var(--kill-chip);
+}
+.chip.wipe {
+  background: var(--wipe-tint);
+  color: var(--wipe-text);
+}
+.chip.abort {
+  background: var(--neutral-tint);
+  color: var(--neutral-text);
+}
+.bar {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+.bar > span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+}
+.fill-kill {
+  background: var(--kill);
+}
+.fill-wipe {
+  background: var(--wipe);
+}
+.fill-abort {
+  background: var(--neutral-fill);
+}
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text-soft);
+  min-height: 44px;
+  cursor: pointer;
+}
+/* The native box stays white when unchecked. */
+.toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  color-scheme: light;
+}
+/* Game icons and the monogram tile of a missing icon (.ph-ico). */
+.ico {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid var(--icon-edge);
+  box-shadow: 0 0 0 1px var(--icon-ring);
+  display: block;
+  flex: none;
+}
+.ico-s {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: 1px solid var(--icon-edge);
+  box-shadow: 0 0 0 1px var(--icon-ring);
+  display: block;
+  flex: none;
+}
+.ph-ico {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--icon-tile);
+  box-shadow: 0 0 0 1px var(--icon-ring);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 10px var(--font-label);
+  color: var(--muted);
+  flex: none;
+}
+.ph-ico-s {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--icon-tile);
+  box-shadow: 0 0 0 1px var(--icon-ring);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 9px var(--font-label);
+  color: var(--muted);
+  flex: none;
+}
+.pill {
+  font: 500 13px var(--font-text);
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 0 14px;
+  min-height: 36px;
+  cursor: pointer;
+}
+.pill.on {
+  background: var(--accent-tint);
+  color: var(--accent-hover);
+  border-color: var(--accent-tint-line);
+}
+/* Colour-only text helpers; .muted also sets 13px. */
+.text-muted {
+  color: var(--muted);
+}
+.text-soft {
+  color: var(--text-soft);
+}
+/* A .cap label above a list: Recent logs. */
+.section-label {
+  margin: 0;
+  padding: 4px 2px 0;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 28px;
+  background: var(--death-tint);
+  color: var(--death);
+  border-bottom: 1px solid var(--death-tint-line);
+}
