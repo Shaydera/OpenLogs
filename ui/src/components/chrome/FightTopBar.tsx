@@ -7,9 +7,10 @@ import { type CrumbAction, fightCrumbs } from './crumbs';
 /** The top bar of every fight screen: the app name back to the pull list and the breadcrumb. */
 export function FightTopBar({ row }: { row: FightRow }) {
   const log = useApp((s) => s.log);
+  const tab = useApp((s) => s.tab);
   const backToPulls = useApp((s) => s.backToPulls);
   if (!log) return null;
-  const crumbs = fightCrumbs({ log, row });
+  const crumbs = fightCrumbs({ log, row, tab });
 
   function follow(action: CrumbAction) {
     switch (action.kind) {

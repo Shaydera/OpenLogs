@@ -1,11 +1,12 @@
 use std::collections::BTreeMap;
 
 use openlogs_analysis::{
-    AbilityRow, ActorId, Attribution, DamageReport, DamageTakenReport, Fight, FightTimeline,
-    HealingReport, NO_SPELL, PhaseKind, ReportFilter, RowKind, SpellId, TakenAbility,
+    AbilityRow, ActorId, Attribution, DamageReport, DamageTakenReport, Fight, HealingReport,
+    NO_SPELL, ReportFilter, RowKind, SpellId, TakenAbility,
 };
-use openlogs_gamedata::Role;
 use serde::{Deserialize, Serialize};
+
+use crate::overview_dto::{PlayerRef, SpellRef, player_ref};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -40,24 +41,6 @@ impl FilterDto {
             attribution: self.attribution.to_attribution(),
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PlayerRef {
-    pub actor_id: ActorId,
-    pub name: String,
-    pub spec_id: Option<u32>,
-    /// E.g. "Arcane Mage"; `None` without a known spec.
-    pub spec_name: Option<String>,
-    pub class_id: Option<u32>,
-    pub class_token: Option<String>,
-    pub role: Option<Role>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct SpellRef {
-    pub name: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -185,24 +168,6 @@ pub struct DamageTakenReportDto {
     pub by_player: Vec<TakenPlayerDto>,
     pub roster: Vec<PlayerRef>,
     pub spells: BTreeMap<SpellId, SpellRef>,
-}
-
-/// Name, class, spec and role of an actor for the UI.
-pub fn player_ref(fight: &Fight, id: ActorId) -> PlayerRef {
-    let actor = fight.actors.get(id);
-    let spec = actor.spec_id.and_then(openlogs_gamedata::spec);
-    let class = spec.and_then(|spec| openlogs_gamedata::class(spec.class_id));
-    PlayerRef {
-        actor_id: id,
-        name: actor.name.clone().unwrap_or_else(|| actor.guid.clone()),
-        spec_id: actor.spec_id,
-        spec_name: spec
-            .zip(class)
-            .map(|(spec, class)| format!("{} {}", spec.name, class.name)),
-        class_id: class.map(|c| c.id),
-        class_token: class.map(|c| c.token.clone()),
-        role: spec.map(|s| s.role),
-    }
 }
 
 /// Collects the players and spells a report references, for names, colours and icons.
@@ -377,62 +342,5 @@ pub fn taken_report_dto(fight: &Fight, report: &DamageTakenReport) -> DamageTake
         by_player,
         roster,
         spells,
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PhaseKindDto {
-    Boss,
-    Intermission,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PhaseDto {
-    pub kind: PhaseKindDto,
-    pub number: u32,
-    pub start_ms: u32,
-    pub end_ms: u32,
-    /// From a phase config; `None` for detected phases.
-    pub name: Option<String>,
-}
-
-/// The whole pull for the time range panel, whatever range the reports cover.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TimelineDto {
-    pub duration_ms: u64,
-    pub boss_hp_step_ms: u32,
-    pub boss_hp: Vec<Option<f32>>,
-    pub dps_step_ms: u32,
-    pub raid_dps: Vec<f64>,
-    pub phases: Vec<PhaseDto>,
-    /// When each player death happened.
-    pub deaths: Vec<i32>,
-}
-
-pub fn timeline_dto(fight: &Fight, timeline: &FightTimeline) -> TimelineDto {
-    TimelineDto {
-        duration_ms: fight.duration_ms,
-        boss_hp_step_ms: timeline.boss_hp_step_ms,
-        boss_hp: timeline.boss_hp.clone(),
-        dps_step_ms: timeline.dps_step_ms,
-        raid_dps: timeline.raid_dps.clone(),
-        phases: timeline
-            .phases
-            .iter()
-            .map(|p| PhaseDto {
-                kind: match p.kind {
-                    PhaseKind::Boss => PhaseKindDto::Boss,
-                    PhaseKind::Intermission => PhaseKindDto::Intermission,
-                },
-                number: p.number,
-                start_ms: p.start_ms,
-                end_ms: p.end_ms,
-                name: p.name.clone(),
-            })
-            .collect(),
-        deaths: timeline.deaths.clone(),
     }
 }

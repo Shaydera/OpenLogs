@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { api } from './api/client';
-import type { DamageReport, FightTimeline, LogView } from './api/types';
+import type { DamageReport, LogView, QuickOverview } from './api/types';
 import { gameDataFixture } from './test/gameDataFixture';
+import { overviewFixture } from './test/overviewFixture';
 import { damageReportFixture, healingReportFixture, takenReportFixture } from './test/reportFixtures';
-import { timelineFixture } from './test/timelineFixture';
 import { initialState, useApp } from './store';
 
 vi.mock('./api/client', () => ({
@@ -11,7 +11,7 @@ vi.mock('./api/client', () => ({
     openLog: vi.fn(),
     recentLogs: vi.fn(),
     removeRecent: vi.fn(),
-    fightTimeline: vi.fn(),
+    quickOverview: vi.fn(),
     damageDoneReport: vi.fn(),
     healingReport: vi.fn(),
     damageTakenReport: vi.fn(),
@@ -41,7 +41,7 @@ beforeEach(() => {
   Object.values(api).forEach((fn) => (fn as Mock).mockReset());
   vi.mocked(api.recentLogs).mockResolvedValue([]);
   vi.mocked(api.openLog).mockResolvedValue(LOG);
-  vi.mocked(api.fightTimeline).mockResolvedValue(timelineFixture);
+  vi.mocked(api.quickOverview).mockResolvedValue(overviewFixture);
   vi.mocked(api.damageDoneReport).mockResolvedValue(damageReportFixture);
   vi.mocked(api.healingReport).mockResolvedValue(healingReportFixture);
   vi.mocked(api.damageTakenReport).mockResolvedValue(takenReportFixture);
@@ -71,14 +71,8 @@ describe('logs and pulls', () => {
     expect(api.recentLogs).toHaveBeenCalled();
 
     await useApp.getState().openFight(1);
-    expect(api.fightTimeline).toHaveBeenCalledWith(LOG.path, 1);
-    expect(api.damageDoneReport).toHaveBeenCalledWith(LOG.path, 1, WHOLE_PULL);
-    expect(useApp.getState()).toMatchObject({
-      view: { kind: 'fight', fightIndex: 1 },
-      timeline: timelineFixture,
-      tab: 'damage',
-      report: { tab: 'damage', data: damageReportFixture },
-    });
+    expect(api.quickOverview).toHaveBeenCalledWith(LOG.path, 1, null);
+    expect(useApp.getState()).toMatchObject({ view: { kind: 'fight', fightIndex: 1 }, overview: overviewFixture });
     useApp.getState().backToPulls();
     expect(useApp.getState().view).toEqual({ kind: 'start' });
   });
@@ -92,7 +86,7 @@ describe('logs and pulls', () => {
   });
 
   it('records a failed pull load for the fight view and clears it on the next load', async () => {
-    vi.mocked(api.fightTimeline).mockRejectedValueOnce(`File not found: ${LOG.path}`);
+    vi.mocked(api.quickOverview).mockRejectedValueOnce(`File not found: ${LOG.path}`);
     await openPull();
     expect(useApp.getState()).toMatchObject({ fightError: `File not found: ${LOG.path}`, fightLoading: false });
 
@@ -107,9 +101,9 @@ describe('logs and pulls', () => {
 
     await useApp.getState().openFight(1);
     expect(useApp.getState()).toMatchObject({
-      tab: 'damage',
+      tab: 'overview',
       range: null,
-      report: { tab: 'damage', data: damageReportFixture },
+      report: null,
     });
   });
 });
@@ -117,6 +111,7 @@ describe('logs and pulls', () => {
 describe('reports', () => {
   it('reloads the shown report with the current range and Aug mode', async () => {
     await openPull();
+    await useApp.getState().setTab('damage');
     expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.path, 1, WHOLE_PULL);
     expect(useApp.getState().report).toEqual({ tab: 'damage', data: damageReportFixture });
 
@@ -127,13 +122,34 @@ describe('reports', () => {
     expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.path, 1, { startMs: 158_000, endMs: 273_000, attribution: 'augmented' });
   });
 
+  it('loads a range overview, also when coming back to the tab, and falls back to the pull overview', async () => {
+    await openPull();
+    const ranged = { ...overviewFixture, deaths: [] };
+    vi.mocked(api.quickOverview).mockResolvedValue(ranged);
+    await useApp.getState().setRange({ startMs: 40_000, endMs: 60_000 });
+    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.path, 1, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed' });
+    expect(useApp.getState().report).toEqual({ tab: 'overview', data: ranged });
+    expect(useApp.getState().overview).toBe(overviewFixture);
+
+    await useApp.getState().setTab('damage');
+    await useApp.getState().setRange({ startMs: 0, endMs: 30_000 });
+    await useApp.getState().setTab('overview');
+    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.path, 1, { startMs: 0, endMs: 30_000, attribution: 'reattributed' });
+
+    await useApp.getState().setRange(null);
+    expect(useApp.getState().report).toBeNull();
+    expect(api.quickOverview).toHaveBeenCalledTimes(3);
+  });
+
   it.each([
+    ['overview', api.quickOverview, overviewFixture],
     ['damage', api.damageDoneReport, damageReportFixture],
     ['healing', api.healingReport, healingReportFixture],
     ['taken', api.damageTakenReport, takenReportFixture],
   ] as const)('loads the %s tab through its own API call', async (tab, load, data) => {
     (load as Mock).mockResolvedValue(data);
     await openPull();
+    // The whole-pull overview arrives with the pull; only a range makes Overview request a report.
     useApp.setState({ range: { startMs: 40_000, endMs: 60_000 } });
     await useApp.getState().setTab(tab);
     expect(load).toHaveBeenLastCalledWith(LOG.path, 1, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed' });
@@ -170,29 +186,29 @@ describe('request races', () => {
     expect(useApp.getState()).toMatchObject({ log: other, openingFile: null, error: null });
   });
 
-  const fresh = { ...timelineFixture, deaths: [] };
+  const fresh = { ...overviewFixture, deaths: [] };
   it.each([
     {
       overtaken: 'the same pull is reopened',
       overtake: async () => {
-        vi.mocked(api.fightTimeline).mockResolvedValueOnce(timelineFixture).mockResolvedValueOnce(fresh);
+        vi.mocked(api.quickOverview).mockResolvedValueOnce(overviewFixture).mockResolvedValueOnce(fresh);
         await useApp.getState().openFight(2);
         await useApp.getState().openFight(1);
       },
       fails: false,
-      expected: { timeline: fresh },
+      expected: { overview: fresh },
     },
-    { overtaken: 'another pull opens', overtake: () => useApp.getState().openFight(2), fails: true, expected: { timeline: timelineFixture } },
-    { overtaken: 'the pull list is shown', overtake: async () => useApp.getState().backToPulls(), fails: true, expected: { timeline: null } },
-    { overtaken: 'another log opens', overtake: () => useApp.getState().openLog(LOG.path), fails: false, expected: { view: { kind: 'start' }, timeline: null } },
+    { overtaken: 'another pull opens', overtake: () => useApp.getState().openFight(2), fails: true, expected: { overview: overviewFixture } },
+    { overtaken: 'the pull list is shown', overtake: async () => useApp.getState().backToPulls(), fails: true, expected: { overview: null } },
+    { overtaken: 'another log opens', overtake: () => useApp.getState().openLog(LOG.path), fails: false, expected: { view: { kind: 'start' }, overview: null } },
   ])('drops a pull load once $overtaken', async ({ overtake, fails, expected }) => {
     await useApp.getState().openLog(LOG.path);
-    const old = deferred<FightTimeline>();
-    vi.mocked(api.fightTimeline).mockReturnValueOnce(old.promise);
+    const old = deferred<QuickOverview>();
+    vi.mocked(api.quickOverview).mockReturnValueOnce(old.promise);
     const pending = useApp.getState().openFight(1);
     await overtake();
     if (fails) old.reject('File not found');
-    else old.resolve({ ...timelineFixture, deaths: [99] });
+    else old.resolve({ ...overviewFixture, kpis: { ...overviewFixture.kpis, deaths: 99 } });
     await pending;
     expect(useApp.getState()).toMatchObject({ ...expected, fightLoading: false, fightError: null, error: null });
   });
@@ -200,7 +216,7 @@ describe('request races', () => {
   const freshReport = { ...damageReportFixture, total: 1 };
   it.each([
     { overtaken: 'a newer Aug mode', overtake: 'augmented', expected: { report: { tab: 'damage', data: freshReport }, reportLoading: false } },
-    { overtaken: 'another pull', overtake: 'pull', expected: { report: { tab: 'damage', data: freshReport }, reportLoading: false } },
+    { overtaken: 'another pull', overtake: 'pull', expected: { report: null, reportLoading: false } },
   ])('drops a report response overtaken by $overtaken', async ({ overtake, expected }) => {
     await openPull();
     const old = deferred<DamageReport>();

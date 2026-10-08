@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { FightTimeline } from '../../api/types';
+import type { OverviewTimeline } from '../../api/types';
 import { bossHpPath, timelineGeometry } from './timelineGeometry';
 
-const base: FightTimeline = {
+const base: OverviewTimeline = {
   durationMs: 0,
+  markers: { deaths: [], bloodlust: [], bossCasts: [] },
   bossHpStepMs: 1_000,
   bossHp: [],
   dpsStepMs: 1_000,
   raidDps: [],
   phases: [],
-  deaths: [],
 };
 
 describe('timelineGeometry', () => {
@@ -22,5 +22,18 @@ describe('timelineGeometry', () => {
   it('draws raid DPS as an area normalised to its peak, across the pull when it is shorter than a step', () => {
     expect(timelineGeometry({ ...base, dpsStepMs: 2_000, raidDps: [10, 20] }, 4_000).dpsPath).toBe('M 250 120 L 250 85 L 750 50 L 750 120 Z');
     expect(timelineGeometry({ ...base, dpsStepMs: 5_000, raidDps: [10] }, 3_000).dpsPath).toBe('M 0 120 L 0 50 L 1000 50 L 1000 120 Z');
+  });
+
+  it('puts a tick on every full minute except the end of the pull', () => {
+    const ticks = (durationMs: number) => timelineGeometry(base, durationMs).ticks.map((tick) => [tick.label, Math.round(tick.leftPct)]);
+    expect(ticks(150_000)).toEqual([
+      ['0:00', 0],
+      ['1:00', 40],
+      ['2:00', 80],
+    ]);
+    expect(ticks(120_000)).toEqual([
+      ['0:00', 0],
+      ['1:00', 50],
+    ]);
   });
 });

@@ -6,11 +6,10 @@ import { App } from '../App';
 import { api } from '../api/client';
 import type { FightRow, LogView, RecentLog } from '../api/types';
 import { initialState, useApp } from '../store';
-import { damageReportFixture } from '../test/reportFixtures';
-import { timelineFixture } from '../test/timelineFixture';
+import { overviewFixture } from '../test/overviewFixture';
 
 vi.mock('../api/client', () => ({
-  api: { openLog: vi.fn(), recentLogs: vi.fn(), removeRecent: vi.fn(), fightTimeline: vi.fn(), damageDoneReport: vi.fn() },
+  api: { openLog: vi.fn(), recentLogs: vi.fn(), removeRecent: vi.fn(), quickOverview: vi.fn() },
 }));
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
 vi.mock('@tauri-apps/api/webview', () => ({
@@ -71,8 +70,7 @@ const LOG: LogView = {
 beforeEach(() => {
   vi.mocked(api.recentLogs).mockReset().mockResolvedValue(RECENT);
   vi.mocked(api.openLog).mockReset().mockResolvedValue(LOG);
-  vi.mocked(api.fightTimeline).mockReset().mockResolvedValue(timelineFixture);
-  vi.mocked(api.damageDoneReport).mockReset().mockResolvedValue(damageReportFixture);
+  vi.mocked(api.quickOverview).mockReset().mockResolvedValue(overviewFixture);
   vi.mocked(open).mockReset();
   localStorage.clear();
   useApp.setState(initialState());
@@ -118,6 +116,6 @@ describe('start page', () => {
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: /^WoWCombatLog/ }));
     await userEvent.click(await screen.findByRole('button', { name: "Open pull 1 of Ula'tek" }));
-    expect(api.fightTimeline).toHaveBeenCalledWith(PATH, 1);
+    expect(api.quickOverview).toHaveBeenCalledWith(PATH, 1, null);
   });
 });

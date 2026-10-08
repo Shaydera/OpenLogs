@@ -1,3 +1,4 @@
+import type { Phase } from '../../api/types';
 import { formatDuration, formatEventTime } from '../../i18n/format';
 import type { TimeRange } from '../../store';
 
@@ -75,6 +76,23 @@ export function timeAt(x: number, width: number, durationMs: number): number {
 export function snapToSecond(ms: number, durationMs: number): number {
   if (ms >= durationMs) return durationMs;
   return Math.max(0, Math.min(durationMs, Math.round(ms / 1000) * 1000));
+}
+
+/** The phase at `ms`: its start belongs to it, its end to the next phase; the last phase includes the pull's end. */
+export function phaseAt(phases: Phase[], ms: number): Phase | null {
+  const last = phases.length - 1;
+  return phases.find((phase, i) => ms >= phase.startMs && (ms < phase.endMs || (i === last && ms <= phase.endMs))) ?? null;
+}
+
+/**
+ * A click without a drag at `x`: the phase under the pointer, or the full pull (`null`) when that
+ * phase is already selected or no phase is there.
+ */
+export function clickToRange(x: number, width: number, durationMs: number, phases: Phase[], current: TimeRange | null): TimeRange | null {
+  const phase = phaseAt(phases, timeAt(x, width, durationMs));
+  if (!phase) return null;
+  const range = normalizeRange({ startMs: phase.startMs, endMs: phase.endMs }, durationMs);
+  return sameRange(range, current) ? null : range;
 }
 
 /**

@@ -1,4 +1,5 @@
-import type { FightTimeline, Phase } from '../../api/types';
+import type { OverviewTimeline, Phase } from '../../api/types';
+import { formatAmount, formatDuration, formatEventTime, formatPercent } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 
 const VIEW_WIDTH = 1000;
@@ -14,13 +15,16 @@ export interface PlotScale {
   dpsSpan: number;
 }
 
+/** The fight timeline and the range panel: boss HP 100 % at y 12 leaves room for the death diamonds. */
 const TIMELINE_SCALE: PlotScale = { height: 120, hpZero: 112, hpSpan: 100, dpsSpan: 70 };
 export const TIMELINE_VIEW_BOX = `0 0 ${VIEW_WIDTH} ${TIMELINE_SCALE.height}`;
 
 export interface TimelineGeometry {
+  hasBossData: boolean;
   bossHpPath: string;
   dpsPath: string;
-  phases: { key: string; label: string }[];
+  phases: { key: string; leftPct: number; widthPct: number; kind: Phase['kind']; label: string }[];
+  ticks: { leftPct: number; label: string }[];
 }
 
 /** Position of `ms` within the pull in percent, clamped to 0–100. */
@@ -119,6 +123,15 @@ function dpsAreaPath(raidDps: number[], stepMs: number, durationMs: number, peak
   return [`M ${first} ${TIMELINE_SCALE.height}`, ...line.map(([px, py]) => `L ${px} ${py}`), `L ${last} ${TIMELINE_SCALE.height}`, 'Z'].join(' ');
 }
 
+/** A tick on every full minute of the axis but its very end, where the label would hang past the plot. */
+export function minuteTicks(axisMs: number): { leftPct: number; label: string }[] {
+  const ticks: { leftPct: number; label: string }[] = [];
+  for (let ms = 0; ms === 0 || ms < axisMs; ms += 60_000) {
+    ticks.push({ leftPct: percentOf(ms, axisMs), label: formatDuration(ms) });
+  }
+  return ticks;
+}
+
 /** A phase's name: from its config, else "Phase 1" / "Intermission 1". */
 function phaseLabel(phase: Phase): string {
   return phase.name ?? (phase.kind === 'boss' ? t('timeline.phase', { n: phase.number }) : t('timeline.intermission', { n: phase.number }));
@@ -135,12 +148,30 @@ export function numberRepeats(labels: string[]): string[] {
   });
 }
 
-export function timelineGeometry(timeline: FightTimeline, durationMs: number): TimelineGeometry {
+export function timelineGeometry(timeline: OverviewTimeline, durationMs: number): TimelineGeometry {
   const bossHp = bossHpPath(timeline.bossHp, timeline.bossHpStepMs, durationMs);
   const dpsPath = dpsAreaPath(timeline.raidDps, timeline.dpsStepMs, durationMs, Math.max(0, ...timeline.raidDps));
   const phases = timeline.phases.map((phase) => ({
     key: `${phase.kind}-${phase.number}`,
+    leftPct: percentOf(phase.startMs, durationMs),
+    widthPct: percentOf(phase.endMs, durationMs) - percentOf(phase.startMs, durationMs),
+    kind: phase.kind,
     label: phaseLabel(phase),
   }));
-  return { bossHpPath: bossHp, dpsPath, phases };
+  return { hasBossData: bossHp !== '', bossHpPath: bossHp, dpsPath, phases, ticks: minuteTicks(durationMs) };
+}
+
+/** Screen-reader summary of the drawn lines: boss HP from its first to its last value, and the raid-DPS peak. */
+export function timelineSummary(timeline: OverviewTimeline): string {
+  const hp = timeline.bossHp.filter((value): value is number => value !== null);
+  const parts: string[] = [];
+  if (hp.length > 0) {
+    parts.push(t('timeline.bossSummary', { from: formatPercent(hp[0]), to: formatPercent(hp[hp.length - 1]) }));
+  }
+  const peak = Math.max(0, ...timeline.raidDps);
+  if (peak > 0) {
+    const middle = Math.min(timeline.durationMs, (timeline.raidDps.indexOf(peak) + 0.5) * timeline.dpsStepMs);
+    parts.push(t('timeline.dpsSummary', { peak: formatAmount(peak), time: formatEventTime(middle) }));
+  }
+  return parts.join(' ');
 }

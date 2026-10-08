@@ -15,19 +15,33 @@
 :root {
   color-scheme: dark;
   --kill: #4e9fe0;
+  --kill-text: #86c8fa;
   --wipe: #d9853f;
   --wipe-text: #f5a766;
   --death: #f0877f;
 
-  /* Tinted backgrounds and borders of chips and selected filters. */
+  /* Bloodlust line on the cooldown rows; the timeline marker is --lust. */
+  --lust-line: #3c6a8f;
+  /* Tinted backgrounds and borders of chips, badges and selected filters. */
   --kill-tint: #12283a;
+  --kill-tint-soft: #0f1c28;
+  --kill-tint-line: #22476a;
   --wipe-tint: #33210f;
+  --wipe-tint-soft: #21170d;
   --wipe-tint-line: #6b4520;
   --death-tint: #3a1d1b;
   --death-tint-line: #5a2b28;
 
-  /* Kill chip text on --kill-tint. */
+  /* Damage segments of the last 5 s before a death, largest first. */
+  --segment-1: #e8a65a;
+  --segment-2: #b98450;
+  --segment-3: #8c6646;
+  --segment-4: #5f4a38;
+
+  /* Kill chip text on --kill-tint; --kill-text is for other kill-blue text. */
   --kill-chip: #7cc4fa;
+  /* Bloodlust / Time Warp marker, dashed. */
+  --lust: #7cc4fa;
   /* Aug support: SUPPORT tag, gains, the "given" callout. */
   --support-text: #6fd3bc;
   --support-tint: #173029;
@@ -63,12 +77,13 @@
   --line: #222731;
   --line-strong: #2e3440;
   --line-soft: #1f242d;
+  --line-faint: #1a1e26;
   --text: #ece7dc;
   --text-soft: #c9cdd3;
   --muted: #a0a7b2;
   /* Dashes and the pull-list chevron; at least 4.5:1 on --panel and --panel-raised. */
   --faint: #7d8592;
-  /* "None" dash of the report tables; 3:1 on --panel, a non-text symbol. */
+  /* "None" dash of the Overview tables; 3:1 on --panel, a non-text symbol. */
   --dash: #5e6672;
   /* Links, the selected tab, primary buttons; tints for chips and selected filters. */
   --accent: #e8913a;
@@ -82,14 +97,16 @@
   --hover-soft: #151920;
   --tile: #1b1f27;
   --neutral-tint: #1c1f26;
+  --neutral-tint-soft: #171a20;
   --neutral-text: #8a919c;
   --neutral-fill: #3a404b;
   --dropzone: #101318;
   --icon-ring: #3a3f49;
   --icon-tile: #232833;
-  /* Range plots, report bars, role pills. */
+  /* Timeline and range plots, report bars, role pills. */
   --plot: #0f1216;
   --dps-area: #2b4a66;
+  --hatch: #12151a;
   --bar-track: #1a1e25;
   --tag-bg: #1e2533;
 }

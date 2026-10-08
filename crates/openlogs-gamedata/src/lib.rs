@@ -12,8 +12,10 @@ mod sync;
 
 pub use boss_portraits::{BossPortraitError, BossPortraitTable};
 pub use curated::{
-    Curated, PHASE_NAMES_FILE, PHASES_DIR, PhaseConfig, PhaseNameList, PhaseNames, PhaseRule,
-    PhaseTrigger,
+    CONSUMABLES_FILE, Consumable, ConsumableKind, ConsumableList, CooldownCategory, CooldownList,
+    CooldownSpell, Curated, DEFENSIVES_FILE, DefensiveList, MAJOR_CDS_FILE, NamePattern,
+    PHASE_NAMES_FILE, PHASES_DIR, PersonalDefensive, PhaseConfig, PhaseNameList, PhaseNames,
+    PhaseRule, PhaseTrigger,
 };
 pub use fetch::{Fetch, FetchError, HttpFetch};
 pub use icon_cache::{IconCache, IconError, RPGLOGS_BOSS_URL, ZAMIMG_ICON_URL, ZAMIMG_JOURNAL_URL};

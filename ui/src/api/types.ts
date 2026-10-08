@@ -44,6 +44,22 @@ export interface RecentLog {
   exists: boolean;
 }
 
+export type ConsumableKind = 'combat_potion' | 'health_potion' | 'healthstone' | 'mana_potion';
+export type CooldownCategory = 'offensive' | 'raid_defensive' | 'bloodlust';
+
+export interface Kpis {
+  players: number;
+  durationMs: number;
+  raidDamage: number;
+  raidDps: number;
+  deaths: number;
+  firstDeathMs: number | null;
+  combatPotions: number;
+  playersWithoutCombatPotion: number;
+  healthstones: number;
+  healthPotions: number;
+}
+
 export interface Phase {
   kind: 'boss' | 'intermission';
   number: number;
@@ -53,17 +69,23 @@ export interface Phase {
   name: string | null;
 }
 
-/** Mirrors `TimelineDto` in `src-tauri/src/report_dto.rs`: the whole pull, whatever the range. */
-export interface FightTimeline {
+export interface TimelineMarkers {
+  deaths: { t: number; player: number }[];
+  bloodlust: { t: number; player: number; spellId: number }[];
+  bossCasts: { t: number; spellId: number }[];
+}
+
+export interface OverviewTimeline {
+  /** The whole pull, whatever the range. */
   durationMs: number;
+  /** Whole-pull markers. */
+  markers: TimelineMarkers;
   bossHpStepMs: number;
   /** Boss HP percent per step; `null` where the boss reported nothing (intermissions). */
   bossHp: (number | null)[];
   dpsStepMs: number;
   raidDps: number[];
   phases: Phase[];
-  /** When each player death happened. */
-  deaths: number[];
 }
 
 export interface PlayerRef {
@@ -75,6 +97,72 @@ export interface PlayerRef {
   classId: number | null;
   classToken: string | null;
   role: Role | null;
+}
+
+export interface Hit {
+  t: number;
+  /** 0 = melee. */
+  spellId: number;
+  sourceName: string | null;
+  amount: number;
+  overkill: number;
+  /** Falling, lava, drowning and other world damage. */
+  environmental: boolean;
+}
+
+/** A death-context entry: a personal defensive, the healthstone, the health potion, or the combat potion while its cooldown runs. */
+export type ContextItem = 'healthstone' | 'health_potion' | 'combat_potion' | 'defensive';
+/** `never_used`: a defensive not used once before the death although it would have been ready again. */
+export type ContextState = 'used' | 'on_cooldown' | 'available' | 'never_used';
+
+export interface ContextEntry {
+  item: ContextItem;
+  /** The stone or potion used, else the item's representative spell; the defensive's spell. */
+  spellId: number;
+  state: ContextState;
+  /** Time of the use for `used` and `on_cooldown`. */
+  t: number | null;
+}
+
+export interface DeathEntry {
+  player: number;
+  playerName: string;
+  /** Milliseconds since the pull started. */
+  t: number;
+  killingBlow: Hit | null;
+  damageLast5s: { spellId: number; amount: number; environmental: boolean }[];
+  damageTaken5s: number;
+  healingTaken5s: number;
+  hpBeforePct: number | null;
+  resurrectedAt: number | null;
+  context: ContextEntry[];
+}
+
+export interface ConsumableEntry {
+  player: number;
+  t: number;
+  spellId: number;
+  kind: ConsumableKind;
+}
+
+export interface CooldownEntry {
+  player: number;
+  t: number;
+  spellId: number;
+  category: CooldownCategory;
+  durationMs: number;
+}
+
+/** Mirrors `src-tauri/src/overview_dto.rs`. */
+export interface QuickOverview {
+  kpis: Kpis;
+  timeline: OverviewTimeline;
+  players: PlayerRef[];
+  /** Spell names by ID (JSON object keys are strings). */
+  spells: Record<string, { name: string }>;
+  deaths: DeathEntry[];
+  consumables: ConsumableEntry[];
+  cooldowns: CooldownEntry[];
 }
 
 export type Attribution = 'augmented' | 'reattributed';

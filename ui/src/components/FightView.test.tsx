@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api/client';
 import type { LogView } from '../api/types';
 import { initialState, useApp } from '../store';
-import { damageReportFixture, healingReportFixture, takenReportFixture } from '../test/reportFixtures';
-import { timelineFixture } from '../test/timelineFixture';
+import { overviewFixture } from '../test/overviewFixture';
+import { damageReportFixture, takenReportFixture } from '../test/reportFixtures';
 import { FightView } from './FightView';
 
 vi.mock('../api/client', () => ({
@@ -13,7 +13,7 @@ vi.mock('../api/client', () => ({
     openLog: vi.fn(),
     recentLogs: vi.fn(),
     removeRecent: vi.fn(),
-    fightTimeline: vi.fn(),
+    quickOverview: vi.fn(),
     damageDoneReport: vi.fn(),
     healingReport: vi.fn(),
     damageTakenReport: vi.fn(),
@@ -39,26 +39,25 @@ beforeEach(() => {
 describe('FightView', () => {
   it('moves between tabs with the arrow keys and wraps around', async () => {
     vi.mocked(api.damageDoneReport).mockResolvedValue(damageReportFixture);
-    vi.mocked(api.healingReport).mockResolvedValue(healingReportFixture);
     vi.mocked(api.damageTakenReport).mockResolvedValue(takenReportFixture);
-    useApp.setState({ timeline: timelineFixture });
+    useApp.setState({ overview: overviewFixture });
     render(<FightView />);
-    const damageTab = screen.getByRole('tab', { name: 'Damage Done' });
-    const panel = screen.getByRole('tabpanel', { name: 'Damage Done' });
-    expect(damageTab).toHaveAttribute('aria-controls', panel.id);
-    expect(damageTab).toHaveAttribute('tabindex', '0');
-    expect(screen.getByRole('tab', { name: 'Healing' })).toHaveAttribute('tabindex', '-1');
-    expect(screen.getByRole('tab', { name: 'Healing' })).not.toHaveAttribute('aria-controls');
+    const overviewTab = screen.getByRole('tab', { name: 'Overview' });
+    const panel = screen.getByRole('tabpanel', { name: 'Overview' });
+    expect(overviewTab).toHaveAttribute('aria-controls', panel.id);
+    expect(overviewTab).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('tab', { name: 'Damage Done' })).toHaveAttribute('tabindex', '-1');
+    expect(screen.getByRole('tab', { name: 'Damage Done' })).not.toHaveAttribute('aria-controls');
 
-    damageTab.focus();
+    overviewTab.focus();
     await userEvent.keyboard('{ArrowRight}');
-    const healing = screen.getByRole('tab', { name: 'Healing' });
-    expect(healing).toHaveFocus();
-    expect(healing).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tabpanel', { name: 'Healing' })).toBeInTheDocument();
+    const damage = screen.getByRole('tab', { name: 'Damage Done' });
+    expect(damage).toHaveFocus();
+    expect(damage).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel', { name: 'Damage Done' })).toBeInTheDocument();
 
     await userEvent.keyboard('{Home}');
-    expect(screen.getByRole('tab', { name: 'Damage Done' })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveFocus();
     await userEvent.keyboard('{ArrowLeft}');
     expect(screen.getByRole('tab', { name: 'Damage Taken' })).toHaveFocus();
     expect(useApp.getState().tab).toBe('taken');
@@ -68,11 +67,11 @@ describe('FightView', () => {
 
   it('switches to Damage Done and reloads it with the Aug attribution', async () => {
     vi.mocked(api.damageDoneReport).mockResolvedValue(damageReportFixture);
-    useApp.setState({ timeline: timelineFixture, tab: 'taken' });
+    useApp.setState({ overview: overviewFixture });
     render(<FightView />);
     await userEvent.click(screen.getByRole('tab', { name: 'Damage Done' }));
     expect(screen.getByRole('tab', { name: 'Damage Done' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Damage Taken' })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'false');
     const toggle = screen.getByRole('group', { name: 'Aug damage' });
     await userEvent.click(within(toggle).getByRole('button', { name: 'Augmented' }));
     expect(within(toggle).getByRole('button', { name: 'Augmented' })).toHaveAttribute('aria-pressed', 'true');

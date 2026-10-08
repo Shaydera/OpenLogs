@@ -57,6 +57,10 @@
   flex-direction: column;
   gap: 18px;
 }
+.fight-page.fight-page-overview {
+  padding: 22px 28px 40px;
+  gap: 20px;
+}
 /* The pull header above the tabs: portrait, name and facts, the tab's key figures. */
 .fight-header {
   display: flex;
@@ -148,6 +152,9 @@
 }
 .kpi-support {
   color: var(--support-text);
+}
+.kpi-sub.kpi-sub-warn {
+  color: var(--wipe-text);
 }
 .h2 {
   margin: 0;

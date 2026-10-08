@@ -29,9 +29,12 @@ const FIXED_PAIRS: [foreground: string, background: string, minimum: number][] =
   ['kill-chip', 'kill-tint', TEXT],
   ['support-text', 'support-tint', TEXT],
   ['muted', 'tag-bg', TEXT],
+  ['kill-text', 'kill-tint', TEXT],
   ['wipe-text', 'wipe-tint', TEXT],
   ['death', 'death-tint', TEXT],
-  ...['dash', 'kill', 'wipe'].map((mark): [string, string, number] => [mark, 'panel', NON_TEXT]),
+  ...['dash', 'kill', 'wipe', 'lust', 'lust-line'].map(
+    (mark): [string, string, number] => [mark, 'panel', NON_TEXT],
+  ),
 ];
 
 const tokens = Object.fromEntries(

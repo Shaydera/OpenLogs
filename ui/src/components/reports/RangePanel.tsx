@@ -1,5 +1,5 @@
 import { type FocusEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
-import type { FightTimeline } from '../../api/types';
+import type { QuickOverview } from '../../api/types';
 import { formatDuration, formatEventTime } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { type TimeRange, useApp } from '../../store';
@@ -14,13 +14,13 @@ import { useRangeKeys } from './useRangeKeys';
  * The report tabs' "Time range" panel: pills for the full pull, its phases and the saved ranges,
  * "+ Save range", a plot with the selection as an accent brush, and the selection with its duration.
  */
-export function RangePanel({ timeline, rangeKey }: { timeline: FightTimeline; rangeKey: string }) {
+export function RangePanel({ overview, rangeKey }: { overview: QuickOverview; rangeKey: string }) {
   const range = useApp((s) => s.range);
   const setRange = useApp((s) => s.setRange);
-  const duration = timeline.durationMs;
-  const geometry = timelineGeometry(timeline, duration);
+  const duration = overview.timeline.durationMs;
+  const geometry = timelineGeometry(overview.timeline, duration);
   const pillLabels = numberRepeats(geometry.phases.map((phase) => phase.label));
-  const phaseRanges = timeline.phases.map((phase) => normalizeRange({ startMs: phase.startMs, endMs: phase.endMs }, duration));
+  const phaseRanges = overview.timeline.phases.map((phase) => normalizeRange({ startMs: phase.startMs, endMs: phase.endMs }, duration));
   const plotRef = useRef<HTMLDivElement>(null);
   const saveRef = useRef<HTMLButtonElement>(null);
   const hintId = useId();
@@ -33,7 +33,8 @@ export function RangePanel({ timeline, rangeKey }: { timeline: FightTimeline; ra
   const change = (next: TimeRange | null) => {
     if (!sameRange(next, range)) void setRange(next);
   };
-  const brush = useBrush(plotRef, duration, range, change);
+  // The pills select phases here; a click on the plot changes nothing.
+  const brush = useBrush(plotRef, duration, range, change, () => {});
   const keys = useRangeKeys(duration, range, change, hintId);
   const shown = keys.draft !== undefined ? keys.draft : brush.preview !== undefined ? brush.preview : range;
   const selection = shown ?? fullRange(duration);

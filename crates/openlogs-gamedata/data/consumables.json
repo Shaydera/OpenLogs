@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "note": "Consumables detected from SPELL_CAST_SUCCESS. IDs checked on Wowhead for 12.1 (Lightfused Mana Potion seen in 12.1 logs); name patterns catch new tiers until the IDs are added. Each potion kind has its own cooldown: in 12.x logs a health potion follows a combat potion within 90 s, so potion_cooldown_s applies per kind.",
+  "potion_cooldown_s": 300,
+  "healthstone_cooldown_s": 60,
+  "consumables": [
+    { "spell_id": 1236994, "name": "Potion of Recklessness", "kind": "combat_potion" },
+    { "spell_id": 1236616, "name": "Light's Potential", "kind": "combat_potion" },
+    { "spell_id": 1295132, "name": "Liquid Luster", "kind": "combat_potion" },
+    { "spell_id": 431932, "name": "Tempered Potion", "kind": "combat_potion" },
+    { "spell_id": 1295247, "name": "Concentrated Silvermoon Health Potion", "kind": "health_potion" },
+    { "spell_id": 1234768, "name": "Silvermoon Health Potion", "kind": "health_potion" },
+    { "spell_id": 1262857, "name": "Potent Healing Potion", "kind": "health_potion" },
+    { "spell_id": 1236648, "name": "Lightfused Mana Potion", "kind": "mana_potion" },
+    { "spell_id": 6262, "name": "Healthstone", "kind": "healthstone" },
+    { "spell_id": 452930, "name": "Demonic Healthstone", "kind": "healthstone" }
+  ],
+  "name_patterns": [
+    { "contains": "Healthstone", "kind": "healthstone" },
+    { "contains": "Health Potion", "kind": "health_potion" },
+    { "contains": "Healing Potion", "kind": "health_potion" },
+    { "contains": "Mana Potion", "kind": "mana_potion" }
+  ]
+}

@@ -34,7 +34,7 @@ export function FightHeader({ row, tiles, titleRef }: { row: FightRow; tiles: He
       </div>
       <KpiStrip label={t('overview.kpis')} large>
         {tiles.map((tile) => (
-          <Kpi key={tile.label} label={tile.label} value={tile.value} sub={tile.sub} tone={tile.tone} />
+          <Kpi key={tile.label} label={tile.label} value={tile.value} sub={tile.sub} tone={tile.tone} subTone={tile.subTone} />
         ))}
       </KpiStrip>
     </section>

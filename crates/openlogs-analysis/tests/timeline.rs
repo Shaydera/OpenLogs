@@ -1,10 +1,9 @@
 mod support;
 
 use openlogs_analysis::{
-    EventKind, MIN_INTERMISSION_MS, NOBODY, PhaseKind, boss_hp_series, boss_units, detect_phases,
-    fight_timeline, raid_dps_series,
+    EventKind, MIN_INTERMISSION_MS, PhaseKind, boss_hp_series, boss_units, detect_phases,
+    raid_dps_series,
 };
-use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS};
 
 #[test]
@@ -90,26 +89,4 @@ fn silent_boss_drops_out_of_the_hp_aggregate_but_dead_ones_stay() {
     // 0–10 s: (50 + 0 + 60) / 300; 50–60 s: heart silent for 54 s → (0 + 2) / 200.
     assert_eq!(series[0], Some(110.0 * 100.0 / 300.0));
     assert_eq!(series[5], Some(1.0));
-}
-
-#[test]
-fn fight_timeline_samples_the_pull_and_lists_its_deaths() {
-    let mut b = FightBuilder::new(10_000);
-    let mage = b.player("Player-1", "Faelan-Emberfall-EU", 62);
-    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
-    b.hit(1_000, mage, boss, 1, 30_000, (900_000, 1_000_000));
-    b.push(
-        6_000,
-        NOBODY,
-        mage,
-        0,
-        EventKind::Died { unconscious: false },
-    );
-    let timeline = fight_timeline(&b.build(), &Curated::bundled());
-    assert_eq!(
-        (timeline.boss_hp_step_ms, timeline.boss_hp.len()),
-        (1_000, 10)
-    );
-    assert_eq!((timeline.dps_step_ms, timeline.raid_dps.len()), (5_000, 2));
-    assert_eq!(timeline.deaths, [6_000]);
 }

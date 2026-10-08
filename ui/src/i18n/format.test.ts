@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatAgo,
   formatAmount,
+  formatAmountWhole,
   formatBytes,
   formatDateTime,
   formatDuration,
@@ -20,9 +22,9 @@ describe('formatters (en-US)', () => {
       ['512', '4.9k', '224k', '22.49M', '1.894B', '1.0k', '100k', '1.00M', '1.000B'],
     ],
     [
-      'millions amounts',
-      () => [54_464, -177_437, 1_234_567_890].map(formatMillions),
-      ['0.05M', '−0.18M', '1,234.57M'],
+      'whole-k and millions amounts',
+      () => [...[4_923, 999.6, -30_091].map(formatAmountWhole), ...[54_464, -177_437, 1_234_567_890].map(formatMillions)],
+      ['5k', '1k', '−30k', '0.05M', '−0.18M', '1,234.57M'],
     ],
     [
       'signed differences',
@@ -30,9 +32,9 @@ describe('formatters (en-US)', () => {
       ['+12.34M', '±0'],
     ],
     [
-      'pull times',
-      () => [formatDuration(478_610), formatEventTime(-2_000)],
-      ['7:58', '-0:02'],
+      'pull times and times before an event',
+      () => [formatDuration(478_610), formatEventTime(-2_000), formatAgo(35_900), formatAgo(91_000), formatAgo(-500)],
+      ['7:58', '-0:02', '−35 s', '−1:31', '−0 s'],
     ],
     [
       'units',

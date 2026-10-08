@@ -83,6 +83,25 @@ export function formatLocalDate(unixMs: number): string {
   return localDate.format(unixMs);
 }
 
+/**
+ * Whole thousands below a million (`5k`, `96k`, `244k`), else like `formatAmount` (`2.42M`). A value
+ * whose rounding reaches the next unit moves there (`999.6` → `1k`, `999,600` → `1.00M`).
+ */
+export function formatAmountWhole(value: number): string {
+  if (value < 0) return `−${formatAmountWhole(-value)}`;
+  if (roundTo(value / 1e3, 0) < 1000 && roundTo(value, 0) >= 1000) {
+    return t('unit.thousands', { value: whole.format(value / 1e3) });
+  }
+  return formatAmount(value);
+}
+
+/** Time back from an event, floored: `−35 s` under a minute, else `−1:31`. */
+export function formatAgo(ms: number): string {
+  const seconds = Math.floor(Math.max(0, ms) / 1000);
+  const span = seconds < 60 ? t('unit.seconds', { value: whole.format(seconds) }) : formatDuration(seconds * 1000);
+  return `−${span}`;
+}
+
 /** Millions with two decimals at every size: `142.44M`, `0.30M`, `−0.18M`. */
 export function formatMillions(value: number): string {
   if (value < 0) return `−${formatMillions(-value)}`;

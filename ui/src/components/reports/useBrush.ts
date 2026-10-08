@@ -14,14 +14,15 @@ export interface Brush {
 
 /**
  * Pointer selection on a plot: a drag across the plot selects a range in whole seconds, a drag of a
- * handle moves that edge, a click without a drag changes nothing. `onChange` gets each new selection;
- * one that covers the whole pull is `null`.
+ * handle moves that edge, a click without a drag goes to `onClick` with its x position and the plot
+ * width. `onChange` gets each new selection; one that covers the whole pull is `null`.
  */
 export function useBrush(
   plotRef: RefObject<HTMLElement | null>,
   durationMs: number,
   current: TimeRange | null,
   onChange: (range: TimeRange | null) => void,
+  onClick: (x: number, width: number) => void,
 ): Brush {
   const [preview, setPreview] = useState<TimeRange | null | undefined>(undefined);
   /** Removes the listeners of a drag in progress. */
@@ -61,7 +62,10 @@ export function useBrush(
     const up = (e: MouseEvent) => {
       stop();
       const x = e.clientX - left;
-      if (!dragged(x)) return;
+      if (!dragged(x)) {
+        if (mode === 'brush') onClick(x0, width);
+        return;
+      }
       const next = selection(x);
       if (next !== undefined && !sameRange(next, current)) onChange(next);
     };

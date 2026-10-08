@@ -8,10 +8,11 @@ use tauri::{AppHandle, Manager};
 
 use crate::dto::{GameDataStatusDto, LogView, RecentLog, log_view, recent_log};
 use crate::fight_cache::FightCache;
+use crate::overview_dto::{QuickOverviewDto, quick_overview_dto};
 use crate::recent::{RecentEntry, RecentLogs};
 use crate::report_dto::{
-    DamageReportDto, DamageTakenReportDto, FilterDto, HealingReportDto, TimelineDto,
-    damage_report_dto, healing_report_dto, taken_report_dto, timeline_dto,
+    DamageReportDto, DamageTakenReportDto, FilterDto, HealingReportDto, damage_report_dto,
+    healing_report_dto, taken_report_dto,
 };
 use crate::state::{AppState, index_cache_dir, now_unix_s};
 
@@ -66,19 +67,22 @@ pub fn with_curated_warnings(mut view: LogView, curated: &Curated) -> LogView {
     view
 }
 
-/// The timeline of pull `fight_index`.
-pub fn fight_timeline_at(
+/// The overview of pull `fight_index`.
+pub fn quick_overview_at(
     cache: &FightCache,
     curated: &Curated,
     path: &Path,
     data_dir: &Path,
     fight_index: u32,
-) -> Result<TimelineDto, String> {
+    filter: Option<FilterDto>,
+) -> Result<QuickOverviewDto, String> {
     let (_, fight) = cache.get(path, data_dir, fight_index)?;
-    Ok(timeline_dto(
-        &fight,
-        &openlogs_analysis::fight_timeline(&fight, curated),
-    ))
+    let filter = filter.map_or_else(
+        || openlogs_analysis::ReportFilter::whole(openlogs_analysis::Attribution::Augmented),
+        FilterDto::to_filter,
+    );
+    let overview = openlogs_analysis::quick_overview_in(&fight, curated, &filter);
+    Ok(quick_overview_dto(&fight, curated, &overview))
 }
 
 pub fn damage_report_at(
@@ -258,19 +262,21 @@ pub async fn refresh_game_data(app: AppHandle) -> Result<GameDataStatusDto, Stri
 }
 
 #[tauri::command]
-pub async fn fight_timeline(
+pub async fn quick_overview(
     path: String,
     fight_index: u32,
+    filter: Option<FilterDto>,
     app: AppHandle,
-) -> Result<TimelineDto, String> {
+) -> Result<QuickOverviewDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        fight_timeline_at(
+        quick_overview_at(
             &state.fight_cache,
             &state.curated,
             &PathBuf::from(&path),
             &state.data_dir,
             fight_index,
+            filter,
         )
     })
     .await
@@ -303,6 +309,7 @@ mod tests {
 
     const FIXTURE: &str = include_str!("../../crates/openlogs-index/tests/fixtures/mini_raid.txt");
     const WHOLE_PULL: &str = r#"{ "startMs": null, "endMs": null, "attribution": "augmented" }"#;
+    const FAELAN: &str = "Faelan-Emberfall-EU";
 
     fn log_file(dir: &Path, text: &str) -> PathBuf {
         let path = dir.join("WoWCombatLog-100726_185823.txt");
@@ -403,7 +410,7 @@ mod tests {
         let path = log_file(dir.path(), FIXTURE);
         let cache = FightCache::default();
         let curated = Curated::bundled();
-        let missing_pull = fight_timeline_at(&cache, &curated, &path, dir.path(), 9);
+        let missing_pull = quick_overview_at(&cache, &curated, &path, dir.path(), 9, None);
         assert_eq!(
             missing_pull.unwrap_err(),
             "Pull 9 does not exist in this log."
@@ -436,8 +443,10 @@ mod tests {
 
         let reports = [
             (
-                "timeline",
-                serde_json::to_value(fight_timeline_at(cache, curated, path, data_dir, 1).unwrap()),
+                "overview",
+                serde_json::to_value(
+                    quick_overview_at(cache, curated, path, data_dir, 1, None).unwrap(),
+                ),
             ),
             ("damage", serde_json::to_value(&damage)),
             (
@@ -452,5 +461,41 @@ mod tests {
         for (name, json) in reports {
             assert_camel_case_keys(&json.unwrap(), name);
         }
+    }
+
+    #[test]
+    fn a_range_overview_keeps_the_whole_pull_markers_and_names_their_players() {
+        let dir = tempfile::tempdir().unwrap();
+        // Without COMBATANT_INFO Faelan has no spec, so only his death marker can add him.
+        let text: String = FIXTURE
+            .lines()
+            .filter(|line| !line.contains("COMBATANT_INFO,Player-4101-8E8C0182"))
+            .map(|line| format!("{line}\n"))
+            .collect();
+        let path = log_file(dir.path(), &text);
+        let first_second = filter(r#"{ "startMs": 0, "endMs": 1000, "attribution": "augmented" }"#);
+        let overview = quick_overview_at(
+            &FightCache::default(),
+            &Curated::bundled(),
+            &path,
+            dir.path(),
+            1,
+            Some(first_second),
+        )
+        .unwrap();
+        assert_eq!(overview.kpis.duration_ms, 1_000);
+        assert_eq!(
+            overview.timeline.duration_ms, 60_000,
+            "the axis keeps the pull length"
+        );
+        assert!(overview.deaths.is_empty(), "Faelan dies after the range");
+        let markers = &overview.timeline.markers.deaths;
+        assert_eq!(markers.len(), 1);
+        assert!(
+            overview
+                .players
+                .iter()
+                .any(|p| p.actor_id == markers[0].player && p.name == FAELAN)
+        );
     }
 }

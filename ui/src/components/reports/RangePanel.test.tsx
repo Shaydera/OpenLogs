@@ -2,7 +2,7 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initialState, useApp } from '../../store';
-import { timelineFixture } from '../../test/timelineFixture';
+import { overviewFixture } from '../../test/overviewFixture';
 import { RangePanel } from './RangePanel';
 
 vi.mock('../../api/client', () => ({ api: {} }));
@@ -15,11 +15,11 @@ beforeEach(() => {
 });
 afterEach(() => localStorage.clear());
 
-const renderPanel = () => render(<RangePanel timeline={timelineFixture} rangeKey="3180:15" />);
+const renderPanel = () => render(<RangePanel overview={overviewFixture} rangeKey="3180:15" />);
 
 describe('RangePanel', () => {
   it('applies a phase pill, numbering repeated phase names, and the full fight', async () => {
-    const [p1, , p2] = timelineFixture.phases;
+    const [p1, , p2] = overviewFixture.timeline.phases;
     const submerged = { kind: 'intermission' as const, name: 'Boss submerged' };
     const phases = [
       { ...p1, startMs: 0, endMs: 100_000 },
@@ -27,7 +27,7 @@ describe('RangePanel', () => {
       { ...p2, startMs: 200_000, endMs: 300_000 },
       { ...submerged, number: 2, startMs: 300_000, endMs: 478_610 },
     ];
-    render(<RangePanel timeline={{ ...timelineFixture, phases }} rangeKey="3180:15" />);
+    render(<RangePanel overview={{ ...overviewFixture, timeline: { ...overviewFixture.timeline, phases } }} rangeKey="3180:15" />);
     await userEvent.click(screen.getByRole('button', { name: 'Boss submerged 2' }));
     expect(setRange).toHaveBeenLastCalledWith({ startMs: 300_000, endMs: 478_610 });
     act(() => useApp.setState({ range: { startMs: 300_000, endMs: 478_610 } }));

@@ -10,6 +10,7 @@ import './styles/tokens.css';
 import './styles/base.css';
 import './styles/start.css';
 import './styles/fight.css';
+import './styles/overview.css';
 import './styles/shared.css';
 import './styles/settings.css';
 import './styles/reports.css';

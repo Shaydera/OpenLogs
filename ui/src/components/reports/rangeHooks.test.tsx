@@ -8,10 +8,18 @@ import { useRangeKeys } from './useRangeKeys';
 const DURATION = 100_000;
 const BOX = { left: 100, width: 1000, top: 0, height: 40, right: 1100, bottom: 40, x: 100, y: 0, toJSON: () => ({}) };
 
-/** A plot with two handles, wired like the RangePanel. */
-function Harness({ current, onChange }: { current: TimeRange | null; onChange: (range: TimeRange | null) => void }) {
+/** A plot with two handles, wired like the Timeline and the RangePanel. */
+function Harness({
+  current,
+  onChange,
+  onClick,
+}: {
+  current: TimeRange | null;
+  onChange: (range: TimeRange | null) => void;
+  onClick: (x: number, width: number) => void;
+}) {
   const plotRef = useRef<HTMLDivElement>(null);
-  const brush = useBrush(plotRef, DURATION, current, onChange);
+  const brush = useBrush(plotRef, DURATION, current, onChange, onClick);
   const keys = useRangeKeys(DURATION, current, onChange, 'hint');
   const shown = keys.draft !== undefined ? keys.draft : brush.preview !== undefined ? brush.preview : current;
   return (
@@ -25,9 +33,10 @@ function Harness({ current, onChange }: { current: TimeRange | null; onChange: (
 
 function setup(current: TimeRange | null = null) {
   const onChange = vi.fn();
-  render(<Harness current={current} onChange={onChange} />);
+  const onClick = vi.fn();
+  render(<Harness current={current} onChange={onChange} onClick={onClick} />);
   vi.spyOn(screen.getByTestId('plot'), 'getBoundingClientRect').mockReturnValue(BOX);
-  return { onChange };
+  return { onChange, onClick };
 }
 
 const shown = () => screen.getByRole('status').textContent;
@@ -36,25 +45,28 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('useBrush', () => {
   it('selects a dragged range in whole seconds and previews it while dragging', () => {
-    const { onChange } = setup();
+    const { onChange, onClick } = setup();
     fireEvent.mouseDown(screen.getByTestId('plot'), { clientX: 400, button: 0 });
     fireEvent.mouseMove(document, { clientX: 702, buttons: 1 });
     expect(shown()).toBe('30000–60000');
     fireEvent.mouseUp(document, { clientX: 702 });
     expect(onChange).toHaveBeenCalledWith({ startMs: 30_000, endMs: 60_000 });
+    expect(onClick).not.toHaveBeenCalled();
     expect(shown()).toBe('full');
   });
 
-  it('ignores a click without a drag and moves one edge when its handle is dragged', () => {
-    const { onChange } = setup();
+  it('reports a click without a drag and moves one edge when its handle is dragged', () => {
+    const { onChange, onClick } = setup();
     fireEvent.mouseDown(screen.getByTestId('plot'), { clientX: 400, button: 0 });
     fireEvent.mouseUp(document, { clientX: 402 });
+    expect(onClick).toHaveBeenCalledWith(300, 1000);
     expect(onChange).not.toHaveBeenCalled();
 
     const [start] = screen.getAllByRole('slider');
     fireEvent.mouseDown(start, { clientX: 100, button: 0 });
     fireEvent.mouseUp(document, { clientX: 351 });
     expect(onChange).toHaveBeenCalledWith({ startMs: 25_000, endMs: 100_000 });
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 });
 

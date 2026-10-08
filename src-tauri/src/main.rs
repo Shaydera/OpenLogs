@@ -5,9 +5,12 @@ mod commands;
 mod dto;
 mod fight_cache;
 mod icons;
+mod overview_dto;
 mod recent;
 mod report_dto;
 mod state;
+#[cfg(test)]
+mod test_fight;
 
 use openlogs_gamedata::HttpFetch;
 use tauri::Manager;
@@ -48,7 +51,7 @@ fn main() {
             commands::remove_recent,
             commands::game_data_status,
             commands::refresh_game_data,
-            commands::fight_timeline,
+            commands::quick_overview,
             commands::damage_done_report,
             commands::healing_report,
             commands::damage_taken_report

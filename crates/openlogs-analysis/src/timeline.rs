@@ -1,17 +1,12 @@
 use std::collections::HashMap;
 
 use crate::actors::{ActorId, ActorKind, NOBODY};
-use crate::deaths::deaths;
 use crate::fight::{Damage, DamageVia, Event, EventKind, Fight};
-use crate::phases::configured_phases;
 use openlogs_gamedata::Curated;
 use openlogs_index::Outcome;
 
 /// Gaps in the boss HP data at least this long are intermissions.
 pub const MIN_INTERMISSION_MS: u32 = 15_000;
-
-pub const BOSS_HP_STEP_MS: u32 = 1_000;
-pub const DPS_STEP_MS: u32 = 5_000;
 
 /// Whether a damage event counts as damage done: support shares repeat the buffed
 /// player's hit, the landed melee copy repeats the swing, and splits move damage around.
@@ -258,39 +253,4 @@ pub fn name_detected_phases(
         }
     }
     phases
-}
-
-/// The whole pull for the time range plot: boss HP, raid DPS, phases and player deaths.
-#[derive(Debug, Clone, PartialEq)]
-pub struct FightTimeline {
-    pub boss_hp_step_ms: u32,
-    pub boss_hp: Vec<Option<f32>>,
-    pub dps_step_ms: u32,
-    pub raid_dps: Vec<f64>,
-    pub phases: Vec<Phase>,
-    /// When each player death happened.
-    pub deaths: Vec<i32>,
-}
-
-pub fn fight_timeline(fight: &Fight, curated: &Curated) -> FightTimeline {
-    let bosses = boss_units(fight);
-    let boss_hp = boss_hp_series(fight, &bosses, BOSS_HP_STEP_MS);
-    // Aborted pulls have no phases, configured or detected.
-    let phases = curated
-        .phase_config(fight.encounter_id)
-        .filter(|_| !is_aborted(fight))
-        .map(|config| configured_phases(fight, config, &boss_hp, BOSS_HP_STEP_MS))
-        .filter(|phases| !phases.is_empty())
-        .unwrap_or_else(|| {
-            let detected = detect_phases(&boss_hp, BOSS_HP_STEP_MS, fight.duration_ms as u32);
-            name_detected_phases(detected, fight.encounter_id, curated)
-        });
-    FightTimeline {
-        boss_hp_step_ms: BOSS_HP_STEP_MS,
-        boss_hp,
-        dps_step_ms: DPS_STEP_MS,
-        raid_dps: raid_dps_series(fight, DPS_STEP_MS),
-        phases,
-        deaths: deaths(fight).iter().map(|death| death.t).collect(),
-    }
 }

@@ -1,24 +1,66 @@
+use std::collections::HashSet;
 use std::fs;
 
-use openlogs_gamedata::{Curated, PHASE_NAMES_FILE, PHASES_DIR, PhaseTrigger};
+use openlogs_gamedata::{
+    CONSUMABLES_FILE, ConsumableKind, CooldownCategory, Curated, DEFENSIVES_FILE, MAJOR_CDS_FILE,
+    PHASES_DIR, PhaseTrigger, class, spec,
+};
 
 #[test]
 fn override_files_replace_a_list_and_invalid_ones_fall_back_to_the_bundled_list() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(
-        dir.path().join(PHASE_NAMES_FILE),
-        r#"{ "version": 2, "encounters": [ { "encounter_id": 3492, "intermission": "Boss submerged" } ] }"#,
+        dir.path().join(CONSUMABLES_FILE),
+        r#"{ "version": 2, "potion_cooldown_s": 300, "healthstone_cooldown_s": 60,
+             "consumables": [ { "spell_id": 999, "name": "Test Potion", "kind": "combat_potion" } ],
+             "name_patterns": [ { "contains": "Healthstone", "kind": "healthstone" } ] }"#,
+    )
+    .unwrap();
+    fs::write(dir.path().join(DEFENSIVES_FILE), "{ not json").unwrap();
+
+    let curated = Curated::load(Some(dir.path()));
+    let bundled = Curated::bundled();
+    assert_eq!(
+        curated.consumable_kind(999, "Test Potion"),
+        Some(ConsumableKind::CombatPotion)
+    );
+    assert_eq!(
+        curated.consumable_kind(1, "Fel-Infused Healthstone"),
+        Some(ConsumableKind::Healthstone),
+        "unknown IDs fall back to the name patterns"
+    );
+    assert_eq!(curated.consumable_kind(2, "Arcane Barrage"), None);
+    assert_eq!(curated.defensives, bundled.defensives);
+    assert_eq!(
+        curated.cooldowns, bundled.cooldowns,
+        "lists without a file stay bundled"
+    );
+    assert_eq!(curated.warnings.len(), 1, "{:?}", curated.warnings);
+    assert!(curated.warnings[0].contains(DEFENSIVES_FILE));
+}
+
+#[test]
+fn spec_entries_win_over_class_wide_ones_of_the_casters_class() {
+    let dir = tempfile::tempdir().unwrap();
+    // Paladin (class 2): Retribution 70, Holy 65, Protection 66. Mage (class 8): Arcane 62.
+    fs::write(
+        dir.path().join(MAJOR_CDS_FILE),
+        r#"{ "version": 1, "cooldowns": [
+            { "spell_id": 10, "name": "Wings", "class_id": 2, "category": "raid_defensive", "duration_s": 20 },
+            { "spell_id": 10, "name": "Wings", "class_id": 2, "specs": [70], "category": "offensive", "duration_s": 20 },
+            { "spell_id": 20, "name": "Avenging Buff", "class_id": 2, "specs": [65], "category": "raid_defensive", "duration_s": 0 } ] }"#,
     )
     .unwrap();
     let curated = Curated::load(Some(dir.path()));
-    assert_eq!(curated.intermission_name(3492), Some("Boss submerged"));
-    assert!(curated.warnings.is_empty(), "{:?}", curated.warnings);
-
-    fs::write(dir.path().join(PHASE_NAMES_FILE), "{ not json").unwrap();
-    let curated = Curated::load(Some(dir.path()));
-    assert_eq!(curated.phase_names, Curated::bundled().phase_names);
-    assert_eq!(curated.warnings.len(), 1, "{:?}", curated.warnings);
-    assert!(curated.warnings[0].contains(PHASE_NAMES_FILE));
+    let category = |spell, spec_id| curated.cooldown(spell, spec_id).map(|c| c.category);
+    assert_eq!(category(10, Some(70)), Some(CooldownCategory::Offensive));
+    assert_eq!(
+        category(10, Some(66)),
+        Some(CooldownCategory::RaidDefensive)
+    );
+    assert_eq!(category(10, None), Some(CooldownCategory::RaidDefensive));
+    assert_eq!(category(10, Some(62)), None, "another class");
+    assert_eq!(category(20, Some(70)), None, "another spec");
 }
 
 #[test]
@@ -64,4 +106,33 @@ fn phase_configs_load_from_the_override_folder() {
         curated.warnings
     );
     assert!(Curated::bundled().phase_config(3492).is_none());
+}
+
+#[test]
+fn bundled_lists_are_consistent() {
+    let curated = Curated::bundled();
+    let belongs_to_class = |name: &str, class_id: u32, specs: &[u32]| {
+        assert!(class(class_id).is_some(), "{name}");
+        for &spec_id in specs {
+            assert_eq!(
+                spec(spec_id).map(|s| s.class_id),
+                Some(class_id),
+                "{name} spec {spec_id}"
+            );
+        }
+    };
+
+    let mut seen = HashSet::new();
+    for cd in &curated.cooldowns.cooldowns {
+        belongs_to_class(&cd.name, cd.class_id, &cd.specs);
+        assert!(
+            seen.insert((cd.spell_id, cd.specs.clone())),
+            "duplicate {}",
+            cd.name
+        );
+    }
+    for def in &curated.defensives.defensives {
+        belongs_to_class(&def.name, def.class_id, &def.specs);
+        assert!(def.cooldown_s > 0, "{}", def.name);
+    }
 }

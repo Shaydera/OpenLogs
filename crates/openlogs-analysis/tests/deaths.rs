@@ -1,7 +1,184 @@
 mod support;
 
-use openlogs_analysis::{DamageVia, EventKind, NOBODY, UnitHp, deaths};
-use support::{FightBuilder, HOSTILE_FLAGS, MELEE, damage};
+use openlogs_analysis::{AbilityAmount, DamageVia, EventKind, NOBODY, UnitHp, deaths};
+use support::{FightBuilder, HOSTILE_FLAGS, MELEE, damage, heal};
+
+#[test]
+fn death_with_killing_blow_window_and_hp_before() {
+    let mut b = FightBuilder::new(60_000);
+    let player = b.player("Player-1", "Faelan-Emberfall-EU", 62);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let spit = b.spell(1, "Virulent Spit");
+    let venom = b.spell(2, "Deadly Venom");
+    b.fight.events.push(openlogs_analysis::Event {
+        t: 30_000,
+        source: boss,
+        target: player,
+        spell: venom,
+        kind: EventKind::Damage(damage(DamageVia::Periodic, 10, 0)),
+        source_hostile: true,
+        target_hostile: false,
+        unit_hp: Some(UnitHp {
+            actor: player,
+            current: 830,
+            max: 1_000,
+        }),
+    });
+    b.push(
+        36_000,
+        boss,
+        player,
+        venom,
+        EventKind::Damage(damage(DamageVia::Periodic, 100, 0)),
+    );
+    b.push(
+        37_000,
+        boss,
+        player,
+        spit,
+        EventKind::Damage(damage(DamageVia::Spell, 400, 0)),
+    );
+    b.push(37_500, NOBODY, player, 3, EventKind::Heal(heal(300, 100)));
+    b.push(
+        38_000,
+        boss,
+        player,
+        spit,
+        EventKind::Damage(damage(DamageVia::Spell, 600, 50)),
+    );
+    b.push(
+        38_000,
+        NOBODY,
+        player,
+        MELEE,
+        EventKind::Died { unconscious: false },
+    );
+    let fight = b.build();
+
+    let deaths = deaths(&fight);
+    assert_eq!(deaths.len(), 1);
+    let death = &deaths[0];
+    assert_eq!((death.player, death.t), (player, 38_000));
+    let kb = death.killing_blow.unwrap();
+    assert_eq!(
+        (kb.t, kb.spell, kb.source, kb.amount, kb.overkill),
+        (38_000, spit, boss, 600, 50)
+    );
+    assert_eq!(
+        death.damage_last_5s,
+        [
+            AbilityAmount {
+                spell: spit,
+                amount: 1_000,
+                environmental: false,
+            },
+            AbilityAmount {
+                spell: venom,
+                amount: 100,
+                environmental: false,
+            }
+        ]
+    );
+    assert_eq!(
+        (death.damage_taken_5s, death.healing_taken_5s),
+        (1_100, 200)
+    );
+    assert_eq!(death.hp_5s_before_pct, Some(83.0));
+    assert_eq!(death.resurrected_at, None);
+}
+
+#[test]
+fn melee_killing_blow_and_landed_copy_counted_once() {
+    let mut b = FightBuilder::new(60_000);
+    let player = b.player("Player-1", "Wendel-Emberfall-EU", 71);
+    let add = b.unit("Creature-0-1-1-1-1-01", "Gore Rattle", HOSTILE_FLAGS);
+    b.push(
+        33_100,
+        add,
+        player,
+        MELEE,
+        EventKind::Damage(damage(DamageVia::Swing, 2_420_251, 1_380_351)),
+    );
+    b.push(
+        33_100,
+        add,
+        player,
+        MELEE,
+        EventKind::Damage(damage(DamageVia::SwingLanded, 2_420_251, 1_380_351)),
+    );
+    b.push(
+        33_200,
+        NOBODY,
+        player,
+        MELEE,
+        EventKind::Died { unconscious: false },
+    );
+    let fight = b.build();
+    let death = &deaths(&fight)[0];
+    let kb = death.killing_blow.unwrap();
+    assert_eq!((kb.spell, kb.source, kb.amount), (MELEE, add, 2_420_251));
+    assert_eq!(death.damage_taken_5s, 2_420_251);
+}
+
+#[test]
+fn only_a_lethal_last_hit_is_a_killing_blow() {
+    let spell_hit =
+        |amount, overkill| EventKind::Damage(damage(DamageVia::Spell, amount, overkill));
+    let cases = [
+        (
+            "non-lethal last hit",
+            spell_hit(26_000, 0),
+            Some(458_000),
+            None,
+        ),
+        (
+            "zero HP left",
+            spell_hit(300_000, 0),
+            Some(0),
+            Some((300_000, 0)),
+        ),
+        (
+            "overkill",
+            spell_hit(300_000, 40_000),
+            None,
+            Some((300_000, 40_000)),
+        ),
+        ("instakill", EventKind::Instakill, None, Some((0, 0))),
+    ];
+    for (case, kind, hp_left, expected) in cases {
+        let mut b = FightBuilder::new(60_000);
+        let player = b.player("Player-1", "Faelan-Emberfall-EU", 62);
+        let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+        let spit = b.spell(1, "Virulent Spit");
+        b.fight.events.push(openlogs_analysis::Event {
+            t: 9_000,
+            source: boss,
+            target: player,
+            spell: spit,
+            kind,
+            source_hostile: true,
+            target_hostile: false,
+            unit_hp: hp_left.map(|current| UnitHp {
+                actor: player,
+                current,
+                max: 1_000_000,
+            }),
+        });
+        b.push(
+            9_500,
+            NOBODY,
+            player,
+            MELEE,
+            EventKind::Died { unconscious: false },
+        );
+        let killing_blow = deaths(&b.build())[0].killing_blow;
+        assert_eq!(
+            killing_blow.map(|kb| (kb.spell, kb.source, kb.amount, kb.overkill)),
+            expected.map(|(amount, overkill)| (spit, boss, amount, overkill)),
+            "{case}"
+        );
+    }
+}
 
 #[test]
 fn death_after_battle_res_counts_again() {
@@ -24,11 +201,12 @@ fn death_after_battle_res_counts_again() {
         MELEE,
         EventKind::Died { unconscious: false },
     );
+    // A second resurrect of the same life changes nothing.
+    b.push(15_000, NOBODY, player, 0, EventKind::Resurrect);
     let deaths = deaths(&b.build());
-    assert_eq!(
-        deaths.iter().map(|d| d.t).collect::<Vec<_>>(),
-        [10_000, 40_000]
-    );
+    assert_eq!(deaths.len(), 2);
+    assert_eq!(deaths[0].resurrected_at, Some(14_000));
+    assert_eq!((deaths[1].t, deaths[1].resurrected_at), (40_000, None));
 }
 
 #[test]
@@ -100,6 +278,7 @@ fn reincarnation_ends_the_death() {
     let mut b = FightBuilder::new(600_000);
     let shaman = b.player("Player-1", "Nadrik-Emberfall-EU", 264);
     let reincarnation = b.spell(21169, "Reincarnation");
+    let other = b.spell(1064, "Chain Heal");
     b.push(
         291_000,
         NOBODY,
@@ -107,6 +286,8 @@ fn reincarnation_ends_the_death() {
         MELEE,
         EventKind::Died { unconscious: false },
     );
+    // A cast of another spell does not revive anybody.
+    b.push(292_000, shaman, NOBODY, other, EventKind::CastSuccess);
     b.push(
         297_000,
         shaman,
@@ -122,10 +303,9 @@ fn reincarnation_ends_the_death() {
         EventKind::Died { unconscious: false },
     );
     let deaths = deaths(&b.build());
-    assert_eq!(
-        deaths.iter().map(|d| d.t).collect::<Vec<_>>(),
-        [291_000, 424_000]
-    );
+    assert_eq!(deaths.len(), 2);
+    assert_eq!(deaths[0].resurrected_at, Some(297_000));
+    assert_eq!(deaths[1].t, 424_000);
 }
 
 /// A player's own HP snapshot, as a cast's advanced block reports it.
@@ -182,9 +362,10 @@ fn a_released_player_dies_again_once_alive() {
         EventKind::Died { unconscious: false },
     );
     let deaths = deaths(&b.build());
+    let spans: Vec<_> = deaths.iter().map(|d| (d.t, d.resurrected_at)).collect();
     assert_eq!(
-        deaths.iter().map(|d| d.t).collect::<Vec<_>>(),
-        [260_000, 400_000],
+        spans,
+        vec![(260_000, None), (400_000, None)],
         "alive at the first own HP snapshot above 0; the next death counts"
     );
 }

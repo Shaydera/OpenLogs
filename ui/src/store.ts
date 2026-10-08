@@ -5,9 +5,9 @@ import type {
   Attribution,
   DamageReport,
   DamageTakenReport,
-  FightTimeline,
   HealingReport,
   LogView,
+  QuickOverview,
   RecentLog,
   ReportFilter,
 } from './api/types';
@@ -17,6 +17,7 @@ import { readStored, writeStored } from './storage';
 const HIDE_ABORTED_KEY = 'hideAborted';
 const AUG_DELTA_KEY = 'showAugDelta';
 export type FightTab =
+  | 'overview'
   | 'damage'
   | 'healing'
   | 'taken';
@@ -27,7 +28,8 @@ export interface TimeRange {
 export type ReportData =
   | { tab: 'damage'; data: DamageReport }
   | { tab: 'healing'; data: HealingReport }
-  | { tab: 'taken'; data: DamageTakenReport };
+  | { tab: 'taken'; data: DamageTakenReport }
+  | { tab: 'overview'; data: QuickOverview };
 
 export type View = { kind: 'start' } | { kind: 'fight'; fightIndex: number };
 
@@ -42,7 +44,7 @@ interface State {
   error: string | null;
   hideAborted: boolean;
   view: View;
-  timeline: FightTimeline | null;
+  overview: QuickOverview | null;
   fightLoading: boolean;
   /** Why the current pull could not be loaded. */
   fightError: string | null;
@@ -109,10 +111,10 @@ export function initialState(): State {
     error: null,
     hideAborted: readFlag(HIDE_ABORTED_KEY, true),
     view: { kind: 'start' },
-    timeline: null,
+    overview: null,
     fightLoading: false,
     fightError: null,
-    tab: 'damage',
+    tab: 'overview',
     attribution: 'reattributed',
     range: null,
     report: null,
@@ -143,6 +145,8 @@ function dropPendingReports() {
 
 async function fetchReport(path: string, fight: number, tab: FightTab, filter: ReportFilter): Promise<ReportData> {
   switch (tab) {
+    case 'overview':
+      return { tab, data: await api.quickOverview(path, fight, filter) };
     case 'damage':
       return { tab, data: await api.damageDoneReport(path, fight, filter) };
     case 'healing':
@@ -157,6 +161,11 @@ async function loadReport(get: () => State & Actions, set: (partial: Partial<Sta
   const { log, view, tab, attribution, range } = get();
   if (!log || view.kind !== 'fight') return;
   const request = ++reportRequest;
+  if (tab === 'overview' && range === null) {
+    // The whole-pull overview is already in `state.overview`.
+    set({ report: null, reportError: null, reportLoading: false });
+    return;
+  }
   const filter = { startMs: range?.startMs ?? null, endMs: range?.endMs ?? null, attribution };
   set({ reportLoading: true, reportError: null });
   try {
@@ -188,7 +197,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
       if (request === logRequest) {
         dropPendingFight();
         dropPendingReports();
-        set({ log, view: { kind: 'start' }, timeline: null, fightLoading: false, fightError: null });
+        set({ log, view: { kind: 'start' }, overview: null, fightLoading: false, fightError: null });
       }
     } catch (err) {
       if (request === logRequest) set({ error: t('error.openFailed', { file: fileName(path), reason: String(err) }) });
@@ -220,27 +229,25 @@ export const useApp = create<State & Actions>()((set, get) => ({
     dropPendingReports();
     set({
       view: { kind: 'fight', fightIndex },
-      timeline: null,
+      overview: null,
       fightLoading: true,
       fightError: null,
       error: null,
-      tab: 'damage',
+      tab: 'overview',
       range: null,
       report: null,
       reportError: null,
       reportLoading: false,
       focusRequest: 'fight',
     });
-    const report = loadReport(get, set);
     try {
-      const timeline = await api.fightTimeline(log.path, fightIndex);
-      if (request === fightRequest) set({ timeline });
+      const overview = await api.quickOverview(log.path, fightIndex, null);
+      if (request === fightRequest) set({ overview });
     } catch (err) {
       if (request === fightRequest) set({ error: t('error.loadFailed', { reason: String(err) }), fightError: String(err) });
     } finally {
       if (request === fightRequest) set({ fightLoading: false });
     }
-    await report;
   },
 
   backToPulls() {
@@ -248,10 +255,10 @@ export const useApp = create<State & Actions>()((set, get) => ({
     dropPendingReports();
     set({
       view: { kind: 'start' },
-      timeline: null,
+      overview: null,
       fightLoading: false,
       fightError: null,
-      tab: 'damage',
+      tab: 'overview',
       range: null,
       report: null,
       reportError: null,

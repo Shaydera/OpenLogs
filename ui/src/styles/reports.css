@@ -308,9 +308,6 @@
 .rrow.rrow-heal-nodelta {
   grid-template-columns: 34px minmax(150px, 190px) minmax(160px, 1fr) 92px 84px 84px 58px;
 }
-.dash {
-  color: var(--dash);
-}
 /* Damage Taken: the raid-wide ability list, laid out like the side panel rows. */
 .taken-rows {
   min-width: 640px;

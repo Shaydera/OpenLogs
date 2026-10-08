@@ -12,7 +12,7 @@ beforeEach(() => {
 
 describe('tab bar', () => {
   it.each<[string, FightTab, boolean]>([
-    ['the Aug toggle on Damage Done', 'damage', true],
+    ['the Aug toggle on the Overview', 'overview', true],
     ['no control on Damage Taken', 'taken', false],
   ])('shows %s', (_, tab, aug) => {
     useApp.setState({ tab });

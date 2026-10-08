@@ -1,5 +1,5 @@
-import type { FightTimeline } from '../../api/types';
-import { formatAmount, formatEventTime, formatInteger, formatShare } from '../../i18n/format';
+import type { Kpis, QuickOverview } from '../../api/types';
+import { formatAmount, formatDuration, formatEventTime, formatInteger, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import type { FightTab, ReportData, TimeRange } from '../../store';
 import type { KpiTone } from '../Kpi';
@@ -11,12 +11,13 @@ export interface HeaderTile {
   value: string;
   sub: string;
   tone?: KpiTone;
+  subTone?: 'warn';
 }
 
 export interface HeaderInput {
   tab: FightTab;
   /** The whole pull; `null` while it loads. */
-  timeline: FightTimeline | null;
+  overview: QuickOverview | null;
   range: TimeRange | null;
   /** The current tab's report; `null` (or another tab's) while it loads. */
   report: ReportData | null;
@@ -41,6 +42,8 @@ export function headerTiles(input: HeaderInput): HeaderTile[] {
   const { tab } = input;
   const ready = <K extends keyof ReportOf>(want: K) => readyData(input, want);
   switch (tab) {
+    case 'overview':
+      return overviewTiles(input.range === null ? (input.overview?.kpis ?? null) : (ready('overview')?.kpis ?? null), input.range !== null);
     case 'damage':
       return damageTiles(ready('damage'));
     case 'healing':
@@ -48,6 +51,31 @@ export function headerTiles(input: HeaderInput): HeaderTile[] {
     case 'taken':
       return takenTiles(ready('taken'), input);
   }
+}
+
+function overviewTiles(kpis: Kpis | null, inRange: boolean): HeaderTile[] {
+  const labels = [t('kpi.raidDps'), t('kpi.deaths'), t('kpi.combatPotions'), t('kpi.healthItems')];
+  if (!kpis) return labels.map(pendingTile);
+  return [
+    { label: labels[0], value: formatAmount(kpis.raidDps), sub: t('kpi.raidDamage', { damage: formatAmount(kpis.raidDamage) }) },
+    {
+      label: labels[1],
+      value: formatInteger(kpis.deaths),
+      tone: kpis.deaths > 0 ? 'death' : undefined,
+      sub: kpis.firstDeathMs !== null ? t('kpi.firstDeath', { time: formatEventTime(kpis.firstDeathMs) }) : t('kpi.noDeaths'),
+    },
+    {
+      label: labels[2],
+      value: formatInteger(kpis.combatPotions),
+      subTone: kpis.playersWithoutCombatPotion > 0 ? 'warn' : undefined,
+      sub: t(inRange ? 'kpi.noCombatPotionInRange' : 'kpi.noCombatPotion', { count: kpis.playersWithoutCombatPotion }),
+    },
+    {
+      label: labels[3],
+      value: `${formatInteger(kpis.healthstones)} · ${formatInteger(kpis.healthPotions)}`,
+      sub: t('kpi.overDuration', { duration: formatDuration(kpis.durationMs) }),
+    },
+  ];
 }
 
 const perSecond = (total: number, durationMs: number) => (durationMs > 0 ? (total * 1000) / durationMs : 0);
@@ -85,7 +113,8 @@ function healingTiles(report: ReportOf['healing'] | null): HeaderTile[] {
   ];
 }
 
-const inRange = (range: TimeRange | null, at: number) => range === null || (at >= range.startMs && at < range.endMs);
+/** The Overview's rule: a range from 0:00 also holds what happened before the pull (prepull lust). */
+const inRange = (range: TimeRange | null, at: number) => range === null || (at < range.endMs && (at >= range.startMs || range.startMs === 0));
 
 function deathsTile(times: number[]): HeaderTile {
   return {
@@ -105,6 +134,6 @@ function takenTiles(report: ReportOf['taken'] | null, input: HeaderInput): Heade
     { label: labels[0], value: formatAmount(report.total), sub: t('kpi.dtps', { amount: formatAmount(perSecond(report.total, report.durationMs)) }) },
     { label: labels[1], value: ability ? formatAmount(ability.amount) : '—', sub: ability ? hitName(ability, (id) => reportSpellName(report.spells, id)) : '' },
     { label: labels[2], value: player ? formatAmount(player.amount) : '—', sub: player ? playerName(report.roster, player.player) : '' },
-    input.timeline ? deathsTile(input.timeline.deaths.filter((at) => inRange(input.range, at))) : pendingTile(labels[3]),
+    input.overview ? deathsTile(input.overview.timeline.markers.deaths.map((d) => d.t).filter((at) => inRange(input.range, at))) : pendingTile(labels[3]),
   ];
 }

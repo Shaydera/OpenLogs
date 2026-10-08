@@ -3,9 +3,9 @@ import type {
   GameDataStatus,
   DamageReport,
   DamageTakenReport,
-  FightTimeline,
   HealingReport,
   LogView,
+  QuickOverview,
   RecentLog,
   ReportFilter,
 } from './types';
@@ -15,7 +15,8 @@ export const api = {
   openLog: (path: string) => invoke<LogView>('open_log', { path }),
   recentLogs: () => invoke<RecentLog[]>('recent_logs'),
   removeRecent: (path: string) => invoke<void>('remove_recent', { path }),
-  fightTimeline: (path: string, fightIndex: number) => invoke<FightTimeline>('fight_timeline', { path, fightIndex }),
+  quickOverview: (path: string, fightIndex: number, filter: ReportFilter | null) =>
+    invoke<QuickOverview>('quick_overview', { path, fightIndex, filter }),
   damageDoneReport: (path: string, fightIndex: number, filter: ReportFilter) =>
     invoke<DamageReport>('damage_done_report', { path, fightIndex, filter }),
   healingReport: (path: string, fightIndex: number, filter: ReportFilter) =>

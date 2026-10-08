@@ -5,6 +5,7 @@ import { AttributionToggle } from '../reports/AttributionToggle';
 import { tabBarControl } from './tabBarControl';
 
 const TABS: { key: MessageKey; tab: FightTab }[] = [
+  { key: 'tabs.overview', tab: 'overview' },
   { key: 'tabs.damageDone', tab: 'damage' },
   { key: 'tabs.healing', tab: 'healing' },
   { key: 'tabs.damageTaken', tab: 'taken' },

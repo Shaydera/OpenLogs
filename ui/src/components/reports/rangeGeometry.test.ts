@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { brushToRange, handleKey, rangeInPull, shiftRange, withEdge } from './rangeGeometry';
+import type { Phase } from '../../api/types';
+import { overviewFixture } from '../../test/overviewFixture';
+import { brushToRange, clickToRange, handleKey, phaseAt, rangeInPull, shiftRange, withEdge } from './rangeGeometry';
 
 const D = 478_610;
+/** Phase 1 0:00–2:00, Intermission 1 2:00–4:00, Phase 2 4:00–7:58. */
+const PHASES: Phase[] = overviewFixture.timeline.phases;
 
 describe('brushToRange', () => {
   it('maps a drag in either direction to whole seconds, clamped to the pull', () => {
@@ -18,6 +22,23 @@ describe('brushToRange', () => {
     expect(brushToRange(997, 1010, 1000, D)).toEqual({ startMs: 477_000, endMs: D });
     // A pull shorter than a second still allows its whole length.
     expect(brushToRange(-10, 1010, 1000, 600)).toEqual({ startMs: 0, endMs: 600 });
+  });
+});
+
+describe('phases under the pointer', () => {
+  it('finds the phase at a time: start included, the end in the next phase, the last one closed', () => {
+    expect(phaseAt(PHASES, 0)).toBe(PHASES[0]);
+    expect(phaseAt(PHASES, 120_000)).toBe(PHASES[1]);
+    expect(phaseAt(PHASES, D)).toBe(PHASES[2]);
+    expect(phaseAt(PHASES, D + 1)).toBeNull();
+    expect(phaseAt([PHASES[0], PHASES[2]], 150_000)).toBeNull();
+  });
+
+  it('selects the clicked phase, and the full pull on the selected one or without a phase', () => {
+    expect(clickToRange(300, 1000, D, PHASES, null)).toEqual({ startMs: 120_000, endMs: 240_000 });
+    expect(clickToRange(300, 1000, D, PHASES, { startMs: 120_000, endMs: 240_000 })).toBeNull();
+    expect(clickToRange(300, 1000, D, [PHASES[0], PHASES[2]], { startMs: 0, endMs: 120_000 })).toBeNull();
+    expect(clickToRange(300, 1000, D, [{ kind: 'boss', number: 1, startMs: 0, endMs: D, name: null }], null)).toBeNull();
   });
 });
 

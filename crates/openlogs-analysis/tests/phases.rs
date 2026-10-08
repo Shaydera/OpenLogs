@@ -1,6 +1,6 @@
 mod support;
 
-use openlogs_analysis::{EventKind, NOBODY, configured_phases, fight_timeline};
+use openlogs_analysis::{EventKind, NOBODY, configured_phases, quick_overview};
 use openlogs_gamedata::{Curated, PhaseConfig, PhaseRule, PhaseTrigger};
 use support::{FightBuilder, HOSTILE_FLAGS};
 
@@ -91,6 +91,6 @@ fn aborted_pulls_ignore_phase_configs() {
             { "name": "Adds", "start": { "type": "unit_appears", "name": "Blightscale Rawling" } } ] }"#,
     )
     .unwrap();
-    let timeline = fight_timeline(&fight, &Curated::load(Some(dir.path())));
-    assert!(timeline.phases.is_empty());
+    let overview = quick_overview(&fight, &Curated::load(Some(dir.path())));
+    assert!(overview.timeline.phases.is_empty());
 }
