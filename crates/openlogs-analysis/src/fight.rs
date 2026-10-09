@@ -19,10 +19,26 @@ pub struct Fight {
     pub duration_ms: u64,
     /// Sorted by `t`; prelude events (before `ENCOUNTER_START`) have `t < 0`.
     pub events: Vec<Event>,
+    /// Players' power samples, sorted by `t`.
+    pub power: Vec<PowerSample>,
     pub actors: Actors,
     /// Every spell referenced by `events`, with the name the log used.
     pub spells: BTreeMap<SpellId, SpellInfo>,
     pub broken_lines: u64,
+}
+
+/// Players' power is kept at most this often per power type.
+pub const POWER_SAMPLE_MS: i32 = 500;
+
+/// A player's power from an advanced block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PowerSample {
+    pub t: i32,
+    pub actor: ActorId,
+    /// WoW power type (0 mana, 1 rage, 3 energy, …).
+    pub power_type: i32,
+    pub current: i64,
+    pub max: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

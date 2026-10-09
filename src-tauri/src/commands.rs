@@ -6,9 +6,11 @@ use openlogs_gamedata::{Curated, HttpFetch};
 use openlogs_index::{CacheStatus, load_or_build};
 use tauri::{AppHandle, Manager};
 
+use crate::detail_dto::{AbilityDetailDto, TargetDetailDto, ability_detail_dto, target_detail_dto};
 use crate::dto::{GameDataStatusDto, LogView, RecentLog, log_view, recent_log};
 use crate::fight_cache::FightCache;
 use crate::overview_dto::{QuickOverviewDto, quick_overview_dto};
+use crate::player_dto::{MetricDto, PlayerDetailDto, player_detail_dto};
 use crate::recent::{RecentEntry, RecentLogs};
 use crate::report_dto::{
     DamageReportDto, DamageTakenReportDto, FilterDto, HealingReportDto, damage_report_dto,
@@ -125,6 +127,167 @@ pub fn taken_report_at(
         &fight,
         &openlogs_analysis::damage_taken(&fight, &filter.to_filter()),
     ))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn player_detail_at(
+    cache: &FightCache,
+    curated: &Curated,
+    path: &Path,
+    data_dir: &Path,
+    fight_index: u32,
+    player: u32,
+    metric: MetricDto,
+    filter: FilterDto,
+) -> Result<PlayerDetailDto, String> {
+    let (_, fight) = cache.get(path, data_dir, fight_index)?;
+    let detail = openlogs_analysis::player_detail(
+        &fight,
+        curated,
+        player,
+        metric.to_metric(),
+        &filter.to_filter(),
+    )
+    .ok_or_else(|| format!("Actor {player} is not a player of this pull"))?;
+    Ok(player_detail_dto(
+        &fight,
+        curated,
+        &detail,
+        metric,
+        filter.attribution,
+    ))
+}
+
+#[tauri::command]
+pub async fn player_detail(
+    path: String,
+    fight_index: u32,
+    player: u32,
+    metric: MetricDto,
+    filter: FilterDto,
+    app: AppHandle,
+) -> Result<PlayerDetailDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        player_detail_at(
+            &state.fight_cache,
+            &state.curated,
+            &PathBuf::from(&path),
+            &state.data_dir,
+            fight_index,
+            player,
+            metric,
+            filter,
+        )
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn ability_detail_at(
+    cache: &FightCache,
+    curated: &Curated,
+    path: &Path,
+    data_dir: &Path,
+    fight_index: u32,
+    player: u32,
+    spell: u32,
+    pet: Option<String>,
+    metric: MetricDto,
+    filter: FilterDto,
+) -> Result<AbilityDetailDto, String> {
+    let (_, fight) = cache.get(path, data_dir, fight_index)?;
+    let detail = openlogs_analysis::ability_detail(
+        &fight,
+        curated,
+        player,
+        spell,
+        pet.as_deref(),
+        metric.to_metric(),
+        &filter.to_filter(),
+    )
+    .ok_or_else(|| format!("Actor {player} is not a player of this pull"))?;
+    Ok(ability_detail_dto(&fight, &detail, metric))
+}
+
+pub fn target_detail_at(
+    cache: &FightCache,
+    path: &Path,
+    data_dir: &Path,
+    fight_index: u32,
+    name: String,
+    filter: FilterDto,
+) -> Result<TargetDetailDto, String> {
+    let (_, fight) = cache.get(path, data_dir, fight_index)?;
+    let filter = filter.to_filter();
+    let enemies = openlogs_analysis::enemy_groups(&fight, &filter);
+    // An empty name opens the enemy that took the most damage.
+    let name = if name.is_empty() {
+        enemies
+            .first()
+            .map(|g| g.name.clone())
+            .ok_or("This pull has no enemies that took damage")?
+    } else {
+        name
+    };
+    let detail = openlogs_analysis::target_detail(&fight, &name, &filter)
+        .ok_or_else(|| format!("No enemy named {name} in this pull"))?;
+    Ok(target_detail_dto(&fight, &detail, &enemies))
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn ability_detail(
+    path: String,
+    fight_index: u32,
+    player: u32,
+    spell: u32,
+    pet: Option<String>,
+    metric: MetricDto,
+    filter: FilterDto,
+    app: AppHandle,
+) -> Result<AbilityDetailDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        ability_detail_at(
+            &state.fight_cache,
+            &state.curated,
+            &PathBuf::from(&path),
+            &state.data_dir,
+            fight_index,
+            player,
+            spell,
+            pet,
+            metric,
+            filter,
+        )
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn target_detail(
+    path: String,
+    fight_index: u32,
+    name: String,
+    filter: FilterDto,
+    app: AppHandle,
+) -> Result<TargetDetailDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        target_detail_at(
+            &state.fight_cache,
+            &PathBuf::from(&path),
+            &state.data_dir,
+            fight_index,
+            name,
+            filter,
+        )
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
@@ -306,6 +469,7 @@ mod tests {
 
     use super::*;
     use crate::dto::OutcomeDto;
+    use crate::report_dto::AttributionDto;
 
     const FIXTURE: &str = include_str!("../../crates/openlogs-index/tests/fixtures/mini_raid.txt");
     const WHOLE_PULL: &str = r#"{ "startMs": null, "endMs": null, "attribution": "augmented" }"#;
@@ -410,11 +574,28 @@ mod tests {
         let path = log_file(dir.path(), FIXTURE);
         let cache = FightCache::default();
         let curated = Curated::bundled();
+        let whole = filter(WHOLE_PULL);
         let missing_pull = quick_overview_at(&cache, &curated, &path, dir.path(), 9, None);
         assert_eq!(
             missing_pull.unwrap_err(),
             "Pull 9 does not exist in this log."
         );
+        let not_a_player = player_detail_at(
+            &cache,
+            &curated,
+            &path,
+            dir.path(),
+            1,
+            0,
+            MetricDto::Damage,
+            whole,
+        );
+        assert_eq!(
+            not_a_player.unwrap_err(),
+            "Actor 0 is not a player of this pull"
+        );
+        let nobody = target_detail_at(&cache, &path, dir.path(), 1, "Nobody".into(), whole);
+        assert_eq!(nobody.unwrap_err(), "No enemy named Nobody in this pull");
 
         let (_, entry) = index_log(&path, dir.path()).unwrap();
         let mut recent = RecentLogs::default();
@@ -440,6 +621,38 @@ mod tests {
 
         let damage = damage_report_at(cache, path, data_dir, 1, whole).unwrap();
         assert_eq!(damage.total, 377_019_940, "Faelan's two Arcane Barrages");
+        let faelan = damage.players[0].player;
+        let reattributed = filter(&WHOLE_PULL.replace("augmented", "reattributed"));
+        let player = player_detail_at(
+            cache,
+            curated,
+            path,
+            data_dir,
+            1,
+            faelan,
+            MetricDto::Damage,
+            reattributed,
+        )
+        .unwrap();
+        assert_eq!(player.attribution, AttributionDto::Reattributed);
+        let top_target = target_detail_at(cache, path, data_dir, 1, String::new(), whole).unwrap();
+        assert_eq!(
+            top_target.name, top_target.enemies[0].name,
+            "an empty name opens the most damaged enemy"
+        );
+        let ability = ability_detail_at(
+            cache,
+            curated,
+            path,
+            data_dir,
+            1,
+            faelan,
+            44425,
+            None,
+            MetricDto::Damage,
+            whole,
+        )
+        .unwrap();
 
         let reports = [
             (
@@ -457,6 +670,9 @@ mod tests {
                 "taken",
                 serde_json::to_value(taken_report_at(cache, path, data_dir, 1, whole).unwrap()),
             ),
+            ("player", serde_json::to_value(&player)),
+            ("ability", serde_json::to_value(&ability)),
+            ("target", serde_json::to_value(&top_target)),
         ];
         for (name, json) in reports {
             assert_camel_case_keys(&json.unwrap(), name);

@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useRef } from 'react';
+import { useFocusRequest } from '../../hooks/useFocusRequest';
 import { type MessageKey, t } from '../../i18n/i18n';
 import { type FightTab, useApp } from '../../store';
 import { AttributionToggle } from '../reports/AttributionToggle';
@@ -26,9 +27,11 @@ function nextTab(current: FightTab, key: string): FightTab | null {
 /** The fight's tab row with its control at the right end (`tabBarControl`). */
 export function TabBar() {
   const tab = useApp((s) => s.tab);
+  const details = useApp((s) => s.details);
   const setTab = useApp((s) => s.setTab);
   const tabRefs = useRef<Map<FightTab, HTMLButtonElement>>(new Map());
-  const control = tabBarControl(tab);
+  useFocusRequest('tab', () => tabRefs.current.get(tab));
+  const control = tabBarControl(tab, details);
 
   function onTabKey(event: KeyboardEvent<HTMLDivElement>) {
     const target = nextTab(tab, event.key);

@@ -247,6 +247,11 @@ export interface HealingReport extends ReportBase {
   players: PlayerHealing[];
 }
 
+/** A spell in a damage-taken summary; world damage is kept apart from melee (both spell 0). */
+export interface TakenSpell extends SpellAmount {
+  environmental: boolean;
+}
+
 export interface TakenAbility {
   spellId: number;
   /** World damage, kept apart from melee (both spell 0). */
@@ -273,6 +278,163 @@ export interface TakenPlayer {
 export interface DamageTakenReport extends ReportBase {
   byAbility: TakenAbility[];
   byPlayer: TakenPlayer[];
+}
+
+export type Metric = 'damage' | 'healing';
+
+/** A buff row's kind; also its colour on the player page. */
+export type BuffKind = 'aug' | 'lust' | 'external' | 'cooldown' | 'proc' | 'shield' | 'defensive';
+
+/** A cast row's group: major cooldown, rotation (curated, or the most-cast spells of a spec without curated rows) or defensive. */
+export type CastKind = 'major' | 'rotation' | 'defensive';
+
+export interface PlayerDeath {
+  t: number;
+  resurrectedAt: number | null;
+  killingBlow: Hit | null;
+  /** The res spell; `source` is the caster when it is a player in `roster`. */
+  resurrectedBy: { spellId: number; source: number | null } | null;
+  /** The killing blow's spell hitting in a row before the death. */
+  lethalBurst: { spellId: number; count: number; windowMs: number } | null;
+  /** Defensives and consumables at the moment of death (as on the Overview). */
+  context: ContextEntry[];
+}
+
+export interface PlayerAbility extends AbilityRow {
+  /** The player's own casts of a spell of this name; `null` without casts and for pet and support rows. */
+  casts: number | null;
+  /** Created by an Evoker's buff and also logged as support (Fate Mirror, Breath of Eons). */
+  aug: boolean;
+  /** Pet names merged into the pet row; 0 for other rows. */
+  pets: number;
+}
+
+export interface SpellAmount {
+  spellId: number;
+  amount: number;
+}
+
+export interface PlayerDetail {
+  player: PlayerRef;
+  specName: string | null;
+  itemLevel: number | null;
+  maxHp: number | null;
+  metric: Metric;
+  /** The Aug mode this page was computed with. */
+  attribution: Attribution;
+  /** The range clipped to the pull. */
+  startMs: number;
+  endMs: number;
+  total: number;
+  otherModeTotal: number;
+  perSecond: number;
+  /** 1-based; 0 = not ranked. */
+  rank: number;
+  rankedPlayers: number;
+  supportReceived: number;
+  supportReceivedFrom: PlayerAmount[];
+  supportBySpell: SpellAmount[];
+  healingReceived: number;
+  deaths: PlayerDeath[];
+  consumables: { t: number; spellId: number; kind: ConsumableKind }[];
+  abilities: PlayerAbility[];
+  /** The pet row's parts: every pet ability by pet name, largest first (the expanded pet row). */
+  petAbilities: PlayerAbility[];
+  takenBySpell: TakenSpell[];
+  seriesStepMs: number;
+  series: number[];
+  castRows: { spellId: number; kind: CastKind; durationMs: number; times: number[]; link: AbilityLink | null }[];
+  /** The player's own casts, most frequent spells first (at most 12). */
+  castTimeline: { spellId: number; kind: CastKind; durationMs: number; times: number[]; link: AbilityLink | null }[];
+  buffRows: { spellId: number; source: number; kind: BuffKind; intervals: [number, number][]; uptime: number }[];
+  /** Ebon Might on the player from any Evoker, merged and clipped to the range. */
+  ebonMight: [number, number][];
+  /** Dead phases overlapping the range, clipped to it. */
+  dead: [number, number][];
+  /** The death time when the player was already dead at the range start. */
+  deadSince: number | null;
+  /** Evokers only: support and buff uptime per buffed player. */
+  augmentation: AugTarget[];
+  /** Mana percent per series step; empty without mana data. */
+  mana: (number | null)[];
+  roster: PlayerRef[];
+  spells: Record<string, { name: string }>;
+}
+
+export type Detail =
+  | { kind: 'player'; player: number }
+  /** `spellName`: pinned once the page loaded, so the breadcrumb keeps it while other pages sit above. */
+  | { kind: 'ability'; player: number; spellId: number; pet: string | null; spellName?: string }
+  | { kind: 'target'; name: string };
+
+export interface AugTarget {
+  player: number;
+  support: number;
+  ebonMightUptime: number;
+  prescienceUptime: number;
+}
+
+export interface AbilityHit {
+  t: number;
+  target: number;
+  amount: number;
+  critical: boolean;
+  periodic: boolean;
+}
+
+export interface AbilityDetail {
+  player: PlayerRef;
+  spellId: number;
+  spellName: string;
+  /** Spell school bit mask. */
+  school: number;
+  pet: string | null;
+  metric: Metric;
+  startMs: number;
+  endMs: number;
+  total: number;
+  playerTotal: number;
+  casts: number[];
+  hits: AbilityHit[];
+  byTarget: { name: string; hits: number; crits: number; amount: number }[];
+  median: number;
+  uptime: number | null;
+  dead: [number, number][];
+  /** Unit names by actor id (JSON keys are strings). */
+  targetNames: Record<string, string>;
+  /** Names in `targetNames` that belong to players; only these drop their realm in the UI. */
+  playerTargets: string[];
+}
+
+export interface UnitLife {
+  actor: number;
+  firstHit: number;
+  lastHit: number;
+  death: number | null;
+}
+
+export interface TargetDetail {
+  name: string;
+  startMs: number;
+  endMs: number;
+  damageTaken: number;
+  raidDamage: number;
+  maxHp: number | null;
+  isBoss: boolean;
+  sharesBossHp: boolean;
+  /** The encounter's main boss: its portrait belongs here. */
+  primary: boolean;
+  units: UnitLife[];
+  waves: { startMs: number; units: number; killed: number; clearMs: number; avgLifeMs: number | null }[];
+  byPlayer: PlayerAmount[];
+  enemies: { name: string; units: number; damageTaken: number; isBoss: boolean; sharesBossHp: boolean; primary: boolean }[];
+  roster: PlayerRef[];
+}
+
+/** Where a cast spell's hits are: cast and hit IDs often differ. */
+export interface AbilityLink {
+  spellId: number;
+  metric: Metric;
 }
 
 /** One downloaded game-data table (mirrors `TableStatusDto`). */

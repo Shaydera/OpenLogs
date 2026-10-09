@@ -14,8 +14,9 @@ pub use boss_portraits::{BossPortraitError, BossPortraitTable};
 pub use curated::{
     CONSUMABLES_FILE, Consumable, ConsumableKind, ConsumableList, CooldownCategory, CooldownList,
     CooldownSpell, Curated, DEFENSIVES_FILE, DefensiveList, MAJOR_CDS_FILE, NamePattern,
-    PHASE_NAMES_FILE, PHASES_DIR, PersonalDefensive, PhaseConfig, PhaseNameList, PhaseNames,
-    PhaseRule, PhaseTrigger,
+    PHASE_NAMES_FILE, PHASES_DIR, PLAYER_COOLDOWNS_FILE, PROCS_FILE, PersonalDefensive,
+    PhaseConfig, PhaseNameList, PhaseNames, PhaseRule, PhaseTrigger, PlayerCooldown,
+    PlayerCooldownKind, PlayerCooldownList, ProcList, ProcSpell,
 };
 pub use fetch::{Fetch, FetchError, HttpFetch};
 pub use icon_cache::{IconCache, IconError, RPGLOGS_BOSS_URL, ZAMIMG_ICON_URL, ZAMIMG_JOURNAL_URL};

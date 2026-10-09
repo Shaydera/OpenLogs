@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use std::fs;
 
 use openlogs_gamedata::{
-    CONSUMABLES_FILE, ConsumableKind, CooldownCategory, Curated, DEFENSIVES_FILE, MAJOR_CDS_FILE,
-    PHASES_DIR, PhaseTrigger, class, spec,
+    CONSUMABLES_FILE, ConsumableKind, CooldownCategory, Curated, MAJOR_CDS_FILE, PHASES_DIR,
+    PROCS_FILE, PhaseTrigger, PlayerCooldownKind, class, spec,
 };
 
 #[test]
@@ -16,7 +16,7 @@ fn override_files_replace_a_list_and_invalid_ones_fall_back_to_the_bundled_list(
              "name_patterns": [ { "contains": "Healthstone", "kind": "healthstone" } ] }"#,
     )
     .unwrap();
-    fs::write(dir.path().join(DEFENSIVES_FILE), "{ not json").unwrap();
+    fs::write(dir.path().join(PROCS_FILE), "{ not json").unwrap();
 
     let curated = Curated::load(Some(dir.path()));
     let bundled = Curated::bundled();
@@ -30,13 +30,13 @@ fn override_files_replace_a_list_and_invalid_ones_fall_back_to_the_bundled_list(
         "unknown IDs fall back to the name patterns"
     );
     assert_eq!(curated.consumable_kind(2, "Arcane Barrage"), None);
-    assert_eq!(curated.defensives, bundled.defensives);
+    assert_eq!(curated.procs, bundled.procs);
     assert_eq!(
         curated.cooldowns, bundled.cooldowns,
         "lists without a file stay bundled"
     );
     assert_eq!(curated.warnings.len(), 1, "{:?}", curated.warnings);
-    assert!(curated.warnings[0].contains(DEFENSIVES_FILE));
+    assert!(curated.warnings[0].contains(PROCS_FILE));
 }
 
 #[test]
@@ -48,7 +48,8 @@ fn spec_entries_win_over_class_wide_ones_of_the_casters_class() {
         r#"{ "version": 1, "cooldowns": [
             { "spell_id": 10, "name": "Wings", "class_id": 2, "category": "raid_defensive", "duration_s": 20 },
             { "spell_id": 10, "name": "Wings", "class_id": 2, "specs": [70], "category": "offensive", "duration_s": 20 },
-            { "spell_id": 20, "name": "Avenging Buff", "class_id": 2, "specs": [65], "category": "raid_defensive", "duration_s": 0 } ] }"#,
+            { "spell_id": 20, "name": "Avenging Buff", "class_id": 2, "specs": [65], "category": "raid_defensive", "duration_s": 0 },
+            { "spell_id": 21, "name": "Avenging Buff", "class_id": 2, "specs": [70], "category": "offensive", "duration_s": 0 } ] }"#,
     )
     .unwrap();
     let curated = Curated::load(Some(dir.path()));
@@ -61,6 +62,13 @@ fn spec_entries_win_over_class_wide_ones_of_the_casters_class() {
     assert_eq!(category(10, None), Some(CooldownCategory::RaidDefensive));
     assert_eq!(category(10, Some(62)), None, "another class");
     assert_eq!(category(20, Some(70)), None, "another spec");
+    assert_eq!(
+        curated
+            .cooldown_named("Avenging Buff", Some(70))
+            .map(|c| c.spell_id),
+        Some(21),
+        "a buff finds its cooldown by name"
+    );
 }
 
 #[test]
@@ -134,5 +142,35 @@ fn bundled_lists_are_consistent() {
     for def in &curated.defensives.defensives {
         belongs_to_class(&def.name, def.class_id, &def.specs);
         assert!(def.cooldown_s > 0, "{}", def.name);
+    }
+    let mut seen = HashSet::new();
+    for entry in &curated.player_cooldowns.spells {
+        belongs_to_class(&entry.name, entry.class_id, &entry.specs);
+        assert!(
+            seen.insert((entry.spell_id, entry.specs.clone())),
+            "duplicate {}",
+            entry.name
+        );
+        assert!(
+            curated
+                .cooldowns
+                .cooldowns
+                .iter()
+                .all(|c| c.spell_id != entry.spell_id),
+            "{} is a major cooldown",
+            entry.name
+        );
+        // Tank buff rows are personal defensives as well.
+        let may_be_defensive = entry.kind == PlayerCooldownKind::Defensive;
+        assert!(
+            may_be_defensive
+                || curated
+                    .defensives
+                    .defensives
+                    .iter()
+                    .all(|d| d.spell_id != entry.spell_id),
+            "{} is a personal defensive",
+            entry.name
+        );
     }
 }

@@ -2,10 +2,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod detail_dto;
 mod dto;
 mod fight_cache;
 mod icons;
 mod overview_dto;
+mod player_dto;
 mod recent;
 mod report_dto;
 mod state;
@@ -54,7 +56,10 @@ fn main() {
             commands::quick_overview,
             commands::damage_done_report,
             commands::healing_report,
-            commands::damage_taken_report
+            commands::damage_taken_report,
+            commands::player_detail,
+            commands::ability_detail,
+            commands::target_detail
         ])
         .run(context)
         .expect("error while running OpenLogs");

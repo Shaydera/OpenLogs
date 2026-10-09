@@ -1,15 +1,19 @@
-import type { FightRow, LogView } from '../../api/types';
+import type { Detail, FightRow, LogView, PlayerRef, QuickOverview } from '../../api/types';
 import { formatDuration } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { pullStatus, pullView } from '../../pulls/groupPulls';
-import type { FightTab } from '../../store';
+import type { FightTab, ReportData } from '../../store';
+import { playerIndex, shortName, spellName } from '../overview/players';
 
 /** What a breadcrumb link does. */
-export type CrumbAction = { kind: 'pulls' };
+export type CrumbAction =
+  | { kind: 'pulls' }
+  | { kind: 'overview' }
+  | { kind: 'detail'; depth: number };
 
 export interface Crumb {
   label: string;
-  /** `null`: the page shown. */
+  /** `null`: plain text (the "Enemies" level) or the page shown. */
   action: CrumbAction | null;
   /** The page shown: the last level. */
   current: boolean;
@@ -19,6 +23,10 @@ export interface CrumbInput {
   log: LogView;
   row: FightRow;
   tab: FightTab;
+  details: Detail[];
+  /** The whole-pull overview: player and spell names while a detail page loads. */
+  overview: QuickOverview | null;
+  report: ReportData | null;
 }
 
 type Level = Omit<Crumb, 'current'>;
@@ -34,14 +42,47 @@ function resultLabel(row: FightRow): string {
   return t('crumb.result', { result: t(`status.${pullStatus(row)}`), duration: formatDuration(row.durationMs) });
 }
 
+/** One level per detail page; an enemy sits under a plain "Enemies" level. */
+function detailLevels(details: Detail[], overview: QuickOverview | null, report: ReportData | null): Level[] {
+  const roster = overview ? playerIndex(overview) : new Map<number, PlayerRef>();
+  const playerName = (id: number) => {
+    const loaded = report?.tab === 'player' && report.data.player.actorId === id ? report.data.player.name : null;
+    const name = roster.get(id)?.name ?? loaded;
+    return name === null ? t('report.unknownPlayer') : shortName(name);
+  };
+  return details.flatMap((detail, depth): Level[] => {
+    const action: CrumbAction = { kind: 'detail', depth };
+    switch (detail.kind) {
+      case 'player':
+        return [{ label: playerName(detail.player), action }];
+      case 'ability': {
+        // Melee (spell 0) has an empty spell name: it falls through to "Melee".
+        const loaded = report?.tab === 'ability' && report.data.spellId === detail.spellId ? report.data.spellName || null : null;
+        const fallback = detail.spellId === 0 ? t('overview.melee') : overview ? spellName(overview, detail.spellId) : t('overview.unknownSpell', { id: detail.spellId });
+        const label = loaded ?? (detail.spellName || fallback);
+        return [{ label, action }];
+      }
+      case 'target': {
+        // The empty "Enemies" entry until the backend resolved it to an enemy.
+        const name = detail.name || (report?.tab === 'target' ? report.data.name : '');
+        const enemies: Level = { label: t('target.enemies'), action: null };
+        return name ? [enemies, { label: name, action }] : [enemies];
+      }
+    }
+  });
+}
+
 /**
  * The fight top bar's breadcrumb: the log file, then the pull — alone on the Overview, with result
- * and duration on the report tabs. Every level but the last links somewhere.
+ * and duration on the report tabs, with the detail stack on detail pages.
+ * Every level but the last links somewhere.
  */
-export function fightCrumbs({ log, row, tab }: CrumbInput): Crumb[] {
+export function fightCrumbs({ log, row, tab, details, overview, report }: CrumbInput): Crumb[] {
   const levels: Level[] = [{ label: log.fileName, action: { kind: 'pulls' } }];
   const pull = pullLabel(log.fights, row);
-  if (tab === 'overview') {
+  if (details.length > 0) {
+    levels.push({ label: pull, action: { kind: 'overview' } }, ...detailLevels(details, overview, report));
+  } else if (tab === 'overview') {
     levels.push({ label: pull, action: null });
   } else {
     levels.push({ label: t('crumb.withResult', { pull, result: resultLabel(row) }), action: null });

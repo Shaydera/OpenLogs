@@ -13,6 +13,30 @@
 .tabbar .toggle {
   padding-bottom: 2px;
 }
+/* A detail page's range pill in the top bar. */
+.range-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px 0 14px;
+  white-space: nowrap;
+  cursor: default;
+}
+.range-chip-x {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  line-height: 1;
+  cursor: pointer;
+}
+.range-chip-x:hover {
+  background: var(--accent-tint-line);
+}
 /* The fight pages' smaller toggle; the start page keeps the larger .toggle. */
 .toggle.toggle-sm {
   display: inline-flex;
@@ -240,8 +264,137 @@
   font: 600 15px var(--font-label);
   margin: 0;
 }
+.player-page {
+  display: grid;
+  gap: 18px;
+}
+.pchart {
+  position: relative;
+  height: 200px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--plot);
+  overflow: hidden;
+}
+.pchart svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.pc-area {
+  fill-opacity: 0.35;
+}
+.pc-line {
+  fill: none;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.pc-cd {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.pc-dead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--death) 22%, transparent) 0 6px, color-mix(in srgb, var(--death) 6%, transparent) 6px 12px);
+}
+.pc-ebon {
+  position: absolute;
+  bottom: 0;
+  height: 5px;
+  background: var(--class-evoker);
+}
+.pc-peak {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font-size: 11px;
+  color: var(--faint);
+}
+.pc-dead-label {
+  position: absolute;
+  top: 70px;
+  font-size: 12px;
+  color: var(--death);
+  white-space: nowrap;
+}
 .scroll-x {
   overflow-x: auto;
+}
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.link-btn:hover,
+.link-btn:focus-visible {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+.ahchart {
+  position: relative;
+  height: 150px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--plot);
+  overflow: hidden;
+}
+.ah-hit {
+  position: absolute;
+  bottom: 19px;
+  width: 3px;
+  transform: translateX(-1px);
+  opacity: 0.9;
+}
+.ah-hit.crit {
+  background: var(--accent);
+}
+.ah-cast {
+  position: absolute;
+  bottom: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  transform: translateX(-3px);
+  background: var(--muted);
+}
+.lt-chart {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--plot);
+  overflow: hidden;
+}
+.lt-lane {
+  position: absolute;
+  height: 4px;
+  min-width: 3px;
+  border-radius: 2px;
+}
+.lt-lane.short {
+  background: var(--kill);
+}
+.lt-lane.long {
+  background: var(--wipe);
+}
+.lt-lane.alive {
+  background: repeating-linear-gradient(90deg, var(--neutral-text) 0 3px, transparent 3px 5px);
+}
+.pc-mana {
+  fill: none;
+  stroke: var(--mana);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
 }
 
 .sr-only {

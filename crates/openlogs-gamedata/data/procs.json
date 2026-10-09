@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "note": "SPELL_CAST_SUCCESS events that are not player actions (procs, passive triggers, off-hand copies). The player and ability pages do not count them as casts. IDs checked against real 12.1 logs.",
+  "procs": [
+    { "spell_id": 204255, "name": "Soul Fragment" },
+    { "spell_id": 341263, "name": "Shadowy Apparition" },
+    { "spell_id": 415388, "name": "Reclamation" },
+    { "spell_id": 228537, "name": "Shattered Souls" },
+    { "spell_id": 155777, "name": "Rejuvenation (Germination)" },
+    { "spell_id": 452538, "name": "Fatebound Coin (Tails)" },
+    { "spell_id": 27576, "name": "Mutilate (off-hand)" },
+    { "spell_id": 337819, "name": "Throw Glaive (proc)" },
+    { "spell_id": 1223412, "name": "Soul Fragment (Devourer)" },
+    { "spell_id": 225919, "name": "Fracture (main-hand hit)" },
+    { "spell_id": 225921, "name": "Fracture (off-hand hit)" },
+    { "spell_id": 213243, "name": "Felblade (charge)" },
+    { "spell_id": 64844, "name": "Divine Hymn (tick)" },
+    { "spell_id": 157982, "name": "Tranquility (tick)" },
+    { "spell_id": 282449, "name": "Secret Technique (clones)" },
+    { "spell_id": 126664, "name": "Charge (effect)" },
+    { "spell_id": 110960, "name": "Greater Invisibility (effect)" },
+    { "spell_id": 393035, "name": "Throw Glaive (proc)" },
+    { "spell_id": 346665, "name": "Throw Glaive (Vengeance trigger)" }
+  ]
+}

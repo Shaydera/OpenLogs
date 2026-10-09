@@ -134,6 +134,13 @@ pub struct HealingReportDto {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SpellAmount {
+    pub spell_id: SpellId,
+    pub amount: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TakenAbilityDto {
     pub spell_id: SpellId,
     /// World damage, kept apart from melee (both spell 0).
@@ -171,14 +178,14 @@ pub struct DamageTakenReportDto {
 }
 
 /// Collects the players and spells a report references, for names, colours and icons.
-struct Names<'a> {
+pub(crate) struct Names<'a> {
     fight: &'a Fight,
     roster: Vec<ActorId>,
     spells: BTreeMap<SpellId, SpellRef>,
 }
 
 impl<'a> Names<'a> {
-    fn new(fight: &'a Fight) -> Self {
+    pub(crate) fn new(fight: &'a Fight) -> Self {
         Self {
             fight,
             roster: Vec::new(),
@@ -186,14 +193,14 @@ impl<'a> Names<'a> {
         }
     }
 
-    fn player(&mut self, id: ActorId) -> ActorId {
+    pub(crate) fn player(&mut self, id: ActorId) -> ActorId {
         if !self.roster.contains(&id) {
             self.roster.push(id);
         }
         id
     }
 
-    fn spell(&mut self, id: SpellId) -> SpellId {
+    pub(crate) fn spell(&mut self, id: SpellId) -> SpellId {
         if id != NO_SPELL {
             let name = self
                 .fight
@@ -205,7 +212,7 @@ impl<'a> Names<'a> {
         id
     }
 
-    fn row(&mut self, row: &AbilityRow) -> AbilityRowDto {
+    pub(crate) fn row(&mut self, row: &AbilityRow) -> AbilityRowDto {
         let actor = self.fight.actors.get(row.actor);
         AbilityRowDto {
             spell_id: self.spell(row.spell),
@@ -226,7 +233,7 @@ impl<'a> Names<'a> {
         }
     }
 
-    fn amounts(&mut self, list: &[(ActorId, u64)]) -> Vec<PlayerAmount> {
+    pub(crate) fn amounts(&mut self, list: &[(ActorId, u64)]) -> Vec<PlayerAmount> {
         list.iter()
             .map(|&(player, amount)| PlayerAmount {
                 player: self.player(player),
@@ -235,7 +242,7 @@ impl<'a> Names<'a> {
             .collect()
     }
 
-    fn taken(&mut self, a: &TakenAbility) -> TakenAbilityDto {
+    pub(crate) fn taken(&mut self, a: &TakenAbility) -> TakenAbilityDto {
         TakenAbilityDto {
             spell_id: self.spell(a.spell),
             environmental: a.environmental,
@@ -248,7 +255,7 @@ impl<'a> Names<'a> {
         }
     }
 
-    fn finish(self) -> (Vec<PlayerRef>, BTreeMap<SpellId, SpellRef>) {
+    pub(crate) fn finish(self) -> (Vec<PlayerRef>, BTreeMap<SpellId, SpellRef>) {
         let roster = self
             .roster
             .iter()
@@ -317,6 +324,16 @@ pub fn healing_report_dto(fight: &Fight, report: &HealingReport) -> HealingRepor
         roster,
         spells,
     }
+}
+
+/// A spell in a player's damage-taken summary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TakenSpellDto {
+    pub spell_id: SpellId,
+    pub amount: u64,
+    /// World damage, kept apart from melee (both spell 0).
+    pub environmental: bool,
 }
 
 pub fn taken_report_dto(fight: &Fight, report: &DamageTakenReport) -> DamageTakenReportDto {

@@ -24,6 +24,12 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+.appbar-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .crumbs {
   display: flex;
   flex-wrap: wrap;
@@ -90,6 +96,22 @@
 .fight-header .kpi-strip {
   flex: 2 1 560px;
 }
+/* Detail pages: the pull in one line above the tabs; the page's own head carries the figures. */
+.fight-header.fight-header-compact {
+  gap: 12px;
+}
+.fight-header-compact .fight-id {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+}
+.fight-header-compact .fight-name {
+  font-size: 22px;
+}
+.fight-header-compact .fight-meta {
+  font-size: 13px;
+}
 
 .tabs {
   display: flex;
@@ -149,9 +171,6 @@
 }
 .kpi-death {
   color: var(--death);
-}
-.kpi-support {
-  color: var(--support-text);
 }
 .kpi-sub.kpi-sub-warn {
   color: var(--wipe-text);

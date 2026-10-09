@@ -10,9 +10,23 @@ use crate::specs::spec;
 pub const CONSUMABLES_FILE: &str = "consumables.json";
 pub const MAJOR_CDS_FILE: &str = "major_cds.json";
 pub const DEFENSIVES_FILE: &str = "personal_defensives.json";
+pub const PROCS_FILE: &str = "procs.json";
 pub const PHASE_NAMES_FILE: &str = "phase_names.json";
+pub const PLAYER_COOLDOWNS_FILE: &str = "player_cooldowns.json";
 /// Folder in the override directory holding one phase config per encounter.
 pub const PHASES_DIR: &str = "phases";
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct ProcSpell {
+    pub spell_id: u32,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct ProcList {
+    pub version: u32,
+    pub procs: Vec<ProcSpell>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -92,6 +106,41 @@ pub struct PersonalDefensive {
 pub struct DefensiveList {
     pub version: u32,
     pub defensives: Vec<PersonalDefensive>,
+}
+
+/// What an entry of the player-page catalogue adds to the player page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlayerCooldownKind {
+    /// A rotational cooldown: a cast row after the major cooldowns.
+    Rotation,
+    /// A short absorb shield: a cast row among the defensives and a buff row with its uptime.
+    Shield,
+    /// A key proc: a buff row (the entry's ID is the buff's).
+    Proc,
+    /// A movement or utility spell (Hover, Charge, …) that never stands for the rotation of a spec
+    /// without rotation entries; no row of its own.
+    Utility,
+    /// A tank's active mitigation or defensive buff (Bone Shield, Ironfur): a buff row with its
+    /// uptime (the entry's ID is the buff's); a cast row only as a personal defensive.
+    Defensive,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct PlayerCooldown {
+    pub spell_id: u32,
+    pub name: String,
+    pub class_id: u32,
+    /// Spec IDs this entry applies to; empty means every spec of the class.
+    #[serde(default)]
+    pub specs: Vec<u32>,
+    pub kind: PlayerCooldownKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct PlayerCooldownList {
+    pub version: u32,
+    pub spells: Vec<PlayerCooldown>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -189,6 +238,9 @@ pub struct Curated {
     pub consumables: ConsumableList,
     pub cooldowns: CooldownList,
     pub defensives: DefensiveList,
+    pub procs: ProcList,
+    /// Rotational cooldowns, shields and key procs of the player page (bundled, overridable).
+    pub player_cooldowns: PlayerCooldownList,
     /// Names for auto-detected phases (bundled, overridable).
     pub phase_names: PhaseNameList,
     /// The user's phase configs; none are bundled.
@@ -222,6 +274,18 @@ impl Curated {
             include_str!("../data/personal_defensives.json"),
             &mut warnings,
         );
+        let procs = load_list(
+            override_dir,
+            PROCS_FILE,
+            include_str!("../data/procs.json"),
+            &mut warnings,
+        );
+        let player_cooldowns = load_list(
+            override_dir,
+            PLAYER_COOLDOWNS_FILE,
+            include_str!("../data/player_cooldowns.json"),
+            &mut warnings,
+        );
         let phase_names = load_list(
             override_dir,
             PHASE_NAMES_FILE,
@@ -233,6 +297,8 @@ impl Curated {
             consumables,
             cooldowns,
             defensives,
+            procs,
+            player_cooldowns,
             phase_names,
             phases,
             warnings,
@@ -288,6 +354,39 @@ impl Curated {
         class_wide
     }
 
+    /// The cooldown entry named `name` for a player of `spec_id`: a cooldown's buff often has
+    /// another ID than its cast (Arcane Surge casts as 365350 and buffs as 365362).
+    pub fn cooldown_named(&self, name: &str, spec_id: Option<u32>) -> Option<&CooldownSpell> {
+        self.cooldowns
+            .cooldowns
+            .iter()
+            .filter(|entry| entry.name == name)
+            .find_map(|entry| self.cooldown(entry.spell_id, spec_id))
+    }
+
+    /// Whether the player-page catalogue has rotation entries for `spec_id`; specs without any
+    /// (also those with only a shield, proc or utility entry) get the fallback rows (most-cast
+    /// spells as rotation).
+    pub fn has_rotation_entries(&self, spec_id: u32) -> bool {
+        spec(spec_id).is_some_and(|spec| {
+            self.player_cooldowns.spells.iter().any(|entry| {
+                entry.kind == PlayerCooldownKind::Rotation
+                    && entry.class_id == spec.class_id
+                    && (entry.specs.is_empty() || entry.specs.contains(&spec_id))
+            })
+        })
+    }
+
+    /// The player-page catalogue entry for `spell_id` cast or worn by a player of `spec_id`.
+    pub fn player_cooldown(&self, spell_id: u32, spec_id: u32) -> Option<&PlayerCooldown> {
+        let class_id = spec(spec_id)?.class_id;
+        self.player_cooldowns.spells.iter().find(|entry| {
+            entry.spell_id == spell_id
+                && entry.class_id == class_id
+                && (entry.specs.is_empty() || entry.specs.contains(&spec_id))
+        })
+    }
+
     pub fn defensives_for(&self, spec_id: u32) -> Vec<&PersonalDefensive> {
         let Some(class_id) = spec(spec_id).map(|spec| spec.class_id) else {
             return Vec::new();
@@ -299,6 +398,11 @@ impl Curated {
                 def.class_id == class_id && (def.specs.is_empty() || def.specs.contains(&spec_id))
             })
             .collect()
+    }
+
+    /// A cast that is a proc or passive trigger, not a player action.
+    pub fn is_proc(&self, spell_id: u32) -> bool {
+        self.procs.procs.iter().any(|p| p.spell_id == spell_id)
     }
 
     pub fn defensive(&self, spell_id: u32, spec_id: u32) -> Option<&PersonalDefensive> {

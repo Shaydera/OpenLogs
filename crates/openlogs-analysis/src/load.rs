@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io;
 use std::path::Path;
@@ -9,10 +9,10 @@ use openlogs_parser::{
     parse_line,
 };
 
-use crate::actors::{ActorId, Actors, NOBODY};
+use crate::actors::{ActorId, ActorKind, Actors, NOBODY};
 use crate::fight::{
-    Absorbed, Damage, Energize, Event, EventKind, Fight, Heal, MissType, Missed, NO_SPELL, SpellId,
-    SpellInfo, UnitHp,
+    Absorbed, Damage, Energize, Event, EventKind, Fight, Heal, MissType, Missed, NO_SPELL,
+    POWER_SAMPLE_MS, PowerSample, SpellId, SpellInfo, UnitHp,
 };
 
 /// Loads one fight, including its prelude, from the complete log bytes.
@@ -48,6 +48,8 @@ pub fn load_fight_file(path: &Path, summary: &FightSummary) -> io::Result<Fight>
 struct FightBuilder {
     start: Timestamp,
     fight: Fight,
+    /// Last kept power sample per (player, power type).
+    last_power: HashMap<(ActorId, i32), i32>,
 }
 
 impl FightBuilder {
@@ -61,10 +63,12 @@ impl FightBuilder {
                 outcome: summary.outcome,
                 duration_ms: summary.duration_ms,
                 events: Vec::new(),
+                power: Vec::new(),
                 actors: Actors::new(),
                 spells: BTreeMap::new(),
                 broken_lines: 0,
             },
+            last_power: HashMap::new(),
         }
     }
 
@@ -85,6 +89,7 @@ impl FightBuilder {
 
     fn finish(mut self) -> Fight {
         self.fight.events.sort_by_key(|event| event.t);
+        self.fight.power.sort_by_key(|p| p.t);
         self.fight
     }
 
@@ -99,6 +104,7 @@ impl FightBuilder {
         let target = actors.intern(&event.target);
         let unit_hp = event.advanced.map(|info| {
             let unit = actors.intern_guid(info.info_guid);
+            actors.note_advanced(unit, info.level, info.max_hp);
             if let Some(owner) = info.owner_guid {
                 let owner = actors.intern_guid(owner);
                 actors.set_owner(unit, owner);
@@ -112,6 +118,14 @@ impl FightBuilder {
         if let CombatKind::Summon = event.kind {
             actors.set_owner(target, source);
         }
+        // `unit_hp.actor` is the advanced block's unit, interned above.
+        if let (Some(info), Some(hp)) = (event.advanced, unit_hp)
+            && self.fight.actors.get(hp.actor).kind == ActorKind::Player
+        {
+            for power in info.powers() {
+                self.note_power(t, hp.actor, power);
+            }
+        }
         let spell = event.spell.map_or(NO_SPELL, |spell| self.spell(spell));
         let kind = self.kind(event.kind);
         Event {
@@ -124,6 +138,25 @@ impl FightBuilder {
             target_hostile: event.target.is_hostile(),
             unit_hp,
         }
+    }
+
+    fn note_power(&mut self, t: i32, actor: ActorId, power: openlogs_parser::Power) {
+        let key = (actor, power.power_type);
+        if self
+            .last_power
+            .get(&key)
+            .is_some_and(|&last| (t - last).abs() < POWER_SAMPLE_MS)
+        {
+            return;
+        }
+        self.last_power.insert(key, t);
+        self.fight.power.push(PowerSample {
+            t,
+            actor,
+            power_type: power.power_type,
+            current: power.current,
+            max: power.max,
+        });
     }
 
     fn spell(&mut self, spell: Spell<'_>) -> SpellId {

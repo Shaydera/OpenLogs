@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use openlogs_analysis::{ActorId, Actors, Event, Fight};
+use openlogs_analysis::{ActorId, Actors, Event, EventKind, Fight, Heal, NOBODY, SpellId};
 use openlogs_index::Outcome;
 use openlogs_parser::Unit;
 
@@ -27,8 +27,30 @@ pub fn fight(actors: Actors, mut events: Vec<Event>) -> Fight {
         outcome: Outcome::Wipe,
         duration_ms: 20_000,
         events,
+        power: Vec::new(),
         actors,
         spells: BTreeMap::new(),
         broken_lines: 0,
+    }
+}
+
+/// An effective heal on a friendly unit.
+pub fn heal_event(t: i32, source: ActorId, target: ActorId, spell: SpellId, amount: u64) -> Event {
+    Event {
+        t,
+        source,
+        target,
+        spell,
+        kind: EventKind::Heal(Heal {
+            periodic: false,
+            amount,
+            overheal: 0,
+            absorbed: 0,
+            critical: false,
+            supporter: NOBODY,
+        }),
+        source_hostile: false,
+        target_hostile: false,
+        unit_hp: None,
     }
 }

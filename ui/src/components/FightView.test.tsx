@@ -81,4 +81,24 @@ describe('FightView', () => {
       { startMs: null, endMs: null, attribution: 'augmented' },
     );
   });
+
+  it('navigates by breadcrumb: the pull crumb back to the Overview with focus on its title, the log crumb to the pull list', async () => {
+    useApp.setState({ overview: overviewFixture, tab: 'damage', details: [{ kind: 'player', player: 4 }] });
+    render(<FightView />);
+    const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    await userEvent.click(within(crumbs).getByRole('button', { name: "Ula'tek · Pull #1" }));
+    expect(useApp.getState().tab).toBe('overview');
+    expect(screen.getByRole('heading', { level: 1, name: "Ula'tek" })).toHaveFocus();
+    await userEvent.click(within(crumbs).getByRole('button', { name: 'WoWCombatLog-100726_185823.txt' }));
+    expect(useApp.getState().view).toEqual({ kind: 'start' });
+  });
+
+  it('offers a way back when a detail page fails', async () => {
+    const back = vi.fn(async () => {});
+    useApp.setState({ overview: overviewFixture, tab: 'damage', details: [{ kind: 'player', player: 99 }], reportError: 'Actor 99 is not a player of this pull', back });
+    render(<FightView />);
+    expect(screen.getByText('The report could not be calculated: Actor 99 is not a player of this pull')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '← Back' }));
+    expect(back).toHaveBeenCalled();
+  });
 });

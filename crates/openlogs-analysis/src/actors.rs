@@ -35,6 +35,10 @@ pub struct Actor {
     pub owner: Option<ActorId>,
     /// From `COMBATANT_INFO`, players only.
     pub spec_id: Option<u32>,
+    /// Largest item level the advanced block reported; players only.
+    pub item_level: Option<u32>,
+    /// Largest max HP the advanced block reported; players only.
+    pub max_hp: Option<u64>,
 }
 
 impl Actor {
@@ -72,6 +76,8 @@ impl Actors {
                 flags: 0,
                 owner: None,
                 spec_id: None,
+                item_level: None,
+                max_hp: None,
             }],
             by_guid: HashMap::new(),
         }
@@ -111,6 +117,8 @@ impl Actors {
             flags: 0,
             owner: None,
             spec_id: None,
+            item_level: None,
+            max_hp: None,
         });
         self.by_guid.insert(guid.to_string(), id);
         id
@@ -160,6 +168,20 @@ impl Actors {
     pub fn set_spec(&mut self, unit: ActorId, spec_id: u32) {
         if unit != NOBODY {
             self.list[unit as usize].spec_id = Some(spec_id);
+        }
+    }
+
+    /// Records a player's item level and max HP from an advanced block, keeping the largest.
+    pub fn note_advanced(&mut self, unit: ActorId, level: u32, max_hp: u64) {
+        let actor = &mut self.list[unit as usize];
+        if actor.kind != ActorKind::Player {
+            return;
+        }
+        if level > 0 {
+            actor.item_level = Some(actor.item_level.map_or(level, |l| l.max(level)));
+        }
+        if max_hp > 0 {
+            actor.max_hp = Some(actor.max_hp.map_or(max_hp, |m| m.max(max_hp)));
         }
     }
 

@@ -1,6 +1,8 @@
 mod support;
 
-use openlogs_analysis::{AbilityAmount, DamageVia, EventKind, NOBODY, UnitHp, deaths};
+use openlogs_analysis::{
+    AbilityAmount, DamageVia, EventKind, LethalBurst, NOBODY, Resurrection, UnitHp, deaths,
+};
 use support::{FightBuilder, HOSTILE_FLAGS, MELEE, damage, heal};
 
 #[test]
@@ -205,7 +207,17 @@ fn death_after_battle_res_counts_again() {
     b.push(15_000, NOBODY, player, 0, EventKind::Resurrect);
     let deaths = deaths(&b.build());
     assert_eq!(deaths.len(), 2);
-    assert_eq!(deaths[0].resurrected_at, Some(14_000));
+    assert_eq!(
+        (deaths[0].resurrected_at, deaths[0].dead_until),
+        (Some(14_000), Some(14_000))
+    );
+    assert_eq!(
+        deaths[0].resurrected_by,
+        Some(Resurrection {
+            spell: rebirth,
+            source: druid
+        })
+    );
     assert_eq!((deaths[1].t, deaths[1].resurrected_at), (40_000, None));
 }
 
@@ -308,6 +320,61 @@ fn reincarnation_ends_the_death() {
     assert_eq!(deaths[1].t, 424_000);
 }
 
+#[test]
+fn the_lethal_burst_counts_close_hits_of_the_killing_spell() {
+    let mut b = FightBuilder::new(60_000);
+    let player = b.player("Player-1", "Faelan-Emberfall-EU", 62);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let spit = b.spell(1, "Virulent Spit");
+    let venom = b.spell(2, "Deadly Venom");
+    // A Spit 3.1 s before the burst is not part of it; Deadly Venom in between does not break it.
+    b.push(
+        35_000,
+        boss,
+        player,
+        spit,
+        EventKind::Damage(damage(DamageVia::Spell, 100, 0)),
+    );
+    b.push(
+        38_100,
+        boss,
+        player,
+        spit,
+        EventKind::Damage(damage(DamageVia::Spell, 300, 0)),
+    );
+    b.push(
+        38_500,
+        boss,
+        player,
+        venom,
+        EventKind::Damage(damage(DamageVia::Periodic, 50, 0)),
+    );
+    b.push(
+        39_100,
+        boss,
+        player,
+        spit,
+        EventKind::Damage(damage(DamageVia::Spell, 400, 120)),
+    );
+    b.push(
+        39_100,
+        NOBODY,
+        player,
+        MELEE,
+        EventKind::Died { unconscious: false },
+    );
+    let death = &deaths(&b.build())[0];
+    assert_eq!(
+        death.lethal_burst,
+        Some(LethalBurst {
+            spell: spit,
+            count: 2,
+            window_ms: 1_000
+        })
+    );
+    assert_eq!(death.resurrected_by, None);
+}
+
 /// A player's own HP snapshot, as a cast's advanced block reports it.
 fn own_hp(b: &mut FightBuilder, t: i32, player: u32, current: u64) {
     b.fight.events.push(openlogs_analysis::Event {
@@ -327,7 +394,7 @@ fn own_hp(b: &mut FightBuilder, t: i32, player: u32, current: u64) {
 }
 
 #[test]
-fn a_released_player_dies_again_once_alive() {
+fn a_released_player_is_dead_until_alive_again() {
     // The player releases and runs back; the log has no resurrect, but his next cast reports
     // him with HP again.
     let mut b = FightBuilder::new(600_000);
@@ -362,10 +429,13 @@ fn a_released_player_dies_again_once_alive() {
         EventKind::Died { unconscious: false },
     );
     let deaths = deaths(&b.build());
-    let spans: Vec<_> = deaths.iter().map(|d| (d.t, d.resurrected_at)).collect();
+    let spans: Vec<_> = deaths
+        .iter()
+        .map(|d| (d.t, d.resurrected_at, d.dead_until))
+        .collect();
     assert_eq!(
         spans,
-        vec![(260_000, None), (400_000, None)],
+        vec![(260_000, None, Some(300_000)), (400_000, None, None)],
         "alive at the first own HP snapshot above 0; the next death counts"
     );
 }

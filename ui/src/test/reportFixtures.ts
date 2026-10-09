@@ -1,4 +1,4 @@
-import type { DamageReport, DamageTakenReport, HealingReport, PlayerRef } from '../api/types';
+import type { AbilityDetail, DamageReport, DamageTakenReport, HealingReport, PlayerDetail, PlayerRef, TargetDetail } from '../api/types';
 
 const roster: PlayerRef[] = [
   { actorId: 3, name: 'Wendel-Emberfall-EU', specId: 71, specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
@@ -92,4 +92,156 @@ export const takenReportFixture: DamageTakenReport = {
       abilities: [{ spellId: 0, sourceName: 'Gore Rattle', sourceId: null, environmental: false, amount: 1_000_000, absorbed: 0, hits: 4, playersHit: 1 }],
     },
   ],
+};
+
+export const playerDetailFixture: PlayerDetail = {
+  player: roster[1],
+  specName: 'Arcane Mage',
+  itemLevel: 334,
+  maxHp: 959_000,
+  metric: 'damage',
+  attribution: 'reattributed',
+  startMs: 0,
+  endMs: 20_000,
+  total: 103_233_825,
+  otherModeTotal: 117_091_704,
+  perSecond: 215_691,
+  rank: 3,
+  rankedPlayers: 3,
+  supportReceived: 13_857_879,
+  supportReceivedFrom: [{ player: 5, amount: 13_857_879 }],
+  supportBySpell: [
+    { spellId: 409311, amount: 5_978_978 },
+    { spellId: 404908, amount: 4_369_588 },
+    { spellId: 395152, amount: 3_509_313 },
+  ],
+  healingReceived: 18_970_000,
+  deaths: [
+    {
+      t: 12_000,
+      resurrectedAt: 16_000,
+      killingBlow: { t: 12_000, spellId: 1300001, sourceName: "Ula'tek", amount: 355_265, overkill: 4_923, environmental: false },
+      resurrectedBy: { spellId: 20484, source: 2 },
+      lethalBurst: { spellId: 1300001, count: 2, windowMs: 1_000 },
+      context: [
+        { item: 'defensive', spellId: 414658, state: 'on_cooldown', t: 4_000 },
+        { item: 'defensive', spellId: 110959, state: 'on_cooldown', t: 6_000 },
+        { item: 'defensive', spellId: 342245, state: 'on_cooldown', t: 7_000 },
+        { item: 'healthstone', spellId: 6262, state: 'available', t: null },
+        { item: 'health_potion', spellId: 1234768, state: 'available', t: null },
+      ],
+    },
+  ],
+  consumables: [],
+  abilities: [
+    { spellId: 5143, actorId: 4, actorName: 'Faelan-Emberfall-EU', kind: 'own', amount: 37_985_527, overheal: 0, hits: 1_325, crits: 340, maxHit: 242_663, ticks: 0, casts: 85, aug: false, pets: 0 },
+    { spellId: 44425, actorId: 4, actorName: 'Faelan-Emberfall-EU', kind: 'own', amount: 22_487_648, overheal: 0, hits: 117, crits: 47, maxHit: 1_056_506, ticks: 0, casts: 67, aug: false, pets: 0 },
+    { spellId: 404908, actorId: 4, actorName: 'Faelan-Emberfall-EU', kind: 'own', amount: 4_369_588, overheal: 0, hits: 69, crits: 0, maxHit: 1_857_443, ticks: 0, casts: null, aug: true, pets: 0 },
+    { spellId: 88084, actorId: 40, actorName: 'Mirror Image', kind: 'pet', amount: 1_319_969, overheal: 0, hits: 120, crits: 20, maxHit: 30_000, ticks: 0, casts: null, aug: false, pets: 2 },
+    { spellId: 409311, actorId: 5, actorName: 'Speronis-Stonevale-EU', kind: 'support_deducted', amount: -5_978_978, overheal: 0, hits: 300, crits: 0, maxHit: 0, ticks: 0, casts: null, aug: false, pets: 0 },
+  ],
+  petAbilities: [
+    { spellId: 59638, actorId: 40, actorName: 'Mirror Image', kind: 'pet', amount: 1_000_000, overheal: 0, hits: 100, crits: 15, maxHit: 30_000, ticks: 0, casts: null, aug: false, pets: 0 },
+    { spellId: 449569, actorId: 41, actorName: 'Arcane Phoenix', kind: 'pet', amount: 319_969, overheal: 0, hits: 20, crits: 5, maxHit: 25_000, ticks: 0, casts: null, aug: false, pets: 0 },
+  ],
+  takenBySpell: [{ spellId: 1300001, amount: 2_000_000, environmental: false }],
+  seriesStepMs: 5_000,
+  series: [200_000, 400_000, 0, 150_000],
+  castRows: [
+    { spellId: 365350, kind: 'major', durationMs: 15_000, times: [700, 13_340], link: null },
+    { spellId: 414658, kind: 'defensive', durationMs: 0, times: [8_000], link: null },
+  ],
+  castTimeline: [
+    { spellId: 44425, kind: 'rotation', durationMs: 0, times: [1_000, 3_000, 5_000], link: { spellId: 44425, metric: 'damage' } },
+    { spellId: 365350, kind: 'rotation', durationMs: 0, times: [700, 13_340], link: null },
+  ],
+  buffRows: [
+    { spellId: 395152, source: 5, kind: 'aug', intervals: [[500, 6_590], [7_370, 16_610]], uptime: 0.766 },
+    { spellId: 365362, source: 4, kind: 'cooldown', intervals: [[700, 1_810], [13_340, 15_080]], uptime: 0.15 },
+  ],
+  ebonMight: [[500, 6_590], [7_370, 16_610]],
+  dead: [[12_000, 16_000]],
+  deadSince: null,
+  augmentation: [],
+  mana: [60, 40, null, 90],
+  roster: [...roster].sort((a, b) => a.name.localeCompare(b.name)),
+  spells: {
+    ...spells,
+    '5143': { name: 'Arcane Missiles' },
+    '404908': { name: 'Fate Mirror' },
+    '88084': { name: 'Arcane Blast' },
+    '365350': { name: 'Arcane Surge' },
+    '365362': { name: 'Arcane Surge' },
+    '414658': { name: 'Ice Cold' },
+    '20484': { name: 'Rebirth' },
+    '110959': { name: 'Greater Invisibility' },
+    '342245': { name: 'Alter Time' },
+    '6262': { name: 'Healthstone' },
+    '1234768': { name: 'Silvermoon Health Potion' },
+    '59638': { name: 'Frostbolt' },
+    '449569': { name: 'Meteorite' },
+  },
+};
+
+/** Faelan's Arcane Barrage over 20 s. */
+export const abilityDetailFixture: AbilityDetail = {
+  player: roster[1],
+  spellId: 44425,
+  spellName: 'Arcane Barrage',
+  school: 64,
+  pet: null,
+  metric: 'damage',
+  startMs: 0,
+  endMs: 20_000,
+  total: 2_300_000,
+  playerTotal: 10_000_000,
+  casts: [1_000, 6_000, 11_000, 16_000],
+  hits: [
+    { t: 1_100, target: 10, amount: 300_000, critical: false, periodic: false },
+    { t: 1_100, target: 11, amount: 200_000, critical: false, periodic: false },
+    { t: 6_100, target: 10, amount: 1_056_506, critical: true, periodic: false },
+    { t: 11_100, target: 10, amount: 400_000, critical: true, periodic: false },
+    { t: 16_100, target: 12, amount: 343_494, critical: false, periodic: false },
+  ],
+  byTarget: [
+    { name: "Ula'tek", hits: 3, crits: 2, amount: 1_756_506 },
+    { name: 'Blightscale Rawling', hits: 2, crits: 0, amount: 543_494 },
+  ],
+  median: 343_494,
+  uptime: null,
+  dead: [[12_000, 16_000]],
+  targetNames: { '10': "Ula'tek", '11': 'Blightscale Rawling', '12': 'Blightscale Rawling' },
+  playerTargets: [],
+};
+
+/** Blightscale Rawlings over 60 s. */
+export const targetDetailFixture: TargetDetail = {
+  name: 'Blightscale Rawling',
+  startMs: 0,
+  endMs: 60_000,
+  damageTaken: 550_000,
+  raidDamage: 2_200_000,
+  maxHp: 7_510_000,
+  isBoss: false,
+  sharesBossHp: false,
+  primary: false,
+  units: [
+    { actor: 20, firstHit: 1_000, lastHit: 7_000, death: 8_000 },
+    { actor: 21, firstHit: 3_000, lastHit: 9_000, death: null },
+    { actor: 22, firstHit: 20_000, lastHit: 34_000, death: 36_000 },
+  ],
+  waves: [
+    { startMs: 1_000, units: 2, killed: 1, clearMs: 8_000, avgLifeMs: 7_000 },
+    { startMs: 20_000, units: 1, killed: 1, clearMs: 16_000, avgLifeMs: 16_000 },
+  ],
+  byPlayer: [
+    { player: 4, amount: 300_000 },
+    { player: 3, amount: 250_000 },
+  ],
+  enemies: [
+    { name: "Ula'tek", units: 1, damageTaken: 1_000_000, isBoss: true, sharesBossHp: false, primary: true },
+    { name: 'Blightscale Rawling', units: 3, damageTaken: 550_000, isBoss: false, sharesBossHp: false, primary: false },
+    { name: 'Gore Rattle', units: 1, damageTaken: 650_000, isBoss: false, sharesBossHp: true, primary: false },
+  ],
+  roster,
 };

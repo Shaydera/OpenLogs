@@ -63,6 +63,11 @@
   --class-demonhunter: #bc66de;
   --class-evoker: #3baa93;
 
+  /* The player chart's dashed mana line. */
+  --mana: #8a7cf0;
+  /* The legend swatch of a dead band: two hatch stripes. */
+  --dead-hatch-a: #3a2020;
+  --dead-hatch-b: #1a1214;
   /* Veils: outside the selected range on a plot, behind a dialog. */
   --plot-dim: color-mix(in srgb, var(--scrim) 72%, transparent);
   --dialog-scrim: color-mix(in srgb, var(--scrim) 72%, transparent);
@@ -103,12 +108,13 @@
   --dropzone: #101318;
   --icon-ring: #3a3f49;
   --icon-tile: #232833;
-  /* Timeline and range plots, report bars, role pills. */
+  /* Timeline and range plots, report bars, role pills, the hit chart's baseline. */
   --plot: #0f1216;
   --dps-area: #2b4a66;
   --hatch: #12151a;
   --bar-track: #1a1e25;
   --tag-bg: #1e2533;
+  --chart-baseline: #252a34;
 }
 
 html,

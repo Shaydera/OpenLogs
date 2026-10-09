@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { DamageTakenReport } from '../../api/types';
 import { formatInteger, formatMillions, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
+import { useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
 import { shortName } from '../overview/players';
 import { takenBreakdown, takenSource } from './breakdown';
@@ -13,6 +14,7 @@ import { barWidth, hitIconUrl, hitName, reportSpellName, rosterIndex } from './r
  * the raid-wide list by ability.
  */
 export function DamageTakenTab({ report }: { report: DamageTakenReport }) {
+  const openPlayer = useApp((s) => s.openPlayer);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const roster = rosterIndex(report.roster);
   if (report.byPlayer.length === 0 && report.byAbility.length === 0) {
@@ -69,6 +71,7 @@ export function DamageTakenTab({ report }: { report: DamageTakenReport }) {
               total={selected.amount}
               perSecond={selected.perSecond}
               unit={t('report.dtps')}
+              onDetails={() => void openPlayer(selected.player)}
             />
             <SideBreakdown
               caption={t('report.takenOf', { name: shortName(roster.get(selected.player)?.name ?? '?') })}

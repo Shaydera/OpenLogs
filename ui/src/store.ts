@@ -2,14 +2,19 @@ import { create } from 'zustand';
 import { api } from './api/client';
 import type {
   GameDataStatus,
+  AbilityDetail,
   Attribution,
   DamageReport,
   DamageTakenReport,
+  Detail,
   HealingReport,
   LogView,
+  Metric,
+  PlayerDetail,
   QuickOverview,
   RecentLog,
   ReportFilter,
+  TargetDetail,
 } from './api/types';
 import { t } from './i18n/i18n';
 import { readStored, writeStored } from './storage';
@@ -29,12 +34,15 @@ export type ReportData =
   | { tab: 'damage'; data: DamageReport }
   | { tab: 'healing'; data: HealingReport }
   | { tab: 'taken'; data: DamageTakenReport }
+  | { tab: 'player'; data: PlayerDetail }
+  | { tab: 'ability'; data: AbilityDetail }
+  | { tab: 'target'; data: TargetDetail }
   | { tab: 'overview'; data: QuickOverview };
 
 export type View = { kind: 'start' } | { kind: 'fight'; fightIndex: number };
 
-/** Where keyboard focus goes after a navigation: a page title. */
-export type FocusTarget = 'start' | 'fight';
+/** Where keyboard focus goes after a navigation: a page title or the active tab. */
+export type FocusTarget = 'start' | 'fight' | 'page' | 'tab';
 
 interface State {
   recent: RecentLog[];
@@ -56,9 +64,13 @@ interface State {
   reportLoading: boolean;
   reportError: string | null;
   showAugDelta: boolean;
+  /** Drilldown stack; the last entry is shown instead of the report. */
+  details: Detail[];
+  /** Tab a detail stack was opened from; shown again once the stack is empty. */
+  detailOrigin: FightTab | null;
   /**
    * Focus requested by the last navigation; the element that renders for it takes it once.
-   * A range or Aug-mode change drops a request nobody took.
+   * A failed load or a range or Aug-mode change drops a request nobody took.
    */
   focusRequest: FocusTarget | null;
   settingsOpen: boolean;
@@ -79,10 +91,19 @@ interface Actions {
   backToPulls(): void;
   dismissError(): void;
   showError(message: string): void;
-  setTab(tab: FightTab): Promise<void>;
+  /** `focus`: where focus goes once the tab shows (the pull breadcrumb: the Overview title). */
+  setTab(tab: FightTab, focus?: FocusTarget | null): Promise<void>;
   setAttribution(attribution: Attribution): Promise<void>;
   setRange(range: TimeRange | null): Promise<void>;
   setShowAugDelta(show: boolean): void;
+  openPlayer(player: number): Promise<void>;
+  openAbility(spellId: number, pet: string | null): Promise<void>;
+  openTarget(name: string): Promise<void>;
+  openAbilityOf(player: number, spellId: number, tab: 'damage' | 'healing'): Promise<void>;
+  back(): Promise<void>;
+  /** Shows the page at `depth` of the detail stack (a breadcrumb link); the pages above it close. */
+  showDetailAt(depth: number): Promise<void>;
+  closeDetail(): Promise<void>;
   consumeFocus(): void;
   openSettings(): Promise<void>;
   closeSettings(): void;
@@ -121,6 +142,8 @@ export function initialState(): State {
     reportLoading: false,
     reportError: null,
     showAugDelta: readFlag(AUG_DELTA_KEY, false),
+    details: [],
+    detailOrigin: null,
     focusRequest: null,
     settingsOpen: false,
     gameData: null,
@@ -143,7 +166,20 @@ function dropPendingReports() {
   reportRequest += 1;
 }
 
-async function fetchReport(path: string, fight: number, tab: FightTab, filter: ReportFilter): Promise<ReportData> {
+/** The tab's report, or the detail page on top of the stack for Damage Done and Healing. */
+async function fetchReport(
+  path: string,
+  fight: number,
+  tab: FightTab,
+  top: Detail | undefined,
+  filter: ReportFilter,
+): Promise<ReportData> {
+  const metric: Metric = tab === 'healing' ? 'healing' : 'damage';
+  if (tab === 'damage' || tab === 'healing') {
+    if (top?.kind === 'player') return { tab: 'player', data: await api.playerDetail(path, fight, top.player, metric, filter) };
+    if (top?.kind === 'ability') return { tab: 'ability', data: await api.abilityDetail(path, fight, top.player, top.spellId, top.pet, metric, filter) };
+    if (top?.kind === 'target') return { tab: 'target', data: await api.targetDetail(path, fight, top.name, filter) };
+  }
   switch (tab) {
     case 'overview':
       return { tab, data: await api.quickOverview(path, fight, filter) };
@@ -158,7 +194,7 @@ async function fetchReport(path: string, fight: number, tab: FightTab, filter: R
 
 /** Loads the report of the current tab; only the newest request may write the result. */
 async function loadReport(get: () => State & Actions, set: (partial: Partial<State>) => void) {
-  const { log, view, tab, attribution, range } = get();
+  const { log, view, tab, attribution, range, details } = get();
   if (!log || view.kind !== 'fight') return;
   const request = ++reportRequest;
   if (tab === 'overview' && range === null) {
@@ -169,13 +205,37 @@ async function loadReport(get: () => State & Actions, set: (partial: Partial<Sta
   const filter = { startMs: range?.startMs ?? null, endMs: range?.endMs ?? null, attribution };
   set({ reportLoading: true, reportError: null });
   try {
-    const report = await fetchReport(log.path, view.fightIndex, tab, filter);
-    if (request === reportRequest) set({ report });
+    const report = await fetchReport(log.path, view.fightIndex, tab, details[details.length - 1], filter);
+    if (request === reportRequest) {
+      // Pin the enemy that the empty "Enemies" entry resolved to, so range changes keep it.
+      const shown = get().details;
+      const last = shown[shown.length - 1];
+      if (report.tab === 'target' && last?.kind === 'target' && last.name === '') {
+        set({ report, details: [...shown.slice(0, -1), { kind: 'target', name: report.data.name }] });
+      } else if (report.tab === 'ability' && last?.kind === 'ability' && last.spellId === report.data.spellId && last.spellName !== report.data.spellName) {
+        // Pin the ability's name: the pull overview knows only its own spells.
+        set({ report, details: [...shown.slice(0, -1), { ...last, spellName: report.data.spellName }] });
+      } else {
+        set({ report });
+      }
+    }
   } catch (err) {
-    if (request === reportRequest) set({ reportError: String(err) });
+    // A page that failed has no heading to focus; a later load must not inherit the request.
+    if (request === reportRequest) set({ reportError: String(err), focusRequest: null });
   } finally {
     if (request === reportRequest) set({ reportLoading: false });
   }
+}
+
+/** Detail pages live on Damage Done or Healing. */
+function reportTab(tab: FightTab): FightTab {
+  return tab === 'healing' ? 'healing' : 'damage';
+}
+
+/** The tab to return to when a detail page opens on top of the current stack. */
+function originFor(state: State): FightTab | null {
+  if (state.details.length > 0) return state.detailOrigin;
+  return state.tab === 'damage' || state.tab === 'healing' ? null : state.tab;
 }
 
 export const useApp = create<State & Actions>()((set, get) => ({
@@ -238,6 +298,8 @@ export const useApp = create<State & Actions>()((set, get) => ({
       report: null,
       reportError: null,
       reportLoading: false,
+      details: [],
+      detailOrigin: null,
       focusRequest: 'fight',
     });
     try {
@@ -263,6 +325,8 @@ export const useApp = create<State & Actions>()((set, get) => ({
       report: null,
       reportError: null,
       reportLoading: false,
+      details: [],
+      detailOrigin: null,
       focusRequest: 'start',
     });
   },
@@ -275,8 +339,91 @@ export const useApp = create<State & Actions>()((set, get) => ({
     set({ error: message });
   },
 
-  async setTab(tab) {
-    set({ tab, report: null, reportError: null });
+  async setTab(tab, focus = null) {
+    const { details, tab: current } = get();
+    const keep = tab === 'damage' || tab === 'healing';
+    const top = details[details.length - 1];
+    // An ability page belongs to one metric; switching the metric shows its player instead.
+    const kept = !keep ? [] : top?.kind === 'ability' && tab !== current ? details.slice(0, -1) : details;
+    set({ tab, report: null, reportError: null, details: kept, detailOrigin: null, focusRequest: focus });
+    await loadReport(get, set);
+  },
+
+  async openPlayer(player) {
+    const state = get();
+    // An enemy page stays below the player so Back returns to it; a shown player or ability is replaced.
+    const below = state.details.slice(0, state.details.findLastIndex((d) => d.kind === 'target') + 1);
+    set({
+      tab: reportTab(state.tab),
+      details: [...below, { kind: 'player', player }],
+      detailOrigin: originFor(state),
+      report: null,
+      reportError: null,
+      focusRequest: 'page',
+    });
+    await loadReport(get, set);
+  },
+
+  async openAbility(spellId, pet) {
+    const details = get().details;
+    const top = details[details.length - 1];
+    if (top?.kind !== 'player') return;
+    set({ details: [...details, { kind: 'ability', player: top.player, spellId, pet }], report: null, reportError: null, focusRequest: 'page' });
+    await loadReport(get, set);
+  },
+
+  async openTarget(name) {
+    const state = get();
+    const details = state.details;
+    const below = details[details.length - 1]?.kind === 'target' ? details.slice(0, -1) : details;
+    set({
+      tab: reportTab(state.tab),
+      details: [...below, { kind: 'target', name }],
+      detailOrigin: originFor(state),
+      report: null,
+      reportError: null,
+      focusRequest: 'page',
+    });
+    await loadReport(get, set);
+  },
+
+  async openAbilityOf(player, spellId, tab) {
+    const { details } = get();
+    const top = details[details.length - 1];
+    if (top?.kind !== 'player' || top.player !== player) return;
+    const ability = { kind: 'ability' as const, player, spellId, pet: null };
+    // From the player's own page: push, so Back walks through what is below it.
+    set({ tab, details: [...details, ability], report: null, reportError: null, focusRequest: 'page' });
+    await loadReport(get, set);
+  },
+
+  async back() {
+    const { details, detailOrigin, tab } = get();
+    const rest = details.slice(0, -1);
+    // The stack empties: return to the tab it was opened from.
+    const home = rest.length === 0 ? detailOrigin : null;
+    set({
+      details: rest,
+      tab: home ?? tab,
+      detailOrigin: home === null ? detailOrigin : null,
+      report: null,
+      reportError: null,
+      focusRequest: rest.length > 0 ? 'page' : 'tab',
+    });
+    await loadReport(get, set);
+  },
+
+  async showDetailAt(depth) {
+    const { details } = get();
+    // Only a lower page: the top one is already shown.
+    if (depth < 0 || depth >= details.length - 1) return;
+    set({ details: details.slice(0, depth + 1), report: null, reportError: null, focusRequest: 'page' });
+    await loadReport(get, set);
+  },
+
+  async closeDetail() {
+    const { detailOrigin, tab } = get();
+    set({ details: [], tab: detailOrigin ?? tab, detailOrigin: null, report: null, reportError: null, focusRequest: 'tab' });
     await loadReport(get, set);
   },
 

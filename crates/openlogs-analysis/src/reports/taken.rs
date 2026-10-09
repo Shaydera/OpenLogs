@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::actors::{ActorId, ActorKind, NOBODY};
 use crate::fight::{DamageVia, Event, EventKind, Fight, MissType, SpellId};
 use crate::filter::ReportFilter;
+use crate::links::{SpellKey, spell_key};
 use crate::reports::per_second;
 use crate::timeline::counts_as_damage_done;
 
@@ -40,19 +41,6 @@ pub struct DamageTakenReport {
     pub total: u64,
     pub by_ability: Vec<TakenAbility>,
     pub by_player: Vec<TakenPlayer>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum SpellKey<'a> {
-    Name(&'a str),
-    Id(SpellId),
-}
-
-fn spell_key(fight: &Fight, spell: SpellId) -> SpellKey<'_> {
-    match fight.spells.get(&spell) {
-        Some(info) if !info.name.is_empty() => SpellKey::Name(&info.name),
-        _ => SpellKey::Id(spell),
-    }
 }
 
 /// Spell name (ID without a known name), world-damage flag and source name: adds of one kind
@@ -189,7 +177,7 @@ fn ability_rows(map: HashMap<AbilityKey<'_>, AbilityAcc>) -> Vec<TakenAbility> {
 
 /// Damage an event deals to its target as `(amount + absorbed, absorbed)`. Hits a shield
 /// swallowed completely are logged as ABSORB misses; they still hit.
-fn taken_amount(event: &Event) -> Option<(u64, u64)> {
+pub(crate) fn taken_amount(event: &Event) -> Option<(u64, u64)> {
     match event.kind {
         EventKind::Damage(damage) if counts_as_damage_done(&damage) => {
             Some((damage.amount + damage.absorbed, damage.absorbed))

@@ -1,6 +1,7 @@
 import type { OverviewTimeline, Phase } from '../../api/types';
 import { formatAmount, formatDuration, formatEventTime, formatPercent } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
+import { stepLine } from '../player/chartGeometry';
 
 const VIEW_WIDTH = 1000;
 
@@ -41,34 +42,6 @@ function stepAt(i: number, stepMs: number, durationMs: number) {
   const from = i * stepMs;
   const to = Math.min(durationMs, (i + 1) * stepMs);
   return { x0: x(from, durationMs), x: x((from + to) / 2, durationMs), x1: x(to, durationMs) };
-}
-
-/** One value of a step series: drawn at `x`, covering `x0`–`x1` of its step. */
-interface StepPoint {
-  x0: number;
-  x: number;
-  x1: number;
-  y: number;
-}
-
-/**
- * A line through step points; `null` breaks it. A point without a neighbour is drawn flat
- * across its step, so a lone value stays visible.
- */
-function stepLine(points: (StepPoint | null)[]): string {
-  const parts: string[] = [];
-  let run: StepPoint[] = [];
-  const flush = () => {
-    if (run.length === 1) parts.push(`M ${run[0].x0} ${run[0].y} L ${run[0].x1} ${run[0].y}`);
-    else if (run.length > 1) parts.push(run.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' '));
-    run = [];
-  };
-  for (const point of points) {
-    if (point === null) flush();
-    else run.push(point);
-  }
-  flush();
-  return parts.join(' ');
 }
 
 /** Boss HP gaps up to this many samples are carried through; longer ones (the boss gone) break the line. */

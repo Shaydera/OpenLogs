@@ -90,9 +90,9 @@ export function RankedRow({ grid, rank, player, barPct, total, selected, onSelec
   );
 }
 
-/** The side panel's head: icon, name, spec · total · per second. */
-export function SideHead(props: { id: string; player: PlayerRef | undefined; total: number; perSecond: number; unit: string }) {
-  const { id, player, total, perSecond, unit } = props;
+/** The side panel's head: icon, name, spec · total · per second, "Player details →". */
+export function SideHead(props: { id: string; player: PlayerRef | undefined; total: number; perSecond: number; unit: string; onDetails: () => void }) {
+  const { id, player, total, perSecond, unit, onDetails } = props;
   return (
     <div className="panel-head panel-head-side">
       <PlayerIcon player={player} size={36} />
@@ -116,6 +116,9 @@ export function SideHead(props: { id: string; player: PlayerRef | undefined; tot
           </span>
         </span>
       </div>
+      <button type="button" className="link-accent" onClick={onDetails}>
+        {t('report.playerDetails')}
+      </button>
     </div>
   );
 }
@@ -186,7 +189,7 @@ export function SideBreakdown({ caption, amountLabel, rows }: { caption: string;
   );
 }
 
-/** How many buffed players "Support by recipient" lists. */
+/** How many buffed players "Support by recipient" lists; the player page has them all. */
 const TOP_RECIPIENTS = 8;
 
 /** "Support by recipient": the top buffed players with a bar and the share of `base`. */

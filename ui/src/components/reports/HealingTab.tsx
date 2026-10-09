@@ -23,6 +23,7 @@ export function HealingTab({ report }: { report: HealingReport }) {
   const attribution = useApp((s) => s.attribution);
   const showAugDelta = useApp((s) => s.showAugDelta);
   const setShowAugDelta = useApp((s) => s.setShowAugDelta);
+  const openPlayer = useApp((s) => s.openPlayer);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const tipId = useId();
   const { panel, tip, open } = useAugTip(report);
@@ -101,6 +102,7 @@ export function HealingTab({ report }: { report: HealingReport }) {
           total={selected.total}
           perSecond={selected.perSecond}
           unit={t('report.hps')}
+          onDetails={() => void openPlayer(selected.player)}
         />
         <SideBreakdown
           caption={t('report.abilitiesOf', { name: shortName(roster.get(selected.player)?.name ?? '?') })}

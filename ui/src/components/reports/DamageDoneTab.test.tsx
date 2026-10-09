@@ -37,6 +37,15 @@ describe('DamageDoneTab', () => {
     ]);
   });
 
+  it("opens the selected player's page from the side panel", async () => {
+    const openPlayer = vi.fn(async () => {});
+    useApp.setState({ openPlayer });
+    render(<DamageDoneTab report={damageReportFixture} />);
+    await userEvent.click(rowOf('Faelan'));
+    await userEvent.click(screen.getByRole('button', { name: 'Player details →' }));
+    expect(openPlayer).toHaveBeenCalledWith(4);
+  });
+
   it("moves a buffed player's Aug support to the Evoker only in Reattributed mode", async () => {
     render(<DamageDoneTab report={damageReportFixture} />);
     await userEvent.click(rowOf('Faelan'));

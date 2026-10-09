@@ -3,20 +3,24 @@ import type { QuickOverview } from '../api/types';
 import { useFocusRequest } from '../hooks/useFocusRequest';
 import { t } from '../i18n/i18n';
 import { useApp } from '../store';
+import { AbilityDetailView } from './ability/AbilityDetailView';
 import { FightHeader } from './chrome/FightHeader';
 import { headerTiles } from './chrome/headerTiles';
 import { FightTopBar } from './chrome/FightTopBar';
 import { PANEL_ID, TabBar, tabId } from './chrome/TabBar';
+import { ErrorBoundary } from './ErrorBoundary';
 import { ConsumablesPanel } from './overview/ConsumablesPanel';
 import { CooldownsPanel } from './overview/CooldownsPanel';
 import { DeathsPanel } from './overview/DeathsPanel';
 import { Timeline } from './overview/Timeline';
+import { PlayerDetailView } from './player/PlayerDetailView';
 import { DamageDoneTab } from './reports/DamageDoneTab';
 import { DamageTakenTab } from './reports/DamageTakenTab';
 import { HealingTab } from './reports/HealingTab';
 import { RangePanel } from './reports/RangePanel';
+import { TargetDetailView } from './target/TargetDetailView';
 
-/** A fight screen: the top bar, then the pull header, the tab row and the tab's panel. */
+/** A fight screen: the top bar, then the pull header (compact on detail pages), the tab row and the tab's panel. */
 export function FightView() {
   const view = useApp((s) => s.view);
   const log = useApp((s) => s.log);
@@ -28,17 +32,21 @@ export function FightView() {
   const report = useApp((s) => s.report);
   const reportLoading = useApp((s) => s.reportLoading);
   const reportFailed = useApp((s) => s.reportError) !== null;
+  const details = useApp((s) => s.details);
+  const closeDetail = useApp((s) => s.closeDetail);
   const titleRef = useRef<HTMLHeadingElement>(null);
-  useFocusRequest('fight', () => titleRef.current);
+  const crumbRef = useRef<HTMLSpanElement>(null);
+  // The pull title; on detail pages (compact header) the current breadcrumb.
+  useFocusRequest('fight', () => titleRef.current ?? crumbRef.current);
   const row = view.kind === 'fight' ? log?.fights.find((f) => f.index === view.fightIndex) : undefined;
   if (!row) return null;
 
   const onOverview = tab === 'overview';
-  const tiles = headerTiles({ tab, overview, range, report, reportLoading, reportFailed });
+  const tiles = details.length > 0 ? null : headerTiles({ tab, overview, range, report, reportLoading, reportFailed });
 
   return (
     <div className="fight-view">
-      <FightTopBar row={row} />
+      <FightTopBar row={row} currentRef={crumbRef} />
       <main className={onOverview ? 'fight-page fight-page-overview' : 'fight-page'}>
         <FightHeader row={row} tiles={tiles} titleRef={titleRef} />
         <TabBar />
@@ -55,8 +63,11 @@ export function FightView() {
             </>
           ) : (
             <>
-              <RangePanel overview={overview} rangeKey={`${row.encounterId}:${row.difficulty}`} />
-              <ReportView />
+              {/* Detail pages have no range panel. */}
+              {details.length === 0 && <RangePanel overview={overview} rangeKey={`${row.encounterId}:${row.difficulty}`} />}
+              <ErrorBoundary key={`${tab}-${details.length}`} onReset={() => void closeDetail()}>
+                <ReportView />
+              </ErrorBoundary>
             </>
           )}
         </div>
@@ -69,7 +80,19 @@ function ReportView() {
   const report = useApp((s) => s.report);
   const loading = useApp((s) => s.reportLoading);
   const error = useApp((s) => s.reportError);
-  if (error) return <p className="muted">{t('report.failed', { reason: error })}</p>;
+  const details = useApp((s) => s.details);
+  const back = useApp((s) => s.back);
+  if (error)
+    return (
+      <div className="report-error">
+        <p className="muted">{t('report.failed', { reason: error })}</p>
+        {details.length > 0 && (
+          <button type="button" className="btn" onClick={() => void back()}>
+            {t('detail.back')}
+          </button>
+        )}
+      </div>
+    );
   if (!report) return <p className="muted">{loading ? t('report.loading') : ''}</p>;
   switch (report.tab) {
     case 'damage':
@@ -78,6 +101,12 @@ function ReportView() {
       return <HealingTab report={report.data} />;
     case 'taken':
       return <DamageTakenTab report={report.data} />;
+    case 'player':
+      return <PlayerDetailView detail={report.data} />;
+    case 'ability':
+      return <AbilityDetailView detail={report.data} />;
+    case 'target':
+      return <TargetDetailView detail={report.data} />;
     case 'overview':
       // The Overview tab renders `RangeOverview`, never this view.
       return null;

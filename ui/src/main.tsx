@@ -14,6 +14,7 @@ import './styles/overview.css';
 import './styles/shared.css';
 import './styles/settings.css';
 import './styles/reports.css';
+import './styles/details.css';
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';

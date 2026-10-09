@@ -150,6 +150,25 @@
 .side-rate {
   white-space: nowrap;
 }
+.link-accent {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: underline;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.link-accent:hover,
+.link-accent:focus-visible {
+  color: var(--accent-hover);
+}
 .side-row {
   display: grid;
   grid-template-columns: 24px minmax(120px, 1fr) 86px 52px;

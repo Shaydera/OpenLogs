@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
-/** Value tones: deaths, Aug support. */
-export type KpiTone = 'death' | 'support';
+/** Value tones: deaths, Aug support, healing received, a warning, the crit rate. */
+export type KpiTone = 'death' | 'support' | 'kill' | 'warn' | 'accent';
 
 /** One figure of a KPI strip: label, value and an optional sub-line. */
 export function Kpi({
@@ -26,9 +26,19 @@ export function Kpi({
   );
 }
 
-/** One panel with the figures side by side. `large` is the Overview header's. */
-export function KpiStrip({ label, large = false, children }: { label: string; large?: boolean; children: ReactNode }) {
-  const className = ['panel', 'kpi-strip', large ? 'kpi-strip-lg' : null].filter(Boolean).join(' ');
+/** One panel with the figures side by side. `large` is the Overview header's; `variant` sizes the player and ability details' cells. */
+export function KpiStrip({
+  label,
+  large = false,
+  variant,
+  children,
+}: {
+  label: string;
+  large?: boolean;
+  variant?: 'player' | 'ability';
+  children: ReactNode;
+}) {
+  const className = ['panel', 'kpi-strip', large ? 'kpi-strip-lg' : null, variant ? `kpi-strip-${variant}` : null].filter(Boolean).join(' ');
   return (
     <section className={className} aria-label={label}>
       {children}

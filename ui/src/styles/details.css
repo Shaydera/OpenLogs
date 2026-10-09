@@ -1,0 +1,916 @@
+/* Accent text links: "← All players", "Open target details (…) →". */
+.accent-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: underline;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.accent-link:hover,
+.accent-link:focus-visible {
+  color: var(--accent-hover);
+}
+/* Header: back link, 56px icon, title with the facts line, the player switcher. */
+.dhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+}
+.dhead.dhead-enemy {
+  gap: 16px;
+}
+.dhead-id {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.dhead-title {
+  margin: 0;
+  font: 700 34px var(--font-label);
+}
+.dhead-title.dhead-title-enemy {
+  font-size: 32px;
+}
+.dhead-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.dhead-player {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dhead-player:hover,
+.dhead-player:focus-visible {
+  text-decoration: underline;
+}
+.dhead-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.dhead-select {
+  font: 500 13px var(--font-text);
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  min-height: 40px;
+  padding: 0 10px;
+}
+.ico.ico-lg {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+}
+.ph-ico.ph-ico-lg {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  font-size: 20px;
+}
+.fact-kill {
+  color: var(--kill-chip);
+}
+.fact-warn {
+  color: var(--wipe-text);
+}
+/* KPI strips of the detail pages and their value colours. */
+.kpi-strip.kpi-strip-player .kpi {
+  flex: 1 1 150px;
+  min-width: 140px;
+}
+.kpi-strip.kpi-strip-ability .kpi {
+  flex: 1 1 130px;
+  min-width: 120px;
+}
+.kpi-support {
+  color: var(--support-text);
+}
+.kpi-kill {
+  color: var(--kill-text);
+}
+.kpi-warn {
+  color: var(--wipe-text);
+}
+.kpi-accent {
+  color: var(--accent-hover);
+}
+/* Chart panels: head row with a legend, the plot, the axis. */
+.chart-panel {
+  padding: 14px 18px 12px;
+}
+.chart-panel.chart-panel-tall {
+  padding-bottom: 16px;
+}
+.chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.chart-head.chart-head-tight {
+  margin-bottom: 6px;
+}
+.chart-head.chart-head-hist {
+  align-items: baseline;
+  margin-bottom: 14px;
+}
+.chart-hint {
+  font-size: 13px;
+  color: var(--muted);
+}
+.chart-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+.chart-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lg-swatch {
+  display: inline-block;
+  flex: none;
+}
+.lg-swatch.lg-swatch-area {
+  width: 14px;
+  height: 8px;
+  opacity: 0.6;
+}
+.lg-swatch.lg-swatch-line {
+  width: 14px;
+  height: 2px;
+  background: var(--mana);
+}
+.lg-swatch.lg-swatch-dead {
+  width: 12px;
+  height: 12px;
+  background: repeating-linear-gradient(135deg, var(--dead-hatch-a) 0 4px, var(--dead-hatch-b) 4px 8px);
+}
+.lg-swatch.lg-swatch-tick {
+  width: 3px;
+  height: 12px;
+}
+.lg-swatch.lg-swatch-crit {
+  width: 3px;
+  height: 12px;
+  background: var(--accent);
+}
+.lg-swatch.lg-swatch-cast {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.lg-swatch.lg-swatch-short {
+  width: 14px;
+  height: 6px;
+  background: var(--kill);
+}
+.lg-swatch.lg-swatch-long {
+  width: 14px;
+  height: 6px;
+  background: var(--wipe);
+}
+.lg-swatch.lg-swatch-alive {
+  width: 14px;
+  height: 6px;
+  background: repeating-linear-gradient(90deg, var(--neutral-text) 0 3px, transparent 3px 5px);
+}
+.axis {
+  position: relative;
+  height: 20px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--faint);
+}
+.axis.axis-flush {
+  margin-top: 0;
+}
+.axis span {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.axis span.axis-start {
+  transform: none;
+}
+/* The player page's section pills. */
+.subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.subnav-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--muted);
+  font: 500 13px var(--font-text);
+  cursor: pointer;
+}
+.subnav-pill:hover {
+  color: var(--text);
+  border-color: var(--accent-tint-line);
+}
+.subnav-pill.subnav-pill-on {
+  background: var(--accent-tint);
+  color: var(--accent-hover);
+  border-color: var(--accent-tint-line);
+}
+/* Head rows of list panels whose rows run to the border. */
+.panel-head.panel-head-tight {
+  padding: 14px 14px 10px;
+  gap: 10px;
+}
+.panel-head.panel-head-tight.panel-head-baseline {
+  align-items: baseline;
+}
+.panel-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.panel-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+.panel-clip {
+  overflow: hidden;
+}
+.bar.bar-md {
+  height: 6px;
+  border-radius: 3px;
+}
+.bar.bar-sm {
+  height: 4px;
+  border-radius: 3px;
+}
+.bar.bar-md > span,
+.bar.bar-sm > span {
+  border-radius: 0;
+}
+.crit-badge {
+  font: 600 10px var(--font-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--accent-tint);
+  color: var(--accent-hover);
+}
+
+/* The player page's abilities. */
+.panel-head.panel-head-ab {
+  padding: 16px 16px 10px;
+  align-items: baseline;
+  gap: 10px;
+}
+.ab-rows {
+  min-width: 1000px;
+}
+.ab-rows.ab-rows-heal {
+  min-width: 1100px;
+}
+.ab-row {
+  display: grid;
+  grid-template-columns: 24px minmax(180px, 1.6fr) minmax(150px, 1.4fr) 64px 60px 64px 64px 84px 84px;
+  gap: 12px;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 16px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.ab-row:hover {
+  background: var(--hover);
+}
+.ab-row.ab-row-head {
+  min-height: 30px;
+}
+.ab-row.ab-row-head:hover {
+  background: transparent;
+}
+.ab-row.ab-row-heal {
+  grid-template-columns: 24px minmax(180px, 1.6fr) minmax(150px, 1.4fr) 64px 84px 60px 64px 64px 84px 84px;
+}
+.ab-cap {
+  font-size: 11px;
+}
+.ab-end {
+  text-align: right;
+}
+.ab-share {
+  color: var(--muted);
+}
+.ab-name-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.ab-name {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 500;
+  color: var(--text);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ab-name.ab-name-link {
+  cursor: pointer;
+}
+.ab-name.ab-name-link:hover,
+.ab-name.ab-name-link:focus-visible {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+/* The pet row's disclosure: its label plus a faint chevron. */
+.ab-name.ab-disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.ab-disclosure .chevron {
+  flex: none;
+  color: var(--faint);
+  transition: transform 0.12s ease;
+}
+.ab-disclosure .chevron.chevron-open {
+  transform: rotate(90deg);
+}
+/* One pet ability of the expanded pet row, indented under it. */
+.ab-row.ab-row-sub {
+  background: var(--hover-soft);
+}
+.ab-row.ab-row-sub .ab-name-cell {
+  padding-left: 16px;
+}
+.ab-pet {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ab-amount {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ab-amount .bar {
+  flex: 1;
+}
+.ab-value {
+  width: 70px;
+  flex: none;
+  text-align: right;
+}
+.ab-row.ab-row-negative .ab-name,
+.ab-row.ab-row-negative .ab-value {
+  color: var(--wipe-text);
+}
+
+/* The player page's Casts & buffs lanes. */
+.pcb {
+  min-width: 1000px;
+}
+.pcb-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pcb-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 64px;
+  gap: 12px;
+  align-items: center;
+  min-height: 30px;
+  border-top: 1px solid var(--line-faint);
+}
+.pcb-row.pcb-row-head {
+  border-top: 0;
+}
+.pcb-cap {
+  font-size: 11px;
+  text-align: right;
+}
+.pcb-group {
+  margin: 0;
+  padding: 8px 0 4px;
+  font-size: 11px;
+  border-top: 1px solid var(--line);
+}
+.pcb-group.pcb-group-buffs {
+  padding-top: 12px;
+}
+.pcb-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+.pcb-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pcb-source {
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.pcb-dead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--death) 18%, transparent) 0 5px, transparent 5px 10px);
+}
+.pcb-cast {
+  position: absolute;
+  top: 4px;
+  margin-left: -11px;
+}
+/* Dots for a crowded rotation lane, centred in the 30px lane. */
+.pcb-dot {
+  position: absolute;
+  top: 12px;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.pcb-bar {
+  position: absolute;
+  top: 9px;
+  height: 12px;
+  min-width: 2px;
+  border-radius: 2px;
+  opacity: 0.8;
+}
+.pcb-count {
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pcb-uptime {
+  text-align: right;
+  font-size: 13px;
+}
+
+/* The player page's side panels: Aug support, damage taken, the death. */
+.player-panels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+}
+.pp-wide {
+  flex: 1 1 380px;
+  min-width: 0;
+  overflow: hidden;
+}
+.pp-narrow {
+  flex: 1 1 300px;
+  min-width: 0;
+  overflow: hidden;
+}
+.lst-row {
+  display: grid;
+  grid-template-columns: 22px 1fr 76px;
+  gap: 10px;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.lst-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.lst-amount {
+  text-align: right;
+}
+.lst-fill-taken {
+  background: var(--wipe);
+}
+.pdeath {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 14px 14px;
+  font-size: 13px;
+}
+.pdeath-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pdeath-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pdeath-note {
+  color: var(--muted);
+  line-height: 1.5;
+}
+.pdeath-time {
+  color: var(--death);
+}
+.pdeath-res {
+  color: var(--kill-text);
+}
+
+.ah-base {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 18px;
+  border-top: 1px solid var(--chart-baseline);
+}
+
+/* Ability page: by target, hit size distribution, hit log. */
+.ability-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+}
+.dpane {
+  flex: 1 1 420px;
+  min-width: 0;
+}
+.tg-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) 52px 52px 150px;
+  gap: 12px;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.tg-row:hover {
+  background: var(--hover);
+}
+.tg-row.tg-row-on {
+  background: var(--tile);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.tg-row.tg-row-head {
+  min-height: 28px;
+  cursor: default;
+}
+.tg-row.tg-row-head:hover {
+  background: transparent;
+}
+.tg-cap {
+  font-size: 11px;
+}
+.tg-end {
+  text-align: right;
+}
+.tg-crits {
+  color: var(--muted);
+}
+.tg-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tg-amount {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tg-amount .bar {
+  flex: 1;
+}
+.tg-value {
+  width: 58px;
+  flex: none;
+  text-align: right;
+}
+/* No vertical padding: the 44px link target sets the height. */
+.tg-foot {
+  padding: 0 14px;
+  border-top: 1px solid var(--line);
+}
+.hist-plot {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  height: 220px;
+  border-bottom: 1px solid var(--line-strong);
+}
+.hist-bin {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+}
+.hist-count {
+  margin-bottom: 4px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-soft);
+}
+.hist-crit {
+  background: var(--accent);
+  border-radius: 3px 3px 0 0;
+}
+.hist-hit {
+  opacity: 0.85;
+}
+.hist-hit.hist-hit-top {
+  border-radius: 3px 3px 0 0;
+}
+.hist-labels {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+.hist-labels span {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  color: var(--faint);
+}
+.hit-count {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.hit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.hit-row {
+  display: grid;
+  grid-template-columns: 70px minmax(140px, 1fr) 100px 60px;
+  gap: 12px;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 14px;
+  border-top: 1px solid var(--line-faint);
+  font-size: 13px;
+}
+.hit-row.hit-row-head {
+  min-height: 28px;
+}
+.hit-cap {
+  font-size: 11px;
+}
+.hit-end {
+  text-align: right;
+}
+.hit-time {
+  color: var(--muted);
+}
+.hit-target {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hit-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+/* Target page: the Enemies list beside the page. */
+.enemy-page {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+}
+.enemy-panel {
+  flex: 1 1 260px;
+  max-width: 320px;
+  overflow: hidden;
+}
+.target-main {
+  flex: 999 1 720px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.elink {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 63px;
+  padding: 6px 14px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.elink:hover {
+  background: var(--hover);
+}
+.elink.elink-on {
+  background: var(--tile);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.elink-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.elink-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.elink-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+.elink-amount {
+  font-size: 13px;
+}
+.enemy-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 5px;
+  border: 1px solid var(--accent-tint-line);
+  object-fit: cover;
+  display: block;
+  flex: none;
+}
+.enemy-icon.enemy-icon-lg {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+}
+.mono.mono-enemy {
+  width: 30px;
+  height: 30px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+.mono.mono-enemy.mono-enemy-lg {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  font-size: 18px;
+}
+
+/* Target page: intermission hatching, waves, damage by player. */
+.lt-phase {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(135deg, var(--hover) 0 6px, var(--hatch) 6px 12px);
+}
+.target-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+}
+.tpane {
+  flex: 1 1 440px;
+  min-width: 0;
+  overflow: hidden;
+}
+.wave-rows {
+  min-width: 470px;
+}
+.wave-row {
+  display: grid;
+  grid-template-columns: 44px 70px 60px 70px 90px 90px;
+  gap: 12px;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.wave-row.wave-row-head {
+  min-height: 28px;
+}
+.wave-cap {
+  font-size: 11px;
+}
+.wave-end {
+  text-align: right;
+}
+.wave-n {
+  color: var(--muted);
+}
+.wave-warn {
+  color: var(--wipe-text);
+}
+.wave-avg {
+  color: var(--text-soft);
+}
+.bp-row {
+  display: grid;
+  grid-template-columns: 22px minmax(110px, 150px) 1fr 70px 54px;
+  gap: 10px;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.bp-name-cell {
+  min-width: 0;
+}
+.bp-name {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.bp-name:hover,
+.bp-name:focus-visible {
+  text-decoration: underline;
+}
+.bar.bp-bar {
+  display: block;
+}
+.bp-fill {
+  opacity: 0.8;
+}
+.bp-end {
+  text-align: right;
+}
+.bp-share {
+  color: var(--muted);
+}

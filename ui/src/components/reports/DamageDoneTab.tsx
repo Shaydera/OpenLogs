@@ -15,6 +15,7 @@ export function DamageDoneTab({ report }: { report: DamageReport }) {
   const attribution = useApp((s) => s.attribution);
   const showAugDelta = useApp((s) => s.showAugDelta);
   const setShowAugDelta = useApp((s) => s.setShowAugDelta);
+  const openPlayer = useApp((s) => s.openPlayer);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const tipId = useId();
   const { panel, tip, open } = useAugTip(report);
@@ -86,6 +87,7 @@ export function DamageDoneTab({ report }: { report: DamageReport }) {
           total={selected.total}
           perSecond={selected.perSecond}
           unit={t('report.dps')}
+          onDetails={() => void openPlayer(selected.player)}
         />
         <SideBreakdown
           caption={t('report.abilitiesOf', { name: shortName(roster.get(selected.player)?.name ?? '?') })}

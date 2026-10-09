@@ -1,6 +1,7 @@
 import { locale, t } from './i18n';
 
 const oneDecimal = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const upToOneDecimal = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
 const integer = new Intl.NumberFormat(locale);
 const megabytes = new Intl.NumberFormat(locale, { style: 'unit', unit: 'megabyte', minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 1 });
@@ -12,6 +13,7 @@ const twoDecimals = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, ma
 const threeDecimals = new Intl.NumberFormat(locale, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 // Real instants (a download time), unlike log times, are shown in the user's time zone.
 const localDate = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric' });
+const plain = new Intl.NumberFormat(locale, { maximumFractionDigits: 0, useGrouping: false });
 const oneDecimalPercent = new Intl.NumberFormat(locale, { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 /** `value` rounded to `digits` decimals; picks the unit a formatted amount lands in. */
@@ -39,6 +41,11 @@ export function formatSeconds(ms: number): string {
 /** A 0–100 value with at most one decimal, e.g. `82.2%`. */
 export function formatPercent(value: number): string {
   return percent.format(value / 100);
+}
+
+/** Exactly `digits` decimals, grouped, e.g. `1.25` (hits per cast). */
+export function formatFixed(value: number, digits: number): string {
+  return new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
 }
 
 export function formatInteger(n: number): string {
@@ -117,4 +124,57 @@ export function formatSignedMillions(value: number): string {
 /** A 0–100 share with exactly one decimal: `7.5%`, `0.0%`, `100.0%`. */
 export function formatShare(value: number): string {
   return oneDecimalPercent.format(value / 100);
+}
+
+/**
+ * One-decimal `k` at every size below a million (`28.7k`, `242.7k`, `518.4k`), plain below a
+ * thousand (`916`), else like `formatAmount` (`11.30M`). Rounding into the next unit moves there
+ * (`999,960` → `1.00M`).
+ */
+export function formatAmountTenths(value: number): string {
+  if (value < 0) return `−${formatAmountTenths(-value)}`;
+  if (roundTo(value / 1e3, 1) >= 1000) return formatAmount(value);
+  if (roundTo(value, 0) >= 1000) return t('unit.thousands', { value: oneDecimal.format(value / 1e3) });
+  return plain.format(value);
+}
+
+/** A count without grouping: `1325`. */
+export function formatCount(n: number): string {
+  return plain.format(n);
+}
+
+/** Time since the pull with tenths, rounded to 100 ms: `0:04.2` (hit log). */
+export function formatEventTimeTenths(ms: number): string {
+  const tenths = Math.round(Math.abs(ms) / 100);
+  const text = `${formatDuration(Math.floor(tenths / 10) * 1000)}.${tenths % 10}`;
+  return ms < 0 ? `-${text}` : text;
+}
+
+/** A chart's y ceiling: one-decimal `M` (`3.0M`), whole `k` (`450k`), else plain. */
+export function formatAxisAmount(value: number): string {
+  if (roundTo(value / 1e3, 0) >= 1000) return t('unit.millions', { value: oneDecimal.format(value / 1e6) });
+  if (roundTo(value, 0) >= 1000) return t('unit.thousands', { value: whole.format(value / 1e3) });
+  return whole.format(value);
+}
+
+/** A histogram edge: at most one decimal, `50k`, `1.2M`, `2.5k`, `200`. */
+export function formatBinAmount(value: number): string {
+  if (roundTo(value / 1e3, 1) >= 1000) return t('unit.millions', { value: upToOneDecimal.format(value / 1e6) });
+  if (roundTo(value, 0) >= 1000) return t('unit.thousands', { value: upToOneDecimal.format(value / 1e3) });
+  return whole.format(value);
+}
+
+/** A histogram bin `50–100k`: the unit once when both edges share it, else both (`500k–1M`). */
+export function formatBinRange(from: number, to: number): string {
+  const a = formatBinAmount(from);
+  const b = formatBinAmount(to);
+  const unit = (text: string) => text.replace(/^[\d.,]+/, '');
+  const shared = unit(a) !== '' && unit(a) === unit(b);
+  return `${shared ? a.slice(0, a.length - unit(a).length) : a}–${b}`;
+}
+
+/** `a`, `a and b`, `a, b and c` (no serial comma). */
+export function formatList(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  return t('format.listAnd', { list: items.slice(0, -1).join(', '), last: items[items.length - 1] });
 }

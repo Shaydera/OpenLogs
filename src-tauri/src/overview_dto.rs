@@ -263,7 +263,7 @@ fn actor_name(fight: &Fight, id: ActorId) -> String {
 }
 
 /// The death context for the UI, noting every spell it references in `spells`.
-fn context_dtos(
+pub(crate) fn context_dtos(
     fight: &Fight,
     curated: &Curated,
     context: &[DeathContext],
@@ -540,9 +540,7 @@ pub fn player_ref(fight: &Fight, id: ActorId) -> PlayerRef {
         actor_id: id,
         name: actor.name.clone().unwrap_or_else(|| actor.guid.clone()),
         spec_id: actor.spec_id,
-        spec_name: spec
-            .zip(class)
-            .map(|(spec, class)| format!("{} {}", spec.name, class.name)),
+        spec_name: crate::player_dto::spec_name(fight, id),
         class_id: class.map(|c| c.id),
         class_token: class.map(|c| c.token.clone()),
         role: spec.map(|s| s.role),
@@ -566,6 +564,9 @@ mod tests {
             healing_taken_5s: 0,
             hp_5s_before_pct: None,
             resurrected_at: None,
+            resurrected_by: None,
+            dead_until: None,
+            lethal_burst: None,
         }
     }
 

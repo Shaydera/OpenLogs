@@ -7,6 +7,9 @@ use crate::timeline::counts_as_damage_done;
 /// Look-back window of the death context.
 pub const DEATH_WINDOW_MS: i32 = 5_000;
 
+/// Hits of the killing spell at most this far apart belong to the lethal burst.
+pub const BURST_GAP_MS: i32 = 2_000;
+
 /// Spells a dead player casts to revive themselves; they log no `SPELL_RESURRECT`.
 const SELF_RESURRECTS: &[SpellId] = &[
     21169, // Reincarnation
@@ -33,6 +36,23 @@ pub struct AbilityAmount {
     pub environmental: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Resurrection {
+    pub spell: SpellId,
+    /// The caster; the player itself for Reincarnation, `NOBODY` when the log names none.
+    pub source: ActorId,
+}
+
+/// The killing blow's spell hitting in a row before the death ("2× Virulent Spit within 1.0 s").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LethalBurst {
+    pub spell: SpellId,
+    /// Hits of the spell in the burst, the killing blow included.
+    pub count: u32,
+    /// From the burst's first hit to the killing blow.
+    pub window_ms: i32,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Death {
     pub player: ActorId,
@@ -46,6 +66,13 @@ pub struct Death {
     pub healing_taken_5s: u64,
     pub hp_5s_before_pct: Option<f32>,
     pub resurrected_at: Option<i32>,
+    /// The spell and caster that ended this death.
+    pub resurrected_by: Option<Resurrection>,
+    /// When the player was alive again: the resurrect, else (a released player logs none) the
+    /// first own HP snapshot above 0. `None`: dead to the end of the fight.
+    pub dead_until: Option<i32>,
+    /// `None` without a killing blow or for an instakill.
+    pub lethal_burst: Option<LethalBurst>,
 }
 
 /// Player deaths from `ENCOUNTER_START` on, one per life.
@@ -63,6 +90,9 @@ pub fn deaths(fight: &Fight) -> Vec<Death> {
             && dead.remove(&hp.actor)
         {
             alive_since.insert(hp.actor, event.t);
+            if let Some(&index) = last_death.get(&hp.actor) {
+                revive(&mut result[index], event.t);
+            }
         }
         let is_player = fight.actors.get(event.target).kind == ActorKind::Player;
         match event.kind {
@@ -77,7 +107,7 @@ pub fn deaths(fight: &Fight) -> Vec<Death> {
             EventKind::Resurrect if is_player && dead.remove(&event.target) => {
                 alive_since.insert(event.target, event.t);
                 if let Some(&index) = last_death.get(&event.target) {
-                    resurrect(&mut result[index], event.t);
+                    resurrect(&mut result[index], event.t, event.spell, event.source);
                 }
             }
             EventKind::CastSuccess
@@ -85,7 +115,7 @@ pub fn deaths(fight: &Fight) -> Vec<Death> {
             {
                 alive_since.insert(event.source, event.t);
                 if let Some(&index) = last_death.get(&event.source) {
-                    resurrect(&mut result[index], event.t);
+                    resurrect(&mut result[index], event.t, event.spell, event.source);
                 }
             }
             _ => {}
@@ -95,10 +125,17 @@ pub fn deaths(fight: &Fight) -> Vec<Death> {
 }
 
 /// The first resurrect of a death wins.
-fn resurrect(death: &mut Death, t: i32) {
+fn resurrect(death: &mut Death, t: i32, spell: SpellId, source: ActorId) {
     if death.resurrected_at.is_none() {
         death.resurrected_at = Some(t);
+        death.resurrected_by = Some(Resurrection { spell, source });
+        revive(death, t);
     }
+}
+
+/// The first sign of life ends a death.
+fn revive(death: &mut Death, t: i32) {
+    death.dead_until.get_or_insert(t);
 }
 
 fn death_at(fight: &Fight, player: ActorId, t: i32, life_start: i32) -> Death {
@@ -113,6 +150,7 @@ fn death_at(fight: &Fight, player: ActorId, t: i32, life_start: i32) -> Death {
     let mut killing_blow = None;
     let mut by_spell: HashMap<(SpellId, bool), u64> = HashMap::new();
     let mut healing = 0;
+    let mut hits: Vec<(i32, SpellId, bool)> = Vec::new();
     for event in &fight.events[first..end] {
         if event.target != player {
             continue;
@@ -122,6 +160,7 @@ fn death_at(fight: &Fight, player: ActorId, t: i32, life_start: i32) -> Death {
                 *by_spell
                     .entry((event.spell, damage.via == DamageVia::Environmental))
                     .or_default() += damage.amount;
+                hits.push((event.t, event.spell, damage.via == DamageVia::Environmental));
                 let left_at_zero = event
                     .unit_hp
                     .is_some_and(|hp| hp.actor == player && hp.current == 0);
@@ -150,6 +189,27 @@ fn death_at(fight: &Fight, player: ActorId, t: i32, life_start: i32) -> Death {
             _ => {}
         }
     }
+
+    // Walk back from the killing blow over hits of its spell that come close together.
+    let lethal_burst = killing_blow.filter(|kb| kb.amount > 0).map(|kb| {
+        let mut first = kb.t;
+        let mut count = 0;
+        for &(t, spell, environmental) in hits.iter().rev() {
+            if t > kb.t || spell != kb.spell || environmental != kb.environmental {
+                continue;
+            }
+            if first - t > BURST_GAP_MS {
+                break;
+            }
+            first = t;
+            count += 1;
+        }
+        LethalBurst {
+            spell: kb.spell,
+            count: count.max(1),
+            window_ms: kb.t - first,
+        }
+    });
 
     let mut damage_last_5s: Vec<AbilityAmount> = by_spell
         .into_iter()
@@ -191,6 +251,9 @@ fn death_at(fight: &Fight, player: ActorId, t: i32, life_start: i32) -> Death {
         healing_taken_5s: healing,
         hp_5s_before_pct,
         resurrected_at: None,
+        resurrected_by: None,
+        dead_until: None,
+        lethal_burst,
     }
 }
 

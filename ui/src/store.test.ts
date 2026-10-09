@@ -3,7 +3,14 @@ import { api } from './api/client';
 import type { DamageReport, LogView, QuickOverview } from './api/types';
 import { gameDataFixture } from './test/gameDataFixture';
 import { overviewFixture } from './test/overviewFixture';
-import { damageReportFixture, healingReportFixture, takenReportFixture } from './test/reportFixtures';
+import {
+  abilityDetailFixture,
+  damageReportFixture,
+  healingReportFixture,
+  playerDetailFixture,
+  takenReportFixture,
+  targetDetailFixture,
+} from './test/reportFixtures';
 import { initialState, useApp } from './store';
 
 vi.mock('./api/client', () => ({
@@ -15,6 +22,9 @@ vi.mock('./api/client', () => ({
     damageDoneReport: vi.fn(),
     healingReport: vi.fn(),
     damageTakenReport: vi.fn(),
+    playerDetail: vi.fn(),
+    abilityDetail: vi.fn(),
+    targetDetail: vi.fn(),
     gameDataStatus: vi.fn(),
     refreshGameData: vi.fn(),
   },
@@ -36,6 +46,7 @@ const LOG: LogView = {
 };
 
 const WHOLE_PULL = { startMs: null, endMs: null, attribution: 'reattributed' };
+const ENEMY = 'Blightscale Rawling';
 
 beforeEach(() => {
   Object.values(api).forEach((fn) => (fn as Mock).mockReset());
@@ -45,6 +56,9 @@ beforeEach(() => {
   vi.mocked(api.damageDoneReport).mockResolvedValue(damageReportFixture);
   vi.mocked(api.healingReport).mockResolvedValue(healingReportFixture);
   vi.mocked(api.damageTakenReport).mockResolvedValue(takenReportFixture);
+  vi.mocked(api.playerDetail).mockResolvedValue(playerDetailFixture);
+  vi.mocked(api.abilityDetail).mockResolvedValue(abilityDetailFixture);
+  vi.mocked(api.targetDetail).mockResolvedValue(targetDetailFixture);
   localStorage.clear();
   useApp.setState(initialState());
 });
@@ -94,16 +108,18 @@ describe('logs and pulls', () => {
     expect(useApp.getState().fightError).toBeNull();
   });
 
-  it('resets the tab and range when a pull opens', async () => {
+  it('resets the tab, range and details when a pull opens', async () => {
     await openPull();
     await useApp.getState().setTab('taken');
     await useApp.getState().setRange({ startMs: 0, endMs: 1_000 });
+    await useApp.getState().openPlayer(4);
 
     await useApp.getState().openFight(1);
     expect(useApp.getState()).toMatchObject({
       tab: 'overview',
       range: null,
       report: null,
+      details: [],
     });
   });
 });
@@ -157,17 +173,157 @@ describe('reports', () => {
   });
 });
 
+describe('detail stack', () => {
+  it('opens a player with the tab metric, keeps range and Aug mode, and closes back to the report', async () => {
+    await openPull();
+    await useApp.getState().setTab('healing');
+    await useApp.getState().setRange({ startMs: 0, endMs: 60_000 });
+    await useApp.getState().openPlayer(2);
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.path, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'reattributed' });
+    expect(useApp.getState().report).toEqual({ tab: 'player', data: playerDetailFixture });
+
+    await useApp.getState().setAttribution('augmented');
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.path, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'augmented' });
+
+    await useApp.getState().closeDetail();
+    expect(useApp.getState().details).toEqual([]);
+    expect(api.healingReport).toHaveBeenLastCalledWith(LOG.path, 1, { startMs: 0, endMs: 60_000, attribution: 'augmented' });
+  });
+
+  it('opens players from Damage Taken in the damage view and forgets that origin on a tab change', async () => {
+    await openPull();
+    await useApp.getState().setTab('taken');
+    await useApp.getState().openPlayer(4);
+    expect(useApp.getState().tab).toBe('damage');
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.path, 1, 4, 'damage', WHOLE_PULL);
+
+    await useApp.getState().setTab('healing');
+    await useApp.getState().closeDetail();
+    expect(useApp.getState().tab).toBe('healing');
+
+    await useApp.getState().openPlayer(4);
+    await useApp.getState().setTab('overview');
+    expect(useApp.getState().details).toEqual([]);
+  });
+
+  it('drills from player to ability and back, keeping the loaded ability name below other pages', async () => {
+    await openPull();
+    await useApp.getState().openPlayer(4);
+    await useApp.getState().openAbility(44425, null);
+    const ability = { kind: 'ability', player: 4, spellId: 44425, pet: null, spellName: 'Arcane Barrage' };
+    expect(useApp.getState().details).toEqual([{ kind: 'player', player: 4 }, ability]);
+    expect(api.abilityDetail).toHaveBeenLastCalledWith(LOG.path, 1, 4, 44425, null, 'damage', WHOLE_PULL);
+    expect(useApp.getState().report).toEqual({ tab: 'ability', data: abilityDetailFixture });
+
+    await useApp.getState().openTarget(ENEMY);
+    expect(useApp.getState().details[1]).toEqual(ability);
+    await useApp.getState().back();
+    await useApp.getState().back();
+    expect(useApp.getState().details).toEqual([{ kind: 'player', player: 4 }]);
+    expect(useApp.getState().report).toEqual({ tab: 'player', data: playerDetailFixture });
+  });
+
+  it('shows the player when the metric changes on an ability page', async () => {
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().openPlayer(4);
+    await useApp.getState().openAbility(44425, null);
+    await useApp.getState().setTab('healing');
+    expect(useApp.getState().details).toEqual([{ kind: 'player', player: 4 }]);
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.path, 1, 4, 'healing', WHOLE_PULL);
+    expect(api.abilityDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it('pins the enemy the empty Enemies entry resolved to and replaces a shown target', async () => {
+    vi.mocked(api.targetDetail).mockResolvedValueOnce({ ...targetDetailFixture, name: "Ula'tek" });
+    await openPull();
+    await useApp.getState().openTarget('');
+    expect(useApp.getState().tab).toBe('damage');
+    expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.path, 1, '', WHOLE_PULL);
+    expect(useApp.getState().details).toEqual([{ kind: 'target', name: "Ula'tek" }]);
+    await useApp.getState().setRange({ startMs: 120_000, endMs: 140_000 });
+    expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.path, 1, "Ula'tek", { startMs: 120_000, endMs: 140_000, attribution: 'reattributed' });
+
+    await useApp.getState().openTarget(ENEMY);
+    expect(useApp.getState().details).toEqual([{ kind: 'target', name: ENEMY }]);
+    await useApp.getState().setTab('healing');
+    expect(useApp.getState().details).toHaveLength(1);
+    await useApp.getState().setTab('taken');
+    expect(useApp.getState().details).toEqual([]);
+  });
+
+  it('keeps an enemy below the player and ability pages opened on top of it', async () => {
+    await openPull();
+    await useApp.getState().openTarget(ENEMY);
+    await useApp.getState().openPlayer(4);
+    await useApp.getState().openPlayer(3);
+    expect(useApp.getState().details).toEqual([
+      { kind: 'target', name: ENEMY },
+      { kind: 'player', player: 3 },
+    ]);
+    await useApp.getState().openAbilityOf(3, 44425, 'damage');
+    expect(useApp.getState().details).toHaveLength(3);
+
+    await useApp.getState().back();
+    await useApp.getState().back();
+    expect(useApp.getState().details).toEqual([{ kind: 'target', name: ENEMY }]);
+    expect(useApp.getState().report).toEqual({ tab: 'target', data: targetDetailFixture });
+  });
+
+  it('shows a lower page of the stack from the breadcrumb and ignores other depths', async () => {
+    await openPull();
+    await useApp.getState().openTarget(ENEMY);
+    await useApp.getState().openPlayer(4);
+    await useApp.getState().openAbility(44425, null);
+    for (const depth of [2, 3, -1]) await useApp.getState().showDetailAt(depth);
+    expect(useApp.getState().details).toHaveLength(3);
+    expect(api.abilityDetail).toHaveBeenCalledTimes(1);
+
+    await useApp.getState().showDetailAt(0);
+    expect(useApp.getState().details).toEqual([{ kind: 'target', name: ENEMY }]);
+    expect(useApp.getState().report).toEqual({ tab: 'target', data: targetDetailFixture });
+    expect(useApp.getState().focusRequest).toBe('page');
+  });
+});
+
+describe('detail origin', () => {
+  it('returns to the tab a player page was opened from', async () => {
+    await openPull();
+    await useApp.getState().setTab('taken');
+    await useApp.getState().openPlayer(4);
+    expect(useApp.getState().tab).toBe('damage');
+    await useApp.getState().back();
+    expect(useApp.getState()).toMatchObject({
+      tab: 'taken',
+      details: [],
+      detailOrigin: null,
+      report: { tab: 'taken', data: takenReportFixture },
+    });
+  });
+});
+
 describe('focus requests', () => {
   it('asks for focus where a navigation leads and drops requests a filter change leaves unanswered', async () => {
     await openPull();
     expect(useApp.getState().focusRequest).toBe('fight');
+    await useApp.getState().setTab('taken');
+    expect(useApp.getState().focusRequest).toBeNull();
+    await useApp.getState().openPlayer(4);
+    expect(useApp.getState().focusRequest).toBe('page');
     await useApp.getState().setRange({ startMs: 0, endMs: 10_000 });
+    expect(useApp.getState().focusRequest).toBeNull();
+    await useApp.getState().back();
+    expect(useApp.getState().focusRequest).toBe('tab');
+    useApp.getState().consumeFocus();
+    expect(useApp.getState().focusRequest).toBeNull();
+
+    vi.mocked(api.playerDetail).mockRejectedValueOnce('Actor 99 is not a player of this pull');
+    await useApp.getState().openPlayer(99);
+    expect(useApp.getState().reportError).toBe('Actor 99 is not a player of this pull');
     expect(useApp.getState().focusRequest).toBeNull();
 
     useApp.getState().backToPulls();
     expect(useApp.getState().focusRequest).toBe('start');
-    useApp.getState().consumeFocus();
-    expect(useApp.getState().focusRequest).toBeNull();
   });
 });
 
