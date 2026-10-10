@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 /** Value tones: deaths, Aug support, healing received, a warning, the crit rate. */
 export type KpiTone = 'death' | 'support' | 'kill' | 'warn' | 'accent';
 
-/** One figure of a KPI strip: label, value and an optional sub-line. */
+/** One figure of a KPI strip: label, value and an optional sub-line (text or a link). */
 export function Kpi({
   label,
   value,
@@ -13,7 +13,7 @@ export function Kpi({
 }: {
   label: string;
   value: string;
-  sub: string;
+  sub: ReactNode;
   tone?: KpiTone;
   subTone?: 'warn';
 }) {

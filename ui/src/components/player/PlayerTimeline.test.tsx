@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initialState, useApp } from '../../store';
 import { playerDetailFixture } from '../../test/reportFixtures';
@@ -25,10 +26,14 @@ describe('CastsAndBuffs', () => {
 });
 
 describe('PlayerSidePanels', () => {
-  it('tells the death with its burst, context and rezzer', () => {
+  it('tells the death with its burst, context and rezzer and opens its recap', async () => {
+    const openDeathRecap = vi.fn(async () => {});
+    useApp.setState({ openDeathRecap });
     render(<PlayerSidePanels detail={playerDetailFixture} />);
     const death = screen.getByRole('region', { name: 'Death' });
     expect(death).toHaveTextContent('2× Virulent Spit within 1.0 s.');
     expect(death).toHaveTextContent('0:16 · Rebirth by Pyrrin · 4 s dead');
+    await userEvent.click(screen.getByRole('button', { name: /^Open death recap →/ }));
+    expect(openDeathRecap).toHaveBeenCalledWith(4, 12_000);
   });
 });

@@ -1,10 +1,26 @@
 import { describe, expect, it } from 'vitest';
+import type { FightRow } from '../../api/types';
 import { overviewFixture } from '../../test/overviewFixture';
 import { damageReportFixture } from '../../test/reportFixtures';
 import { type HeaderInput, headerTiles } from './headerTiles';
 
+const ROW: FightRow = {
+  index: 1,
+  encounterId: 3492,
+  name: "Ula'tek",
+  difficulty: 15,
+  difficultyLabel: 'Heroic',
+  outcome: 'kill',
+  durationMs: 478_610,
+  bossHpPercent: 0,
+  playerCount: 23,
+  startUnixMs: 0,
+  zone: null,
+};
+
 const input = (partial: Partial<HeaderInput>): HeaderInput => ({
   tab: 'overview',
+  row: ROW,
   overview: overviewFixture,
   range: null,
   report: null,

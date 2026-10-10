@@ -9,11 +9,13 @@ vi.mock('../../api/client', () => ({ api: {} }));
 
 const openPlayer = vi.fn(async () => {});
 const closeDetail = vi.fn(async () => {});
+const openDeathRecap = vi.fn(async () => {});
 
 beforeEach(() => {
-  useApp.setState({ ...initialState(), attribution: 'reattributed', openPlayer, closeDetail });
+  useApp.setState({ ...initialState(), attribution: 'reattributed', openPlayer, closeDetail, openDeathRecap });
   openPlayer.mockClear();
   closeDetail.mockClear();
+  openDeathRecap.mockClear();
 });
 
 describe('PlayerDetailView', () => {
@@ -26,7 +28,7 @@ describe('PlayerDetailView', () => {
     expect(closeDetail).toHaveBeenCalled();
   });
 
-  it('shows the key figures', () => {
+  it('shows the key figures and links the death to its recap', async () => {
     render(<PlayerDetailView detail={playerDetailFixture} />);
     const kpis = screen.getByRole('region', { name: 'Player key figures' });
     expect(within(kpis).getByText('103.23M')).toBeInTheDocument();
@@ -34,6 +36,7 @@ describe('PlayerDetailView', () => {
     expect(kpis).toHaveTextContent('Rank 3 of 3');
     expect(kpis).toHaveTextContent('from Speronis');
     expect(within(kpis).getByText('no potion, no healthstone')).toBeInTheDocument();
-    expect(kpis).toHaveTextContent('0:12 · res at 0:16');
+    await userEvent.click(within(kpis).getByRole('button', { name: '0:12 · res at 0:16 →' }));
+    expect(openDeathRecap).toHaveBeenCalledWith(4, 12_000);
   });
 });

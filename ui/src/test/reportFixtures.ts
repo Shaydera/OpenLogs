@@ -1,4 +1,4 @@
-import type { AbilityDetail, DamageReport, DamageTakenReport, HealingReport, PlayerDetail, PlayerRef, TargetDetail } from '../api/types';
+import type { AbilityDetail, DamageReport, DamageTakenReport, DeathRecap, DeathsReport, HealingReport, PlayerDetail, PlayerRef, TargetDetail } from '../api/types';
 
 const roster: PlayerRef[] = [
   { actorId: 3, name: 'Wendel-Emberfall-EU', specId: 71, specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
@@ -120,7 +120,7 @@ export const playerDetailFixture: PlayerDetail = {
     {
       t: 12_000,
       resurrectedAt: 16_000,
-      killingBlow: { t: 12_000, spellId: 1300001, sourceName: "Ula'tek", amount: 355_265, overkill: 4_923, environmental: false },
+      killingBlow: { t: 12_000, spellId: 1300001, sourceName: "Ula'tek", amount: 355_265, overkill: 4_923, environmental: false, periodic: false },
       resurrectedBy: { spellId: 20484, source: 2 },
       lethalBurst: { spellId: 1300001, count: 2, windowMs: 1_000 },
       context: [
@@ -245,3 +245,73 @@ export const targetDetailFixture: TargetDetail = {
   ],
   roster,
 };
+
+/** Faelan's death in the reference pull, with its events, HP and context. */
+const faelanRecap: DeathRecap = {
+  player: 4,
+  playerName: 'Faelan-Emberfall-EU',
+  t: 239_100,
+  killingBlow: { t: 239_100, spellId: 1302982, sourceName: "Ula'tek", amount: 355_265, overkill: 4_923, environmental: false, periodic: false },
+  damageLast5s: [{ spellId: 1302982, amount: 710_530, environmental: false }],
+  damageTaken5s: 1_060_000,
+  healingTaken5s: 224_000,
+  hpBeforePct: 83.4,
+  resurrectedAt: 259_548,
+  context: [
+    { item: 'defensive', spellId: 414658, state: 'on_cooldown', t: 204_000 },
+    { item: 'defensive', spellId: 110959, state: 'on_cooldown', t: 212_600 },
+    { item: 'defensive', spellId: 235450, state: 'used', t: 215_100 },
+    { item: 'healthstone', spellId: 6262, state: 'available', t: null },
+    { item: 'health_potion', spellId: 1234768, state: 'available', t: null },
+    { item: 'combat_potion', spellId: 1236994, state: 'available', t: null },
+  ],
+  number: 4,
+  specName: 'Arcane Mage',
+  maxHp: 959_133,
+  resurrectedBy: { spellId: 20484, source: 6 },
+  lethalBurst: { spellId: 1302982, count: 2, windowMs: 1_010 },
+  events: [
+    { t: 231_990, spellId: 1286835, sourceName: "Ula'tek", kind: 'damage', amount: 33_163, absorbed: 0, excess: 0, hpPct: 94, environmental: false, periodic: false, sourceOwnerName: null },
+    { t: 236_470, spellId: 1297338, sourceName: null, kind: 'damage', amount: 45_999, absorbed: 0, excess: 0, hpPct: 68, environmental: false, periodic: true, sourceOwnerName: null },
+    { t: 236_728, spellId: 1267745, sourceName: 'Stormstream Totem', kind: 'heal', amount: 14_195, absorbed: 0, excess: 0, hpPct: null, environmental: false, periodic: true, sourceOwnerName: 'Mulgar-Emberfall-EU' },
+    { t: 237_990, spellId: 1286835, sourceName: "Ula'tek", kind: 'damage', amount: 35_444, absorbed: 0, excess: 0, hpPct: 74, environmental: false, periodic: false, sourceOwnerName: null },
+    { t: 238_090, spellId: 1302982, sourceName: "Ula'tek", kind: 'damage', amount: 355_265, absorbed: 0, excess: 0, hpPct: 36, environmental: false, periodic: false, sourceOwnerName: null },
+    { t: 238_270, spellId: 1287908, sourceName: 'Faelan-Emberfall-EU', kind: 'heal', amount: 12_552, absorbed: 0, excess: 0, hpPct: null, environmental: false, periodic: false, sourceOwnerName: null },
+    { t: 238_600, spellId: 235450, sourceName: 'Faelan-Emberfall-EU', kind: 'absorb', amount: 20_000, absorbed: 0, excess: 0, hpPct: null, environmental: false, periodic: false, sourceOwnerName: null },
+    { t: 239_100, spellId: 1302982, sourceName: "Ula'tek", kind: 'damage', amount: 394_738, absorbed: 39_473, excess: 4_923, hpPct: 0, environmental: false, periodic: false, sourceOwnerName: null },
+  ],
+  hp: [
+    { t: 231_100, pct: 95 },
+    { t: 236_470, pct: 68 },
+    { t: 237_990, pct: 74 },
+    { t: 238_090, pct: 36 },
+    { t: 239_100, pct: 0 },
+  ],
+  buffs: [],
+};
+
+/** The Deaths tab: Faelan's death and the druid who resurrected him. */
+export const recapFixture: DeathsReport = {
+  roster: [
+    { actorId: 4, name: 'Faelan-Emberfall-EU', specId: 62, specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' },
+    { actorId: 6, name: 'Serrik-Silverbrook-EU', specId: 105, specName: 'Restoration Druid', classId: 11, classToken: 'DRUID', role: 'healer' },
+  ],
+  spells: {
+    '1302982': { name: 'Virulent Spit' },
+    '1286835': { name: 'Necrotic Vapors' },
+    '1297338': { name: 'Deadly Venom' },
+    '1267745': { name: 'Stormstream Totem' },
+    '1287908': { name: 'Rune of Self-Mending' },
+    '414658': { name: 'Ice Cold' },
+    '110959': { name: 'Greater Invisibility' },
+    '235450': { name: 'Prismatic Barrier' },
+    '6262': { name: 'Healthstone' },
+    '1234768': { name: 'Concentrated Silvermoon Health Potion' },
+    '1236994': { name: 'Potion of Recklessness' },
+    '1236616': { name: "Light's Potential" },
+    '20484': { name: 'Rebirth' },
+  },
+  deaths: [faelanRecap],
+};
+
+export const deathsReportFixture: DeathsReport = recapFixture;

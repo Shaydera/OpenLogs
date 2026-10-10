@@ -1,0 +1,369 @@
+/* Deaths tab: the list of deaths beside the recap. */
+.deaths-page {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+}
+.deaths-list {
+  flex: 1 1 260px;
+  max-width: 320px;
+}
+.deaths-main {
+  flex: 999 1 720px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.dlink {
+  display: grid;
+  grid-template-columns: 44px 22px 1fr;
+  gap: 10px;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 65px;
+  padding: 6px 14px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dlink:hover {
+  background: var(--hover);
+}
+.dlink.dlink-on {
+  background: var(--tile);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.dlink-time {
+  color: var(--death);
+}
+.dlink-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dlink-name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dlink-blow {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The death recap panel: title, figures, callout, HP chart. */
+.panel-head.panel-head-recap {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 16px;
+  padding: 16px 18px;
+}
+.recap-id {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.recap-title {
+  margin: 0;
+  font: 700 28px var(--font-label);
+}
+.recap-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.recap-dagger {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.recap-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+.recap-em {
+  color: var(--text);
+}
+.recap-stats {
+  display: flex;
+  flex-wrap: wrap;
+  flex: 1 1 420px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.recap-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  flex: 1 1 140px;
+}
+.recap-stat + .recap-stat {
+  border-left: 1px solid var(--line);
+}
+.recap-stat b {
+  font: 500 20px var(--font-mono);
+}
+.recap-stat-dmg {
+  color: var(--wipe-text);
+}
+.recap-stat-heal {
+  color: var(--kill-text);
+}
+.recap-stat-death {
+  color: var(--death);
+}
+.recap-callout {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 0 18px 14px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--wipe-tint-soft);
+  border: 1px solid var(--wipe-tint-line);
+}
+.recap-callout-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.recap-lead {
+  font-weight: 600;
+  color: var(--wipe-text);
+}
+.recap-warn {
+  color: var(--wipe-text);
+}
+.recap-chart-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 18px 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.lg-swatch.lg-swatch-dmg {
+  width: 10px;
+  height: 10px;
+  background: var(--wipe);
+}
+.lg-swatch.lg-swatch-heal {
+  width: 10px;
+  height: 10px;
+  background: var(--kill);
+}
+.recap-chart {
+  position: relative;
+  margin: 0 18px 16px;
+  height: 200px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--plot);
+  overflow: hidden;
+}
+.recap-chart svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.recap-guide {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px dashed var(--chart-baseline);
+}
+.recap-area {
+  fill: currentColor;
+  fill-opacity: 0.1;
+}
+.recap-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.recap-tick {
+  position: absolute;
+  width: 3px;
+  opacity: 0.85;
+}
+.recap-tick.recap-tick-dmg {
+  bottom: 0;
+  background: var(--wipe);
+}
+.recap-tick.recap-tick-heal {
+  top: 0;
+  background: var(--kill);
+}
+.recap-label {
+  position: absolute;
+  font-size: 11px;
+  color: var(--faint);
+}
+.recap-label.recap-label-top {
+  left: 6px;
+  top: 4px;
+}
+.recap-label.recap-label-mid {
+  left: 6px;
+  top: calc(50% - 16px);
+}
+.recap-label.recap-label-start {
+  left: 6px;
+  bottom: 4px;
+}
+.recap-label.recap-label-death {
+  right: 6px;
+  bottom: 4px;
+  color: var(--death);
+}
+
+/* The recap's events and context panels. */
+.recap-lower {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+}
+.recap-events {
+  flex: 999 1 560px;
+  min-width: 0;
+}
+.recap-context {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.panel-head.panel-head-events {
+  align-items: baseline;
+  gap: 10px;
+  padding: 14px 16px 10px;
+}
+.rev-rows {
+  min-width: 620px;
+}
+.rev-row {
+  display: grid;
+  grid-template-columns: 64px 22px minmax(150px, 1.3fr) minmax(120px, 1fr) 110px 56px;
+  gap: 12px;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 16px;
+  border-top: 1px solid var(--line-faint);
+  font-size: 13px;
+}
+.rev-row.rev-row-head {
+  min-height: 28px;
+}
+.rev-row.rev-row-kill {
+  background: var(--death-row);
+}
+.rev-row.rev-row-big {
+  background: var(--wipe-tint-soft);
+}
+.rev-cap {
+  font-size: 11px;
+}
+.rev-cap.rev-cap-end {
+  text-align: right;
+}
+.rev-time {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.rev-ability {
+  color: var(--text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rev-ability.rev-ability-dmg {
+  font-weight: 600;
+  color: var(--text);
+}
+.rev-source {
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rev-amount {
+  text-align: right;
+}
+.rev-amount.rev-amount-dmg {
+  color: var(--wipe-text);
+}
+.rev-amount.rev-amount-heal {
+  color: var(--kill-text);
+}
+.rev-hp {
+  text-align: right;
+  color: var(--text-soft);
+}
+.ctx-cap {
+  padding: 6px 14px;
+  font-size: 11px;
+}
+.ctx-cap.ctx-cap-gap {
+  padding: 14px 14px 6px;
+}
+.ctx-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ctx-row {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.ctx-when {
+  font-size: 12px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.st {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.st.st-cd {
+  background: var(--neutral-tint-soft);
+  color: var(--muted);
+  border: 1px solid var(--line-strong);
+}
+.st.st-us {
+  background: var(--kill-tint-soft);
+  color: var(--kill-text);
+  border: 1px solid var(--kill-tint-line);
+}
+.st.st-un {
+  background: var(--wipe-tint-soft);
+  color: var(--wipe-text);
+  border: 1px solid var(--wipe-tint-line);
+}

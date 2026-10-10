@@ -227,8 +227,8 @@
   padding: 0 10px;
   min-height: 36px;
 }
-/* Player cell: icon and name in the class colour. The name keeps the font size around it (side-panel
-   heads); rows set 14px. */
+/* Player cell: icon and name in the class colour. The name keeps the font size around it (recap title,
+   side-panel heads); rows set 14px. */
 .player-name {
   display: flex;
   align-items: center;

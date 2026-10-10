@@ -1,4 +1,4 @@
-import type { Kpis, QuickOverview } from '../../api/types';
+import type { FightRow, Kpis, QuickOverview } from '../../api/types';
 import { formatAmount, formatDuration, formatEventTime, formatInteger, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import type { FightTab, ReportData, TimeRange } from '../../store';
@@ -16,6 +16,7 @@ export interface HeaderTile {
 
 export interface HeaderInput {
   tab: FightTab;
+  row: FightRow;
   /** The whole pull; `null` while it loads. */
   overview: QuickOverview | null;
   range: TimeRange | null;
@@ -50,6 +51,8 @@ export function headerTiles(input: HeaderInput): HeaderTile[] {
       return healingTiles(ready('healing'));
     case 'taken':
       return takenTiles(ready('taken'), input);
+    case 'deaths':
+      return deathsTiles(ready('deaths'), input.row);
   }
 }
 
@@ -135,5 +138,27 @@ function takenTiles(report: ReportOf['taken'] | null, input: HeaderInput): Heade
     { label: labels[1], value: ability ? formatAmount(ability.amount) : '—', sub: ability ? hitName(ability, (id) => reportSpellName(report.spells, id)) : '' },
     { label: labels[2], value: player ? formatAmount(player.amount) : '—', sub: player ? playerName(report.roster, player.player) : '' },
     input.overview ? deathsTile(input.overview.timeline.markers.deaths.map((d) => d.t).filter((at) => inRange(input.range, at))) : pendingTile(labels[3]),
+  ];
+}
+
+function deathsTiles(report: ReportOf['deaths'] | null, row: FightRow): HeaderTile[] {
+  const labels = [t('kpi.deaths'), t('kpi.mostLethal'), t('kpi.battleRes'), t('kpi.survivors')];
+  if (!report) return labels.map(pendingTile);
+  const byAbility = new Map<string, number>();
+  for (const death of report.deaths) {
+    if (!death.killingBlow) continue;
+    const name = hitName(death.killingBlow, (id) => reportSpellName(report.spells, id));
+    byAbility.set(name, (byAbility.get(name) ?? 0) + 1);
+  }
+  // Map order is first-seen, so a tie goes to the ability that killed first.
+  const lethal = [...byAbility].reduce<[string, number] | null>((best, entry) => (!best || entry[1] > best[1] ? entry : best), null);
+  const rezzed = report.deaths.filter((d) => d.resurrectedAt !== null).length;
+  const dead = new Set(report.deaths.map((d) => d.player)).size;
+  const survivors = Math.max(0, row.playerCount - dead);
+  return [
+    deathsTile(report.deaths.map((d) => d.t)),
+    { label: labels[1], value: lethal ? t('kpi.times', { count: lethal[1] }) : '—', sub: lethal ? lethal[0] : '' },
+    { label: labels[2], value: formatInteger(rezzed), sub: t('kpi.ofDeaths', { count: report.deaths.length }) },
+    { label: labels[3], value: formatInteger(survivors), sub: t('kpi.ofPlayers', { count: row.playerCount }) },
   ];
 }

@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   GameDataStatus,
+  DeathsReport,
   AbilityDetail,
   DamageReport,
   DamageTakenReport,
@@ -33,6 +34,8 @@ export const api = {
     invoke<AbilityDetail>('ability_detail', { path, fightIndex, player, spell, pet, metric, filter }),
   targetDetail: (path: string, fightIndex: number, name: string, filter: ReportFilter) =>
     invoke<TargetDetail>('target_detail', { path, fightIndex, name, filter }),
+  deathsReport: (path: string, fightIndex: number, filter: ReportFilter) =>
+    invoke<DeathsReport>('deaths_report', { path, fightIndex, filter }),
   gameDataStatus: () => invoke<GameDataStatus>('game_data_status'),
   refreshGameData: () => invoke<GameDataStatus>('refresh_game_data'),
 };

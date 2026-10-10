@@ -8,7 +8,9 @@ mod fight_cache;
 mod icons;
 mod overview_dto;
 mod player_dto;
+mod recap_dto;
 mod recent;
+mod refs;
 mod report_dto;
 mod state;
 #[cfg(test)]
@@ -59,7 +61,8 @@ fn main() {
             commands::damage_taken_report,
             commands::player_detail,
             commands::ability_detail,
-            commands::target_detail
+            commands::target_detail,
+            commands::deaths_report
         ])
         .run(context)
         .expect("error while running OpenLogs");

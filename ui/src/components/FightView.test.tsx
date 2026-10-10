@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import type { LogView } from '../api/types';
 import { initialState, useApp } from '../store';
 import { overviewFixture } from '../test/overviewFixture';
-import { damageReportFixture, takenReportFixture } from '../test/reportFixtures';
+import { damageReportFixture, deathsReportFixture } from '../test/reportFixtures';
 import { FightView } from './FightView';
 
 vi.mock('../api/client', () => ({
@@ -17,6 +17,7 @@ vi.mock('../api/client', () => ({
     damageDoneReport: vi.fn(),
     healingReport: vi.fn(),
     damageTakenReport: vi.fn(),
+    deathsReport: vi.fn(),
   },
 }));
 
@@ -39,7 +40,7 @@ beforeEach(() => {
 describe('FightView', () => {
   it('moves between tabs with the arrow keys and wraps around', async () => {
     vi.mocked(api.damageDoneReport).mockResolvedValue(damageReportFixture);
-    vi.mocked(api.damageTakenReport).mockResolvedValue(takenReportFixture);
+    vi.mocked(api.deathsReport).mockResolvedValue(deathsReportFixture);
     useApp.setState({ overview: overviewFixture });
     render(<FightView />);
     const overviewTab = screen.getByRole('tab', { name: 'Overview' });
@@ -59,10 +60,10 @@ describe('FightView', () => {
     await userEvent.keyboard('{Home}');
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveFocus();
     await userEvent.keyboard('{ArrowLeft}');
-    expect(screen.getByRole('tab', { name: 'Damage Taken' })).toHaveFocus();
-    expect(useApp.getState().tab).toBe('taken');
+    expect(screen.getByRole('tab', { name: 'Deaths' })).toHaveFocus();
+    expect(useApp.getState().tab).toBe('deaths');
     await userEvent.keyboard('{End}');
-    expect(screen.getByRole('tab', { name: 'Damage Taken' })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: 'Deaths' })).toHaveFocus();
   });
 
   it('switches to Damage Done and reloads it with the Aug attribution', async () => {

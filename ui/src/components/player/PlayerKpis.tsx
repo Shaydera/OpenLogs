@@ -2,6 +2,7 @@ import type { ConsumableKind, PlayerDetail } from '../../api/types';
 import { formatAmount, formatAmountTenths, formatEventTime, formatInteger } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import type { MessageKey } from '../../i18n/i18n';
+import { useApp } from '../../store';
 import { Kpi, KpiStrip } from '../Kpi';
 import { shortName } from '../overview/players';
 
@@ -13,19 +14,24 @@ const CONSUMABLE_LABEL: Record<ConsumableKind, MessageKey> = {
 };
 
 export function PlayerKpis({ detail }: { detail: PlayerDetail }) {
+  const openDeathRecap = useApp((s) => s.openDeathRecap);
   const healing = detail.metric === 'healing';
   const otherMode = t(detail.attribution === 'augmented' ? 'aug.reattributed' : 'aug.augmented');
   const names = new Map(detail.roster.map((p) => [p.actorId, shortName(p.name)]));
   const firstDeath = detail.deaths[0];
   const kinds = [...new Set(detail.consumables.map((u) => u.kind))].map((kind) => t(CONSUMABLE_LABEL[kind]));
   const noConsumables = detail.consumables.length === 0;
-  const deathSub = firstDeath
-    ? firstDeath.resurrectedAt !== null
-      ? t('player.deathRes', { time: formatEventTime(firstDeath.t), res: formatEventTime(firstDeath.resurrectedAt) })
-      : formatEventTime(firstDeath.t)
-    : detail.deadSince !== null
-      ? t('player.deadSince', { time: formatEventTime(detail.deadSince) })
-      : t('player.survived');
+  const deathSub = firstDeath ? (
+    <button type="button" className="kpi-link" onClick={() => void openDeathRecap(detail.player.actorId, firstDeath.t)}>
+      {firstDeath.resurrectedAt !== null
+        ? t('player.deathRes', { time: formatEventTime(firstDeath.t), res: formatEventTime(firstDeath.resurrectedAt) })
+        : t('player.deathAt', { time: formatEventTime(firstDeath.t) })}
+    </button>
+  ) : detail.deadSince !== null ? (
+    t('player.deadSince', { time: formatEventTime(detail.deadSince) })
+  ) : (
+    t('player.survived')
+  );
   return (
     <KpiStrip label={t('player.kpis')} variant="player">
       <Kpi

@@ -68,6 +68,8 @@
   /* The legend swatch of a dead band: two hatch stripes. */
   --dead-hatch-a: #3a2020;
   --dead-hatch-b: #1a1214;
+  /* The killing blow's row in the death recap's events. */
+  --death-row: #2a1514;
   /* Veils: outside the selected range on a plot, behind a dialog. */
   --plot-dim: color-mix(in srgb, var(--scrim) 72%, transparent);
   --dialog-scrim: color-mix(in srgb, var(--scrim) 72%, transparent);

@@ -96,6 +96,7 @@ export function PlayerSidePanels({ detail }: { detail: PlayerDetail }) {
 }
 
 function DeathBlock({ detail, death, roster }: { detail: PlayerDetail; death: PlayerDeath; roster: Map<number, PlayerRef> }) {
+  const openDeathRecap = useApp((s) => s.openDeathRecap);
   const spell = (id: number) => reportSpellName(detail.spells, id);
   const kb = death.killingBlow;
   const summary = deathSummary(detail, death);
@@ -134,6 +135,10 @@ function DeathBlock({ detail, death, roster }: { detail: PlayerDetail; death: Pl
           </span>
         </div>
       )}
+      <button type="button" className="accent-link" onClick={() => void openDeathRecap(detail.player.actorId, death.t)}>
+        {t('player.openRecap')}
+        <span className="sr-only"> {formatEventTime(death.t)}</span>
+      </button>
     </div>
   );
 }

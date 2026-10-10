@@ -219,6 +219,8 @@ pub fn death_context(
             let at_death = match last {
                 // Not once before the death, although it would have been ready again by now.
                 None if death.t >= cooldown => ContextState::NeverUsed,
+                // A shield is cast on cooldown: while its cooldown runs it was spent, not held back.
+                Some(t) if defensive.shield && death.t - t < cooldown => ContextState::Used { t },
                 last => state(last, death.t, cooldown),
             };
             context.push(DeathContext {

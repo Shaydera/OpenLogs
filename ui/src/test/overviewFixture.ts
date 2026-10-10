@@ -62,7 +62,7 @@ export const overviewFixture: QuickOverview = {
       player: 3,
       playerName: 'Wendel-Emberfall-EU',
       t: 33_200,
-      killingBlow: { t: 33_140, spellId: 0, sourceName: 'Gore Rattle', amount: 2_420_251, overkill: 1_380_351, environmental: false },
+      killingBlow: { t: 33_140, spellId: 0, sourceName: 'Gore Rattle', amount: 2_420_251, overkill: 1_380_351, environmental: false, periodic: false },
       damageLast5s: [
         { spellId: 0, amount: 2_420_251, environmental: false },
         { spellId: 1297338, amount: 101_569, environmental: false },
@@ -81,7 +81,7 @@ export const overviewFixture: QuickOverview = {
       player: 4,
       playerName: 'Faelan-Emberfall-EU',
       t: 239_100,
-      killingBlow: { t: 239_050, spellId: 1300001, sourceName: "Ula'tek", amount: 355_265, overkill: 4_923, environmental: false },
+      killingBlow: { t: 239_050, spellId: 1300001, sourceName: "Ula'tek", amount: 355_265, overkill: 4_923, environmental: false, periodic: false },
       damageLast5s: [
         { spellId: 1300001, amount: 710_530, environmental: false },
         { spellId: 1297338, amount: 120_000, environmental: false },

@@ -100,6 +100,10 @@ pub struct PersonalDefensive {
     pub cooldown_s: u32,
     /// Every player of the class/spec has it; otherwise it counts once used in the pull.
     pub baseline: bool,
+    /// An absorb shield cast on cooldown (Prismatic Barrier): while its cooldown runs after a
+    /// cast it was spent, not held back. The death recap lists it; the Overview leaves it out.
+    #[serde(default)]
+    pub shield: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -409,6 +413,14 @@ impl Curated {
         self.defensives_for(spec_id)
             .into_iter()
             .find(|def| def.spell_id == spell_id)
+    }
+
+    /// Whether a personal defensive of any class or spec is an absorb shield.
+    pub fn is_shield(&self, spell_id: u32) -> bool {
+        self.defensives
+            .defensives
+            .iter()
+            .any(|def| def.spell_id == spell_id && def.shield)
     }
 }
 

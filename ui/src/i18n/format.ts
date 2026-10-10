@@ -90,6 +90,12 @@ export function formatLocalDate(unixMs: number): string {
   return localDate.format(unixMs);
 }
 
+/** A signed, grouped count difference, e.g. `+10`, `−1,200`, `0`. */
+export function formatSignedInteger(n: number): string {
+  if (n === 0) return formatInteger(0);
+  return `${n > 0 ? '+' : '−'}${formatInteger(Math.abs(n))}`;
+}
+
 /**
  * Whole thousands below a million (`5k`, `96k`, `244k`), else like `formatAmount` (`2.42M`). A value
  * whose rounding reaches the next unit moves there (`999.6` → `1k`, `999,600` → `1.00M`).
@@ -143,7 +149,7 @@ export function formatCount(n: number): string {
   return plain.format(n);
 }
 
-/** Time since the pull with tenths, rounded to 100 ms: `0:04.2` (hit log). */
+/** Time since the pull with tenths, rounded to 100 ms: `0:04.2` (hit log, death recap). */
 export function formatEventTimeTenths(ms: number): string {
   const tenths = Math.round(Math.abs(ms) / 100);
   const text = `${formatDuration(Math.floor(tenths / 10) * 1000)}.${tenths % 10}`;
@@ -177,4 +183,9 @@ export function formatBinRange(from: number, to: number): string {
 export function formatList(items: string[]): string {
   if (items.length <= 1) return items[0] ?? '';
   return t('format.listAnd', { list: items.slice(0, -1).join(', '), last: items[items.length - 1] });
+}
+
+/** Time before an event with two decimals: `−0.07 s`. */
+export function formatOffsetSeconds(ms: number): string {
+  return `−${t('unit.seconds', { value: twoDecimals.format(Math.max(0, ms) / 1000) })}`;
 }

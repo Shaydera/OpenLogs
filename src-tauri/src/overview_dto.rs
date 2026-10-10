@@ -143,6 +143,8 @@ pub struct HitDto {
     pub overkill: u64,
     /// Falling, lava, drowning and other world damage.
     pub environmental: bool,
+    /// A damage-over-time tick: without a source it reads "Debuff".
+    pub periodic: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -262,6 +264,16 @@ fn actor_name(fight: &Fight, id: ActorId) -> String {
     actor.name.clone().unwrap_or_else(|| actor.guid.clone())
 }
 
+/// The death context without absorb shields: the overview's death list and the player page's
+/// death sentence do not show rotational shields; only the death recap lists them.
+pub(crate) fn without_shields(curated: &Curated, context: &[DeathContext]) -> Vec<DeathContext> {
+    context
+        .iter()
+        .filter(|c| !matches!(c.item, ContextItem::Defensive(id) if curated.is_shield(id)))
+        .copied()
+        .collect()
+}
+
 /// The death context for the UI, noting every spell it references in `spells`.
 pub(crate) fn context_dtos(
     fight: &Fight,
@@ -349,6 +361,7 @@ pub fn death_dto(
             amount: hit.amount,
             overkill: hit.overkill,
             environmental: hit.environmental,
+            periodic: hit.periodic,
         }
     });
     let damage_last_5s = death
@@ -388,7 +401,15 @@ pub fn quick_overview_dto(
     let deaths = overview
         .deaths
         .iter()
-        .map(|report| death_dto(fight, curated, &report.death, &report.context, &mut spells))
+        .map(|report| {
+            death_dto(
+                fight,
+                curated,
+                &report.death,
+                &without_shields(curated, &report.context),
+                &mut spells,
+            )
+        })
         .collect();
 
     let consumables: Vec<ConsumableDto> = overview
@@ -591,6 +612,11 @@ mod tests {
             );
         }
         let entry = |item, state, spell| DeathContext { item, state, spell };
+        let prismatic_barrier = entry(
+            ContextItem::Defensive(235450),
+            ContextState::Used { t: 40_000 },
+            None,
+        );
         let context = [
             entry(
                 ContextItem::Defensive(414658),
@@ -608,14 +634,18 @@ mod tests {
                 ContextState::Used { t: 41_000 },
                 Some(ancient_healthstone),
             ),
+            prismatic_barrier,
         ];
         let curated = Curated::bundled();
+        let shown = without_shields(&curated, &context);
+        assert_eq!(shown, context[..4], "the overview leaves the shield out");
+
         let mut spells = BTreeMap::new();
         let dto = death_dto(
             &fight,
             &curated,
             &death_of(mage, 45_000),
-            &context,
+            &shown,
             &mut spells,
         );
         let rows: Vec<_> = dto

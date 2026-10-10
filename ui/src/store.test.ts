@@ -6,6 +6,7 @@ import { overviewFixture } from './test/overviewFixture';
 import {
   abilityDetailFixture,
   damageReportFixture,
+  deathsReportFixture,
   healingReportFixture,
   playerDetailFixture,
   takenReportFixture,
@@ -25,6 +26,7 @@ vi.mock('./api/client', () => ({
     playerDetail: vi.fn(),
     abilityDetail: vi.fn(),
     targetDetail: vi.fn(),
+    deathsReport: vi.fn(),
     gameDataStatus: vi.fn(),
     refreshGameData: vi.fn(),
   },
@@ -59,6 +61,7 @@ beforeEach(() => {
   vi.mocked(api.playerDetail).mockResolvedValue(playerDetailFixture);
   vi.mocked(api.abilityDetail).mockResolvedValue(abilityDetailFixture);
   vi.mocked(api.targetDetail).mockResolvedValue(targetDetailFixture);
+  vi.mocked(api.deathsReport).mockResolvedValue(deathsReportFixture);
   localStorage.clear();
   useApp.setState(initialState());
 });
@@ -110,7 +113,7 @@ describe('logs and pulls', () => {
 
   it('resets the tab, range and details when a pull opens', async () => {
     await openPull();
-    await useApp.getState().setTab('taken');
+    await useApp.getState().setTab('deaths');
     await useApp.getState().setRange({ startMs: 0, endMs: 1_000 });
     await useApp.getState().openPlayer(4);
 
@@ -162,6 +165,7 @@ describe('reports', () => {
     ['damage', api.damageDoneReport, damageReportFixture],
     ['healing', api.healingReport, healingReportFixture],
     ['taken', api.damageTakenReport, takenReportFixture],
+    ['deaths', api.deathsReport, deathsReportFixture],
   ] as const)('loads the %s tab through its own API call', async (tab, load, data) => {
     (load as Mock).mockResolvedValue(data);
     await openPull();
@@ -287,18 +291,25 @@ describe('detail stack', () => {
 });
 
 describe('detail origin', () => {
-  it('returns to the tab a player page was opened from', async () => {
+  it('returns to the Deaths tab and the chosen death a player page was opened from', async () => {
     await openPull();
-    await useApp.getState().setTab('taken');
+    await useApp.getState().openDeathRecap(4, 239_100);
+    expect(useApp.getState()).toMatchObject({ tab: 'deaths', focusDeath: { player: 4, t: 239_100 }, report: { tab: 'deaths', data: deathsReportFixture } });
+
+    useApp.getState().selectDeath(4, 239_050);
     await useApp.getState().openPlayer(4);
     expect(useApp.getState().tab).toBe('damage');
     await useApp.getState().back();
     expect(useApp.getState()).toMatchObject({
-      tab: 'taken',
+      tab: 'deaths',
       details: [],
       detailOrigin: null,
-      report: { tab: 'taken', data: takenReportFixture },
+      focusDeath: { player: 4, t: 239_050 },
+      report: { tab: 'deaths', data: deathsReportFixture },
     });
+
+    await useApp.getState().setTab('taken');
+    expect(useApp.getState().focusDeath).toBeNull();
   });
 });
 
@@ -306,7 +317,7 @@ describe('focus requests', () => {
   it('asks for focus where a navigation leads and drops requests a filter change leaves unanswered', async () => {
     await openPull();
     expect(useApp.getState().focusRequest).toBe('fight');
-    await useApp.getState().setTab('taken');
+    await useApp.getState().setTab('deaths');
     expect(useApp.getState().focusRequest).toBeNull();
     await useApp.getState().openPlayer(4);
     expect(useApp.getState().focusRequest).toBe('page');

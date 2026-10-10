@@ -10,6 +10,7 @@ const TABS: { key: MessageKey; tab: FightTab }[] = [
   { key: 'tabs.damageDone', tab: 'damage' },
   { key: 'tabs.healing', tab: 'healing' },
   { key: 'tabs.damageTaken', tab: 'taken' },
+  { key: 'tabs.deaths', tab: 'deaths' },
 ];
 
 /** The one panel every tab controls; its content follows the selected tab. */

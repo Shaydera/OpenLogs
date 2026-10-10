@@ -160,8 +160,11 @@ fn bundled_lists_are_consistent() {
             "{} is a major cooldown",
             entry.name
         );
-        // Tank buff rows are personal defensives as well.
-        let may_be_defensive = entry.kind == PlayerCooldownKind::Defensive;
+        // Shields (death recap) and tank buff rows are personal defensives as well.
+        let may_be_defensive = matches!(
+            entry.kind,
+            PlayerCooldownKind::Shield | PlayerCooldownKind::Defensive
+        );
         assert!(
             may_be_defensive
                 || curated

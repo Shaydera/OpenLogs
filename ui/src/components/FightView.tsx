@@ -8,6 +8,7 @@ import { FightHeader } from './chrome/FightHeader';
 import { headerTiles } from './chrome/headerTiles';
 import { FightTopBar } from './chrome/FightTopBar';
 import { PANEL_ID, TabBar, tabId } from './chrome/TabBar';
+import { DeathsTab } from './deaths/DeathsTab';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ConsumablesPanel } from './overview/ConsumablesPanel';
 import { CooldownsPanel } from './overview/CooldownsPanel';
@@ -42,7 +43,7 @@ export function FightView() {
   if (!row) return null;
 
   const onOverview = tab === 'overview';
-  const tiles = details.length > 0 ? null : headerTiles({ tab, overview, range, report, reportLoading, reportFailed });
+  const tiles = details.length > 0 ? null : headerTiles({ tab, row, overview, range, report, reportLoading, reportFailed });
 
   return (
     <div className="fight-view">
@@ -101,6 +102,8 @@ function ReportView() {
       return <HealingTab report={report.data} />;
     case 'taken':
       return <DamageTakenTab report={report.data} />;
+    case 'deaths':
+      return <DeathsTab report={report.data} />;
     case 'player':
       return <PlayerDetailView detail={report.data} />;
     case 'ability':

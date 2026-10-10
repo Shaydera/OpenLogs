@@ -12,9 +12,11 @@ import {
   formatEventTimeTenths,
   formatList,
   formatMillions,
+  formatOffsetSeconds,
   formatPercent,
   formatSeconds,
   formatShare,
+  formatSignedInteger,
   formatSignedMillions,
 } from './format';
 
@@ -32,13 +34,13 @@ describe('formatters (en-US)', () => {
     ],
     [
       'signed differences',
-      () => [formatSignedMillions(12_340_000), formatSignedMillions(0)],
-      ['+12.34M', '±0'],
+      () => [formatSignedMillions(12_340_000), formatSignedMillions(0), formatSignedInteger(-1_200)],
+      ['+12.34M', '±0', '−1,200'],
     ],
     [
       'pull times and times before an event',
-      () => [formatDuration(478_610), formatEventTime(-2_000), formatEventTimeTenths(148_990), formatEventTimeTenths(-1_500), formatAgo(35_900), formatAgo(91_000), formatAgo(-500)],
-      ['7:58', '-0:02', '2:29.0', '-0:01.5', '−35 s', '−1:31', '−0 s'],
+      () => [formatDuration(478_610), formatEventTime(-2_000), formatEventTimeTenths(148_990), formatEventTimeTenths(-1_500), formatAgo(35_900), formatAgo(91_000), formatAgo(-500), formatOffsetSeconds(70), formatOffsetSeconds(-30)],
+      ['7:58', '-0:02', '2:29.0', '-0:01.5', '−35 s', '−1:31', '−0 s', '−0.07 s', '−0.00 s'],
     ],
     [
       'units and histogram bins',

@@ -108,6 +108,8 @@ export interface Hit {
   overkill: number;
   /** Falling, lava, drowning and other world damage. */
   environmental: boolean;
+  /** A damage-over-time tick: a source-less one is a debuff whose caster is gone ("Debuff"). */
+  periodic: boolean;
 }
 
 /** A death-context entry: a personal defensive, the healthstone, the health potion, or the combat potion while its cooldown runs. */
@@ -429,6 +431,50 @@ export interface TargetDetail {
   byPlayer: PlayerAmount[];
   enemies: { name: string; units: number; damageTaken: number; isBoss: boolean; sharesBossHp: boolean; primary: boolean }[];
   roster: PlayerRef[];
+}
+
+export type RecapKind = 'damage' | 'heal' | 'absorb';
+
+export interface RecapEvent {
+  t: number;
+  spellId: number;
+  sourceName: string | null;
+  kind: RecapKind;
+  /** Damage incl. shielded part, effective heal, or absorbed amount. */
+  amount: number;
+  /** Damage only: the shielded part. */
+  absorbed: number;
+  /** Overkill (damage) or overheal (heals). */
+  excess: number;
+  hpPct: number | null;
+  /** Falling, lava, drowning and other world damage (spell 0, like melee). */
+  environmental: boolean;
+  /** A damage or heal over time tick. */
+  periodic: boolean;
+  /** The player behind a pet, guardian or totem source ("Mulgar (Totem)"). */
+  sourceOwnerName: string | null;
+}
+
+export interface DeathRecap extends DeathEntry {
+  /** 1-based number of the death in the pull. */
+  number: number;
+  /** "Arcane Mage"; `null` without COMBATANT_INFO. */
+  specName: string | null;
+  /** The res spell; `source` is the caster when it is a player in `roster`. */
+  resurrectedBy: PlayerDeath['resurrectedBy'];
+  /** The killing blow's spell hitting in a row before the death. */
+  lethalBurst: PlayerDeath['lethalBurst'];
+  maxHp: number | null;
+  /** The last 8 s, oldest first. */
+  events: RecapEvent[];
+  hp: { t: number; pct: number }[];
+  buffs: { spellId: number; sourceName: string | null }[];
+}
+
+export interface DeathsReport {
+  deaths: DeathRecap[];
+  roster: PlayerRef[];
+  spells: Record<string, { name: string }>;
 }
 
 /** Where a cast spell's hits are: cast and hit IDs often differ. */

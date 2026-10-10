@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { api } from './api/client';
 import type {
   GameDataStatus,
+  DeathsReport,
   AbilityDetail,
   Attribution,
   DamageReport,
@@ -25,7 +26,8 @@ export type FightTab =
   | 'overview'
   | 'damage'
   | 'healing'
-  | 'taken';
+  | 'taken'
+  | 'deaths';
 export interface TimeRange {
   startMs: number;
   endMs: number;
@@ -37,6 +39,7 @@ export type ReportData =
   | { tab: 'player'; data: PlayerDetail }
   | { tab: 'ability'; data: AbilityDetail }
   | { tab: 'target'; data: TargetDetail }
+  | { tab: 'deaths'; data: DeathsReport }
   | { tab: 'overview'; data: QuickOverview };
 
 export type View = { kind: 'start' } | { kind: 'fight'; fightIndex: number };
@@ -68,6 +71,8 @@ interface State {
   details: Detail[];
   /** Tab a detail stack was opened from; shown again once the stack is empty. */
   detailOrigin: FightTab | null;
+  /** Death the Deaths tab shows: a cross-link target or the user's choice. */
+  focusDeath: { player: number; t: number } | null;
   /**
    * Focus requested by the last navigation; the element that renders for it takes it once.
    * A failed load or a range or Aug-mode change drops a request nobody took.
@@ -99,6 +104,8 @@ interface Actions {
   openPlayer(player: number): Promise<void>;
   openAbility(spellId: number, pet: string | null): Promise<void>;
   openTarget(name: string): Promise<void>;
+  openDeathRecap(player: number, t: number): Promise<void>;
+  selectDeath(player: number, t: number): void;
   openAbilityOf(player: number, spellId: number, tab: 'damage' | 'healing'): Promise<void>;
   back(): Promise<void>;
   /** Shows the page at `depth` of the detail stack (a breadcrumb link); the pages above it close. */
@@ -144,6 +151,7 @@ export function initialState(): State {
     showAugDelta: readFlag(AUG_DELTA_KEY, false),
     details: [],
     detailOrigin: null,
+    focusDeath: null,
     focusRequest: null,
     settingsOpen: false,
     gameData: null,
@@ -189,6 +197,8 @@ async function fetchReport(
       return { tab, data: await api.healingReport(path, fight, filter) };
     case 'taken':
       return { tab, data: await api.damageTakenReport(path, fight, filter) };
+    case 'deaths':
+      return { tab, data: await api.deathsReport(path, fight, filter) };
   }
 }
 
@@ -300,6 +310,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
       reportLoading: false,
       details: [],
       detailOrigin: null,
+      focusDeath: null,
       focusRequest: 'fight',
     });
     try {
@@ -327,6 +338,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
       reportLoading: false,
       details: [],
       detailOrigin: null,
+      focusDeath: null,
       focusRequest: 'start',
     });
   },
@@ -345,7 +357,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
     const top = details[details.length - 1];
     // An ability page belongs to one metric; switching the metric shows its player instead.
     const kept = !keep ? [] : top?.kind === 'ability' && tab !== current ? details.slice(0, -1) : details;
-    set({ tab, report: null, reportError: null, details: kept, detailOrigin: null, focusRequest: focus });
+    set({ tab, report: null, reportError: null, details: kept, focusDeath: null, detailOrigin: null, focusRequest: focus });
     await loadReport(get, set);
   },
 
@@ -385,6 +397,15 @@ export const useApp = create<State & Actions>()((set, get) => ({
       focusRequest: 'page',
     });
     await loadReport(get, set);
+  },
+
+  async openDeathRecap(player, t) {
+    set({ tab: 'deaths', details: [], detailOrigin: null, focusDeath: { player, t }, report: null, reportError: null, focusRequest: 'page' });
+    await loadReport(get, set);
+  },
+
+  selectDeath(player, t) {
+    set({ focusDeath: { player, t } });
   },
 
   async openAbilityOf(player, spellId, tab) {

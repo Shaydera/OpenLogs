@@ -7,7 +7,9 @@ use openlogs_analysis::{
 use openlogs_gamedata::{ConsumableKind, Curated};
 use serde::{Deserialize, Serialize};
 
-use crate::overview_dto::{ContextDto, HitDto, PlayerRef, SpellRef, context_dtos, player_ref};
+use crate::overview_dto::{
+    ContextDto, HitDto, PlayerRef, SpellRef, context_dtos, player_ref, without_shields,
+};
 use crate::report_dto::{
     AbilityRowDto, AttributionDto, Names, PlayerAmount, SpellAmount, TakenSpellDto,
 };
@@ -278,6 +280,7 @@ pub fn player_detail_dto(
                     amount: hit.amount,
                     overkill: hit.overkill,
                     environmental: hit.environmental,
+                    periodic: hit.periodic,
                 }),
                 resurrected_by: death.resurrected_by.map(|rez| ResurrectionDto {
                     spell_id: names.spell(rez.spell),
@@ -290,7 +293,12 @@ pub fn player_detail_dto(
                     count: burst.count,
                     window_ms: burst.window_ms,
                 }),
-                context: context_dtos(fight, curated, &entry.context, &mut context_spells),
+                context: context_dtos(
+                    fight,
+                    curated,
+                    &without_shields(curated, &entry.context),
+                    &mut context_spells,
+                ),
             }
         })
         .collect();

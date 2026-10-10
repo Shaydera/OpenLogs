@@ -26,6 +26,9 @@ pub struct Hit {
     pub overkill: u64,
     /// Falling, lava, drowning and other world damage.
     pub environmental: bool,
+    /// A damage-over-time tick (`SPELL_PERIODIC_DAMAGE`): without a source it is a debuff whose
+    /// caster is gone (Deadly Venom).
+    pub periodic: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -172,6 +175,7 @@ fn death_at(fight: &Fight, player: ActorId, t: i32, life_start: i32) -> Death {
                         amount: damage.amount,
                         overkill: damage.overkill,
                         environmental: damage.via == DamageVia::Environmental,
+                        periodic: damage.via == DamageVia::Periodic,
                     });
                 }
             }
@@ -183,6 +187,7 @@ fn death_at(fight: &Fight, player: ActorId, t: i32, life_start: i32) -> Death {
                     amount: 0,
                     overkill: 0,
                     environmental: false,
+                    periodic: false,
                 });
             }
             EventKind::Heal(heal) => healing += heal.amount.saturating_sub(heal.overheal),
@@ -258,6 +263,6 @@ fn death_at(fight: &Fight, player: ActorId, t: i32, life_start: i32) -> Death {
 }
 
 /// HP percent of a snapshot, clamped: snapshots after a max-HP buff drops exceed 100 %.
-fn hp_pct(hp: UnitHp) -> f32 {
+pub(crate) fn hp_pct(hp: UnitHp) -> f32 {
     (hp.current as f64 * 100.0 / hp.max as f64).clamp(0.0, 100.0) as f32
 }

@@ -12,6 +12,7 @@ const MAX_ROWS = 5;
 
 export function DeathsPanel({ overview }: { overview: QuickOverview }) {
   const range = useApp((s) => s.range);
+  const setTab = useApp((s) => s.setTab);
   const players = playerIndex(overview);
   const shown = overview.deaths.slice(0, MAX_ROWS);
 
@@ -21,6 +22,9 @@ export function DeathsPanel({ overview }: { overview: QuickOverview }) {
         <h2 id="deaths-title" className="h2">
           {t('deaths.title')}
         </h2>
+        <button type="button" className="panel-link" onClick={() => void setTab('deaths')}>
+          {t('deaths.allLink')}
+        </button>
       </div>
       {shown.length === 0 ? (
         <p className="muted pad">{t(range ? 'deaths.noneInRange' : 'deaths.none')}</p>
@@ -53,6 +57,7 @@ export function DeathsPanel({ overview }: { overview: QuickOverview }) {
 }
 
 function DeathRow({ n, death, player, overview }: { n: number; death: DeathEntry; player: PlayerRef | undefined; overview: QuickOverview }) {
+  const openDeathRecap = useApp((s) => s.openDeathRecap);
   const name = shortName(death.playerName);
   const kb = death.killingBlow;
   const kbName = kb ? hitName(kb, (id) => spellName(overview, id)) : '';
@@ -65,12 +70,17 @@ function DeathRow({ n, death, player, overview }: { n: number; death: DeathEntry
       </div>
       <div className="death-player">
         {player && player.specId !== null && <GameIcon src={specIconUrl(player.specId)} size={22} name={name} />}
-        <span className="death-who">
+        <button
+          type="button"
+          className="link-btn death-who"
+          aria-label={t('deaths.openRecapOf', { name })}
+          onClick={() => void openDeathRecap(death.player, death.t)}
+        >
           <span className="death-name" style={{ color: classColor(player?.classToken ?? null) }} title={name}>
             {name}
           </span>
           {player?.specName && <span className="death-spec">{player.specName}</span>}
-        </span>
+        </button>
       </div>
       <div className="death-kb">
         {kb ? (

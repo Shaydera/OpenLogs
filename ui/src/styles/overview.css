@@ -196,10 +196,22 @@
   margin: 0;
   padding: 0;
 }
-/* Overview panels: head row inset. */
+/* Overview panels: head row inset and the head's text link. */
 .panel-head.panel-head-ov {
   padding: 16px 18px 12px;
   gap: 10px;
+}
+.panel-link {
+  font: 13px var(--font-text);
+  color: var(--accent);
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.panel-link:hover {
+  color: var(--accent-hover);
 }
 /* First 5 deaths. */
 .death-scroll {

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Personal defensives for the death context. cooldown_s is the untalented cooldown (talents usually shorten it, so 'on cooldown' errs towards leniency). baseline: every player of the class/spec has it; otherwise it only counts once the player used it in the pull.",
+  "note": "Personal defensives for the death context. cooldown_s is the untalented cooldown (talents usually shorten it, so 'on cooldown' errs towards leniency). baseline: every player of the class/spec has it; otherwise it only counts once the player used it in the pull. shield: an absorb shield cast on cooldown; within its cooldown before a death it counts as used. Only the death recap shows shields.",
   "defensives": [
     { "spell_id": 48792, "name": "Icebound Fortitude", "class_id": 6, "specs": [], "cooldown_s": 120, "baseline": true },
     { "spell_id": 48707, "name": "Anti-Magic Shell", "class_id": 6, "specs": [], "cooldown_s": 60, "baseline": true },
@@ -23,6 +23,9 @@
     { "spell_id": 110959, "name": "Greater Invisibility", "class_id": 8, "specs": [], "cooldown_s": 120, "baseline": false },
     { "spell_id": 342245, "name": "Alter Time", "class_id": 8, "specs": [], "cooldown_s": 60, "baseline": false },
     { "spell_id": 55342, "name": "Mirror Image", "class_id": 8, "specs": [], "cooldown_s": 120, "baseline": false },
+    { "spell_id": 235450, "name": "Prismatic Barrier", "class_id": 8, "specs": [62], "cooldown_s": 25, "baseline": false, "shield": true },
+    { "spell_id": 235313, "name": "Blazing Barrier", "class_id": 8, "specs": [63], "cooldown_s": 25, "baseline": false, "shield": true },
+    { "spell_id": 11426, "name": "Ice Barrier", "class_id": 8, "specs": [64], "cooldown_s": 25, "baseline": false, "shield": true },
     { "spell_id": 115203, "name": "Fortifying Brew", "class_id": 10, "specs": [], "cooldown_s": 360, "baseline": true },
     { "spell_id": 122470, "name": "Touch of Karma", "class_id": 10, "specs": [269], "cooldown_s": 90, "baseline": true },
     { "spell_id": 122783, "name": "Diffuse Magic", "class_id": 10, "specs": [], "cooldown_s": 90, "baseline": false },

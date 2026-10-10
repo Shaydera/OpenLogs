@@ -11,6 +11,7 @@ use crate::dto::{GameDataStatusDto, LogView, RecentLog, log_view, recent_log};
 use crate::fight_cache::FightCache;
 use crate::overview_dto::{QuickOverviewDto, quick_overview_dto};
 use crate::player_dto::{MetricDto, PlayerDetailDto, player_detail_dto};
+use crate::recap_dto::{DeathsReportDto, deaths_report_dto};
 use crate::recent::{RecentEntry, RecentLogs};
 use crate::report_dto::{
     DamageReportDto, DamageTakenReportDto, FilterDto, HealingReportDto, damage_report_dto,
@@ -283,6 +284,41 @@ pub async fn target_detail(
             &state.data_dir,
             fight_index,
             name,
+            filter,
+        )
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+pub fn deaths_report_at(
+    cache: &FightCache,
+    curated: &Curated,
+    path: &Path,
+    data_dir: &Path,
+    fight_index: u32,
+    filter: FilterDto,
+) -> Result<DeathsReportDto, String> {
+    let (_, fight) = cache.get(path, data_dir, fight_index)?;
+    let recaps = openlogs_analysis::death_recaps(&fight, curated, &filter.to_filter());
+    Ok(deaths_report_dto(&fight, curated, &recaps))
+}
+
+#[tauri::command]
+pub async fn deaths_report(
+    path: String,
+    fight_index: u32,
+    filter: FilterDto,
+    app: AppHandle,
+) -> Result<DeathsReportDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        deaths_report_at(
+            &state.fight_cache,
+            &state.curated,
+            &PathBuf::from(&path),
+            &state.data_dir,
+            fight_index,
             filter,
         )
     })
@@ -673,6 +709,12 @@ mod tests {
             ("player", serde_json::to_value(&player)),
             ("ability", serde_json::to_value(&ability)),
             ("target", serde_json::to_value(&top_target)),
+            (
+                "deaths",
+                serde_json::to_value(
+                    deaths_report_at(cache, curated, path, data_dir, 1, whole).unwrap(),
+                ),
+            ),
         ];
         for (name, json) in reports {
             assert_camel_case_keys(&json.unwrap(), name);
