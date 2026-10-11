@@ -18,6 +18,7 @@ import type {
   LogView,
   Metric,
   PlayerDetail,
+  PullComparison,
   QuickOverview,
   RecentLog,
   ReportFilter,
@@ -59,8 +60,8 @@ export type ReportData =
 
 export type View = { kind: 'start' } | { kind: 'fight'; fightIndex: number };
 
-/** Where keyboard focus goes after a navigation: a page title or the active tab. */
-export type FocusTarget = 'start' | 'fight' | 'page' | 'tab';
+/** Where keyboard focus goes after a navigation: a page title, the comparison title or the active tab. */
+export type FocusTarget = 'start' | 'fight' | 'page' | 'tab' | 'compare';
 
 export type CastsSortKey = 'amount' | 'uptime' | 'cpm';
 export interface CastsSort {
@@ -68,6 +69,18 @@ export interface CastsSort {
   desc: boolean;
 }
 const DEFAULT_CASTS_SORT: CastsSort = { key: 'amount', desc: true };
+
+/** A pull comparison, shown instead of the pull's tabs. */
+export interface ComparisonState {
+  /** Log indices of the earlier and the later pull; the shown pull is one of them. */
+  a: number;
+  b: number;
+  data: PullComparison | null;
+  loading: boolean;
+  error: string | null;
+  /** Aug mode the pull's report was calculated with; Back recalculates it after a change. */
+  reportAttribution: Attribution;
+}
 
 interface State {
   recent: RecentLog[];
@@ -104,6 +117,8 @@ interface State {
   detailOrigin: FightTab | null;
   /** Death the Deaths tab shows: a cross-link target or the user's choice. */
   focusDeath: { player: number; t: number } | null;
+  /** Open pull comparison; `null` shows the pull's tabs. Tab, range and details stay as they were. */
+  comparison: ComparisonState | null;
   /**
    * Focus requested by the last navigation; the element that renders for it takes it once.
    * A failed load or a range, Aug-mode or scope change drops a request nobody took.
@@ -147,6 +162,8 @@ interface Actions {
   showDetailAt(depth: number): Promise<void>;
   closeDetail(): Promise<void>;
   consumeFocus(): void;
+  openComparison(other: number): Promise<void>;
+  closeComparison(): Promise<void>;
   openSettings(): Promise<void>;
   closeSettings(): void;
   loadGameDataStatus(): Promise<void>;
@@ -192,6 +209,7 @@ export function initialState(): State {
     details: [],
     detailOrigin: null,
     focusDeath: null,
+    comparison: null,
     focusRequest: null,
     settingsOpen: false,
     gameData: null,
@@ -203,6 +221,7 @@ export function initialState(): State {
 let reportRequest = 0;
 let logRequest = 0;
 let fightRequest = 0;
+let comparisonRequest = 0;
 
 /** Makes an in-flight pull load stale. */
 function dropPendingFight() {
@@ -212,6 +231,11 @@ function dropPendingFight() {
 /** Makes every in-flight report request stale. */
 function dropPendingReports() {
   reportRequest += 1;
+}
+
+/** Makes an in-flight comparison stale. */
+function dropPendingComparison() {
+  comparisonRequest += 1;
 }
 
 /** The tab's report, or the detail page on top of the stack for Damage Done and Healing. */
@@ -291,6 +315,26 @@ async function loadReport(get: () => State & Actions, set: (partial: Partial<Sta
   }
 }
 
+/** Loads the open comparison in the current Aug mode; only the newest request may write. */
+async function loadComparison(get: () => State & Actions, set: (partial: Partial<State>) => void) {
+  const { log, comparison, attribution } = get();
+  if (!log || !comparison) return;
+  const request = ++comparisonRequest;
+  // The shown comparison stays until the new Aug mode is calculated.
+  set({ comparison: { ...comparison, loading: true, error: null } });
+  const update = (partial: Partial<ComparisonState>) => {
+    const current = get().comparison;
+    if (request === comparisonRequest && current) set({ comparison: { ...current, ...partial } });
+  };
+  try {
+    update({ data: await api.comparePulls(log.path, comparison.a, comparison.b, attribution) });
+  } catch (err) {
+    update({ data: null, error: String(err) });
+  } finally {
+    update({ loading: false });
+  }
+}
+
 /** Detail pages live on Damage Done or Healing. */
 function reportTab(tab: FightTab): FightTab {
   return tab === 'healing' ? 'healing' : 'damage';
@@ -321,7 +365,8 @@ export const useApp = create<State & Actions>()((set, get) => ({
       if (request === logRequest) {
         dropPendingFight();
         dropPendingReports();
-        set({ log, view: { kind: 'start' }, overview: null, fightLoading: false, fightError: null });
+        dropPendingComparison();
+        set({ log, view: { kind: 'start' }, overview: null, fightLoading: false, fightError: null, comparison: null });
       }
     } catch (err) {
       if (request === logRequest) set({ error: t('error.openFailed', { file: fileName(path), reason: String(err) }) });
@@ -351,6 +396,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
     if (!log) return;
     const request = ++fightRequest;
     dropPendingReports();
+    dropPendingComparison();
     set({
       view: { kind: 'fight', fightIndex },
       overview: null,
@@ -366,6 +412,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
       details: [],
       detailOrigin: null,
       focusDeath: null,
+      comparison: null,
       focusRequest: 'fight',
       castsPlayer: null,
       castsSort: DEFAULT_CASTS_SORT,
@@ -383,6 +430,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
   backToPulls() {
     dropPendingFight();
     dropPendingReports();
+    dropPendingComparison();
     set({
       view: { kind: 'start' },
       overview: null,
@@ -397,6 +445,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
       details: [],
       detailOrigin: null,
       focusDeath: null,
+      comparison: null,
       focusRequest: 'start',
       castsPlayer: null,
       castsSort: DEFAULT_CASTS_SORT,
@@ -522,10 +571,28 @@ export const useApp = create<State & Actions>()((set, get) => ({
     set({ focusRequest: null });
   },
 
+  async openComparison(other) {
+    const { view, attribution } = get();
+    if (view.kind !== 'fight' || other === view.fightIndex) return;
+    const [a, b] = other < view.fightIndex ? [other, view.fightIndex] : [view.fightIndex, other];
+    set({ comparison: { a, b, data: null, loading: true, error: null, reportAttribution: attribution }, focusRequest: 'compare' });
+    await loadComparison(get, set);
+  },
+
+  async closeComparison() {
+    const comparison = get().comparison;
+    if (!comparison) return;
+    dropPendingComparison();
+    set({ comparison: null, focusRequest: 'fight' });
+    if (comparison.reportAttribution !== get().attribution) await loadReport(get, set);
+  },
+
   async setAttribution(attribution) {
     // Filter changes never move focus; drop a request that no heading has taken (also in setRange and setAuraScope).
     set({ attribution, focusRequest: null });
-    await loadReport(get, set);
+    // The Aug toggle on the comparison recalculates the comparison; Back recalculates the pull.
+    if (get().comparison) await loadComparison(get, set);
+    else await loadReport(get, set);
   },
 
   async setRange(range) {

@@ -17,6 +17,8 @@ import {
   formatPercent,
   formatSeconds,
   formatShare,
+  formatSignedAmount,
+  formatSignedDuration,
   formatSignedInteger,
   formatSignedMillions,
 } from './format';
@@ -35,8 +37,8 @@ describe('formatters (en-US)', () => {
     ],
     [
       'signed differences',
-      () => [formatSignedMillions(12_340_000), formatSignedMillions(0), formatSignedInteger(-1_200)],
-      ['+12.34M', '±0', '−1,200'],
+      () => [formatSignedAmount(-4_920), formatSignedAmount(0), formatSignedMillions(12_340_000), formatSignedMillions(0), formatSignedInteger(-1_200), formatSignedDuration(-14_200), formatSignedDuration(400)],
+      ['−4.9k', '0', '+12.34M', '±0', '−1,200', '−0:14', '0:00'],
     ],
     [
       'pull times and times before an event',

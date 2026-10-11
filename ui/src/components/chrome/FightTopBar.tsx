@@ -2,13 +2,14 @@ import { Fragment, type RefObject, useRef } from 'react';
 import type { FightRow } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
+import { CompareMenu } from '../compare/CompareMenu';
 import { type CrumbAction, fightCrumbs } from './crumbs';
 import { RangeChip } from './RangeChip';
 
 /**
- * The top bar of every fight screen: the app name back to the pull list, the breadcrumb and the range
- * pill on a ranged detail page. `currentRef` gets the last level: the focus target of a page without
- * a title.
+ * The top bar of every fight screen: the app name back to the pull list, the breadcrumb, the range pill
+ * on a ranged detail page and "Compare with…". `currentRef` gets the last level: the focus target of
+ * a page without a title.
  */
 export function FightTopBar({ row, currentRef }: { row: FightRow; currentRef?: RefObject<HTMLSpanElement | null> }) {
   const log = useApp((s) => s.log);
@@ -16,14 +17,16 @@ export function FightTopBar({ row, currentRef }: { row: FightRow; currentRef?: R
   const details = useApp((s) => s.details);
   const overview = useApp((s) => s.overview);
   const report = useApp((s) => s.report);
+  const comparing = useApp((s) => s.comparison !== null);
   const backToPulls = useApp((s) => s.backToPulls);
   const setTab = useApp((s) => s.setTab);
   const showDetailAt = useApp((s) => s.showDetailAt);
+  const closeComparison = useApp((s) => s.closeComparison);
   const range = useApp((s) => s.range);
   const setRange = useApp((s) => s.setRange);
   const current = useRef<HTMLSpanElement | null>(null);
   if (!log) return null;
-  const crumbs = fightCrumbs({ log, row, tab, details, overview, report });
+  const crumbs = fightCrumbs({ log, row, tab, details, overview, report, comparing });
 
   function follow(action: CrumbAction) {
     switch (action.kind) {
@@ -34,6 +37,8 @@ export function FightTopBar({ row, currentRef }: { row: FightRow; currentRef?: R
         return void setTab('overview', 'fight');
       case 'detail':
         return void showDetailAt(action.depth);
+      case 'closeComparison':
+        return void closeComparison();
     }
   }
 
@@ -78,7 +83,8 @@ export function FightTopBar({ row, currentRef }: { row: FightRow; currentRef?: R
         })}
       </nav>
       <div className="appbar-end">
-        {details.length > 0 && range !== null && <RangeChip range={range} onClear={clearRange} />}
+        {!comparing && details.length > 0 && range !== null && <RangeChip range={range} onClear={clearRange} />}
+        {!comparing && <CompareMenu row={row} />}
       </div>
     </header>
   );

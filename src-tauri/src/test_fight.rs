@@ -2,7 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use openlogs_analysis::{ActorId, Actors, Event, EventKind, Fight, Heal, NOBODY, SpellId};
+use openlogs_analysis::{
+    ActorId, Actors, Damage, DamageVia, Event, EventKind, Fight, Heal, NOBODY, SpellId,
+};
 use openlogs_index::Outcome;
 use openlogs_parser::Unit;
 
@@ -32,6 +34,37 @@ pub fn fight(actors: Actors, mut events: Vec<Event>) -> Fight {
         actors,
         spells: BTreeMap::new(),
         broken_lines: 0,
+    }
+}
+
+/// A hit on a hostile unit; `supporter` is the Evoker of a support share, else `NOBODY`.
+pub fn damage_event(
+    t: i32,
+    source: ActorId,
+    target: ActorId,
+    spell: SpellId,
+    amount: u64,
+    supporter: ActorId,
+) -> Event {
+    Event {
+        t,
+        source,
+        target,
+        spell,
+        kind: EventKind::Damage(Damage {
+            via: DamageVia::Spell,
+            amount,
+            overkill: 0,
+            school: 1,
+            resisted: 0,
+            blocked: 0,
+            absorbed: 0,
+            critical: false,
+            supporter,
+        }),
+        source_hostile: false,
+        target_hostile: true,
+        unit_hp: None,
     }
 }
 

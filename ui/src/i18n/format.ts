@@ -81,6 +81,12 @@ export function formatEventTime(ms: number): string {
   return ms < 0 ? `-${formatDuration(-ms)}` : formatDuration(ms);
 }
 
+/** An amount with an explicit sign, e.g. `+87.29M`, `−8.28M`; zero is `0`. */
+export function formatSignedAmount(value: number): string {
+  if (value === 0) return formatAmount(0);
+  return value > 0 ? `+${formatAmount(value)}` : formatAmount(value);
+}
+
 /** A log date with its clock time, e.g. `Oct 7, 2026 · 18:58`. */
 export function formatDateTime(unixMs: number): string {
   return t('format.dateTime', { date: formatDate(unixMs), time: formatClock(unixMs) });
@@ -89,6 +95,12 @@ export function formatDateTime(unixMs: number): string {
 /** A real instant (not a log time) as a date in the user's time zone, e.g. `Oct 11, 2026`. */
 export function formatLocalDate(unixMs: number): string {
   return localDate.format(unixMs);
+}
+
+/** A signed `m:ss` difference, e.g. `+5:36`, `−0:14`; under a second reads `0:00`. */
+export function formatSignedDuration(ms: number): string {
+  if (Math.abs(ms) < 1000) return formatDuration(0);
+  return `${ms > 0 ? '+' : '−'}${formatDuration(Math.abs(ms))}`;
 }
 
 /** A signed, grouped count difference, e.g. `+10`, `−1,200`, `0`. */

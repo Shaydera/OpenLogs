@@ -4,11 +4,12 @@ import { useApp } from '../../store';
 
 const MODES: Attribution[] = ['augmented', 'reattributed'];
 
-export function AttributionToggle() {
+/** The global Aug mode. `label` names it where the tab's metric does not (the pull comparison). */
+export function AttributionToggle({ label: fixedLabel }: { label?: string }) {
   const attribution = useApp((s) => s.attribution);
   const setAttribution = useApp((s) => s.setAttribution);
   const tab = useApp((s) => s.tab);
-  const label = t(tab === 'healing' ? 'aug.labelHealing' : 'aug.label');
+  const label = fixedLabel ?? t(tab === 'healing' ? 'aug.labelHealing' : 'aug.label');
   return (
     <div className="seg-wrap">
       <span className="cap" aria-hidden="true">

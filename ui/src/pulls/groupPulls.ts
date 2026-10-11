@@ -103,3 +103,8 @@ export function pullView(fights: FightRow[], index: number): PullView | null {
   if (!fight) return null;
   return bossPulls(fights, fight).find((view) => view.index === index) ?? null;
 }
+
+/** Pulls `current` can be compared with: same boss and difficulty, not aborted, not itself. */
+export function comparablePulls(fights: FightRow[], current: FightRow): PullView[] {
+  return bossPulls(fights, current).filter((view) => view.index !== current.index && view.status !== 'aborted');
+}

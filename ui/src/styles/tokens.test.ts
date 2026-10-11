@@ -32,7 +32,7 @@ const FIXED_PAIRS: [foreground: string, background: string, minimum: number][] =
   ['kill-text', 'kill-tint', TEXT],
   ['wipe-text', 'wipe-tint', TEXT],
   ['death', 'death-tint', TEXT],
-  ...['dash', 'kill', 'wipe', 'lust', 'lust-line', 'mana'].map(
+  ...['dash', 'kill', 'wipe', 'pull-a', 'pull-b', 'lust', 'lust-line', 'mana'].map(
     (mark): [string, string, number] => [mark, 'panel', NON_TEXT],
   ),
 ];

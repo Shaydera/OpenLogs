@@ -5,6 +5,7 @@ mod actors;
 mod aura_report;
 mod auras;
 mod casts;
+mod compare;
 mod deaths;
 mod fight;
 mod filter;
@@ -26,6 +27,7 @@ pub use actors::{Actor, ActorId, ActorKind, Actors, NOBODY};
 pub use aura_report::{AuraRow, AuraScope, AuraTarget, auras_report};
 pub use auras::{AuraInterval, aura_intervals, union_ms};
 pub use casts::{CastsReport, PlayerCasts, SpellCasts, casts_report};
+pub use compare::{ComparedPlayer, PlayerSide, PullComparison, compare_pulls};
 pub use deaths::{
     AbilityAmount, BURST_GAP_MS, DEATH_WINDOW_MS, Death, Hit, LethalBurst, Resurrection, deaths,
 };

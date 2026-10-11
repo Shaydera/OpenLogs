@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initialState, useApp } from '../../store';
-import { logFixture } from '../../test/logFixture';
+import { compareLogFixture } from '../../test/compareFixture';
 import { overviewFixture } from '../../test/overviewFixture';
 import { abilityDetailFixture } from '../../test/reportFixtures';
 import { FightTopBar } from './FightTopBar';
@@ -12,14 +12,14 @@ vi.mock('../../api/client', () => ({ api: {} }));
 const backToPulls = vi.fn();
 const showDetailAt = vi.fn(async () => {});
 const setRange = vi.fn(async () => {});
-const KILL = logFixture.fights[2];
+const KILL = compareLogFixture.fights[2];
 const FILE = 'WoWCombatLog-100726_185823.txt';
 
 beforeEach(() => {
   vi.clearAllMocks();
   useApp.setState({
     ...initialState(),
-    log: logFixture,
+    log: compareLogFixture,
     view: { kind: 'fight', fightIndex: 3 },
     overview: overviewFixture,
     backToPulls,

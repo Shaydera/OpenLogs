@@ -15,8 +15,8 @@ const base: OverviewTimeline = {
 describe('timelineGeometry', () => {
   it('bridges boss HP gaps of up to three samples and breaks the line at longer ones', () => {
     const hp = [100, null, 80, null, null, null, 60, null, null, null, null, 40];
-    expect(bossHpPath(hp, 1_000, 12_000)).toBe('M 41.7 12 L 208.3 32 L 541.7 52 M 916.7 72 L 1000 72');
-    expect(bossHpPath([null, 50, 50, null], 1_000, 4_000)).toBe('M 375 62 L 625 62');
+    expect(bossHpPath(hp, 1_000, 12_000)).toBe('M 41.7 0 L 208.3 20 L 541.7 40 M 916.7 60 L 1000 60');
+    expect(bossHpPath([null, 50, 50, null], 1_000, 4_000)).toBe('M 375 50 L 625 50');
   });
 
   it('draws raid DPS as an area normalised to its peak, across the pull when it is shorter than a step', () => {

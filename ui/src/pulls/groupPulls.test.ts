@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FightRow } from '../api/types';
-import { groupPulls, pullStatus, pullView } from './groupPulls';
+import { comparablePulls, groupPulls, pullStatus, pullView } from './groupPulls';
 
 let next = 1;
 function fight(
@@ -77,6 +77,7 @@ describe('groupPulls', () => {
       ['Nymrissa Wavecaller', 'Difficulty 233', 1, 1, null],
     ]);
     expect(new Set(groups.map((g) => g.key)).size).toBe(3);
+    expect(comparablePulls(mixed, mixed[0])).toEqual([]);
   });
 });
 
@@ -90,8 +91,13 @@ describe('pullStatus', () => {
   });
 });
 
-describe('pullView', () => {
-  it('numbers a pull as in the pull list, aborted pulls included', () => {
+describe('comparable pulls', () => {
+  it('offers the other pulls of the boss and difficulty, never aborted ones, numbered as in the pull list', () => {
+    expect(comparablePulls(LOG, LOG[7]).map((p) => [p.index, p.n, p.status])).toEqual([
+      [5, 1, 'wipe'],
+      [6, 2, 'wipe'],
+    ]);
+    expect(comparablePulls(LOG, LOG[0])).toEqual([]);
     expect(pullView(LOG, 8)).toMatchObject({ index: 8, n: 4, status: 'kill' });
     expect(pullView(LOG, 7)).toMatchObject({ n: 3, status: 'aborted' });
     expect(pullView(LOG, 99)).toBeNull();

@@ -20,6 +20,11 @@
   --wipe-text: #f5a766;
   --death: #f0877f;
 
+  /* The two pulls of a comparison (A earlier, B later). Checked on --panel for
+     lightness band, chroma, colour-blind separation (ΔE 25) and ≥ 3:1 contrast. B's line is also dashed. */
+  --pull-a: #b8862a;
+  --pull-b: #8f7ee0;
+
   /* Bloodlust line on the cooldown rows; the timeline marker is --lust. */
   --lust-line: #3c6a8f;
   /* Tinted backgrounds and borders of chips, badges and selected filters. */

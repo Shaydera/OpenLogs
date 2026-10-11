@@ -17,12 +17,12 @@ struct Key {
     modified: Option<SystemTime>,
 }
 
-/// Pulls kept loaded: the shown pull and the one shown before it.
+/// Pulls kept loaded: the shown pull and the one it is compared with.
 const CAPACITY: usize = 2;
 
 type Entry = (Key, FightSummary, Arc<Fight>);
 
-/// The most recently used pulls. Tabs, filters and going back to an earlier pull reuse them
+/// The most recently used pulls. Tabs, filters and a comparison of two pulls reuse them
 /// instead of re-reading the log.
 #[derive(Default)]
 pub struct FightCache {
@@ -92,7 +92,7 @@ mod tests {
 
         let one = get(1);
         let three = get(3);
-        assert!(Arc::ptr_eq(&one, &get(1)), "both pulls stay loaded");
+        assert!(Arc::ptr_eq(&one, &get(1)), "a compared pair stays loaded");
         assert!(Arc::ptr_eq(&three, &get(3)));
         let two = get(2);
         assert!(Arc::ptr_eq(&three, &get(3)));

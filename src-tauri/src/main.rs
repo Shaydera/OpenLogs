@@ -4,6 +4,7 @@
 mod auras_dto;
 mod casts_dto;
 mod commands;
+mod compare_dto;
 mod detail_dto;
 mod dto;
 mod fight_cache;
@@ -70,7 +71,8 @@ fn main() {
             commands::casts_report,
             commands::auras_report,
             commands::interrupts_report,
-            commands::resources_report
+            commands::resources_report,
+            commands::compare_pulls
         ])
         .run(context)
         .expect("error while running OpenLogs");

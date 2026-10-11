@@ -13,7 +13,7 @@
 .tabbar .toggle {
   padding-bottom: 2px;
 }
-/* A detail page's range pill in the top bar. */
+/* A detail page's range pill, left of "Compare with…" in the top bar. */
 .range-chip {
   display: inline-flex;
   align-items: center;
@@ -226,6 +226,9 @@
   font: 400 13px var(--font-text);
   padding: 0 10px;
   min-height: 36px;
+}
+.rtable .r {
+  text-align: right;
 }
 /* Player cell: icon and name in the class colour. The name keeps the font size around it (recap title,
    side-panel heads); rows set 14px. */

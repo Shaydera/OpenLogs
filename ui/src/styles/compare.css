@@ -1,0 +1,126 @@
+/* The "Compare with…" menu in the pull header. */
+.compare-menu {
+  position: relative;
+}
+.compare-list {
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 280px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--panel-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
+.compare-option {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  text-align: left;
+  font: 500 13px var(--font-text);
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.compare-option:hover,
+.compare-option:focus-visible {
+  background: var(--hover);
+}
+
+/* Pull comparison: pull cards, the over-time plots and the deaths of both pulls. */
+.cmp-pulls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+.cmp-pull {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.cmp-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex: none;
+}
+.cmp-swatch-a {
+  background: var(--pull-a);
+}
+.cmp-swatch-b {
+  background: var(--pull-b);
+}
+.legend-pull-a::before {
+  background: var(--pull-a);
+}
+.legend-pull-b::before {
+  background: var(--pull-b);
+}
+.cmp-plot {
+  position: relative;
+  height: 110px;
+  margin: 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+.cmp-plot .cap {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  font-size: 11px;
+}
+.cmp-plot svg {
+  position: absolute;
+  inset: 20px 0 0 0;
+  width: 100%;
+  height: calc(100% - 20px);
+}
+.cmp-hp-a,
+.cmp-hp-b {
+  fill: none;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.cmp-hp-a {
+  stroke: var(--pull-a);
+}
+.cmp-hp-b {
+  stroke: var(--pull-b);
+  stroke-dasharray: 6 4;
+}
+.cmp-dps-a {
+  fill: color-mix(in srgb, var(--pull-a) 30%, transparent);
+}
+.cmp-dps-b {
+  fill: color-mix(in srgb, var(--pull-b) 30%, transparent);
+  /* Dashed like B's HP line, so the areas differ by more than colour. */
+  stroke: var(--pull-b);
+  stroke-width: 1;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+.cmp-deaths {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 0 24px;
+  padding: 0 16px 14px;
+}
+.cmp-deaths .h3 {
+  margin: 0 0 8px;
+}
+.cmp-death {
+  display: grid;
+  grid-template-columns: 52px minmax(90px, 1fr) minmax(140px, 2fr);
+  gap: 10px;
+  align-items: start;
+  padding: 8px 0;
+  border-top: 1px solid var(--line-soft);
+}

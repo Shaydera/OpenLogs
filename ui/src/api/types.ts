@@ -167,6 +167,40 @@ export interface QuickOverview {
   cooldowns: CooldownEntry[];
 }
 
+/** Mirrors `src-tauri/src/compare_dto.rs`. */
+export interface PlayerSide {
+  /** The player's actor in that pull; ids differ between pulls. */
+  actorId: number;
+  dps: number;
+  hps: number;
+  deaths: number;
+}
+
+export interface ComparedPlayer {
+  /** Name, class, spec and role; its `actorId` belongs to the pull that named the player. */
+  player: PlayerRef;
+  /** `null` when the player was not in that pull. */
+  a: PlayerSide | null;
+  b: PlayerSide | null;
+  /** DPS in B minus DPS in A; `null` unless the player was in both pulls. */
+  dpsDelta: number | null;
+}
+
+export interface PullSide {
+  fightIndex: number;
+  /** The whole pull. */
+  overview: QuickOverview;
+}
+
+export interface PullComparison {
+  /** The earlier pull. */
+  a: PullSide;
+  /** The later pull. */
+  b: PullSide;
+  /** Players of both pulls by |DPS difference|, then players of one pull by DPS. */
+  players: ComparedPlayer[];
+}
+
 export type Attribution = 'augmented' | 'reattributed';
 
 export interface ReportFilter {

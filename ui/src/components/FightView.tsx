@@ -10,6 +10,7 @@ import { FightHeader } from './chrome/FightHeader';
 import { headerTiles } from './chrome/headerTiles';
 import { FightTopBar } from './chrome/FightTopBar';
 import { PANEL_ID, TabBar, tabId } from './chrome/TabBar';
+import { PullComparisonView } from './compare/PullComparisonView';
 import { DeathsTab } from './deaths/DeathsTab';
 import { ErrorBoundary } from './ErrorBoundary';
 import { InterruptsTab } from './interrupts/InterruptsTab';
@@ -42,12 +43,21 @@ export function FightView() {
   const hideProcs = useApp((s) => s.hideProcs);
   const details = useApp((s) => s.details);
   const closeDetail = useApp((s) => s.closeDetail);
+  const comparing = useApp((s) => s.comparison !== null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const crumbRef = useRef<HTMLSpanElement>(null);
   // The pull title; on detail pages (compact header) the current breadcrumb.
   useFocusRequest('fight', () => titleRef.current ?? crumbRef.current);
   const row = view.kind === 'fight' ? log?.fights.find((f) => f.index === view.fightIndex) : undefined;
   if (!row) return null;
+  // The comparison replaces the tabs; tab, range and details wait in the store for "Back".
+  if (comparing)
+    return (
+      <div className="fight-view">
+        <FightTopBar row={row} currentRef={crumbRef} />
+        <PullComparisonView row={row} />
+      </div>
+    );
 
   const onOverview = tab === 'overview';
   const tiles =

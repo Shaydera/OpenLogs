@@ -49,6 +49,14 @@
 .crumb-current {
   color: var(--text);
 }
+.fight-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--line);
+}
 .fight-title {
   margin: 0;
   font: 600 26px var(--font-label);

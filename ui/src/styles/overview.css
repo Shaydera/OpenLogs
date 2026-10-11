@@ -169,6 +169,18 @@
   outline: 2px solid var(--text);
   outline-offset: -2px;
 }
+.tl-axis {
+  position: relative;
+  height: 22px;
+  margin: 0 16px 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.tl-axis span {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+}
 .tl-ticks {
   position: relative;
   height: 20px;
@@ -316,6 +328,12 @@
 .death-taken-head .num {
   color: var(--text);
 }
+.spell-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
 .seg5 {
   display: flex;
   height: 12px;
@@ -381,6 +399,21 @@
 }
 .badge-state {
   opacity: 0.85;
+}
+
+.ctable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ctable th,
+.ctable td {
+  text-align: left;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.ctable thead th {
+  border-top: 0;
 }
 /* Consumables: item legend, two roster columns, grid rows. */
 .cons-legend {

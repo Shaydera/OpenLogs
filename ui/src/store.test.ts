@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { api } from './api/client';
-import type { DamageReport, LogView, QuickOverview } from './api/types';
+import type { DamageReport, LogView, PullComparison, QuickOverview } from './api/types';
+import { comparisonFixture } from './test/compareFixture';
 import { gameDataFixture } from './test/gameDataFixture';
 import { overviewFixture } from './test/overviewFixture';
 import {
@@ -35,6 +36,7 @@ vi.mock('./api/client', () => ({
     aurasReport: vi.fn(),
     interruptsReport: vi.fn(),
     resourcesReport: vi.fn(),
+    comparePulls: vi.fn(),
     gameDataStatus: vi.fn(),
     refreshGameData: vi.fn(),
   },
@@ -71,6 +73,7 @@ beforeEach(() => {
   vi.mocked(api.targetDetail).mockResolvedValue(targetDetailFixture);
   vi.mocked(api.deathsReport).mockResolvedValue(deathsReportFixture);
   vi.mocked(api.castsReport).mockResolvedValue(castsReportFixture);
+  vi.mocked(api.comparePulls).mockResolvedValue(comparisonFixture);
   localStorage.clear();
   useApp.setState(initialState());
 });
@@ -422,19 +425,80 @@ describe('request races', () => {
   });
 
   const freshReport = { ...damageReportFixture, total: 1 };
-  it.each([
-    { overtaken: 'a newer Aug mode', overtake: 'augmented', expected: { report: { tab: 'damage', data: freshReport }, reportLoading: false } },
-    { overtaken: 'another pull', overtake: 'pull', expected: { report: null, reportLoading: false } },
-  ])('drops a report response overtaken by $overtaken', async ({ overtake, expected }) => {
-    await openPull();
+  const freshComparison = { ...comparisonFixture, players: [] };
+  function slowReport() {
     const old = deferred<DamageReport>();
     vi.mocked(api.damageDoneReport).mockReturnValueOnce(old.promise).mockResolvedValue(freshReport);
-    const pending = useApp.getState().setTab('damage');
+    return { start: () => useApp.getState().setTab('damage'), settle: () => old.resolve(damageReportFixture) };
+  }
+  function slowComparison() {
+    const old = deferred<PullComparison>();
+    vi.mocked(api.comparePulls).mockReturnValueOnce(old.promise).mockResolvedValue(freshComparison);
+    return { start: () => useApp.getState().openComparison(3), settle: () => old.resolve(comparisonFixture) };
+  }
+  it.each([
+    { response: 'report', slow: slowReport, overtaken: 'a newer Aug mode', overtake: 'augmented', expected: { report: { tab: 'damage', data: freshReport }, reportLoading: false } },
+    { response: 'report', slow: slowReport, overtaken: 'another pull', overtake: 'pull', expected: { report: null, reportLoading: false } },
+    { response: 'comparison', slow: slowComparison, overtaken: 'a newer Aug mode', overtake: 'augmented', expected: { comparison: { data: freshComparison, loading: false } } },
+    { response: 'comparison', slow: slowComparison, overtaken: 'another pull', overtake: 'pull', expected: { comparison: null } },
+    { response: 'comparison', slow: slowComparison, overtaken: 'closing it', overtake: 'close', expected: { comparison: null } },
+  ])('drops a $response response overtaken by $overtaken', async ({ slow, overtake, expected }) => {
+    await openPull();
+    const { start, settle } = slow();
+    const pending = start();
     if (overtake === 'augmented') await useApp.getState().setAttribution('augmented');
-    else await useApp.getState().openFight(2);
-    old.resolve(damageReportFixture);
+    else if (overtake === 'pull') await useApp.getState().openFight(2);
+    else await useApp.getState().closeComparison();
+    settle();
     await pending;
     expect(useApp.getState()).toMatchObject(expected);
+  });
+});
+
+describe('pull comparison', () => {
+  it('compares the shown pull with another one, the earlier pull first, in the current Aug mode', async () => {
+    await openPull();
+    await useApp.getState().openComparison(1);
+    expect(api.comparePulls).not.toHaveBeenCalled();
+
+    await useApp.getState().openFight(3);
+    await useApp.getState().openComparison(1);
+    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.path, 1, 3, 'reattributed');
+    expect(useApp.getState().comparison).toEqual({ a: 1, b: 3, data: comparisonFixture, loading: false, error: null, reportAttribution: 'reattributed' });
+    expect(useApp.getState().focusRequest).toBe('compare');
+    expect(useApp.getState().view).toEqual({ kind: 'fight', fightIndex: 3 });
+
+    await useApp.getState().setAttribution('augmented');
+    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.path, 1, 3, 'augmented');
+
+    vi.mocked(api.comparePulls).mockRejectedValueOnce('Pull 9 does not exist in this log.');
+    await useApp.getState().openComparison(9);
+    expect(useApp.getState().comparison).toMatchObject({ a: 3, b: 9, data: null, loading: false, error: 'Pull 9 does not exist in this log.' });
+  });
+
+  it('returns to the pull as it was left and recalculates it only for a new Aug mode', async () => {
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().setRange({ startMs: 0, endMs: 60_000 });
+    expect(api.damageDoneReport).toHaveBeenCalledTimes(2);
+
+    await useApp.getState().openComparison(3);
+    await useApp.getState().closeComparison();
+    expect(useApp.getState()).toMatchObject({
+      comparison: null,
+      focusRequest: 'fight',
+      tab: 'damage',
+      range: { startMs: 0, endMs: 60_000 },
+      report: { tab: 'damage', data: damageReportFixture },
+    });
+    expect(api.damageDoneReport).toHaveBeenCalledTimes(2);
+
+    await useApp.getState().openComparison(3);
+    await useApp.getState().setAttribution('augmented');
+    expect(api.damageDoneReport).toHaveBeenCalledTimes(2);
+    await useApp.getState().closeComparison();
+    expect(api.damageDoneReport).toHaveBeenCalledTimes(3);
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.path, 1, { startMs: 0, endMs: 60_000, attribution: 'augmented' });
   });
 });
 

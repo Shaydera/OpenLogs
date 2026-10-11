@@ -4,6 +4,8 @@ import { t } from '../../i18n/i18n';
 import { stepLine } from '../player/chartGeometry';
 
 const VIEW_WIDTH = 1000;
+/** Height of the pull comparison's 1000×100 box. */
+const VIEW_HEIGHT = 100;
 
 /**
  * How values map into a view box: boss HP 0–100 % from `hpZero` up by `hpSpan`, raid DPS from the
@@ -15,6 +17,9 @@ export interface PlotScale {
   hpSpan: number;
   dpsSpan: number;
 }
+
+/** The pull comparison: both series use the whole 1000×100 box. */
+const COMPARE_SCALE: PlotScale = { height: VIEW_HEIGHT, hpZero: VIEW_HEIGHT, hpSpan: VIEW_HEIGHT, dpsSpan: VIEW_HEIGHT };
 
 /** The fight timeline and the range panel: boss HP 100 % at y 12 leaves room for the death diamonds. */
 const TIMELINE_SCALE: PlotScale = { height: 120, hpZero: 112, hpSpan: 100, dpsSpan: 70 };
@@ -37,11 +42,11 @@ export function percentOf(ms: number, durationMs: number): number {
 const round = (value: number) => Math.round(value * 10) / 10;
 const x = (ms: number, durationMs: number) => round((percentOf(ms, durationMs) / 100) * VIEW_WIDTH);
 
-/** Step `i` of a series over the pull: start, middle of its real length, end. */
-function stepAt(i: number, stepMs: number, durationMs: number) {
+/** Step `i` of a series over a pull of `lengthMs` on an axis of `axisMs`: start, middle of its real length, end. */
+function stepAt(i: number, stepMs: number, lengthMs: number, axisMs: number) {
   const from = i * stepMs;
-  const to = Math.min(durationMs, (i + 1) * stepMs);
-  return { x0: x(from, durationMs), x: x((from + to) / 2, durationMs), x1: x(to, durationMs) };
+  const to = Math.min(lengthMs, (i + 1) * stepMs);
+  return { x0: x(from, axisMs), x: x((from + to) / 2, axisMs), x1: x(to, axisMs) };
 }
 
 /** Boss HP gaps up to this many samples are carried through; longer ones (the boss gone) break the line. */
@@ -69,19 +74,32 @@ function bridgeShortGaps<T>(points: (T | null)[], maxGap: number): (T | null)[] 
  * Boss HP per step as a line that breaks where the boss reported nothing for longer than
  * MAX_BRIDGED_HP_SAMPLES steps; shorter gaps are bridged so no lone dashes remain.
  */
-export function bossHpPath(bossHp: (number | null)[], stepMs: number, durationMs: number): string {
+export function bossHpPath(
+  bossHp: (number | null)[],
+  stepMs: number,
+  lengthMs: number,
+  axisMs = lengthMs,
+  scale: PlotScale = COMPARE_SCALE,
+): string {
   const points = bossHp.map((value, i) =>
-    value === null ? null : { ...stepAt(i, stepMs, durationMs), y: round(TIMELINE_SCALE.hpZero - (value / 100) * TIMELINE_SCALE.hpSpan) },
+    value === null ? null : { ...stepAt(i, stepMs, lengthMs, axisMs), y: round(scale.hpZero - (value / 100) * scale.hpSpan) },
   );
   return stepLine(bridgeShortGaps(points, MAX_BRIDGED_HP_SAMPLES));
 }
 
 /** Raid DPS per step as a closed area scaled to `peak`; empty without values or peak. */
-function dpsAreaPath(raidDps: number[], stepMs: number, durationMs: number, peak: number): string {
+export function dpsAreaPath(
+  raidDps: number[],
+  stepMs: number,
+  lengthMs: number,
+  peak: number,
+  axisMs = lengthMs,
+  scale: PlotScale = COMPARE_SCALE,
+): string {
   if (peak <= 0 || raidDps.length === 0) return '';
   const points = raidDps.map((value, i) => ({
-    ...stepAt(i, stepMs, durationMs),
-    y: round(TIMELINE_SCALE.height - (value / peak) * TIMELINE_SCALE.dpsSpan),
+    ...stepAt(i, stepMs, lengthMs, axisMs),
+    y: round(scale.height - (value / peak) * scale.dpsSpan),
   }));
   // A pull shorter than one step: draw its only value across the step.
   const line: (readonly [number, number])[] =
@@ -93,7 +111,7 @@ function dpsAreaPath(raidDps: number[], stepMs: number, durationMs: number, peak
       : points.map((p) => [p.x, p.y] as const);
   const first = line[0][0];
   const last = line[line.length - 1][0];
-  return [`M ${first} ${TIMELINE_SCALE.height}`, ...line.map(([px, py]) => `L ${px} ${py}`), `L ${last} ${TIMELINE_SCALE.height}`, 'Z'].join(' ');
+  return [`M ${first} ${scale.height}`, ...line.map(([px, py]) => `L ${px} ${py}`), `L ${last} ${scale.height}`, 'Z'].join(' ');
 }
 
 /** A tick on every full minute of the axis but its very end, where the label would hang past the plot. */
@@ -106,7 +124,7 @@ export function minuteTicks(axisMs: number): { leftPct: number; label: string }[
 }
 
 /** A phase's name: from its config, else "Phase 1" / "Intermission 1". */
-function phaseLabel(phase: Phase): string {
+export function phaseLabel(phase: Phase): string {
   return phase.name ?? (phase.kind === 'boss' ? t('timeline.phase', { n: phase.number }) : t('timeline.intermission', { n: phase.number }));
 }
 
@@ -122,8 +140,8 @@ export function numberRepeats(labels: string[]): string[] {
 }
 
 export function timelineGeometry(timeline: OverviewTimeline, durationMs: number): TimelineGeometry {
-  const bossHp = bossHpPath(timeline.bossHp, timeline.bossHpStepMs, durationMs);
-  const dpsPath = dpsAreaPath(timeline.raidDps, timeline.dpsStepMs, durationMs, Math.max(0, ...timeline.raidDps));
+  const bossHp = bossHpPath(timeline.bossHp, timeline.bossHpStepMs, durationMs, durationMs, TIMELINE_SCALE);
+  const dpsPath = dpsAreaPath(timeline.raidDps, timeline.dpsStepMs, durationMs, Math.max(0, ...timeline.raidDps), durationMs, TIMELINE_SCALE);
   const phases = timeline.phases.map((phase) => ({
     key: `${phase.kind}-${phase.number}`,
     leftPct: percentOf(phase.startMs, durationMs),

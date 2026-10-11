@@ -1,19 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { logFixture } from '../../test/logFixture';
+import { compareLogFixture } from '../../test/compareFixture';
 import { overviewFixture } from '../../test/overviewFixture';
 import { abilityDetailFixture } from '../../test/reportFixtures';
 import { type Crumb, type CrumbInput, fightCrumbs } from './crumbs';
 
 // Ula'tek Heroic: pull #1 a 2:22 wipe, pull #3 the 7:58 kill.
-const [WIPE, , KILL] = logFixture.fights;
+const [WIPE, , KILL] = compareLogFixture.fights;
 const FILE = 'WoWCombatLog-100726_185823.txt';
 const base: CrumbInput = {
-  log: logFixture,
+  log: compareLogFixture,
   row: KILL,
   tab: 'overview',
   details: [],
   overview: overviewFixture,
   report: null,
+  comparing: false,
 };
 
 /** Label and what a click does: `current` for the page shown, `text` for a plain level. */

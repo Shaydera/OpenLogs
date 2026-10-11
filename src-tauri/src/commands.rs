@@ -8,6 +8,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::auras_dto::{AuraScopeDto, AurasReportDto, auras_report_dto};
 use crate::casts_dto::{CastsReportDto, casts_report_dto};
+use crate::compare_dto::{PullComparisonDto, pull_comparison_dto};
 use crate::detail_dto::{AbilityDetailDto, TargetDetailDto, ability_detail_dto, target_detail_dto};
 use crate::dto::{GameDataStatusDto, LogView, RecentLog, log_view, recent_log};
 use crate::fight_cache::FightCache;
@@ -17,8 +18,8 @@ use crate::player_dto::{MetricDto, PlayerDetailDto, player_detail_dto};
 use crate::recap_dto::{DeathsReportDto, deaths_report_dto};
 use crate::recent::{RecentEntry, RecentLogs};
 use crate::report_dto::{
-    DamageReportDto, DamageTakenReportDto, FilterDto, HealingReportDto, damage_report_dto,
-    healing_report_dto, taken_report_dto,
+    AttributionDto, DamageReportDto, DamageTakenReportDto, FilterDto, HealingReportDto,
+    damage_report_dto, healing_report_dto, taken_report_dto,
 };
 use crate::resources_dto::{ResourcesReportDto, resources_report_dto};
 use crate::state::{AppState, index_cache_dir, now_unix_s};
@@ -633,6 +634,52 @@ pub async fn quick_overview(
     .map_err(|err| err.to_string())?
 }
 
+/// Pulls `fight_a` and `fight_b` compared as a whole (the time range never applies).
+pub fn compare_pulls_at(
+    cache: &FightCache,
+    curated: &Curated,
+    path: &Path,
+    data_dir: &Path,
+    fight_a: u32,
+    fight_b: u32,
+    attribution: AttributionDto,
+) -> Result<PullComparisonDto, String> {
+    let (_, a) = cache.get(path, data_dir, fight_a)?;
+    let (_, b) = cache.get(path, data_dir, fight_b)?;
+    let comparison =
+        openlogs_analysis::compare_pulls(&a, &b, curated, attribution.to_attribution());
+    Ok(pull_comparison_dto(
+        curated,
+        (fight_a, &a),
+        (fight_b, &b),
+        &comparison,
+    ))
+}
+
+#[tauri::command]
+pub async fn compare_pulls(
+    path: String,
+    fight_a: u32,
+    fight_b: u32,
+    attribution: AttributionDto,
+    app: AppHandle,
+) -> Result<PullComparisonDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        compare_pulls_at(
+            &state.fight_cache,
+            &state.curated,
+            &PathBuf::from(&path),
+            &state.data_dir,
+            fight_a,
+            fight_b,
+            attribution,
+        )
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
 pub fn describe(path: &Path, err: &io::Error) -> String {
     match err.kind() {
         io::ErrorKind::NotFound => format!("File not found: {}", path.display()),
@@ -656,7 +703,6 @@ mod tests {
 
     use super::*;
     use crate::dto::OutcomeDto;
-    use crate::report_dto::AttributionDto;
 
     const FIXTURE: &str = include_str!("../../crates/openlogs-index/tests/fixtures/mini_raid.txt");
     const WHOLE_PULL: &str = r#"{ "startMs": null, "endMs": null, "attribution": "augmented" }"#;
@@ -767,6 +813,16 @@ mod tests {
             missing_pull.unwrap_err(),
             "Pull 9 does not exist in this log."
         );
+        let compared = compare_pulls_at(
+            &cache,
+            &curated,
+            &path,
+            dir.path(),
+            1,
+            9,
+            AttributionDto::Augmented,
+        );
+        assert_eq!(compared.unwrap_err(), "Pull 9 does not exist in this log.");
         let not_a_player = player_detail_at(
             &cache,
             &curated,
@@ -889,6 +945,21 @@ mod tests {
                 "resources",
                 serde_json::to_value(resources_report_at(cache, path, data_dir, 1, whole).unwrap()),
             ),
+            (
+                "comparison",
+                serde_json::to_value(
+                    compare_pulls_at(
+                        cache,
+                        curated,
+                        path,
+                        data_dir,
+                        1,
+                        3,
+                        AttributionDto::Augmented,
+                    )
+                    .unwrap(),
+                ),
+            ),
         ];
         for (name, json) in reports {
             assert_camel_case_keys(&json.unwrap(), name);
@@ -929,5 +1000,45 @@ mod tests {
                 .iter()
                 .any(|p| p.actor_id == markers[0].player && p.name == FAELAN)
         );
+    }
+
+    #[test]
+    fn comparing_pulls_lists_every_player_of_either_pull() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = log_file(dir.path(), FIXTURE);
+        let comparison = compare_pulls_at(
+            &FightCache::default(),
+            &Curated::bundled(),
+            &path,
+            dir.path(),
+            1,
+            3,
+            AttributionDto::Augmented,
+        )
+        .unwrap();
+        assert_eq!((comparison.a.fight_index, comparison.b.fight_index), (1, 3));
+        assert_eq!(
+            comparison.a.overview.deaths.len(),
+            1,
+            "Faelan dies in the first pull"
+        );
+
+        let row = |name: &str| {
+            comparison
+                .players
+                .iter()
+                .find(|p| p.player.name == name)
+                .unwrap()
+        };
+        let faelan = row(FAELAN);
+        let in_a = faelan.a.unwrap();
+        assert!((in_a.dps - 377_019_940.0 / 60.0).abs() < 1e-6);
+        assert_eq!(in_a.deaths, 1);
+        assert!(
+            faelan.b.is_some_and(|b| b.dps > 0.0),
+            "Faelan hits Ula'tek in pull 3"
+        );
+        let pyrrin = row("Pyrrin-Emberfall-EU");
+        assert!(pyrrin.a.is_some() && pyrrin.b.is_none() && pyrrin.dps_delta.is_none());
     }
 }

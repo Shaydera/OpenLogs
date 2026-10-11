@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   GameDataStatus,
+  Attribution,
   AuraScope,
   AurasReport,
   InterruptsReport,
@@ -14,6 +15,7 @@ import type {
   LogView,
   Metric,
   PlayerDetail,
+  PullComparison,
   QuickOverview,
   RecentLog,
   TargetDetail,
@@ -49,6 +51,8 @@ export const api = {
     invoke<InterruptsReport>('interrupts_report', { path, fightIndex, filter }),
   resourcesReport: (path: string, fightIndex: number, filter: ReportFilter) =>
     invoke<ResourcesReport>('resources_report', { path, fightIndex, filter }),
+  comparePulls: (path: string, fightA: number, fightB: number, attribution: Attribution) =>
+    invoke<PullComparison>('compare_pulls', { path, fightA, fightB, attribution }),
   gameDataStatus: () => invoke<GameDataStatus>('game_data_status'),
   refreshGameData: () => invoke<GameDataStatus>('refresh_game_data'),
 };

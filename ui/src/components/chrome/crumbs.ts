@@ -9,7 +9,8 @@ import { playerIndex, shortName, spellName } from '../overview/players';
 export type CrumbAction =
   | { kind: 'pulls' }
   | { kind: 'overview' }
-  | { kind: 'detail'; depth: number };
+  | { kind: 'detail'; depth: number }
+  | { kind: 'closeComparison' };
 
 export interface Crumb {
   label: string;
@@ -27,6 +28,7 @@ export interface CrumbInput {
   /** The whole-pull overview: player and spell names while a detail page loads. */
   overview: QuickOverview | null;
   report: ReportData | null;
+  comparing: boolean;
 }
 
 type Level = Omit<Crumb, 'current'>;
@@ -77,10 +79,12 @@ function detailLevels(details: Detail[], overview: QuickOverview | null, report:
  * and duration on the report tabs, with the tab on Casts, with the detail stack on detail pages.
  * Every level but the last links somewhere.
  */
-export function fightCrumbs({ log, row, tab, details, overview, report }: CrumbInput): Crumb[] {
+export function fightCrumbs({ log, row, tab, details, overview, report, comparing }: CrumbInput): Crumb[] {
   const levels: Level[] = [{ label: log.fileName, action: { kind: 'pulls' } }];
   const pull = pullLabel(log.fights, row);
-  if (details.length > 0) {
+  if (comparing) {
+    levels.push({ label: pull, action: { kind: 'closeComparison' } }, { label: t('crumb.comparison'), action: null });
+  } else if (details.length > 0) {
     levels.push({ label: pull, action: { kind: 'overview' } }, ...detailLevels(details, overview, report));
   } else if (tab === 'overview') {
     levels.push({ label: pull, action: null });

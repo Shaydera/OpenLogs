@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api/client';
 import type { LogView } from '../api/types';
 import { initialState, useApp } from '../store';
+import { compareLogFixture, comparisonFixture } from '../test/compareFixture';
 import { overviewFixture } from '../test/overviewFixture';
 import { damageReportFixture, resourcesReportFixture } from '../test/reportFixtures';
 import { FightView } from './FightView';
@@ -22,6 +23,7 @@ vi.mock('../api/client', () => ({
     aurasReport: vi.fn(),
     interruptsReport: vi.fn(),
     resourcesReport: vi.fn(),
+    comparePulls: vi.fn(),
   },
 }));
 
@@ -105,5 +107,40 @@ describe('FightView', () => {
     expect(screen.getByText('The report could not be calculated: Actor 99 is not a player of this pull')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '← Back' }));
     expect(back).toHaveBeenCalled();
+  });
+});
+
+describe('compare with…', () => {
+  const first = compareLogFixture.fights[0];
+  const PULLS: LogView = {
+    ...compareLogFixture,
+    fights: [
+      ...compareLogFixture.fights,
+      { ...first, index: 4, encounterId: 3420, name: 'Sszorak' },
+      { ...first, index: 5, difficulty: 16, difficultyLabel: 'Mythic' },
+      { ...first, index: 6, durationMs: 247_029, bossHpPercent: 33.8 },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.mocked(api.comparePulls).mockReset().mockResolvedValue(comparisonFixture);
+    useApp.setState({ log: PULLS, view: { kind: 'fight', fightIndex: 3 }, overview: overviewFixture });
+  });
+
+  it('opens a comparison with another pull of the boss and comes back to the tabs', async () => {
+    render(<FightView />);
+    await userEvent.click(screen.getByRole('button', { name: 'Compare with…' }));
+    const list = screen.getByRole('list', { name: 'Compare this pull with' });
+    expect(within(list).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Pull #1 · Wipe · 2:22 · 60.4%',
+      'Pull #4 · Wipe · 4:07 · 33.8%',
+    ]);
+    await userEvent.click(within(list).getByRole('button', { name: 'Pull #1 · Wipe · 2:22 · 60.4%' }));
+    expect(api.comparePulls).toHaveBeenLastCalledWith(PULLS.path, 1, 3, 'reattributed');
+    expect(await screen.findByRole('table', { name: 'Key figures' })).toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '← Back to pull #3' }));
+    expect(screen.getByRole('tablist')).toBeInTheDocument();
   });
 });
