@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import type { LogView } from '../api/types';
 import { initialState, useApp } from '../store';
 import { overviewFixture } from '../test/overviewFixture';
-import { damageReportFixture, deathsReportFixture } from '../test/reportFixtures';
+import { damageReportFixture, resourcesReportFixture } from '../test/reportFixtures';
 import { FightView } from './FightView';
 
 vi.mock('../api/client', () => ({
@@ -18,6 +18,10 @@ vi.mock('../api/client', () => ({
     healingReport: vi.fn(),
     damageTakenReport: vi.fn(),
     deathsReport: vi.fn(),
+    castsReport: vi.fn(),
+    aurasReport: vi.fn(),
+    interruptsReport: vi.fn(),
+    resourcesReport: vi.fn(),
   },
 }));
 
@@ -40,7 +44,7 @@ beforeEach(() => {
 describe('FightView', () => {
   it('moves between tabs with the arrow keys and wraps around', async () => {
     vi.mocked(api.damageDoneReport).mockResolvedValue(damageReportFixture);
-    vi.mocked(api.deathsReport).mockResolvedValue(deathsReportFixture);
+    vi.mocked(api.resourcesReport).mockResolvedValue(resourcesReportFixture);
     useApp.setState({ overview: overviewFixture });
     render(<FightView />);
     const overviewTab = screen.getByRole('tab', { name: 'Overview' });
@@ -60,10 +64,10 @@ describe('FightView', () => {
     await userEvent.keyboard('{Home}');
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveFocus();
     await userEvent.keyboard('{ArrowLeft}');
-    expect(screen.getByRole('tab', { name: 'Deaths' })).toHaveFocus();
-    expect(useApp.getState().tab).toBe('deaths');
+    expect(screen.getByRole('tab', { name: 'Resources' })).toHaveFocus();
+    expect(useApp.getState().tab).toBe('resources');
     await userEvent.keyboard('{End}');
-    expect(screen.getByRole('tab', { name: 'Deaths' })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: 'Resources' })).toHaveFocus();
   });
 
   it('switches to Damage Done and reloads it with the Aug attribution', async () => {
@@ -84,7 +88,7 @@ describe('FightView', () => {
   });
 
   it('navigates by breadcrumb: the pull crumb back to the Overview with focus on its title, the log crumb to the pull list', async () => {
-    useApp.setState({ overview: overviewFixture, tab: 'damage', details: [{ kind: 'player', player: 4 }] });
+    useApp.setState({ overview: overviewFixture, tab: 'casts' });
     render(<FightView />);
     const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });
     await userEvent.click(within(crumbs).getByRole('button', { name: "Ula'tek · Pull #1" }));

@@ -2,6 +2,7 @@ import { type KeyboardEvent, useRef } from 'react';
 import { useFocusRequest } from '../../hooks/useFocusRequest';
 import { type MessageKey, t } from '../../i18n/i18n';
 import { type FightTab, useApp } from '../../store';
+import { HideProcsToggle } from '../casts/HideProcsToggle';
 import { AttributionToggle } from '../reports/AttributionToggle';
 import { tabBarControl } from './tabBarControl';
 
@@ -11,6 +12,10 @@ const TABS: { key: MessageKey; tab: FightTab }[] = [
   { key: 'tabs.healing', tab: 'healing' },
   { key: 'tabs.damageTaken', tab: 'taken' },
   { key: 'tabs.deaths', tab: 'deaths' },
+  { key: 'tabs.buffs', tab: 'buffs' },
+  { key: 'tabs.casts', tab: 'casts' },
+  { key: 'tabs.interrupts', tab: 'interrupts' },
+  { key: 'tabs.resources', tab: 'resources' },
 ];
 
 /** The one panel every tab controls; its content follows the selected tab. */
@@ -70,6 +75,7 @@ export function TabBar() {
         })}
       </div>
       {control === 'aug' && <AttributionToggle />}
+      {control === 'procs' && <HideProcsToggle />}
     </div>
   );
 }

@@ -74,7 +74,7 @@ function detailLevels(details: Detail[], overview: QuickOverview | null, report:
 
 /**
  * The fight top bar's breadcrumb: the log file, then the pull — alone on the Overview, with result
- * and duration on the report tabs, with the detail stack on detail pages.
+ * and duration on the report tabs, with the tab on Casts, with the detail stack on detail pages.
  * Every level but the last links somewhere.
  */
 export function fightCrumbs({ log, row, tab, details, overview, report }: CrumbInput): Crumb[] {
@@ -84,6 +84,8 @@ export function fightCrumbs({ log, row, tab, details, overview, report }: CrumbI
     levels.push({ label: pull, action: { kind: 'overview' } }, ...detailLevels(details, overview, report));
   } else if (tab === 'overview') {
     levels.push({ label: pull, action: null });
+  } else if (tab === 'casts') {
+    levels.push({ label: pull, action: { kind: 'overview' } }, { label: t('tabs.casts'), action: null });
   } else {
     levels.push({ label: t('crumb.withResult', { pull, result: resultLabel(row) }), action: null });
   }

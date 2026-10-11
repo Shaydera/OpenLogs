@@ -15,6 +15,7 @@ const threeDecimals = new Intl.NumberFormat(locale, { minimumFractionDigits: 3, 
 const localDate = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric' });
 const plain = new Intl.NumberFormat(locale, { maximumFractionDigits: 0, useGrouping: false });
 const oneDecimalPercent = new Intl.NumberFormat(locale, { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const oneDecimalUngrouped = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false });
 
 /** `value` rounded to `digits` decimals; picks the unit a formatted amount lands in. */
 function roundTo(value: number, digits: number): number {
@@ -130,6 +131,11 @@ export function formatSignedMillions(value: number): string {
 /** A 0–100 share with exactly one decimal: `7.5%`, `0.0%`, `100.0%`. */
 export function formatShare(value: number): string {
   return oneDecimalPercent.format(value / 100);
+}
+
+/** Casts per minute with one decimal and no grouping: `59.0`, `1006.8`. */
+export function formatCpm(value: number): string {
+  return oneDecimalUngrouped.format(value);
 }
 
 /**

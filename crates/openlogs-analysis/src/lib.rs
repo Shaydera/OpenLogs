@@ -2,11 +2,13 @@
 
 mod ability;
 mod actors;
+mod aura_report;
 mod auras;
 mod casts;
 mod deaths;
 mod fight;
 mod filter;
+mod interrupts;
 mod links;
 mod load;
 mod overview;
@@ -21,7 +23,9 @@ mod usage;
 
 pub use ability::{AbilityDetail, AbilityHit, TargetHits, ability_detail};
 pub use actors::{Actor, ActorId, ActorKind, Actors, NOBODY};
+pub use aura_report::{AuraRow, AuraScope, AuraTarget, auras_report};
 pub use auras::{AuraInterval, aura_intervals, union_ms};
+pub use casts::{CastsReport, PlayerCasts, SpellCasts, casts_report};
 pub use deaths::{
     AbilityAmount, BURST_GAP_MS, DEATH_WINDOW_MS, Death, Hit, LethalBurst, Resurrection, deaths,
 };
@@ -30,6 +34,9 @@ pub use fight::{
     MissType, Missed, NO_SPELL, POWER_SAMPLE_MS, PowerSample, SpellId, SpellInfo, UnitHp,
 };
 pub use filter::{Attribution, ReportFilter};
+pub use interrupts::{
+    DispelEntry, InterruptEntry, InterruptsReport, MissedCast, interrupts_report,
+};
 pub use links::AbilityLink;
 pub use load::{load_fight, load_fight_file};
 pub use overview::{
@@ -46,6 +53,9 @@ pub use reports::damage::{DamageReport, PlayerDamage, damage_done};
 pub use reports::healing::{HealingReport, PlayerHealing, healing};
 pub use reports::taken::{DamageTakenReport, TakenAbility, TakenPlayer, damage_taken};
 pub use reports::{AbilityRow, RowKind};
+pub use resources::{
+    PlayerResources, PowerTrack, RESOURCE_STEP_MS, ResourcesReport, resources_report,
+};
 pub use targets::{
     EnemyGroup, TargetDetail, UnitLife, WAVE_GAP_MS, Wave, enemy_groups, target_detail,
 };

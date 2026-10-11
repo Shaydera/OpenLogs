@@ -6,9 +6,12 @@ use openlogs_gamedata::{Curated, HttpFetch};
 use openlogs_index::{CacheStatus, load_or_build};
 use tauri::{AppHandle, Manager};
 
+use crate::auras_dto::{AuraScopeDto, AurasReportDto, auras_report_dto};
+use crate::casts_dto::{CastsReportDto, casts_report_dto};
 use crate::detail_dto::{AbilityDetailDto, TargetDetailDto, ability_detail_dto, target_detail_dto};
 use crate::dto::{GameDataStatusDto, LogView, RecentLog, log_view, recent_log};
 use crate::fight_cache::FightCache;
+use crate::interrupts_dto::{InterruptsReportDto, interrupts_report_dto};
 use crate::overview_dto::{QuickOverviewDto, quick_overview_dto};
 use crate::player_dto::{MetricDto, PlayerDetailDto, player_detail_dto};
 use crate::recap_dto::{DeathsReportDto, deaths_report_dto};
@@ -17,6 +20,7 @@ use crate::report_dto::{
     DamageReportDto, DamageTakenReportDto, FilterDto, HealingReportDto, damage_report_dto,
     healing_report_dto, taken_report_dto,
 };
+use crate::resources_dto::{ResourcesReportDto, resources_report_dto};
 use crate::state::{AppState, index_cache_dir, now_unix_s};
 
 /// Indexes (or loads from cache) the log at `path`. Returns the view and, for real combat
@@ -304,6 +308,21 @@ pub fn deaths_report_at(
     Ok(deaths_report_dto(&fight, curated, &recaps))
 }
 
+pub fn casts_report_at(
+    cache: &FightCache,
+    curated: &Curated,
+    path: &Path,
+    data_dir: &Path,
+    fight_index: u32,
+    filter: FilterDto,
+) -> Result<CastsReportDto, String> {
+    let (_, fight) = cache.get(path, data_dir, fight_index)?;
+    Ok(casts_report_dto(
+        &fight,
+        &openlogs_analysis::casts_report(&fight, curated, &filter.to_filter()),
+    ))
+}
+
 #[tauri::command]
 pub async fn deaths_report(
     path: String,
@@ -316,6 +335,138 @@ pub async fn deaths_report(
         deaths_report_at(
             &state.fight_cache,
             &state.curated,
+            &PathBuf::from(&path),
+            &state.data_dir,
+            fight_index,
+            filter,
+        )
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn casts_report(
+    path: String,
+    fight_index: u32,
+    filter: FilterDto,
+    app: AppHandle,
+) -> Result<CastsReportDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        casts_report_at(
+            &state.fight_cache,
+            &state.curated,
+            &PathBuf::from(&path),
+            &state.data_dir,
+            fight_index,
+            filter,
+        )
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+pub fn auras_report_at(
+    cache: &FightCache,
+    path: &Path,
+    data_dir: &Path,
+    fight_index: u32,
+    scope: AuraScopeDto,
+    filter: FilterDto,
+) -> Result<AurasReportDto, String> {
+    let (_, fight) = cache.get(path, data_dir, fight_index)?;
+    let filter = filter.to_filter();
+    Ok(auras_report_dto(
+        &fight,
+        &filter,
+        &openlogs_analysis::auras_report(&fight, &filter, scope.to_scope()),
+    ))
+}
+
+pub fn interrupts_report_at(
+    cache: &FightCache,
+    path: &Path,
+    data_dir: &Path,
+    fight_index: u32,
+    filter: FilterDto,
+) -> Result<InterruptsReportDto, String> {
+    let (_, fight) = cache.get(path, data_dir, fight_index)?;
+    Ok(interrupts_report_dto(
+        &fight,
+        &openlogs_analysis::interrupts_report(&fight, &filter.to_filter()),
+    ))
+}
+
+pub fn resources_report_at(
+    cache: &FightCache,
+    path: &Path,
+    data_dir: &Path,
+    fight_index: u32,
+    filter: FilterDto,
+) -> Result<ResourcesReportDto, String> {
+    let (_, fight) = cache.get(path, data_dir, fight_index)?;
+    Ok(resources_report_dto(
+        &fight,
+        &openlogs_analysis::resources_report(&fight, &filter.to_filter()),
+    ))
+}
+
+#[tauri::command]
+pub async fn auras_report(
+    path: String,
+    fight_index: u32,
+    scope: AuraScopeDto,
+    filter: FilterDto,
+    app: AppHandle,
+) -> Result<AurasReportDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        auras_report_at(
+            &state.fight_cache,
+            &PathBuf::from(&path),
+            &state.data_dir,
+            fight_index,
+            scope,
+            filter,
+        )
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn interrupts_report(
+    path: String,
+    fight_index: u32,
+    filter: FilterDto,
+    app: AppHandle,
+) -> Result<InterruptsReportDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        interrupts_report_at(
+            &state.fight_cache,
+            &PathBuf::from(&path),
+            &state.data_dir,
+            fight_index,
+            filter,
+        )
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn resources_report(
+    path: String,
+    fight_index: u32,
+    filter: FilterDto,
+    app: AppHandle,
+) -> Result<ResourcesReportDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        resources_report_at(
+            &state.fight_cache,
             &PathBuf::from(&path),
             &state.data_dir,
             fight_index,
@@ -689,6 +840,7 @@ mod tests {
             whole,
         )
         .unwrap();
+        let scope: AuraScopeDto = serde_json::from_str(r#""debuffs_on_enemies""#).unwrap();
 
         let reports = [
             (
@@ -714,6 +866,28 @@ mod tests {
                 serde_json::to_value(
                     deaths_report_at(cache, curated, path, data_dir, 1, whole).unwrap(),
                 ),
+            ),
+            (
+                "casts",
+                serde_json::to_value(
+                    casts_report_at(cache, curated, path, data_dir, 1, whole).unwrap(),
+                ),
+            ),
+            (
+                "auras",
+                serde_json::to_value(
+                    auras_report_at(cache, path, data_dir, 1, scope, whole).unwrap(),
+                ),
+            ),
+            (
+                "interrupts",
+                serde_json::to_value(
+                    interrupts_report_at(cache, path, data_dir, 1, whole).unwrap(),
+                ),
+            ),
+            (
+                "resources",
+                serde_json::to_value(resources_report_at(cache, path, data_dir, 1, whole).unwrap()),
             ),
         ];
         for (name, json) in reports {

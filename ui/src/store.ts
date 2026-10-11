@@ -2,6 +2,11 @@ import { create } from 'zustand';
 import { api } from './api/client';
 import type {
   GameDataStatus,
+  AuraScope,
+  AurasReport,
+  InterruptsReport,
+  ResourcesReport,
+  CastsReport,
   DeathsReport,
   AbilityDetail,
   Attribution,
@@ -9,6 +14,7 @@ import type {
   DamageTakenReport,
   Detail,
   HealingReport,
+  Kpis,
   LogView,
   Metric,
   PlayerDetail,
@@ -22,12 +28,17 @@ import { readStored, writeStored } from './storage';
 
 const HIDE_ABORTED_KEY = 'hideAborted';
 const AUG_DELTA_KEY = 'showAugDelta';
+const HIDE_PROCS_KEY = 'hideProcs';
 export type FightTab =
   | 'overview'
   | 'damage'
   | 'healing'
   | 'taken'
-  | 'deaths';
+  | 'deaths'
+  | 'casts'
+  | 'buffs'
+  | 'interrupts'
+  | 'resources';
 export interface TimeRange {
   startMs: number;
   endMs: number;
@@ -40,12 +51,23 @@ export type ReportData =
   | { tab: 'ability'; data: AbilityDetail }
   | { tab: 'target'; data: TargetDetail }
   | { tab: 'deaths'; data: DeathsReport }
+  | { tab: 'casts'; data: CastsReport }
+  | { tab: 'buffs'; data: AurasReport }
+  | { tab: 'interrupts'; data: InterruptsReport }
+  | { tab: 'resources'; data: ResourcesReport }
   | { tab: 'overview'; data: QuickOverview };
 
 export type View = { kind: 'start' } | { kind: 'fight'; fightIndex: number };
 
 /** Where keyboard focus goes after a navigation: a page title or the active tab. */
 export type FocusTarget = 'start' | 'fight' | 'page' | 'tab';
+
+export type CastsSortKey = 'amount' | 'uptime' | 'cpm';
+export interface CastsSort {
+  key: CastsSortKey;
+  desc: boolean;
+}
+const DEFAULT_CASTS_SORT: CastsSort = { key: 'amount', desc: true };
 
 interface State {
   recent: RecentLog[];
@@ -65,8 +87,17 @@ interface State {
   range: TimeRange | null;
   report: ReportData | null;
   reportLoading: boolean;
+  /** The Overview's figures for the range, loaded with the report of a tab whose header shows them. */
+  rangeKpis: Kpis | null;
   reportError: string | null;
   showAugDelta: boolean;
+  /** Casts tab: hide curated procs and passive triggers. */
+  hideProcs: boolean;
+  /** Casts tab: the chosen player (`null` = the top caster) and the spell sort; kept per pull. */
+  castsPlayer: number | null;
+  castsSort: CastsSort;
+  /** Buffs & Debuffs tab: which auras to list. */
+  auraScope: AuraScope;
   /** Drilldown stack; the last entry is shown instead of the report. */
   details: Detail[];
   /** Tab a detail stack was opened from; shown again once the stack is empty. */
@@ -75,7 +106,7 @@ interface State {
   focusDeath: { player: number; t: number } | null;
   /**
    * Focus requested by the last navigation; the element that renders for it takes it once.
-   * A failed load or a range or Aug-mode change drops a request nobody took.
+   * A failed load or a range, Aug-mode or scope change drops a request nobody took.
    */
   focusRequest: FocusTarget | null;
   settingsOpen: boolean;
@@ -101,6 +132,10 @@ interface Actions {
   setAttribution(attribution: Attribution): Promise<void>;
   setRange(range: TimeRange | null): Promise<void>;
   setShowAugDelta(show: boolean): void;
+  setHideProcs(hide: boolean): void;
+  selectCastsPlayer(player: number): void;
+  setCastsSort(sort: CastsSort): void;
+  setAuraScope(scope: AuraScope): Promise<void>;
   openPlayer(player: number): Promise<void>;
   openAbility(spellId: number, pet: string | null): Promise<void>;
   openTarget(name: string): Promise<void>;
@@ -147,8 +182,13 @@ export function initialState(): State {
     range: null,
     report: null,
     reportLoading: false,
+    rangeKpis: null,
     reportError: null,
     showAugDelta: readFlag(AUG_DELTA_KEY, false),
+    hideProcs: readFlag(HIDE_PROCS_KEY, true),
+    castsPlayer: null,
+    castsSort: DEFAULT_CASTS_SORT,
+    auraScope: 'buffs_on_players',
     details: [],
     detailOrigin: null,
     focusDeath: null,
@@ -180,6 +220,7 @@ async function fetchReport(
   fight: number,
   tab: FightTab,
   top: Detail | undefined,
+  auraScope: AuraScope,
   filter: ReportFilter,
 ): Promise<ReportData> {
   const metric: Metric = tab === 'healing' ? 'healing' : 'damage';
@@ -199,12 +240,20 @@ async function fetchReport(
       return { tab, data: await api.damageTakenReport(path, fight, filter) };
     case 'deaths':
       return { tab, data: await api.deathsReport(path, fight, filter) };
+    case 'casts':
+      return { tab, data: await api.castsReport(path, fight, filter) };
+    case 'buffs':
+      return { tab, data: await api.aurasReport(path, fight, auraScope, filter) };
+    case 'interrupts':
+      return { tab, data: await api.interruptsReport(path, fight, filter) };
+    case 'resources':
+      return { tab, data: await api.resourcesReport(path, fight, filter) };
   }
 }
 
 /** Loads the report of the current tab; only the newest request may write the result. */
 async function loadReport(get: () => State & Actions, set: (partial: Partial<State>) => void) {
-  const { log, view, tab, attribution, range, details } = get();
+  const { log, view, tab, attribution, range, details, auraScope } = get();
   if (!log || view.kind !== 'fight') return;
   const request = ++reportRequest;
   if (tab === 'overview' && range === null) {
@@ -213,9 +262,12 @@ async function loadReport(get: () => State & Actions, set: (partial: Partial<Sta
     return;
   }
   const filter = { startMs: range?.startMs ?? null, endMs: range?.endMs ?? null, attribution };
-  set({ reportLoading: true, reportError: null });
+  set({ reportLoading: true, reportError: null, rangeKpis: null });
   try {
-    const report = await fetchReport(log.path, view.fightIndex, tab, details[details.length - 1], filter);
+    // Resources' header shows the Overview's figures; a failure only leaves it at "…".
+    const rangeKpis =
+      tab === 'resources' && range !== null ? api.quickOverview(log.path, view.fightIndex, filter).then((o) => o.kpis, () => null) : null;
+    const report = await fetchReport(log.path, view.fightIndex, tab, details[details.length - 1], auraScope, filter);
     if (request === reportRequest) {
       // Pin the enemy that the empty "Enemies" entry resolved to, so range changes keep it.
       const shown = get().details;
@@ -229,6 +281,8 @@ async function loadReport(get: () => State & Actions, set: (partial: Partial<Sta
         set({ report });
       }
     }
+    const kpis = await rangeKpis;
+    if (kpis && request === reportRequest) set({ rangeKpis: kpis });
   } catch (err) {
     // A page that failed has no heading to focus; a later load must not inherit the request.
     if (request === reportRequest) set({ reportError: String(err), focusRequest: null });
@@ -308,10 +362,13 @@ export const useApp = create<State & Actions>()((set, get) => ({
       report: null,
       reportError: null,
       reportLoading: false,
+      rangeKpis: null,
       details: [],
       detailOrigin: null,
       focusDeath: null,
       focusRequest: 'fight',
+      castsPlayer: null,
+      castsSort: DEFAULT_CASTS_SORT,
     });
     try {
       const overview = await api.quickOverview(log.path, fightIndex, null);
@@ -334,12 +391,15 @@ export const useApp = create<State & Actions>()((set, get) => ({
       tab: 'overview',
       range: null,
       report: null,
+      rangeKpis: null,
       reportError: null,
       reportLoading: false,
       details: [],
       detailOrigin: null,
       focusDeath: null,
       focusRequest: 'start',
+      castsPlayer: null,
+      castsSort: DEFAULT_CASTS_SORT,
     });
   },
 
@@ -411,10 +471,20 @@ export const useApp = create<State & Actions>()((set, get) => ({
   async openAbilityOf(player, spellId, tab) {
     const { details } = get();
     const top = details[details.length - 1];
-    if (top?.kind !== 'player' || top.player !== player) return;
     const ability = { kind: 'ability' as const, player, spellId, pet: null };
-    // From the player's own page: push, so Back walks through what is below it.
-    set({ tab, details: [...details, ability], report: null, reportError: null, focusRequest: 'page' });
+    if (top?.kind === 'player' && top.player === player) {
+      // From the player's own page: push, so Back walks through what is below it.
+      set({ tab, details: [...details, ability], report: null, reportError: null, focusRequest: 'page' });
+    } else {
+      set({
+        tab,
+        details: [{ kind: 'player', player }, ability],
+        detailOrigin: originFor(get()),
+        report: null,
+        reportError: null,
+        focusRequest: 'page',
+      });
+    }
     await loadReport(get, set);
   },
 
@@ -453,7 +523,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
   },
 
   async setAttribution(attribution) {
-    // Filter changes never move focus; drop a request that no heading has taken (also in setRange).
+    // Filter changes never move focus; drop a request that no heading has taken (also in setRange and setAuraScope).
     set({ attribution, focusRequest: null });
     await loadReport(get, set);
   },
@@ -461,6 +531,25 @@ export const useApp = create<State & Actions>()((set, get) => ({
   async setRange(range) {
     set({ range, focusRequest: null });
     await loadReport(get, set);
+  },
+
+  async setAuraScope(scope) {
+    // Keep the shown report while the new scope loads, so the tab keeps its filter and focus.
+    set({ auraScope: scope, focusRequest: null });
+    await loadReport(get, set);
+  },
+
+  setHideProcs(hide) {
+    writeFlag(HIDE_PROCS_KEY, hide);
+    set({ hideProcs: hide });
+  },
+
+  selectCastsPlayer(player) {
+    set({ castsPlayer: player });
+  },
+
+  setCastsSort(sort) {
+    set({ castsSort: sort });
   },
 
   setShowAugDelta(show) {

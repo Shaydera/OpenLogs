@@ -20,7 +20,7 @@ const base: CrumbInput = {
 const read = (crumbs: Crumb[]) => crumbs.map((crumb) => [crumb.label, crumb.current ? 'current' : (crumb.action?.kind ?? 'text')]);
 
 describe('fight breadcrumb', () => {
-  it('ends in the pull on the Overview and adds the result on report tabs', () => {
+  it('ends in the pull on the Overview, adds the result on report tabs and the tab on Casts', () => {
     expect(read(fightCrumbs(base))).toEqual([
       [FILE, 'pulls'],
       ["Ula'tek · Pull #3", 'current'],
@@ -28,6 +28,11 @@ describe('fight breadcrumb', () => {
     expect(read(fightCrumbs({ ...base, row: WIPE, tab: 'damage' }))).toEqual([
       [FILE, 'pulls'],
       ["Ula'tek · Pull #1 · Wipe 2:22", 'current'],
+    ]);
+    expect(read(fightCrumbs({ ...base, tab: 'casts' }))).toEqual([
+      [FILE, 'pulls'],
+      ["Ula'tek · Pull #3", 'overview'],
+      ['Casts', 'current'],
     ]);
   });
 

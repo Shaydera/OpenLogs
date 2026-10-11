@@ -422,3 +422,7 @@
 .fight-page-overview .tabpanel {
   gap: 20px;
 }
+
+.dim {
+  opacity: 0.5;
+}

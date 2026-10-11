@@ -1,6 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   GameDataStatus,
+  AuraScope,
+  AurasReport,
+  InterruptsReport,
+  ResourcesReport,
+  CastsReport,
   DeathsReport,
   AbilityDetail,
   DamageReport,
@@ -36,6 +41,14 @@ export const api = {
     invoke<TargetDetail>('target_detail', { path, fightIndex, name, filter }),
   deathsReport: (path: string, fightIndex: number, filter: ReportFilter) =>
     invoke<DeathsReport>('deaths_report', { path, fightIndex, filter }),
+  castsReport: (path: string, fightIndex: number, filter: ReportFilter) =>
+    invoke<CastsReport>('casts_report', { path, fightIndex, filter }),
+  aurasReport: (path: string, fightIndex: number, scope: AuraScope, filter: ReportFilter) =>
+    invoke<AurasReport>('auras_report', { path, fightIndex, scope, filter }),
+  interruptsReport: (path: string, fightIndex: number, filter: ReportFilter) =>
+    invoke<InterruptsReport>('interrupts_report', { path, fightIndex, filter }),
+  resourcesReport: (path: string, fightIndex: number, filter: ReportFilter) =>
+    invoke<ResourcesReport>('resources_report', { path, fightIndex, filter }),
   gameDataStatus: () => invoke<GameDataStatus>('game_data_status'),
   refreshGameData: () => invoke<GameDataStatus>('refresh_game_data'),
 };

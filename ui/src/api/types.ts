@@ -477,10 +477,89 @@ export interface DeathsReport {
   spells: Record<string, { name: string }>;
 }
 
+export interface SpellCasts {
+  spellId: number;
+  casts: number;
+  /** The first cast in the range (ms from the pull); equal counts are ordered by it. */
+  firstCastMs: number;
+  procTrigger: boolean;
+  uptime: number | null;
+  /** The ability page with this spell's hits; `null` when it has none. */
+  link: AbilityLink | null;
+}
+
 /** Where a cast spell's hits are: cast and hit IDs often differ. */
 export interface AbilityLink {
   spellId: number;
   metric: Metric;
+}
+
+export interface CastsReport {
+  durationMs: number;
+  players: { player: number; spells: SpellCasts[] }[];
+  roster: PlayerRef[];
+  spells: Record<string, { name: string }>;
+}
+
+export type AuraScope = 'buffs_on_players' | 'debuffs_on_players' | 'debuffs_on_enemies';
+
+export interface AurasReport {
+  startMs: number;
+  endMs: number;
+  rows: {
+    spellId: number;
+    /** Every spell ID of the row's name (one row per name), `spellId` first. */
+    spellIds: number[];
+    /** The players who applied it (in `roster`), most applications first. */
+    sources: number[];
+    applications: number;
+    uptime: number;
+    targets: { name: string; player: number | null; uptime: number; intervals: [number, number][] }[];
+  }[];
+  roster: PlayerRef[];
+  spells: Record<string, { name: string }>;
+}
+
+export interface InterruptsReport {
+  interrupts: { t: number; player: number; spellId: number; targetName: string | null; interruptedId: number }[];
+  dispels: {
+    t: number;
+    player: number;
+    spellId: number;
+    targetName: string | null;
+    /** The target when it is a player (in `roster`). */
+    target: number | null;
+    removedId: number;
+    stolen: boolean;
+  }[];
+  missed: { t: number; sourceName: string | null; spellId: number }[];
+  roster: PlayerRef[];
+  spells: Record<string, { name: string }>;
+}
+
+export interface PowerTrack {
+  powerType: number;
+  series: (number | null)[];
+  avgPct: number | null;
+  minPct: number | null;
+  cappedMs: number;
+  gained: number;
+  wasted: number;
+  gains: { spellId: number; gained: number; wasted: number }[];
+}
+
+export interface ResourcesReport {
+  startMs: number;
+  endMs: number;
+  stepMs: number;
+  players: {
+    player: number;
+    tracks: PowerTrack[];
+    /** Dead phases in the range, clipped to it. */
+    dead: [number, number][];
+  }[];
+  roster: PlayerRef[];
+  spells: Record<string, { name: string }>;
 }
 
 /** One downloaded game-data table (mirrors `TableStatusDto`). */

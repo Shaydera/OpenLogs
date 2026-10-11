@@ -1,4 +1,4 @@
-import type { AbilityDetail, DamageReport, DamageTakenReport, DeathRecap, DeathsReport, HealingReport, PlayerDetail, PlayerRef, TargetDetail } from '../api/types';
+import type { AbilityDetail, AurasReport, CastsReport, DamageReport, DamageTakenReport, DeathRecap, DeathsReport, HealingReport, InterruptsReport, PlayerDetail, PlayerRef, ResourcesReport, TargetDetail } from '../api/types';
 
 const roster: PlayerRef[] = [
   { actorId: 3, name: 'Wendel-Emberfall-EU', specId: 71, specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
@@ -244,6 +244,105 @@ export const targetDetailFixture: TargetDetail = {
     { name: 'Gore Rattle', units: 1, damageTaken: 650_000, isBoss: false, sharesBossHp: true, primary: false },
   ],
   roster,
+};
+
+export const castsReportFixture: CastsReport = {
+  durationMs: 120_000,
+  roster,
+  spells: { ...spells, '204255': { name: 'Soul Fragment' }, '774': { name: 'Rejuvenation' }, '8936': { name: 'Regrowth' } },
+  players: [
+    {
+      player: 2,
+      spells: [
+        { spellId: 204255, casts: 50, firstCastMs: 0, procTrigger: true, uptime: null, link: null },
+        { spellId: 774, casts: 30, firstCastMs: 1_000, procTrigger: false, uptime: 0.8, link: { spellId: 774, metric: 'healing' } },
+        { spellId: 8936, casts: 6, firstCastMs: 500, procTrigger: false, uptime: null, link: null },
+      ],
+    },
+    { player: 4, spells: [{ spellId: 44425, casts: 40, firstCastMs: 0, procTrigger: false, uptime: null, link: { spellId: 44425, metric: 'damage' } }] },
+  ],
+};
+
+export const aurasReportFixture: AurasReport = {
+  startMs: 0,
+  endMs: 20_000,
+  roster,
+  spells: { ...spells, '10060': { name: 'Power Infusion' }, '1459': { name: 'Arcane Intellect' }, '2825': { name: 'Bloodlust' } },
+  rows: [
+    {
+      spellId: 1459,
+      spellIds: [1459],
+      sources: [4],
+      applications: 4,
+      uptime: 1,
+      targets: [
+        { name: 'Faelan-Emberfall-EU', player: 4, uptime: 1, intervals: [[0, 20_000]] },
+        { name: 'Wendel-Emberfall-EU', player: 3, uptime: 1, intervals: [[0, 20_000]] },
+      ],
+    },
+    {
+      spellId: 2825,
+      spellIds: [2825],
+      sources: [],
+      applications: 2,
+      uptime: 0.4,
+      targets: [
+        { name: 'Faelan-Emberfall-EU', player: 4, uptime: 0.4, intervals: [[2_000, 10_000]] },
+        { name: 'Wendel-Emberfall-EU', player: 3, uptime: 0.4, intervals: [[2_000, 10_000]] },
+      ],
+    },
+    {
+      spellId: 10060,
+      spellIds: [10060],
+      sources: [2],
+      applications: 1,
+      uptime: 0.75,
+      targets: [{ name: 'Faelan-Emberfall-EU', player: 4, uptime: 0.75, intervals: [[5_000, 20_000]] }],
+    },
+  ],
+};
+
+export const interruptsReportFixture: InterruptsReport = {
+  roster,
+  spells: { ...spells, '2139': { name: 'Counterspell' }, '6552': { name: 'Pummel' }, '527': { name: 'Purify' }, '5': { name: 'Venom Bolt' }, '9': { name: 'Toxic Spores' } },
+  interrupts: [
+    { t: 12_000, player: 4, spellId: 2139, targetName: "Ula'tek", interruptedId: 5 },
+    { t: 30_000, player: 3, spellId: 6552, targetName: "Ula'tek", interruptedId: 5 },
+  ],
+  dispels: [{ t: 20_000, player: 2, spellId: 527, targetName: 'Wendel-Emberfall-EU', target: 3, removedId: 9, stolen: false }],
+  missed: [{ t: 45_000, sourceName: "Ula'tek", spellId: 5 }],
+};
+
+export const resourcesReportFixture: ResourcesReport = {
+  startMs: 0,
+  endMs: 15_000,
+  stepMs: 5_000,
+  roster,
+  spells: { ...spells, '12051': { name: 'Evocation' } },
+  players: [
+    {
+      player: 4,
+      dead: [[5_000, 10_000]],
+      tracks: [
+        {
+          powerType: 0,
+          series: [50, 100, 80],
+          avgPct: 82.5,
+          minPct: 50,
+          cappedMs: 10_000,
+          gained: 50_000,
+          wasted: 10_000,
+          gains: [{ spellId: 12051, gained: 50_000, wasted: 10_000 }],
+        },
+        { powerType: 16, series: [25, 100, null], avgPct: 62.5, minPct: 25, cappedMs: 5_000, gained: 0, wasted: 0, gains: [] },
+      ],
+    },
+    {
+      player: 3,
+      dead: [],
+      tracks: [{ powerType: 1, series: [0, 40, 10], avgPct: 16.7, minPct: 0, cappedMs: 0, gained: 300, wasted: 20, gains: [] }],
+    },
+  ],
 };
 
 /** Faelan's death in the reference pull, with its events, HP and context. */

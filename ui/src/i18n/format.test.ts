@@ -6,6 +6,7 @@ import {
   formatAmountWhole,
   formatBinRange,
   formatBytes,
+  formatCpm,
   formatDateTime,
   formatDuration,
   formatEventTime,
@@ -44,8 +45,8 @@ describe('formatters (en-US)', () => {
     ],
     [
       'units and histogram bins',
-      () => [formatBytes(230_331_451), formatSeconds(12_303), formatPercent(58.436), formatPercent(100), formatShare(0.04), formatBinRange(50_000, 100_000), formatBinRange(500_000, 1_000_000)],
-      ['219.7 MB', '12.3 s', '58.4%', '100%', '0.0%', '50–100k', '500k–1M'],
+      () => [formatBytes(230_331_451), formatSeconds(12_303), formatPercent(58.436), formatPercent(100), formatShare(0.04), formatCpm(1006.83), formatBinRange(50_000, 100_000), formatBinRange(500_000, 1_000_000)],
+      ['219.7 MB', '12.3 s', '58.4%', '100%', '0.0%', '1006.8', '50–100k', '500k–1M'],
     ],
     [
       'zone-less log times and lists',

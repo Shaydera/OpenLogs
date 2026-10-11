@@ -17,12 +17,14 @@ beforeEach(() => {
 });
 
 describe('tab bar', () => {
-  it.each<[string, FightTab, Detail[], boolean]>([
-    ['the Aug toggle on the Overview', 'overview', [], true],
-    ['no control on an ability page', 'damage', ABILITY_PAGE, false],
-  ])('shows %s', (_, tab, details, aug) => {
+  it.each<[string, FightTab, Detail[], boolean, boolean]>([
+    ['the Aug toggle on the Overview', 'overview', [], true, false],
+    ['"Hide procs" on Casts', 'casts', [], false, true],
+    ['no control on an ability page', 'damage', ABILITY_PAGE, false, false],
+  ])('shows %s', (_, tab, details, aug, procs) => {
     useApp.setState({ tab, details });
     render(<TabBar />);
     expect(screen.queryByRole('group', { name: 'Aug damage' }) !== null).toBe(aug);
+    expect(screen.queryByRole('checkbox', { name: 'Hide procs & passive triggers' }) !== null).toBe(procs);
   });
 });

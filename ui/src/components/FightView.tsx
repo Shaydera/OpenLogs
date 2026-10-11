@@ -4,12 +4,15 @@ import { useFocusRequest } from '../hooks/useFocusRequest';
 import { t } from '../i18n/i18n';
 import { useApp } from '../store';
 import { AbilityDetailView } from './ability/AbilityDetailView';
+import { AurasTab } from './auras/AurasTab';
+import { CastsTab } from './casts/CastsTab';
 import { FightHeader } from './chrome/FightHeader';
 import { headerTiles } from './chrome/headerTiles';
 import { FightTopBar } from './chrome/FightTopBar';
 import { PANEL_ID, TabBar, tabId } from './chrome/TabBar';
 import { DeathsTab } from './deaths/DeathsTab';
 import { ErrorBoundary } from './ErrorBoundary';
+import { InterruptsTab } from './interrupts/InterruptsTab';
 import { ConsumablesPanel } from './overview/ConsumablesPanel';
 import { CooldownsPanel } from './overview/CooldownsPanel';
 import { DeathsPanel } from './overview/DeathsPanel';
@@ -19,6 +22,7 @@ import { DamageDoneTab } from './reports/DamageDoneTab';
 import { DamageTakenTab } from './reports/DamageTakenTab';
 import { HealingTab } from './reports/HealingTab';
 import { RangePanel } from './reports/RangePanel';
+import { ResourcesTab } from './resources/ResourcesTab';
 import { TargetDetailView } from './target/TargetDetailView';
 
 /** A fight screen: the top bar, then the pull header (compact on detail pages), the tab row and the tab's panel. */
@@ -33,6 +37,9 @@ export function FightView() {
   const report = useApp((s) => s.report);
   const reportLoading = useApp((s) => s.reportLoading);
   const reportFailed = useApp((s) => s.reportError) !== null;
+  const auraScope = useApp((s) => s.auraScope);
+  const rangeKpis = useApp((s) => s.rangeKpis);
+  const hideProcs = useApp((s) => s.hideProcs);
   const details = useApp((s) => s.details);
   const closeDetail = useApp((s) => s.closeDetail);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -43,7 +50,8 @@ export function FightView() {
   if (!row) return null;
 
   const onOverview = tab === 'overview';
-  const tiles = details.length > 0 ? null : headerTiles({ tab, row, overview, range, report, reportLoading, reportFailed });
+  const tiles =
+    details.length > 0 ? null : headerTiles({ tab, row, overview, range, report, reportLoading, reportFailed, rangeKpis, hideProcs, auraScope });
 
   return (
     <div className="fight-view">
@@ -102,8 +110,16 @@ function ReportView() {
       return <HealingTab report={report.data} />;
     case 'taken':
       return <DamageTakenTab report={report.data} />;
+    case 'buffs':
+      return <AurasTab report={report.data} />;
+    case 'interrupts':
+      return <InterruptsTab report={report.data} />;
+    case 'resources':
+      return <ResourcesTab report={report.data} />;
     case 'deaths':
       return <DeathsTab report={report.data} />;
+    case 'casts':
+      return <CastsTab report={report.data} />;
     case 'player':
       return <PlayerDetailView detail={report.data} />;
     case 'ability':

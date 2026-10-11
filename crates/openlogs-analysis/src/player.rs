@@ -675,7 +675,7 @@ pub fn player_detail(
         return None;
     }
     let (start_ms, end_ms) = filter.clipped(fight);
-    let links = AbilityIndex::new(fight, filter, player);
+    let links = AbilityIndex::new(fight, filter, Some(player));
 
     let other_mode = match filter.attribution {
         Attribution::Augmented => Attribution::Reattributed,

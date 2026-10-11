@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "SPELL_CAST_SUCCESS events that are not player actions (procs, passive triggers, off-hand copies). The player and ability pages do not count them as casts. IDs checked against real 12.1 logs.",
+  "note": "SPELL_CAST_SUCCESS events that are not player actions (procs, passive triggers, off-hand copies). The Casts tab hides them by default. IDs checked against real 12.1 logs.",
   "procs": [
     { "spell_id": 204255, "name": "Soul Fragment" },
     { "spell_id": 341263, "name": "Shadowy Apparition" },

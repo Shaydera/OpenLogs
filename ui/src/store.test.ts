@@ -5,10 +5,14 @@ import { gameDataFixture } from './test/gameDataFixture';
 import { overviewFixture } from './test/overviewFixture';
 import {
   abilityDetailFixture,
+  aurasReportFixture,
+  castsReportFixture,
   damageReportFixture,
   deathsReportFixture,
   healingReportFixture,
+  interruptsReportFixture,
   playerDetailFixture,
+  resourcesReportFixture,
   takenReportFixture,
   targetDetailFixture,
 } from './test/reportFixtures';
@@ -27,6 +31,10 @@ vi.mock('./api/client', () => ({
     abilityDetail: vi.fn(),
     targetDetail: vi.fn(),
     deathsReport: vi.fn(),
+    castsReport: vi.fn(),
+    aurasReport: vi.fn(),
+    interruptsReport: vi.fn(),
+    resourcesReport: vi.fn(),
     gameDataStatus: vi.fn(),
     refreshGameData: vi.fn(),
   },
@@ -62,6 +70,7 @@ beforeEach(() => {
   vi.mocked(api.abilityDetail).mockResolvedValue(abilityDetailFixture);
   vi.mocked(api.targetDetail).mockResolvedValue(targetDetailFixture);
   vi.mocked(api.deathsReport).mockResolvedValue(deathsReportFixture);
+  vi.mocked(api.castsReport).mockResolvedValue(castsReportFixture);
   localStorage.clear();
   useApp.setState(initialState());
 });
@@ -111,9 +120,11 @@ describe('logs and pulls', () => {
     expect(useApp.getState().fightError).toBeNull();
   });
 
-  it('resets the tab, range and details when a pull opens', async () => {
+  it('resets the tab, range, details and Casts selection when a pull opens', async () => {
     await openPull();
-    await useApp.getState().setTab('deaths');
+    await useApp.getState().setTab('casts');
+    useApp.getState().selectCastsPlayer(2);
+    useApp.getState().setCastsSort({ key: 'cpm', desc: false });
     await useApp.getState().setRange({ startMs: 0, endMs: 1_000 });
     await useApp.getState().openPlayer(4);
 
@@ -123,6 +134,8 @@ describe('logs and pulls', () => {
       range: null,
       report: null,
       details: [],
+      castsPlayer: null,
+      castsSort: { key: 'amount', desc: true },
     });
   });
 });
@@ -161,18 +174,22 @@ describe('reports', () => {
   });
 
   it.each([
-    ['overview', api.quickOverview, overviewFixture],
-    ['damage', api.damageDoneReport, damageReportFixture],
-    ['healing', api.healingReport, healingReportFixture],
-    ['taken', api.damageTakenReport, takenReportFixture],
-    ['deaths', api.deathsReport, deathsReportFixture],
-  ] as const)('loads the %s tab through its own API call', async (tab, load, data) => {
+    ['overview', api.quickOverview, overviewFixture, []],
+    ['damage', api.damageDoneReport, damageReportFixture, []],
+    ['healing', api.healingReport, healingReportFixture, []],
+    ['taken', api.damageTakenReport, takenReportFixture, []],
+    ['deaths', api.deathsReport, deathsReportFixture, []],
+    ['casts', api.castsReport, castsReportFixture, []],
+    ['buffs', api.aurasReport, aurasReportFixture, ['debuffs_on_enemies']],
+    ['interrupts', api.interruptsReport, interruptsReportFixture, []],
+    ['resources', api.resourcesReport, resourcesReportFixture, []],
+  ] as const)('loads the %s tab through its own API call', async (tab, load, data, scope) => {
     (load as Mock).mockResolvedValue(data);
     await openPull();
     // The whole-pull overview arrives with the pull; only a range makes Overview request a report.
-    useApp.setState({ range: { startMs: 40_000, endMs: 60_000 } });
+    useApp.setState({ range: { startMs: 40_000, endMs: 60_000 }, auraScope: 'debuffs_on_enemies' });
     await useApp.getState().setTab(tab);
-    expect(load).toHaveBeenLastCalledWith(LOG.path, 1, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed' });
+    expect(load).toHaveBeenLastCalledWith(LOG.path, 1, ...scope, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed' });
     expect(useApp.getState().report).toEqual({ tab, data });
   });
 });
@@ -308,8 +325,32 @@ describe('detail origin', () => {
       report: { tab: 'deaths', data: deathsReportFixture },
     });
 
-    await useApp.getState().setTab('taken');
+    await useApp.getState().setTab('casts');
     expect(useApp.getState().focusDeath).toBeNull();
+  });
+
+  it("walks back through a player's ability to the Casts tab and keeps its selection", async () => {
+    await openPull();
+    await useApp.getState().setTab('casts');
+    useApp.getState().selectCastsPlayer(2);
+    useApp.getState().setCastsSort({ key: 'cpm', desc: false });
+    await useApp.getState().openAbilityOf(2, 774, 'healing');
+    expect(useApp.getState().tab).toBe('healing');
+    expect(useApp.getState().details).toEqual([
+      { kind: 'player', player: 2 },
+      { kind: 'ability', player: 2, spellId: 774, pet: null },
+    ]);
+    expect(api.abilityDetail).toHaveBeenLastCalledWith(LOG.path, 1, 2, 774, null, 'healing', WHOLE_PULL);
+
+    await useApp.getState().back();
+    expect(useApp.getState().details).toEqual([{ kind: 'player', player: 2 }]);
+    await useApp.getState().closeDetail();
+    expect(useApp.getState()).toMatchObject({
+      tab: 'casts',
+      report: { tab: 'casts', data: castsReportFixture },
+      castsPlayer: 2,
+      castsSort: { key: 'cpm', desc: false },
+    });
   });
 });
 

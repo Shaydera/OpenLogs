@@ -1,8 +1,9 @@
-import type { FightRow, Kpis, QuickOverview } from '../../api/types';
-import { formatAmount, formatDuration, formatEventTime, formatInteger, formatShare } from '../../i18n/format';
+import type { AuraScope, FightRow, Kpis, QuickOverview } from '../../api/types';
+import { formatAmount, formatCpm, formatDuration, formatEventTime, formatInteger, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import type { FightTab, ReportData, TimeRange } from '../../store';
 import type { KpiTone } from '../Kpi';
+import { mostInterrupted } from '../interrupts/kickModel';
 import { shortName } from '../overview/players';
 import { hitName, reportSpellName } from '../reports/reportData';
 
@@ -25,7 +26,13 @@ export interface HeaderInput {
   reportLoading: boolean;
   /** The last load failed: `report` still holds the figures of the previous range or mode. */
   reportFailed: boolean;
+  /** Overview figures of the range, for the tabs that show them (Resources). */
+  rangeKpis: Kpis | null;
+  hideProcs: boolean;
+  auraScope: AuraScope;
 }
+
+const EBON_MIGHT = 395152;
 
 type ReportOf = { [R in ReportData as R['tab']]: R['data'] };
 
@@ -45,6 +52,8 @@ export function headerTiles(input: HeaderInput): HeaderTile[] {
   switch (tab) {
     case 'overview':
       return overviewTiles(input.range === null ? (input.overview?.kpis ?? null) : (ready('overview')?.kpis ?? null), input.range !== null);
+    case 'resources':
+      return overviewTiles(input.range === null ? (input.overview?.kpis ?? null) : input.reportLoading ? null : input.rangeKpis, input.range !== null);
     case 'damage':
       return damageTiles(ready('damage'));
     case 'healing':
@@ -53,6 +62,12 @@ export function headerTiles(input: HeaderInput): HeaderTile[] {
       return takenTiles(ready('taken'), input);
     case 'deaths':
       return deathsTiles(ready('deaths'), input.row);
+    case 'buffs':
+      return aurasTiles(ready('buffs'), input);
+    case 'casts':
+      return castsTiles(ready('casts'), input.hideProcs);
+    case 'interrupts':
+      return interruptsTiles(ready('interrupts'));
   }
 }
 
@@ -160,5 +175,73 @@ function deathsTiles(report: ReportOf['deaths'] | null, row: FightRow): HeaderTi
     { label: labels[1], value: lethal ? t('kpi.times', { count: lethal[1] }) : '—', sub: lethal ? lethal[0] : '' },
     { label: labels[2], value: formatInteger(rezzed), sub: t('kpi.ofDeaths', { count: report.deaths.length }) },
     { label: labels[3], value: formatInteger(survivors), sub: t('kpi.ofPlayers', { count: row.playerCount }) },
+  ];
+}
+
+function aurasTiles(report: ReportOf['buffs'] | null, input: HeaderInput): HeaderTile[] {
+  const labels = [t('kpi.bloodlust'), t('kpi.ebonMight'), t('kpi.auras'), t('kpi.players')];
+  if (!report) return labels.map(pendingTile);
+  const overview = input.overview;
+  const lust = overview?.timeline.markers.bloodlust.find((l) => inRange(input.range, l.t));
+  const ebon = report.rows.find((r) => r.spellIds.includes(EBON_MIGHT));
+  // Enemy debuffs have no player targets; there the players who applied them count.
+  const onEnemies = input.auraScope === 'debuffs_on_enemies';
+  const players = new Set(
+    report.rows.flatMap((r) => (onEnemies ? r.sources : r.targets.flatMap((target) => (target.player === null ? [] : [target.player])))),
+  ).size;
+  return [
+    !overview
+      ? pendingTile(labels[0])
+      : {
+          label: labels[0],
+          value: lust ? formatEventTime(lust.t) : '—',
+          sub: lust ? reportSpellName(overview.spells, lust.spellId) : t('kpi.noBloodlust'),
+        },
+    {
+      label: labels[1],
+      value: ebon ? formatShare(ebon.uptime * 100) : '—',
+      tone: ebon ? 'support' : undefined,
+      sub: ebon ? t('kpi.onPlayers', { count: ebon.targets.length }) : t('kpi.noEbonMight'),
+    },
+    { label: labels[2], value: formatInteger(report.rows.length), sub: t('kpi.inThisView') },
+    { label: labels[3], value: formatInteger(players), sub: t(onEnemies ? 'kpi.whoApplied' : 'kpi.withAuras') },
+  ];
+}
+
+function castsTiles(report: ReportOf['casts'] | null, hideProcs: boolean): HeaderTile[] {
+  const labels = [t('kpi.casts'), t('kpi.avgCpm'), t('kpi.mostCast'), t('kpi.players')];
+  if (!report) return labels.map(pendingTile);
+  const bySpell = new Map<number, number>();
+  let total = 0;
+  let casting = 0;
+  for (const player of report.players) {
+    const spells = player.spells.filter((s) => !hideProcs || !s.procTrigger);
+    const casts = spells.reduce((sum, s) => sum + s.casts, 0);
+    total += casts;
+    if (casts > 0) casting += 1;
+    for (const s of spells) bySpell.set(s.spellId, (bySpell.get(s.spellId) ?? 0) + s.casts);
+  }
+  const most = [...bySpell].reduce<[number, number] | null>((best, entry) => (!best || entry[1] > best[1] ? entry : best), null);
+  const minutes = report.durationMs / 60_000;
+  const cpm = casting > 0 && minutes > 0 ? total / casting / minutes : 0;
+  return [
+    { label: labels[0], value: formatInteger(total), sub: t('kpi.overDuration', { duration: formatDuration(report.durationMs) }) },
+    { label: labels[1], value: formatCpm(cpm), sub: t('kpi.perPlayer') },
+    { label: labels[2], value: most ? t('kpi.times', { count: most[1] }) : '—', sub: most ? reportSpellName(report.spells, most[0]) : '' },
+    { label: labels[3], value: formatInteger(casting), sub: t('kpi.withCasts') },
+  ];
+}
+
+function interruptsTiles(report: ReportOf['interrupts'] | null): HeaderTile[] {
+  const labels = [t('kicks.interrupts'), t('kicks.dispels'), t('kicks.missed'), t('kicks.most')];
+  if (!report) return labels.map(pendingTile);
+  const kickers = new Set(report.interrupts.map((k) => k.player)).size;
+  const dispellers = new Set(report.dispels.map((d) => d.player)).size;
+  const top = mostInterrupted(report);
+  return [
+    { label: labels[0], value: formatInteger(report.interrupts.length), sub: kickers > 0 ? t('kicks.byPlayers', { count: kickers }) : '—' },
+    { label: labels[1], value: formatInteger(report.dispels.length), sub: dispellers > 0 ? t('kicks.byPlayers', { count: dispellers }) : '—' },
+    { label: labels[2], value: formatInteger(report.missed.length), tone: report.missed.length > 0 ? 'warn' : undefined, sub: t('kicks.missedSub') },
+    { label: labels[3], value: top ? t('kicks.times', { count: top.count }) : '—', sub: top ? reportSpellName(report.spells, top.spellId) : '—' },
   ];
 }

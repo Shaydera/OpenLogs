@@ -1,17 +1,21 @@
 // Prevents an extra console window on Windows in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod auras_dto;
+mod casts_dto;
 mod commands;
 mod detail_dto;
 mod dto;
 mod fight_cache;
 mod icons;
+mod interrupts_dto;
 mod overview_dto;
 mod player_dto;
 mod recap_dto;
 mod recent;
 mod refs;
 mod report_dto;
+mod resources_dto;
 mod state;
 #[cfg(test)]
 mod test_fight;
@@ -62,7 +66,11 @@ fn main() {
             commands::player_detail,
             commands::ability_detail,
             commands::target_detail,
-            commands::deaths_report
+            commands::deaths_report,
+            commands::casts_report,
+            commands::auras_report,
+            commands::interrupts_report,
+            commands::resources_report
         ])
         .run(context)
         .expect("error while running OpenLogs");

@@ -1,3 +1,47 @@
+/* Shared by the Deaths, Buffs & Debuffs, Interrupts & Dispels and Resources tabs. */
+/* A count after a panel title ("Hit log 34"). */
+.h2-count {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--muted);
+}
+/* A list panel's head row ("Casts by player"). */
+.panel-head.panel-head-list {
+  align-items: baseline;
+  gap: 10px;
+  padding: 16px 14px 10px;
+}
+/* A panel's footnote strip ("Uptime % = …"). */
+.panel-note {
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.note-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.note-link:hover,
+.note-link:focus-visible {
+  color: var(--accent-hover);
+}
+.input.input-sel {
+  font: 500 13px var(--font-text);
+  border-radius: 7px;
+}
+/* A long list scrolls inside its panel. */
+.scroll-box {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
 /* Deaths tab: the list of deaths beside the recap. */
 .deaths-page {
   display: flex;
@@ -366,4 +410,482 @@
   background: var(--wipe-tint-soft);
   color: var(--wipe-text);
   border: 1px solid var(--wipe-tint-line);
+}
+
+/* Buffs & Debuffs tab: aura rows with per-target uptime lanes. */
+.panel-head.panel-head-auras {
+  padding: 16px 18px 12px;
+  gap: 10px;
+}
+.auras-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+}
+.auras-summary {
+  font-size: 13px;
+  color: var(--muted);
+}
+.auras-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.aura-rows {
+  min-width: 640px;
+}
+.aura-row {
+  display: grid;
+  grid-template-columns: 24px minmax(200px, 1.2fr) minmax(200px, 1.6fr) 84px 96px;
+  gap: 12px;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 16px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.aura-row:hover {
+  background: var(--hover);
+}
+.aura-row.aura-row-head {
+  min-height: 32px;
+}
+.aura-row.aura-row-head:hover {
+  background: transparent;
+}
+.aura-row.aura-row-sel {
+  background: var(--tile);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.aura-cap {
+  font-size: 11px;
+}
+.aura-sort {
+  display: flex;
+}
+.aura-sort.aura-sort-end {
+  justify-content: flex-end;
+}
+.aura-name-cell {
+  display: flex;
+  min-width: 0;
+}
+.aura-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 500;
+  color: var(--text);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.aura-name:hover,
+.aura-name:focus-visible {
+  color: var(--accent-hover);
+}
+.aura-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.aura-bar .bar > span {
+  opacity: 0.75;
+}
+.aura-uptime {
+  width: 48px;
+  text-align: right;
+}
+.aura-end {
+  text-align: right;
+}
+.aura-end.aura-end-muted {
+  color: var(--muted);
+}
+.aura-detail {
+  padding: 4px 16px 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.atl-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 64px;
+  gap: 12px;
+  align-items: center;
+  min-height: 30px;
+  border-top: 1px solid var(--line-faint);
+}
+.atl-row.atl-row-head {
+  border-top: 0;
+  min-height: 20px;
+}
+.atl-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.atl-cap {
+  font-size: 11px;
+  text-align: right;
+}
+.atl-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+.atl-player {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.atl-enemy {
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.atl-bar {
+  position: absolute;
+  top: 9px;
+  height: 12px;
+  border-radius: 2px;
+  min-width: 2px;
+  opacity: 0.8;
+}
+.atl-uptime {
+  font-size: 13px;
+  text-align: right;
+}
+
+/* Interrupts & Dispels tab: players and event logs; the totals sit in the fight header. */
+.kicks-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.kicks-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+}
+.kicks-players {
+  flex: 1 1 460px;
+  min-width: 0;
+}
+.kicks-logs {
+  flex: 1.4 1 600px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.kicks-summary {
+  font-size: 13px;
+  color: var(--muted);
+}
+.kick-prows {
+  min-width: 480px;
+}
+.kick-prow {
+  display: grid;
+  grid-template-columns: 28px minmax(120px, 1fr) 46px minmax(120px, 1.4fr) 64px;
+  gap: 10px;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.kick-prow:hover {
+  background: var(--hover);
+}
+.kick-prow.kick-prow-head {
+  min-height: 30px;
+}
+.kick-prow.kick-prow-head:hover {
+  background: transparent;
+}
+.kick-cap {
+  font-size: 11px;
+}
+.kick-cap.kick-cap-end {
+  text-align: right;
+}
+.kick-name {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kick-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.kick-bar .bar > span {
+  opacity: 0.8;
+}
+.kick-count {
+  width: 40px;
+  text-align: right;
+}
+.kick-end {
+  text-align: right;
+}
+.kick-log {
+  min-width: 744px;
+}
+.kick-ev {
+  display: grid;
+  grid-template-columns: 64px repeat(4, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 16px;
+  border-top: 1px solid var(--line-faint);
+  font-size: 13px;
+}
+.kick-ev.kick-ev-head {
+  min-height: 28px;
+}
+.kick-ev.kick-ev-three {
+  grid-template-columns: 64px minmax(150px, 1fr) minmax(150px, 1.3fr);
+}
+.kick-ev.kick-ev-warn {
+  background: var(--wipe-tint-soft);
+}
+.kick-time {
+  color: var(--muted);
+}
+.kick-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.kick-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kick-text.kick-text-muted {
+  color: var(--muted);
+}
+.kick-text.kick-text-warn {
+  color: var(--wipe-text);
+}
+.kick-player {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Resources tab: player list, resource charts, gains. */
+.res-page {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+}
+.res-list {
+  flex: 1 1 260px;
+  max-width: 320px;
+}
+.res-main {
+  flex: 999 1 720px;
+  min-width: 0;
+}
+.plink {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 65px;
+  padding: 6px 14px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.plink:hover {
+  background: var(--hover);
+}
+.plink.plink-on {
+  background: var(--tile);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.plink-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.plink-name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.plink-sub {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.plink-value {
+  font-size: 13px;
+}
+.res-title-suffix {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 16px;
+}
+.res-track {
+  border-top: 1px solid var(--line);
+}
+.res-track-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px 10px;
+}
+.res-track-title {
+  margin: 0;
+  font: 600 16px var(--font-label);
+  letter-spacing: 0.02em;
+}
+.res-stats {
+  display: flex;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+}
+.res-chart-wrap {
+  padding: 14px 18px 12px;
+}
+.res-chart {
+  position: relative;
+  height: 160px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--plot);
+  overflow: hidden;
+}
+.res-chart svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.res-guide {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px dashed var(--chart-baseline);
+}
+.res-area {
+  fill: currentColor;
+  fill-opacity: 0.35;
+}
+.res-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.res-dead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--death) 22%, transparent) 0 6px,
+    color-mix(in srgb, var(--death) 6%, transparent) 6px 12px
+  );
+}
+.res-dead-label {
+  position: absolute;
+  top: 60px;
+  font-size: 12px;
+  color: var(--death);
+  white-space: nowrap;
+}
+.res-label {
+  position: absolute;
+  left: 6px;
+  top: 4px;
+  font-size: 11px;
+  color: var(--faint);
+}
+.lg-swatch.lg-swatch-power {
+  width: 14px;
+  height: 2px;
+}
+.res-gains {
+  min-width: 560px;
+}
+.res-gain {
+  display: grid;
+  grid-template-columns: 24px minmax(160px, 1.2fr) minmax(160px, 1.4fr) 84px;
+  gap: 12px;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 16px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.res-gain.res-gain-head {
+  min-height: 28px;
+}
+.res-cap {
+  font-size: 11px;
+}
+.res-cap.res-cap-end {
+  text-align: right;
+}
+.res-gain-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.res-gain-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.res-gain-bar .bar > span {
+  opacity: 0.75;
+}
+.res-gain-amount {
+  width: 56px;
+  text-align: right;
+}
+.res-gain-wasted {
+  text-align: right;
+}
+.res-gain-wasted.res-gain-wasted-warn {
+  color: var(--wipe-text);
 }

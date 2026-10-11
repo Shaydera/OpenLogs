@@ -26,6 +26,8 @@ export function SettingsDialog() {
   const closeSettings = useApp((s) => s.closeSettings);
   const hideAborted = useApp((s) => s.hideAborted);
   const setHideAborted = useApp((s) => s.setHideAborted);
+  const hideProcs = useApp((s) => s.hideProcs);
+  const setHideProcs = useApp((s) => s.setHideProcs);
   const showAugDelta = useApp((s) => s.showAugDelta);
   const setShowAugDelta = useApp((s) => s.setShowAugDelta);
   const gameData = useApp((s) => s.gameData);
@@ -80,6 +82,10 @@ export function SettingsDialog() {
           <label className="toggle">
             <input type="checkbox" checked={hideAborted} onChange={(event) => setHideAborted(event.target.checked)} />
             {t('pulls.hideAborted')}
+          </label>
+          <label className="toggle">
+            <input type="checkbox" checked={hideProcs} onChange={(event) => setHideProcs(event.target.checked)} />
+            {t('casts.hideProcs')}
           </label>
           <label className="toggle">
             <input type="checkbox" checked={showAugDelta} onChange={(event) => setShowAugDelta(event.target.checked)} />
