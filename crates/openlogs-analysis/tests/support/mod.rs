@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use openlogs_analysis::{
-    ActorId, Actors, Damage, DamageVia, Event, EventKind, Fight, Heal, NO_SPELL, NOBODY,
+    ActorId, Actors, Damage, DamageVia, Event, EventKind, Fight, FightKind, Heal, NO_SPELL, NOBODY,
     PowerSample, SpellId, SpellInfo, UnitHp,
 };
 use openlogs_index::Outcome;
@@ -23,6 +23,7 @@ impl FightBuilder {
     pub fn new(duration_ms: u64) -> Self {
         Self {
             fight: Fight {
+                kind: FightKind::Pull,
                 encounter_id: 3492,
                 name: "Ula'tek".into(),
                 difficulty: 15,
@@ -33,6 +34,7 @@ impl FightBuilder {
                 actors: Actors::new(),
                 spells: BTreeMap::new(),
                 broken_lines: 0,
+                encounters: Vec::new(),
             },
         }
     }

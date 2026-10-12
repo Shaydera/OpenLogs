@@ -1,9 +1,11 @@
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use openlogs_gamedata::{Curated, Fetch, HttpFetch, IconCache, SyncError, SyncOutcome};
+use openlogs_gamedata::{
+    Curated, DungeonTable, Fetch, HttpFetch, IconCache, SyncError, SyncOutcome,
+};
 
 use crate::dto::{GameDataStatusDto, TableStatusDto};
 use crate::fight_cache::FightCache;
@@ -14,12 +16,17 @@ use crate::recent::RecentLogs;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DataTable {
     SpellIcons = 0,
-    BossPortraits = 1,
+    Dungeons = 1,
+    BossPortraits = 2,
 }
 
 impl DataTable {
-    /// Sync order: the small table first, the 46 MB spell export last.
-    pub const ALL: [DataTable; 2] = [DataTable::BossPortraits, DataTable::SpellIcons];
+    /// Sync order: the small tables first, the 46 MB spell export last.
+    pub const ALL: [DataTable; 3] = [
+        DataTable::Dungeons,
+        DataTable::BossPortraits,
+        DataTable::SpellIcons,
+    ];
 }
 
 /// Shown for a table whose download failed while the stored one stays in use.
@@ -41,8 +48,10 @@ pub struct AppState {
     pub icons: IconService<HttpFetch>,
     pub curated: Curated,
     pub fight_cache: FightCache,
+    /// Mythic+ dungeons; `None` until a table was stored or downloaded once.
+    dungeons: RwLock<Option<DungeonTable>>,
     /// Why the last download of each table failed (index `DataTable as usize`).
-    sync_errors: Mutex<[Option<String>; 2]>,
+    sync_errors: Mutex<[Option<String>; 3]>,
     /// Set while `sync_game_data` runs, so a second request does not start another sync.
     syncing: AtomicBool,
 }
@@ -54,7 +63,7 @@ impl AppState {
             data_dir.join("icons"),
             HttpFetch::for_icons(),
         ));
-        // The small stored table loads now, so a log opened right away has it; the spell
+        // The small stored tables load now, so a log opened right away has them; the spell
         // table (about 12 MB) loads in the sync thread.
         if let Some(table) = openlogs_gamedata::load_cached_boss_portraits(&data_path(
             &data_dir,
@@ -66,12 +75,15 @@ impl AppState {
         for warning in &curated.warnings {
             eprintln!("curated lists: {warning}");
         }
+        let dungeons =
+            openlogs_gamedata::load_cached_dungeons(&data_path(&data_dir, DataTable::Dungeons));
         Self {
             data_dir,
             recent: Mutex::new(recent),
             icons,
             curated,
             fight_cache: FightCache::default(),
+            dungeons: RwLock::new(dungeons),
             sync_errors: Mutex::new(Default::default()),
             syncing: AtomicBool::new(false),
         }
@@ -79,6 +91,11 @@ impl AppState {
 
     pub fn recent_path(&self) -> PathBuf {
         self.data_dir.join("recent.json")
+    }
+
+    /// The dungeon table as far as it is known now.
+    pub fn dungeon_table(&self) -> Option<DungeonTable> {
+        self.dungeons.read().ok().and_then(|table| table.clone())
     }
 
     /// Installs the stored spell table, then downloads every table that is older than 7 days
@@ -121,6 +138,18 @@ impl AppState {
                 };
                 let size = spells.len();
                 self.icons.set_spell_table(spells);
+                (outcome, size)
+            }
+            DataTable::Dungeons => {
+                let (dungeons, outcome) = if force {
+                    openlogs_gamedata::refresh_dungeons(&path, fetch, now_unix_s)?
+                } else {
+                    openlogs_gamedata::load_or_sync_dungeons(&path, fetch, now_unix_s)?
+                };
+                let size = dungeons.len();
+                if let Ok(mut slot) = self.dungeons.write() {
+                    *slot = Some(dungeons);
+                }
                 (outcome, size)
             }
             DataTable::BossPortraits => {
@@ -169,8 +198,14 @@ impl AppState {
                 .map(|seconds| seconds as i64 * 1000),
             error: errors[table as usize].clone(),
         };
+        let dungeons = self
+            .dungeons
+            .read()
+            .ok()
+            .and_then(|table| table.as_ref().map(DungeonTable::len));
         GameDataStatusDto {
             spell_icons: status(DataTable::SpellIcons, self.icons.spell_count()),
+            dungeons: status(DataTable::Dungeons, dungeons),
             boss_portraits: status(DataTable::BossPortraits, self.icons.portrait_count()),
             refreshing: self.syncing.load(Ordering::SeqCst),
         }
@@ -185,6 +220,7 @@ pub fn index_cache_dir(data_dir: &Path) -> PathBuf {
 pub fn data_path(data_dir: &Path, table: DataTable) -> PathBuf {
     data_dir.join("game-data").join(match table {
         DataTable::SpellIcons => "spell_icons.tsv",
+        DataTable::Dungeons => "dungeons.txt",
         DataTable::BossPortraits => "boss_portraits.tsv",
     })
 }
@@ -220,6 +256,12 @@ mod tests {
             let body: &[u8] = match url {
                 openlogs_gamedata::WAGO_SPELL_MISC_URL => SPELL_MISC.as_bytes(),
                 openlogs_gamedata::WAGO_MANIFEST_URL => MANIFEST.as_bytes(),
+                openlogs_gamedata::WAGO_MAP_CHALLENGE_MODE_URL => &include_bytes!(
+                    "../../crates/openlogs-gamedata/tests/fixtures/MapChallengeMode.csv"
+                )[..],
+                openlogs_gamedata::WAGO_DUNGEON_ENCOUNTER_URL => &include_bytes!(
+                    "../../crates/openlogs-gamedata/tests/fixtures/DungeonEncounter.csv"
+                )[..],
                 openlogs_gamedata::WAGO_JOURNAL_ENCOUNTER_URL => JOURNAL_ENCOUNTER.as_bytes(),
                 openlogs_gamedata::WAGO_JOURNAL_ENCOUNTER_CREATURE_URL => {
                     JOURNAL_ENCOUNTER_CREATURE.as_bytes()
@@ -238,17 +280,41 @@ mod tests {
         }
     }
 
-    fn statuses(status: &GameDataStatusDto) -> [&TableStatusDto; 2] {
-        [&status.spell_icons, &status.boss_portraits]
+    fn statuses(status: &GameDataStatusDto) -> [&TableStatusDto; 3] {
+        [
+            &status.spell_icons,
+            &status.dungeons,
+            &status.boss_portraits,
+        ]
+    }
+
+    fn fixture_dungeons() -> DungeonTable {
+        DungeonTable::from_csv(
+            include_bytes!("../../crates/openlogs-gamedata/tests/fixtures/MapChallengeMode.csv"),
+            include_bytes!("../../crates/openlogs-gamedata/tests/fixtures/DungeonEncounter.csv"),
+        )
+        .unwrap()
     }
 
     #[test]
     fn stored_tables_are_ready_at_startup() {
         let dir = tempfile::tempdir().unwrap();
-        let path = data_path(dir.path(), DataTable::BossPortraits);
+        assert_eq!(
+            AppState::new(dir.path().to_path_buf()).dungeon_table(),
+            None
+        );
+
+        let dungeons = fixture_dungeons();
+        let path = data_path(dir.path(), DataTable::Dungeons);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(&path, "# fetched_unix_s=7\n3492\tui-ej-boss-ulatek\n").unwrap();
+        fs::write(&path, format!("# fetched_unix_s=1\n{}", dungeons.to_json())).unwrap();
+        fs::write(
+            data_path(dir.path(), DataTable::BossPortraits),
+            "# fetched_unix_s=7\n3492\tui-ej-boss-ulatek\n",
+        )
+        .unwrap();
         let state = AppState::new(dir.path().to_path_buf());
+        assert_eq!(state.dungeon_table(), Some(dungeons));
         assert_eq!(
             state.data_status().boss_portraits,
             TableStatusDto {
@@ -277,6 +343,7 @@ mod tests {
         };
         let status = state.data_status();
         assert_eq!(status.spell_icons, ready(1));
+        assert_eq!(status.dungeons, ready(fixture_dungeons().len()));
         assert_eq!(status.boss_portraits, ready(1));
         assert!(!status.refreshing);
         assert_eq!(

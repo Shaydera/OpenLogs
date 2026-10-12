@@ -6,6 +6,7 @@ import { useApp } from '../store';
 
 const TABLES: { key: keyof Omit<GameDataStatus, 'refreshing'>; name: MessageKey; entries: MessageKey }[] = [
   { key: 'spellIcons', name: 'settings.spellIcons', entries: 'settings.entries.spellIcons' },
+  { key: 'dungeons', name: 'settings.dungeons', entries: 'settings.entries.dungeons' },
   { key: 'bossPortraits', name: 'settings.bossPortraits', entries: 'settings.entries.bossPortraits' },
 ];
 

@@ -4,11 +4,11 @@ import { useFocusRequest } from '../hooks/useFocusRequest';
 import type { LogView } from '../api/types';
 import { formatBytes, formatDateTime } from '../i18n/format';
 import { t } from '../i18n/i18n';
-import { groupPulls } from '../pulls/groupPulls';
+import { groupPulls, groupRuns } from '../pulls/groupPulls';
 import { logStartMs } from '../pulls/logStart';
 import { useApp } from '../store';
 import { DropZone } from './DropZone';
-import { PullList } from './PullList';
+import { PullList, RunCards } from './PullList';
 import { RecentLogs } from './RecentLogs';
 
 export function StartPage({ dragOver }: { dragOver: boolean }) {
@@ -68,8 +68,10 @@ function LogPulls({ log }: { log: LogView }) {
   const setHideAborted = useApp((s) => s.setHideAborted);
   const openFight = useApp((s) => s.openFight);
   const groups = useMemo(() => groupPulls(log.fights, hideAborted), [log.fights, hideAborted]);
+  const runs = useMemo(() => groupRuns(log.fights, hideAborted), [log.fights, hideAborted]);
   const start = logStartMs(log.fileName, log.startUnixMs);
   const heading = [log.zone, start !== null ? formatDateTime(start) : null].filter(Boolean).join(' · ');
+  const bothKinds = runs.length > 0 && groups.length > 0;
 
   return (
     <>
@@ -97,10 +99,13 @@ function LogPulls({ log }: { log: LogView }) {
           {t('pulls.hideAborted')}
         </label>
       </div>
+      {bothKinds && <h2 className="cap section-label">{t('runs.title')}</h2>}
+      {runs.length > 0 && <RunCards runs={runs} onOpen={(index) => void openFight(index)} />}
+      {bothKinds && <h2 className="cap section-label">{t('pulls.raidBosses')}</h2>}
       {groups.length > 0 ? (
         <PullList groups={groups} onOpen={(index) => void openFight(index)} />
       ) : (
-        <EmptyState title={t('pulls.noneTitle')} text={t('pulls.none')} />
+        runs.length === 0 && <EmptyState title={t('pulls.noneTitle')} text={t('pulls.none')} />
       )}
     </>
   );

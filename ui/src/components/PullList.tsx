@@ -1,6 +1,6 @@
-import { formatClock, formatDuration, formatInteger, formatPercent, formatSeconds } from '../i18n/format';
+import { formatClock, formatDuration, formatInteger, formatKeystoneLevel, formatPercent, formatSeconds } from '../i18n/format';
 import { t } from '../i18n/i18n';
-import type { BossGroup, PullStatus, PullView } from '../pulls/groupPulls';
+import { type BossGroup, type PullStatus, type PullView, RUN_CHIP, type RunView, runChipLabel, runSubtitle, runTimeMs } from '../pulls/groupPulls';
 import { BossTile } from './BossTile';
 
 interface Props {
@@ -26,10 +26,11 @@ function pullDuration(pull: PullView): string {
   return pull.status === 'aborted' ? formatSeconds(pull.durationMs) : formatDuration(pull.durationMs);
 }
 
-/** Boss HP at the end of a pull as a bar and a value. */
-function PullHp({ pull }: { pull: PullView }) {
+/** Boss HP at the end of a pull as a bar and a value; inside a run the boss name comes first. */
+function PullHp({ pull, name }: { pull: PullView; name?: string }) {
   return (
     <span className="hp">
+      {name && <span className="run-boss">{name}</span>}
       <span className="bar" style={{ flex: 1 }}>
         <span className={FILL[pull.status]} style={{ width: `${pull.hpBarPercent}%` }} />
       </span>
@@ -96,6 +97,86 @@ export function PullList({ groups, onOpen }: Props) {
                 <span className={`chip ${CHIP[pull.status]}`}>{t(`status.${pull.status}`)}</span>
                 <span className="num">{pullDuration(pull)}</span>
                 <PullHp pull={pull} />
+                <span className="num text-soft">{formatInteger(pull.playerCount)}</span>
+                <span className="num text-muted pull-start">{formatClock(pull.startUnixMs)}</span>
+                <Chevron />
+              </button>
+            ))}
+          </section>
+        );
+      })}
+    </>
+  );
+}
+
+/** Bosses killed of the dungeon's list as a bar and `3/3`; empty and `—` without dungeon data. */
+function RunProgress({ run }: { run: RunView }) {
+  const bosses = run.bosses;
+  const width = bosses !== null && bosses.total > 0 ? (bosses.killed / bosses.total) * 100 : 0;
+  const fill = bosses === null ? 'fill-abort' : run.status === 'completed' ? 'fill-kill' : 'fill-wipe';
+  return (
+    <span className="hp">
+      <span className="bar" style={{ flex: 1 }}>
+        <span className={fill} style={{ width: `${width}%` }} />
+      </span>
+      <span className="num hp-value">
+        {bosses === null ? '—' : t('runs.bossCount', { killed: formatInteger(bosses.killed), total: formatInteger(bosses.total) })}
+      </span>
+    </span>
+  );
+}
+
+interface RunProps {
+  runs: RunView[];
+  onOpen: (fightIndex: number) => void;
+}
+
+/** One card per Mythic+ run, built like a boss card: the first row opens the whole run, the boss pulls follow. */
+export function RunCards({ runs, onOpen }: RunProps) {
+  return (
+    <>
+      {runs.map((run) => {
+        const level = formatKeystoneLevel(run.keystoneLevel);
+        return (
+          <section key={run.index} className="panel boss run-card" aria-label={t('runs.heading', { dungeon: run.dungeon, level })}>
+            <div className="boss-head">
+              <BossTile encounterId={0} name={run.dungeon} />
+              <div className="boss-title">
+                <div className="boss-name-row">
+                  <h2 className="boss-name">{run.dungeon}</h2>
+                  <span className="chip chip-key">{level}</span>
+                </div>
+                <div className="boss-sub">{runSubtitle(run)}</div>
+              </div>
+              <span className={`chip ${RUN_CHIP[run.status]}`}>{runChipLabel(run)}</span>
+            </div>
+            <PullHead />
+            <button
+              type="button"
+              className="pull"
+              aria-label={t('runs.open', { dungeon: run.dungeon, level })}
+              onClick={() => onOpen(run.index)}
+            >
+              <span className="cap run-label">{t('runs.run')}</span>
+              <span className={`chip ${RUN_CHIP[run.status]}`}>{t(`runs.status.${run.status}`)}</span>
+              <span className="num">{formatDuration(runTimeMs(run))}</span>
+              <RunProgress run={run} />
+              <span className="num text-soft">{formatInteger(run.playerCount)}</span>
+              <span className="num text-muted pull-start">{formatClock(run.startUnixMs)}</span>
+              <Chevron />
+            </button>
+            {run.pulls.map((pull) => (
+              <button
+                key={pull.index}
+                type="button"
+                className="pull"
+                aria-label={t('runs.openPull', { boss: pull.name, n: pull.n })}
+                onClick={() => onOpen(pull.index)}
+              >
+                <span className="num text-muted">#{pull.n}</span>
+                <span className={`chip ${CHIP[pull.status]}`}>{t(`status.${pull.status}`)}</span>
+                <span className="num">{pullDuration(pull)}</span>
+                <PullHp pull={pull} name={pull.name} />
                 <span className="num text-soft">{formatInteger(pull.playerCount)}</span>
                 <span className="num text-muted pull-start">{formatClock(pull.startUnixMs)}</span>
                 <Chevron />

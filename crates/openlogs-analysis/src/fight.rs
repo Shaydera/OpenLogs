@@ -9,15 +9,19 @@ pub type SpellId = u32;
 /// Spell of melee swings, environmental damage and deaths.
 pub const NO_SPELL: SpellId = 0;
 
-/// One fight, owned and ready for analysis.
+/// One fight, owned and ready for analysis: a boss pull or a whole Mythic+ run. Every
+/// report works on both.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fight {
+    pub kind: FightKind,
+    /// 0 for a run.
     pub encounter_id: u32,
+    /// The boss, or the dungeon of a run.
     pub name: String,
     pub difficulty: u32,
     pub outcome: Outcome,
     pub duration_ms: u64,
-    /// Sorted by `t`; prelude events (before `ENCOUNTER_START`) have `t < 0`.
+    /// Sorted by `t`; prelude events (before the start line) have `t < 0`.
     pub events: Vec<Event>,
     /// Players' power samples, sorted by `t`.
     pub power: Vec<PowerSample>,
@@ -25,6 +29,29 @@ pub struct Fight {
     /// Every spell referenced by `events`, with the name the log used.
     pub spells: BTreeMap<SpellId, SpellInfo>,
     pub broken_lines: u64,
+    /// The boss encounters of a run in log order; empty for a boss pull.
+    pub encounters: Vec<RunEncounter>,
+}
+
+/// What a [`Fight`] covers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FightKind {
+    /// `ENCOUNTER_START` to `ENCOUNTER_END`.
+    Pull,
+    /// A Mythic+ run, `CHALLENGE_MODE_START` to `CHALLENGE_MODE_END`.
+    Run,
+}
+
+/// A boss encounter inside a Mythic+ run, in ms since the run started.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunEncounter {
+    pub encounter_id: u32,
+    pub name: String,
+    pub start_ms: i32,
+    /// `ENCOUNTER_END`; without it the encounter's last line before the next encounter
+    /// or the end of the run.
+    pub end_ms: i32,
+    pub outcome: Outcome,
 }
 
 /// Players' power is kept at most this often per power type.
@@ -49,7 +76,8 @@ pub struct SpellInfo {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Event {
-    /// Milliseconds since `ENCOUNTER_START`.
+    /// Milliseconds since the start line (`ENCOUNTER_START`, for a run
+    /// `CHALLENGE_MODE_START`).
     pub t: i32,
     pub source: ActorId,
     pub target: ActorId,

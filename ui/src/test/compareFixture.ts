@@ -66,6 +66,8 @@ function pull(index: number, outcome: Outcome, durationMs: number, bossHpPercent
     playerCount: 4,
     startUnixMs: Date.UTC(2026, 9, 7, 19, index * 10),
     zone: 'The Venomous Abyss',
+    run: null,
+    runIndex: null,
   };
 }
 

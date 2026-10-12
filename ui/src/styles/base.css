@@ -237,7 +237,7 @@
 .text-soft {
   color: var(--text-soft);
 }
-/* A .cap label above a list: Recent logs. */
+/* A .cap label above a list: Recent logs, Mythic+ runs, Raid bosses. */
 .section-label {
   margin: 0;
   padding: 4px 2px 0;

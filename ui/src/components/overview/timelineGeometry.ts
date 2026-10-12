@@ -123,9 +123,27 @@ export function minuteTicks(axisMs: number): { leftPct: number; label: string }[
   return ticks;
 }
 
-/** A phase's name: from its config, else "Phase 1" / "Intermission 1". */
+/** A phase's name: from its config or its boss, else "Phase 1" / "Intermission 1" / "Trash 1". */
 export function phaseLabel(phase: Phase): string {
-  return phase.name ?? (phase.kind === 'boss' ? t('timeline.phase', { n: phase.number }) : t('timeline.intermission', { n: phase.number }));
+  if (phase.name !== null) return phase.name;
+  if (phase.kind === 'boss') return t('timeline.phase', { n: phase.number });
+  return phase.kind === 'trash' ? t('timeline.trash', { n: phase.number }) : t('timeline.intermission', { n: phase.number });
+}
+
+/**
+ * Labels of all phases. In a Mythic+ run (it has trash phases) a boss pulled more than once is
+ * numbered ("Baron Braunpyke #2"); raid phase names stay as configured.
+ */
+export function phaseLabels(phases: Phase[]): string[] {
+  const labels = phases.map(phaseLabel);
+  if (!phases.some((phase) => phase.kind === 'trash')) return labels;
+  const seen = new Map<string, number>();
+  return labels.map((label, i) => {
+    if (phases[i].name === null || labels.filter((other) => other === label).length < 2) return label;
+    const n = (seen.get(label) ?? 0) + 1;
+    seen.set(label, n);
+    return t('timeline.repeated', { name: label, n });
+  });
 }
 
 /** Labels that still repeat get a number ("Boss submerged 1", "Boss submerged 2"), as the range pills show them. */
@@ -142,12 +160,13 @@ export function numberRepeats(labels: string[]): string[] {
 export function timelineGeometry(timeline: OverviewTimeline, durationMs: number): TimelineGeometry {
   const bossHp = bossHpPath(timeline.bossHp, timeline.bossHpStepMs, durationMs, durationMs, TIMELINE_SCALE);
   const dpsPath = dpsAreaPath(timeline.raidDps, timeline.dpsStepMs, durationMs, Math.max(0, ...timeline.raidDps), durationMs, TIMELINE_SCALE);
-  const phases = timeline.phases.map((phase) => ({
+  const labels = phaseLabels(timeline.phases);
+  const phases = timeline.phases.map((phase, i) => ({
     key: `${phase.kind}-${phase.number}`,
     leftPct: percentOf(phase.startMs, durationMs),
     widthPct: percentOf(phase.endMs, durationMs) - percentOf(phase.startMs, durationMs),
     kind: phase.kind,
-    label: phaseLabel(phase),
+    label: labels[i],
   }));
   return { hasBossData: bossHp !== '', bossHpPath: bossHp, dpsPath, phases, ticks: minuteTicks(durationMs) };
 }

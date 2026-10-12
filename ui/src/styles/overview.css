@@ -122,6 +122,9 @@
 .tl-phase-intermission {
   background: repeating-linear-gradient(135deg, var(--hover) 0 6px, var(--hatch) 6px 12px);
 }
+.tl-phase-trash {
+  background: color-mix(in srgb, var(--muted) 4%, transparent);
+}
 .tl-marker {
   position: absolute;
   top: 0;

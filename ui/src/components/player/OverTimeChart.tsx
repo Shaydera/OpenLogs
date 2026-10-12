@@ -37,8 +37,8 @@ export function OverTimeChart({ detail }: { detail: PlayerDetail }) {
   const deadBands = detail.dead.map(([a, b]) => band(a, b, startMs, endMs)).filter(isBand);
   // "Dead · Rebirth by Serrik" at each death inside the range, from the middle of its dead band.
   const deadLabels = detail.deaths.flatMap((death) => {
-    // The band's end, not the resurrect: a released player logs none (the backend ends his dead
-    // phase when he is alive again).
+    // The band's end, not the resurrect: a released Mythic+ player logs none (the backend ends his
+    // dead phase when he is alive again or at the next segment).
     const from = Math.max(death.t, startMs);
     const until = detail.dead.find(([a, b]) => a <= from && from < b)?.[1] ?? death.resurrectedAt ?? endMs;
     const at = band(death.t, until, startMs, endMs);

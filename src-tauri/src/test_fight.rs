@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use openlogs_analysis::{
-    ActorId, Actors, Damage, DamageVia, Event, EventKind, Fight, Heal, NOBODY, SpellId,
+    ActorId, Actors, Damage, DamageVia, Event, EventKind, Fight, FightKind, Heal, NOBODY, SpellId,
 };
 use openlogs_index::Outcome;
 use openlogs_parser::Unit;
@@ -24,6 +24,7 @@ pub fn unit(actors: &mut Actors, guid: &str, name: &str, flags: u32) -> ActorId 
 pub fn fight(actors: Actors, mut events: Vec<Event>) -> Fight {
     events.sort_by_key(|e| e.t);
     Fight {
+        kind: FightKind::Pull,
         encounter_id: 3492,
         name: "Ula'tek".into(),
         difficulty: 15,
@@ -34,6 +35,7 @@ pub fn fight(actors: Actors, mut events: Vec<Event>) -> Fight {
         actors,
         spells: BTreeMap::new(),
         broken_lines: 0,
+        encounters: Vec::new(),
     }
 }
 

@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { compareLogFixture } from '../../test/compareFixture';
 import { overviewFixture } from '../../test/overviewFixture';
 import { abilityDetailFixture } from '../../test/reportFixtures';
+import { runLogFixture } from '../../test/runFixture';
 import { type Crumb, type CrumbInput, fightCrumbs } from './crumbs';
 
 // Ula'tek Heroic: pull #1 a 2:22 wipe, pull #3 the 7:58 kill.
 const [WIPE, , KILL] = compareLogFixture.fights;
 const FILE = 'WoWCombatLog-100726_185823.txt';
+const RUN_FILE = 'WoWCombatLog-100826_195800.txt';
 const base: CrumbInput = {
   log: compareLogFixture,
   row: KILL,
@@ -54,5 +56,22 @@ describe('fight breadcrumb', () => {
       ['Blightscale Rawling', 'detail'],
       ['Faelan', 'current'],
     ]);
+  });
+
+  it('heads a Mythic+ run with its key and numbers its boss pulls within the run', () => {
+    const [run, , , braunpyke] = runLogFixture.fights;
+    const runBase = { ...base, log: runLogFixture };
+    expect(read(fightCrumbs({ ...runBase, row: run }))).toEqual([
+      [RUN_FILE, 'pulls'],
+      ['Priory of the Sacred Flame +12', 'current'],
+    ]);
+    expect(read(fightCrumbs({ ...runBase, row: run, tab: 'damage' }))[1]).toEqual(['Priory of the Sacred Flame +12 · Completed 31:00', 'current']);
+    const crumbs = fightCrumbs({ ...runBase, row: braunpyke });
+    expect(read(crumbs)).toEqual([
+      [RUN_FILE, 'pulls'],
+      ['Priory of the Sacred Flame +12', 'fight'],
+      ['Baron Braunpyke · Pull #3', 'current'],
+    ]);
+    expect(crumbs[1].action).toEqual({ kind: 'fight', index: 1 });
   });
 });

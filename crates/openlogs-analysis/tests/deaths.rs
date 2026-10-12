@@ -395,8 +395,8 @@ fn own_hp(b: &mut FightBuilder, t: i32, player: u32, current: u64) {
 
 #[test]
 fn a_released_player_is_dead_until_alive_again() {
-    // The player releases and runs back; the log has no resurrect, but his next cast reports
-    // him with HP again.
+    // Mythic+: the player releases and runs back; the log has no resurrect, but his next
+    // cast reports him with HP again.
     let mut b = FightBuilder::new(600_000);
     let mage = b.player("Player-1", "Faelan-Emberfall-EU", 62);
     let boss = b.unit(

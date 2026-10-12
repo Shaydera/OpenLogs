@@ -19,6 +19,7 @@ export function FightTopBar({ row, currentRef }: { row: FightRow; currentRef?: R
   const report = useApp((s) => s.report);
   const comparing = useApp((s) => s.comparison !== null);
   const backToPulls = useApp((s) => s.backToPulls);
+  const openFight = useApp((s) => s.openFight);
   const setTab = useApp((s) => s.setTab);
   const showDetailAt = useApp((s) => s.showDetailAt);
   const closeComparison = useApp((s) => s.closeComparison);
@@ -32,6 +33,8 @@ export function FightTopBar({ row, currentRef }: { row: FightRow; currentRef?: R
     switch (action.kind) {
       case 'pulls':
         return backToPulls();
+      case 'fight':
+        return void openFight(action.index);
       case 'overview':
         // The clicked crumb turns into plain text: focus the Overview title instead.
         return void setTab('overview', 'fight');

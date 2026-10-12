@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import type { QuickOverview } from '../api/types';
 import { useFocusRequest } from '../hooks/useFocusRequest';
 import { t } from '../i18n/i18n';
+import { rangeKey } from '../pulls/groupPulls';
 import { useApp } from '../store';
 import { AbilityDetailView } from './ability/AbilityDetailView';
 import { AurasTab } from './auras/AurasTab';
@@ -77,13 +78,13 @@ export function FightView() {
           ) : onOverview ? (
             <>
               {/* The timeline is the Overview's brush and always shows the whole pull. */}
-              <Timeline overview={overview} />
+              <Timeline overview={overview} run={row.run !== null} />
               <RangeOverview whole={overview} />
             </>
           ) : (
             <>
               {/* Detail pages have no range panel. */}
-              {details.length === 0 && <RangePanel overview={overview} rangeKey={`${row.encounterId}:${row.difficulty}`} />}
+              {details.length === 0 && <RangePanel overview={overview} rangeKey={rangeKey(row)} run={row.run !== null} />}
               <ErrorBoundary key={`${tab}-${details.length}`} onReset={() => void closeDetail()}>
                 <ReportView />
               </ErrorBoundary>

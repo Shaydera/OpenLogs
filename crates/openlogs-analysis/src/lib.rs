@@ -18,6 +18,7 @@ mod player;
 mod recap;
 mod reports;
 mod resources;
+mod run_result;
 mod targets;
 mod timeline;
 mod usage;
@@ -32,8 +33,9 @@ pub use deaths::{
     AbilityAmount, BURST_GAP_MS, DEATH_WINDOW_MS, Death, Hit, LethalBurst, Resurrection, deaths,
 };
 pub use fight::{
-    Absorbed, AuraAction, AuraType, Damage, DamageVia, Energize, Event, EventKind, Fight, Heal,
-    MissType, Missed, NO_SPELL, POWER_SAMPLE_MS, PowerSample, SpellId, SpellInfo, UnitHp,
+    Absorbed, AuraAction, AuraType, Damage, DamageVia, Energize, Event, EventKind, Fight,
+    FightKind, Heal, MissType, Missed, NO_SPELL, POWER_SAMPLE_MS, PowerSample, RunEncounter,
+    SpellId, SpellInfo, UnitHp,
 };
 pub use filter::{Attribution, ReportFilter};
 pub use interrupts::{
@@ -45,7 +47,7 @@ pub use overview::{
     BOSS_HP_STEP_MS, DPS_STEP_MS, DeathReport, Kpis, OverviewMarkers, OverviewTimeline,
     QuickOverview, quick_overview, quick_overview_in,
 };
-pub use phases::configured_phases;
+pub use phases::{configured_phases, run_phases};
 pub use player::{
     AugTarget, BuffKind, BuffRow, CAST_TIMELINE_ROWS, CastKind, CastRow, EBON_MIGHT, Metric,
     PRESCIENCE, PlayerAbility, PlayerDeath, PlayerDetail, SERIES_STEP_MS, player_detail,
@@ -58,6 +60,7 @@ pub use reports::{AbilityRow, RowKind};
 pub use resources::{
     PlayerResources, PowerTrack, RESOURCE_STEP_MS, ResourcesReport, resources_report,
 };
+pub use run_result::{BossProgress, RunResult, run_result};
 pub use targets::{
     EnemyGroup, TargetDetail, UnitLife, WAVE_GAP_MS, Wave, enemy_groups, target_detail,
 };

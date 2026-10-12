@@ -7,6 +7,7 @@ import { api } from '../api/client';
 import type { FightRow, LogView, RecentLog } from '../api/types';
 import { initialState, useApp } from '../store';
 import { overviewFixture } from '../test/overviewFixture';
+import { runLogFixture } from '../test/runFixture';
 
 vi.mock('../api/client', () => ({
   api: { openLog: vi.fn(), recentLogs: vi.fn(), removeRecent: vi.fn(), quickOverview: vi.fn() },
@@ -44,6 +45,8 @@ function row(index: number, name: string, encounterId: number, outcome: FightRow
     playerCount: 23,
     startUnixMs: Date.UTC(2026, 9, 7, 19, index * 10),
     zone: 'The Venomous Abyss',
+    run: null,
+    runIndex: null,
     ...extra,
   };
 }
@@ -117,5 +120,28 @@ describe('start page', () => {
     await userEvent.click(await screen.findByRole('button', { name: /^WoWCombatLog/ }));
     await userEvent.click(await screen.findByRole('button', { name: "Open pull 1 of Ula'tek" }));
     expect(api.quickOverview).toHaveBeenCalledWith(PATH, 1, null);
+  });
+});
+
+describe('Mythic+ runs', () => {
+  it('shows each run above the raid bosses and opens the run or one of its boss pulls', async () => {
+    vi.mocked(api.openLog).mockResolvedValue(runLogFixture);
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /^WoWCombatLog/ }));
+    const run = await screen.findByRole('region', { name: 'Priory of the Sacred Flame +12' });
+    const regions = screen.getAllByRole('region');
+    expect(regions.indexOf(run)).toBeLessThan(regions.indexOf(screen.getByRole('region', { name: "Ula'tek" })));
+    expect(within(run).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Open run Priory of the Sacred Flame +12',
+      'Open Captain Dailcry, pull 1 of the run',
+      'Open Baron Braunpyke, pull 3 of the run',
+      'Open Baron Braunpyke, pull 4 of the run',
+      'Open Prioress Murrpray, pull 5 of the run',
+    ]);
+    await userEvent.click(within(run).getByRole('button', { name: 'Open Baron Braunpyke, pull 4 of the run' }));
+    expect(api.quickOverview).toHaveBeenLastCalledWith(runLogFixture.path, 5, null);
+    useApp.setState({ view: { kind: 'start' } });
+    await userEvent.click(await screen.findByRole('button', { name: 'Open run Priory of the Sacred Flame +12' }));
+    expect(api.quickOverview).toHaveBeenLastCalledWith(runLogFixture.path, 1, null);
   });
 });

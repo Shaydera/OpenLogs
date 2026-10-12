@@ -34,7 +34,7 @@ const LOG = {
     {
       index: 1, encounterId: 3492, name: "Ula'tek", difficulty: 15, difficultyLabel: 'Heroic', outcome: 'kill',
       durationMs: 478_610, bossHpPercent: 0, playerCount: 23, startUnixMs: Date.UTC(2026, 9, 7, 19, 3, 2),
-      zone: 'The Venomous Abyss',
+      zone: 'The Venomous Abyss', run: null, runIndex: null,
     },
   ],
 } as LogView;

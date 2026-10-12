@@ -16,6 +16,8 @@ const ROW: FightRow = {
   playerCount: 23,
   startUnixMs: 0,
   zone: null,
+  run: null,
+  runIndex: null,
 };
 
 const input = (partial: Partial<HeaderInput>): HeaderInput => ({

@@ -3,16 +3,16 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use openlogs_index::FightSummary;
+use openlogs_index::{FightSummary, Outcome};
 use openlogs_parser::{
-    CombatEvent, CombatKind, Event as LogEvent, HealVia, Lines, LogLine, Spell, Timestamp,
-    parse_line,
+    CombatEvent, CombatKind, EncounterEnd, EncounterStart, Event as LogEvent, HealVia, Lines,
+    LogLine, Spell, Timestamp, parse_line,
 };
 
 use crate::actors::{ActorId, ActorKind, Actors, NOBODY};
 use crate::fight::{
-    Absorbed, Damage, Energize, Event, EventKind, Fight, Heal, MissType, Missed, NO_SPELL,
-    POWER_SAMPLE_MS, PowerSample, SpellId, SpellInfo, UnitHp,
+    Absorbed, Damage, Energize, Event, EventKind, Fight, FightKind, Heal, MissType, Missed,
+    NO_SPELL, POWER_SAMPLE_MS, PowerSample, RunEncounter, SpellId, SpellInfo, UnitHp,
 };
 
 /// Loads one fight, including its prelude, from the complete log bytes.
@@ -50,6 +50,19 @@ struct FightBuilder {
     fight: Fight,
     /// Last kept power sample per (player, power type).
     last_power: HashMap<(ActorId, i32), i32>,
+    /// Time of the latest line: where a run's encounter without `ENCOUNTER_END` ends.
+    last_t: i32,
+    /// Whether the last of `fight.encounters` still waits for its `ENCOUNTER_END`.
+    encounter_open: bool,
+    /// The run's instance; a `CHALLENGE_MODE_END` of another one is not its end.
+    instance_id: u32,
+    /// Time of the last line before the run's `CHALLENGE_MODE_END`: where an encounter
+    /// still open at the end of the run ends unless its `ENCOUNTER_END` follows.
+    run_end_t: Option<i32>,
+    /// Time of the last line before the run's key was started again (reconnect, /reload)
+    /// while an encounter was open: where that encounter ends unless its `ENCOUNTER_END`
+    /// follows, as the index ends its pull.
+    resume_t: Option<i32>,
 }
 
 impl FightBuilder {
@@ -57,6 +70,11 @@ impl FightBuilder {
         Self {
             start: summary.start,
             fight: Fight {
+                kind: if summary.is_run() {
+                    FightKind::Run
+                } else {
+                    FightKind::Pull
+                },
                 encounter_id: summary.encounter_id,
                 name: summary.name.clone(),
                 difficulty: summary.difficulty,
@@ -67,30 +85,99 @@ impl FightBuilder {
                 actors: Actors::new(),
                 spells: BTreeMap::new(),
                 broken_lines: 0,
+                encounters: Vec::new(),
             },
             last_power: HashMap::new(),
+            last_t: i32::MIN,
+            encounter_open: false,
+            instance_id: summary.instance_id,
+            run_end_t: None,
+            resume_t: None,
         }
     }
 
     fn push(&mut self, line: &LogLine<'_>) {
+        let t = self.relative_ms(line.timestamp);
+        let run = self.fight.kind == FightKind::Run;
         match &line.event {
             LogEvent::CombatantInfo(info) => {
                 let id = self.fight.actors.intern_guid(info.guid);
                 self.fight.actors.set_spec(id, info.spec_id);
             }
             LogEvent::Combat(event) => {
-                let t = self.relative_ms(line.timestamp);
                 let converted = self.convert(t, event);
                 self.fight.events.push(converted);
             }
+            LogEvent::EncounterStart(start) if run => self.start_encounter(t, start),
+            LogEvent::EncounterEnd(end) if run => self.end_encounter(t, end),
+            // The index ends a run's range right after an `ENCOUNTER_END` that follows its
+            // END within `END_GRACE_MICROS`, so the encounter stays open until then.
+            LogEvent::ChallengeModeEnd(end) if run && end.instance_id == self.instance_id => {
+                self.run_end_t.get_or_insert(self.last_t);
+            }
+            LogEvent::ChallengeModeStart(start)
+                if run && self.encounter_open && start.instance_id == self.instance_id =>
+            {
+                self.resume_t.get_or_insert(self.last_t);
+            }
             _ => {}
         }
+        self.last_t = self.last_t.max(t);
     }
 
     fn finish(mut self) -> Fight {
+        self.close_encounter();
         self.fight.events.sort_by_key(|event| event.t);
         self.fight.power.sort_by_key(|p| p.t);
         self.fight
+    }
+
+    /// A boss encounter of a run; one still waiting for its end ends at the line before.
+    fn start_encounter(&mut self, t: i32, start: &EncounterStart<'_>) {
+        self.close_encounter();
+        self.fight.encounters.push(RunEncounter {
+            encounter_id: start.encounter_id,
+            name: start.name.to_string(),
+            start_ms: t.max(0),
+            end_ms: t.max(0),
+            outcome: Outcome::Incomplete,
+        });
+        self.encounter_open = true;
+    }
+
+    fn end_encounter(&mut self, t: i32, end: &EncounterEnd<'_>) {
+        if !self.encounter_open {
+            return;
+        }
+        if let Some(encounter) = self.fight.encounters.last_mut()
+            && encounter.encounter_id == end.encounter_id
+        {
+            encounter.end_ms = t.max(encounter.start_ms);
+            encounter.outcome = if end.success {
+                Outcome::Kill
+            } else {
+                Outcome::Wipe
+            };
+            self.encounter_open = false;
+            self.resume_t = None;
+        }
+    }
+
+    /// An encounter without `ENCOUNTER_END` ends at the line before whatever ended it, as
+    /// an incomplete pull does in the index: the key started again while it was open, the
+    /// next encounter, or the run's `CHALLENGE_MODE_END`.
+    fn close_encounter(&mut self) {
+        if self.encounter_open
+            && let Some(encounter) = self.fight.encounters.last_mut()
+        {
+            encounter.end_ms = self
+                .resume_t
+                .or(self.run_end_t)
+                .unwrap_or(self.last_t)
+                .max(encounter.start_ms);
+        }
+        self.encounter_open = false;
+        self.resume_t = None;
     }
 
     fn relative_ms(&self, timestamp: Timestamp) -> i32 {

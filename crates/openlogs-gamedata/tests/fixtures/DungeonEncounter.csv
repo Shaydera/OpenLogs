@@ -1,0 +1,15 @@
+Name_lang,ID,MapID,DifficultyID,OrderIndex,CompleteWorldStateID,Bit,Flags,SpellIconFileID,Faction,ItemSequenceLevel
+"Zuraal the Ascended",2065,1753,0,0,0,0,4,0,-1,0
+Saprish,2066,1753,0,1000,0,1,4,0,-1,0
+"Viceroy Nezhar",2067,1753,0,2000,0,2,4,0,-1,0
+L'ura,2068,1753,0,3000,0,3,4,0,-1,0
+"Sergeant Bainbridge",2097,1822,0,0,14405,0,4,0,-1,0
+"Chopper Redhook",2098,1822,0,1000,14403,1,0,0,-1,0
+Chronikar,2666,2579,0,0,22901,0,4,0,-1,0
+"Manifested Timeways",2667,2579,0,1000,22903,1,4,0,-1,0
+"Baron Braunpyke",2835,2649,0,0,24899,0,4,0,-1,0
+"Captain Dailcry",2847,2649,0,-1000,25022,1,4,0,-1,0
+"Prioress Murrpray",2848,2649,0,1000,25024,2,4,0,-1,0
+"Ki'katal the Harvester",2901,2660,0,2000,25585,0,4,0,-1,0
+Anub'zekt,2906,2660,0,1000,25668,1,4,0,-1,0
+Avanoxx,2926,2660,0,0,25728,2,4,0,-1,0

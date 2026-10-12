@@ -6,8 +6,16 @@ use openlogs_parser::{Lines, parse_header, parse_line};
 use crate::builder::{IndexBuilder, LineSpan};
 use crate::model::LogIndex;
 
-/// Events that matter to the index even outside fights.
-const META_EVENTS: [&str; 3] = ["COMBAT_LOG_VERSION", "ENCOUNTER_START", "ZONE_CHANGE"];
+/// Events that matter to the index even outside fights. Mythic+ runs start, end and list
+/// their players between boss pulls.
+const META_EVENTS: [&str; 6] = [
+    "COMBAT_LOG_VERSION",
+    "ENCOUNTER_START",
+    "ZONE_CHANGE",
+    "CHALLENGE_MODE_START",
+    "CHALLENGE_MODE_END",
+    "COMBATANT_INFO",
+];
 
 /// Indexes a complete log held in memory. Lines outside fights are only read up to their
 /// event name, which keeps indexing fast on trash-heavy logs.

@@ -2,7 +2,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use openlogs_gamedata::{Curated, HttpFetch};
+use openlogs_gamedata::{Curated, DungeonTable, HttpFetch};
 use openlogs_index::{CacheStatus, load_or_build};
 use tauri::{AppHandle, Manager};
 
@@ -25,8 +25,13 @@ use crate::resources_dto::{ResourcesReportDto, resources_report_dto};
 use crate::state::{AppState, index_cache_dir, now_unix_s};
 
 /// Indexes (or loads from cache) the log at `path`. Returns the view and, for real combat
-/// logs, the entry to remember in the recent list.
-pub fn index_log(path: &Path, data_dir: &Path) -> Result<(LogView, Option<RecentEntry>), String> {
+/// logs, the entry to remember in the recent list. `dungeons` decides run results when it
+/// knows the key.
+pub fn index_log(
+    path: &Path,
+    data_dir: &Path,
+    dungeons: Option<&DungeonTable>,
+) -> Result<(LogView, Option<RecentEntry>), String> {
     // One spelling per file: the recent list, `LogView.path` and the fight cache key on it.
     let path = &crate::recent::canonical_path(path);
     if path.is_dir() {
@@ -51,6 +56,7 @@ pub fn index_log(path: &Path, data_dir: &Path) -> Result<(LogView, Option<Recent
         size_bytes,
         status == CacheStatus::Hit,
         &index,
+        dungeons,
     );
     let entry = index.log_version.map(|_| RecentEntry {
         path: path_text,
@@ -58,7 +64,12 @@ pub fn index_log(path: &Path, data_dir: &Path) -> Result<(LogView, Option<Recent
         size_bytes,
         zone: view.zone.clone(),
         start_unix_ms: view.start_unix_ms,
-        pull_count: view.fights.len() as u32,
+        // A run is no pull; its boss pulls are.
+        pull_count: view
+            .fights
+            .iter()
+            .filter(|fight| fight.run.is_none())
+            .count() as u32,
         opened_at_unix_ms: now_unix_ms(),
     });
     Ok((view, entry))
@@ -553,7 +564,8 @@ pub fn recent_view(recent: &RecentLogs) -> Vec<RecentLog> {
 pub async fn open_log(path: String, app: AppHandle) -> Result<LogView, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let (view, entry) = index_log(Path::new(&path), &state.data_dir)?;
+        let dungeons = state.dungeon_table();
+        let (view, entry) = index_log(Path::new(&path), &state.data_dir, dungeons.as_ref())?;
         if let Some(entry) = entry {
             let mut recent = state
                 .recent
@@ -702,9 +714,12 @@ mod tests {
     use openlogs_parser::Timestamp;
 
     use super::*;
-    use crate::dto::OutcomeDto;
+    use crate::dto::{BossProgressDto, OutcomeDto, RunDto};
 
     const FIXTURE: &str = include_str!("../../crates/openlogs-index/tests/fixtures/mini_raid.txt");
+    /// A synthetic +12 in the real line format.
+    const MYTHIC_PLUS: &str =
+        include_str!("../../crates/openlogs-index/tests/fixtures/mythic_plus.txt");
     const WHOLE_PULL: &str = r#"{ "startMs": null, "endMs": null, "attribution": "augmented" }"#;
     const FAELAN: &str = "Faelan-Emberfall-EU";
 
@@ -740,7 +755,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = log_file(dir.path(), FIXTURE);
         let other_spelling = dir.path().join(".").join("WoWCombatLog-100726_185823.txt");
-        let (view, remember) = index_log(&other_spelling, dir.path()).unwrap();
+        let (view, remember) = index_log(&other_spelling, dir.path(), None).unwrap();
 
         let canonical = crate::recent::canonical_path(&path)
             .to_string_lossy()
@@ -770,7 +785,7 @@ mod tests {
             (canonical.as_str(), 3)
         );
 
-        assert!(index_log(&path, dir.path()).unwrap().0.cache_hit);
+        assert!(index_log(&path, dir.path(), None).unwrap().0.cache_hit);
         let mut file = OpenOptions::new().append(true).open(&path).unwrap();
         write!(
             file,
@@ -779,7 +794,7 @@ mod tests {
         )
         .unwrap();
         drop(file);
-        let (view, _) = index_log(&path, dir.path()).unwrap();
+        let (view, _) = index_log(&path, dir.path(), None).unwrap();
         assert!(!view.cache_hit);
         assert_eq!(view.fights.len(), 4);
         assert_eq!(view.fights[3].outcome, OutcomeDto::Kill);
@@ -788,7 +803,7 @@ mod tests {
     #[test]
     fn unusable_input_fails_with_a_message() {
         let dir = tempfile::tempdir().unwrap();
-        let err = index_log(dir.path(), dir.path()).unwrap_err();
+        let err = index_log(dir.path(), dir.path(), None).unwrap_err();
         assert!(
             err.ends_with("is a folder. Open a WoWCombatLog*.txt file instead."),
             "{err}"
@@ -796,7 +811,7 @@ mod tests {
 
         let notes = dir.path().join("notes.txt");
         fs::write(&notes, "shopping list\nmilk, eggs\n").unwrap();
-        let (view, remember) = index_log(&notes, dir.path()).unwrap();
+        let (view, remember) = index_log(&notes, dir.path(), None).unwrap();
         assert!(view.fights.is_empty() && remember.is_none());
         assert!(
             view.warnings
@@ -840,13 +855,13 @@ mod tests {
         let nobody = target_detail_at(&cache, &path, dir.path(), 1, "Nobody".into(), whole);
         assert_eq!(nobody.unwrap_err(), "No enemy named Nobody in this pull");
 
-        let (_, entry) = index_log(&path, dir.path()).unwrap();
+        let (_, entry) = index_log(&path, dir.path(), None).unwrap();
         let mut recent = RecentLogs::default();
         recent.touch(entry.unwrap());
         assert!(recent_view(&recent)[0].exists);
         fs::remove_file(&path).unwrap();
         assert!(!recent_view(&recent)[0].exists);
-        let err = index_log(&path, dir.path()).unwrap_err();
+        let err = index_log(&path, dir.path(), None).unwrap_err();
         assert!(err.starts_with("File not found"), "{err}");
     }
 
@@ -1040,5 +1055,178 @@ mod tests {
         );
         let pyrrin = row("Pyrrin-Emberfall-EU");
         assert!(pyrrin.a.is_some() && pyrrin.b.is_none() && pyrrin.dps_delta.is_none());
+    }
+
+    #[test]
+    fn opening_a_mythic_plus_log_lists_the_run_and_its_boss_pulls() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = log_file(dir.path(), MYTHIC_PLUS);
+        let (view, remember) = index_log(&path, dir.path(), None).unwrap();
+        let rows: Vec<_> = view
+            .fights
+            .iter()
+            .map(|f| (f.index, f.name.as_str(), f.outcome, f.run_index))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                (1, "Priory of the Sacred Flame", OutcomeDto::Kill, None),
+                (2, "Captain Dailcry", OutcomeDto::Kill, Some(1)),
+                (3, "Baron Braunpyke", OutcomeDto::Wipe, Some(1)),
+                (4, "Baron Braunpyke", OutcomeDto::Kill, Some(1)),
+            ]
+        );
+        let run = &view.fights[0];
+        assert_eq!(
+            run.run,
+            Some(RunDto {
+                challenge_mode_id: 499,
+                keystone_level: 12,
+                affix_ids: vec![10, 147, 9],
+                total_time_ms: Some(600_000),
+                bosses: None,
+                timer: None,
+            })
+        );
+        assert_eq!(
+            (run.duration_ms, run.player_count, run.boss_hp_percent),
+            (600_000, 2, None)
+        );
+        assert_eq!(view.fights[1].run, None);
+        assert_eq!(view.fights[1].difficulty_label.as_deref(), Some("Mythic+"));
+        assert_eq!(view.zone.as_deref(), Some("Priory of the Sacred Flame"));
+        assert_eq!(
+            remember.unwrap().pull_count,
+            3,
+            "the run itself is not a pull"
+        );
+    }
+
+    /// Priory: three bosses, 1950/1560/1170 s.
+    fn dungeons() -> DungeonTable {
+        DungeonTable::from_csv(
+            include_bytes!("../../crates/openlogs-gamedata/tests/fixtures/MapChallengeMode.csv"),
+            include_bytes!("../../crates/openlogs-gamedata/tests/fixtures/DungeonEncounter.csv"),
+        )
+        .unwrap()
+    }
+
+    /// `MYTHIC_PLUS` with Prioress Murrpray killed before the run's end, which logs `total_ms`.
+    fn every_boss_killed(total_ms: u64) -> String {
+        MYTHIC_PLUS
+            .lines()
+            .flat_map(|line| {
+                if line.contains("CHALLENGE_MODE_END") {
+                    vec![
+                        "10/8/2026 20:09:00.0000  ENCOUNTER_START,2848,\"Prioress Murrpray\",8,5,2649".to_string(),
+                        "10/8/2026 20:09:50.0000  ENCOUNTER_END,2848,\"Prioress Murrpray\",8,5,1,50000".to_string(),
+                        format!("10/8/2026 20:10:00.0000  CHALLENGE_MODE_END,2649,1,12,{total_ms}"),
+                    ]
+                } else {
+                    vec![line.to_string()]
+                }
+            })
+            .map(|line| line + "\n")
+            .collect()
+    }
+
+    #[test]
+    fn dungeon_data_decides_the_result_of_a_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let table = dungeons();
+        let path = log_file(dir.path(), MYTHIC_PLUS);
+        let (view, _) = index_log(&path, dir.path(), Some(&table)).unwrap();
+        let run = &view.fights[0];
+        assert_eq!(run.outcome, OutcomeDto::Wipe, "Prioress Murrpray lives");
+        let details = run.run.as_ref().unwrap();
+        assert_eq!(
+            (details.bosses, details.timer),
+            (
+                Some(BossProgressDto {
+                    killed: 2,
+                    total: 3
+                }),
+                None
+            )
+        );
+        assert_eq!(
+            view.fights[1..]
+                .iter()
+                .map(|pull| pull.outcome)
+                .collect::<Vec<_>>(),
+            [OutcomeDto::Kill, OutcomeDto::Wipe, OutcomeDto::Kill],
+            "boss pulls keep their outcome"
+        );
+
+        for (total_ms, timer) in [
+            (
+                600_000,
+                serde_json::json!({ "kind": "inTime", "upgrades": 3 }),
+            ),
+            (2_000_000, serde_json::json!({ "kind": "overTime" })),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = log_file(dir.path(), &every_boss_killed(total_ms));
+            let (view, _) = index_log(&path, dir.path(), Some(&table)).unwrap();
+            assert_eq!(view.fights[0].outcome, OutcomeDto::Kill);
+            let json = serde_json::to_value(&view.fights[0]).unwrap();
+            assert_eq!(
+                json["run"]["bosses"],
+                serde_json::json!({ "killed": 3, "total": 3 })
+            );
+            assert_eq!(json["run"]["timer"], timer, "{total_ms} ms");
+        }
+
+        let raid = log_file(dir.path(), FIXTURE);
+        let (without, _) = index_log(&raid, dir.path(), None).unwrap();
+        let (with, _) = index_log(&raid, dir.path(), Some(&table)).unwrap();
+        assert_eq!(
+            with.fights, without.fights,
+            "a raid log ignores dungeon data"
+        );
+    }
+
+    #[test]
+    fn a_run_opens_like_a_pull_with_boss_phases_and_no_boss_hp() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = log_file(dir.path(), MYTHIC_PLUS);
+        let cache = FightCache::default();
+        let curated = Curated::bundled();
+
+        let run = quick_overview_at(&cache, &curated, &path, dir.path(), 1, None).unwrap();
+        assert_eq!(
+            (run.kpis.players, run.kpis.duration_ms, run.kpis.deaths),
+            (2, 600_000, 1)
+        );
+        assert!(run.timeline.boss_hp.iter().all(Option::is_none));
+        assert!(run.timeline.markers.boss_casts.is_empty());
+        let phases = serde_json::to_value(&run.timeline.phases).unwrap();
+        assert_eq!(phases.as_array().unwrap().len(), 7);
+        assert_eq!(
+            phases[0],
+            serde_json::json!({ "kind": "trash", "number": 1, "startMs": 0, "endMs": 60_000, "name": null })
+        );
+        assert_eq!(phases[1]["kind"], "boss");
+        assert_eq!(phases[1]["name"], "Captain Dailcry");
+
+        let damage = damage_report_at(&cache, &path, dir.path(), 1, filter(WHOLE_PULL)).unwrap();
+        assert_eq!(
+            damage.total, 610_000_000,
+            "trash and boss damage of the whole run"
+        );
+        let second_baron =
+            filter(r#"{ "startMs": 360000, "endMs": 420000, "attribution": "augmented" }"#);
+        assert_eq!(
+            damage_report_at(&cache, &path, dir.path(), 1, second_baron)
+                .unwrap()
+                .total,
+            400_000_000
+        );
+
+        let pull = quick_overview_at(&cache, &curated, &path, dir.path(), 2, None).unwrap();
+        assert!(
+            pull.timeline.boss_hp.iter().any(Option::is_some),
+            "a boss pull of the run keeps its boss HP"
+        );
     }
 }

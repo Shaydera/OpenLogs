@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::actors::{ActorId, ActorKind};
-use crate::fight::{DamageVia, Event, EventKind, Fight, SpellId, UnitHp};
+use crate::fight::{DamageVia, Event, EventKind, Fight, FightKind, SpellId, UnitHp};
+use crate::phases::run_phases;
 use crate::timeline::counts_as_damage_done;
 
 /// Look-back window of the death context.
@@ -71,8 +72,9 @@ pub struct Death {
     pub resurrected_at: Option<i32>,
     /// The spell and caster that ended this death.
     pub resurrected_by: Option<Resurrection>,
-    /// When the player was alive again: the resurrect, else (a released player logs none) the
-    /// first own HP snapshot above 0. `None`: dead to the end of the fight.
+    /// When the player was alive again: the resurrect, else (a released Mythic+ player logs
+    /// none) the first own HP snapshot above 0 or the next run segment's start, whichever comes
+    /// first. `None`: dead to the end of the fight.
     pub dead_until: Option<i32>,
     /// `None` without a killing blow or for an instakill.
     pub lethal_burst: Option<LethalBurst>,
@@ -85,7 +87,28 @@ pub fn deaths(fight: &Fight) -> Vec<Death> {
     let mut last_death: HashMap<ActorId, usize> = HashMap::new();
     // When the current life began: the last resurrect (0 for the first life).
     let mut alive_since: HashMap<ActorId, i32> = HashMap::new();
+    // Segment starts of a run (boss and trash phases); a pull has one segment from 0.
+    let segment_starts: Vec<i32> = if fight.kind == FightKind::Run {
+        run_phases(fight)
+            .iter()
+            .map(|phase| phase.start_ms as i32)
+            .filter(|&start| start > 0)
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let mut next_segment = 0;
     for event in &fight.events {
+        while next_segment < segment_starts.len() && segment_starts[next_segment] <= event.t {
+            let at = segment_starts[next_segment];
+            for player in dead.drain() {
+                alive_since.insert(player, at);
+                if let Some(&index) = last_death.get(&player) {
+                    revive(&mut result[index], at);
+                }
+            }
+            next_segment += 1;
+        }
         // Damage and casts of a dead player still land (projectiles, queued casts); only a
         // snapshot with HP shows him alive.
         if let Some(hp) = event.unit_hp
@@ -122,6 +145,13 @@ pub fn deaths(fight: &Fight) -> Vec<Death> {
                 }
             }
             _ => {}
+        }
+    }
+    if let Some(&at) = segment_starts.get(next_segment) {
+        for player in dead {
+            if let Some(&index) = last_death.get(&player) {
+                revive(&mut result[index], at);
+            }
         }
     }
     result

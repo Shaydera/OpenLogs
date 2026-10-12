@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::actors::{ActorId, ActorKind, NOBODY};
-use crate::fight::{Damage, DamageVia, Event, EventKind, Fight};
+use crate::fight::{Damage, DamageVia, Event, EventKind, Fight, FightKind};
 use openlogs_gamedata::Curated;
 use openlogs_index::Outcome;
 
@@ -44,9 +44,10 @@ pub fn is_aborted(fight: &Fight) -> bool {
 
 /// Boss candidates: hostile units that took at least a fifth of the damage of the
 /// most-damaged unit and have at least a quarter of the largest max HP. Councils yield
-/// several bosses; untouched encounter NPCs and small adds are excluded.
+/// several bosses; untouched encounter NPCs and small adds are excluded. A Mythic+ run has
+/// none: its boss pulls do.
 pub fn boss_units(fight: &Fight) -> Vec<ActorId> {
-    if is_aborted(fight) {
+    if is_aborted(fight) || fight.kind == FightKind::Run {
         return Vec::new();
     }
     let mut taken: HashMap<ActorId, u64> = HashMap::new();
@@ -167,6 +168,8 @@ pub fn raid_dps_series(fight: &Fight, step_ms: u32) -> Vec<f64> {
 pub enum PhaseKind {
     Boss,
     Intermission,
+    /// Time between the boss pulls of a Mythic+ run.
+    Trash,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -176,7 +179,8 @@ pub struct Phase {
     pub number: u32,
     pub start_ms: u32,
     pub end_ms: u32,
-    /// Name from a phase config; `None` for detected phases.
+    /// Name from a phase config, or the boss of a run's boss phase; `None` for detected
+    /// phases and trash.
     pub name: Option<String>,
 }
 

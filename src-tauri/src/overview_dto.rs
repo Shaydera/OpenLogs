@@ -85,6 +85,7 @@ pub struct MarkersDto {
 pub enum PhaseKindDto {
     Boss,
     Intermission,
+    Trash,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -94,7 +95,7 @@ pub struct PhaseDto {
     pub number: u32,
     pub start_ms: u32,
     pub end_ms: u32,
-    /// From a phase config; `None` for detected phases.
+    /// From a phase config or a run's boss; `None` for detected phases and trash.
     pub name: Option<String>,
 }
 
@@ -534,6 +535,7 @@ pub fn quick_overview_dto(
                     kind: match p.kind {
                         PhaseKind::Boss => PhaseKindDto::Boss,
                         PhaseKind::Intermission => PhaseKindDto::Intermission,
+                        PhaseKind::Trash => PhaseKindDto::Trash,
                     },
                     number: p.number,
                     start_ms: p.start_ms,

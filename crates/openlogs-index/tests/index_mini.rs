@@ -105,6 +105,7 @@ fn aborted_and_unfinished_pulls() {
 #[test]
 fn difficulty_labels() {
     for (id, label) in [
+        (8, Some("Mythic+")),
         (15, Some("Heroic")),
         (16, Some("Mythic")),
         (233, Some("Mythic")),

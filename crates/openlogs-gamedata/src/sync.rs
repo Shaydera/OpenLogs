@@ -6,11 +6,14 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 use crate::boss_portraits::{BossPortraitError, BossPortraitTable};
+use crate::dungeons::{DungeonTable, DungeonTableError};
 use crate::fetch::{Fetch, FetchError};
 use crate::spell_icons::{SpellIconError, SpellIconTable};
 
 pub const WAGO_SPELL_MISC_URL: &str = "https://wago.tools/db2/SpellMisc/csv";
 pub const WAGO_MANIFEST_URL: &str = "https://wago.tools/db2/ManifestInterfaceData/csv";
+pub const WAGO_MAP_CHALLENGE_MODE_URL: &str = "https://wago.tools/db2/MapChallengeMode/csv";
+pub const WAGO_DUNGEON_ENCOUNTER_URL: &str = "https://wago.tools/db2/DungeonEncounter/csv";
 pub const WAGO_JOURNAL_ENCOUNTER_URL: &str = "https://wago.tools/db2/JournalEncounter/csv";
 pub const WAGO_JOURNAL_ENCOUNTER_CREATURE_URL: &str =
     "https://wago.tools/db2/JournalEncounterCreature/csv";
@@ -35,6 +38,8 @@ pub enum SyncError {
     Fetch(#[from] FetchError),
     #[error("downloaded data is invalid: {0}")]
     Parse(#[from] SpellIconError),
+    #[error("downloaded dungeon data is invalid: {0}")]
+    Dungeons(#[from] DungeonTableError),
     #[error("downloaded boss portrait data is invalid: {0}")]
     BossPortraits(#[from] BossPortraitError),
 }
@@ -59,6 +64,22 @@ impl SyncedTable for SpellIconTable {
 
     fn serialize(&self) -> String {
         self.to_tsv()
+    }
+}
+
+impl SyncedTable for DungeonTable {
+    fn download<F: Fetch>(fetch: &F) -> Result<Self, SyncError> {
+        let keys = fetch.get(WAGO_MAP_CHALLENGE_MODE_URL)?;
+        let encounters = fetch.get(WAGO_DUNGEON_ENCOUNTER_URL)?;
+        Ok(Self::from_csv(&keys, &encounters)?)
+    }
+
+    fn parse(body: &str) -> Option<Self> {
+        Self::from_json(body).ok()
+    }
+
+    fn serialize(&self) -> String {
+        self.to_json()
     }
 }
 
@@ -94,6 +115,21 @@ pub fn load_cached(path: &Path) -> Option<SpellIconTable> {
     cached_table(path)
 }
 
+/// Loads the Mythic+ dungeon table from `path`, downloading it from wago.tools when it is
+/// missing, corrupt or older than [`REFRESH_AFTER_SECS`].
+pub fn load_or_sync_dungeons<F: Fetch>(
+    path: &Path,
+    fetch: &F,
+    now_unix_s: u64,
+) -> Result<(DungeonTable, SyncOutcome), SyncError> {
+    sync_table(path, fetch, now_unix_s, false)
+}
+
+/// The dungeon table stored at `path`, however old.
+pub fn load_cached_dungeons(path: &Path) -> Option<DungeonTable> {
+    cached_table(path)
+}
+
 /// Downloads the spell icon table now, whatever its age ("Refresh now"); a failed download
 /// keeps the stored table (`Stale`).
 pub fn refresh_spell_icons<F: Fetch>(
@@ -101,6 +137,15 @@ pub fn refresh_spell_icons<F: Fetch>(
     fetch: &F,
     now_unix_s: u64,
 ) -> Result<(SpellIconTable, SyncOutcome), SyncError> {
+    sync_table(path, fetch, now_unix_s, true)
+}
+
+/// Downloads the dungeon table now, whatever its age.
+pub fn refresh_dungeons<F: Fetch>(
+    path: &Path,
+    fetch: &F,
+    now_unix_s: u64,
+) -> Result<(DungeonTable, SyncOutcome), SyncError> {
     sync_table(path, fetch, now_unix_s, true)
 }
 

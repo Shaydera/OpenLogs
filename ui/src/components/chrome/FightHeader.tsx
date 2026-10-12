@@ -1,7 +1,8 @@
 import { Fragment, type RefObject } from 'react';
 import type { FightRow } from '../../api/types';
+import { formatKeystoneLevel } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import { pullStatus } from '../../pulls/groupPulls';
+import { RUN_CHIP, pullStatus, runStatus } from '../../pulls/groupPulls';
 import { BossTile } from '../BossTile';
 import { Kpi, KpiStrip } from '../Kpi';
 import { fightMeta } from './fightMeta';
@@ -13,21 +14,25 @@ import type { HeaderTile } from './headerTiles';
  * page's own title stays the page's heading.
  */
 export function FightHeader({ row, tiles, titleRef }: { row: FightRow; tiles: HeaderTile[] | null; titleRef: RefObject<HTMLHeadingElement | null> }) {
+  const run = row.run;
   const status = pullStatus(row);
-  const chip = { className: status === 'kill' ? 'kill' : status === 'aborted' ? 'abort' : 'wipe', label: t(`status.${status}`) };
+  const title = run ? t('runs.heading', { dungeon: row.name, level: formatKeystoneLevel(run.keystoneLevel) }) : row.name;
+  const chip = run
+    ? { className: RUN_CHIP[runStatus(row)], label: t(`runs.status.${runStatus(row)}`) }
+    : { className: status === 'kill' ? 'kill' : status === 'aborted' ? 'abort' : 'wipe', label: t(`status.${status}`) };
   const meta = fightMeta(row);
   const compact = tiles === null;
   return (
     <section className={compact ? 'fight-header fight-header-compact' : 'fight-header'} aria-labelledby="fight-title">
-      <BossTile encounterId={row.encounterId} name={row.name} large={!compact} />
+      <BossTile encounterId={run ? 0 : row.encounterId} name={row.name} large={!compact} />
       <div className="fight-id">
         {compact ? (
           <p id="fight-title" className="fight-name">
-            {row.name}
+            {title}
           </p>
         ) : (
           <h1 id="fight-title" ref={titleRef} tabIndex={-1} className="fight-name">
-            {row.name}
+            {title}
           </h1>
         )}
         <div className="fight-meta">

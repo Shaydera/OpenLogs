@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { OverviewTimeline } from '../../api/types';
-import { bossHpPath, timelineGeometry } from './timelineGeometry';
+import type { OverviewTimeline, Phase } from '../../api/types';
+import { bossHpPath, phaseLabels, timelineGeometry } from './timelineGeometry';
 
 const base: OverviewTimeline = {
   durationMs: 0,
@@ -35,5 +35,20 @@ describe('timelineGeometry', () => {
       ['0:00', 0],
       ['1:00', 50],
     ]);
+  });
+
+  it('numbers a boss pulled twice in a run but leaves repeated raid phase names plain', () => {
+    const run: Phase[] = [
+      { kind: 'trash', number: 1, startMs: 0, endMs: 60_000, name: null },
+      { kind: 'boss', number: 1, startMs: 60_000, endMs: 120_000, name: 'Baron Braunpyke' },
+      { kind: 'trash', number: 2, startMs: 120_000, endMs: 240_000, name: null },
+      { kind: 'boss', number: 2, startMs: 240_000, endMs: 270_000, name: 'Baron Braunpyke' },
+    ];
+    expect(phaseLabels(run)).toEqual(['Trash 1', 'Baron Braunpyke #1', 'Trash 2', 'Baron Braunpyke #2']);
+    const raid: Phase[] = [
+      { kind: 'boss', number: 1, startMs: 0, endMs: 60_000, name: 'Intermission' },
+      { kind: 'boss', number: 2, startMs: 60_000, endMs: 90_000, name: 'Intermission' },
+    ];
+    expect(phaseLabels(raid)).toEqual(['Intermission', 'Intermission']);
   });
 });

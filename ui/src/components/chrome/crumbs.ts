@@ -1,13 +1,14 @@
 import type { Detail, FightRow, LogView, PlayerRef, QuickOverview } from '../../api/types';
-import { formatDuration } from '../../i18n/format';
+import { formatDuration, formatKeystoneLevel } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import { pullStatus, pullView } from '../../pulls/groupPulls';
+import { pullStatus, pullView, runStatus } from '../../pulls/groupPulls';
 import type { FightTab, ReportData } from '../../store';
 import { playerIndex, shortName, spellName } from '../overview/players';
 
 /** What a breadcrumb link does. */
 export type CrumbAction =
   | { kind: 'pulls' }
+  | { kind: 'fight'; index: number }
   | { kind: 'overview' }
   | { kind: 'detail'; depth: number }
   | { kind: 'closeComparison' };
@@ -33,15 +34,24 @@ export interface CrumbInput {
 
 type Level = Omit<Crumb, 'current'>;
 
-/** `Ula'tek · Pull #1`: the pull's number among the boss's pulls (hidden pulls count). */
+/** A boss pull's number among the boss's pulls, or among the boss pulls of its Mythic+ run (hidden pulls count). */
+function pullNumber(fights: FightRow[], row: FightRow): number | null {
+  if (row.runIndex === null) return pullView(fights, row.index)?.n ?? null;
+  const at = fights.filter((fight) => fight.runIndex === row.runIndex).findIndex((fight) => fight.index === row.index);
+  return at === -1 ? null : at + 1;
+}
+
+/** `Ula'tek · Pull #1`, or a run's `Priory of the Sacred Flame +12`. */
 function pullLabel(fights: FightRow[], row: FightRow): string {
-  const n = pullView(fights, row.index)?.n ?? null;
+  if (row.run) return t('runs.heading', { dungeon: row.name, level: formatKeystoneLevel(row.run.keystoneLevel) });
+  const n = pullNumber(fights, row);
   return n === null ? row.name : t('crumb.pull', { boss: row.name, n });
 }
 
-/** `Kill 7:58`, `Wipe 2:22`. */
+/** `Kill 7:58`, `Wipe 2:22`, a run's `Completed 31:00`. */
 function resultLabel(row: FightRow): string {
-  return t('crumb.result', { result: t(`status.${pullStatus(row)}`), duration: formatDuration(row.durationMs) });
+  const result = row.run ? t(`runs.status.${runStatus(row)}`) : t(`status.${pullStatus(row)}`);
+  return t('crumb.result', { result, duration: formatDuration(row.durationMs) });
 }
 
 /** One level per detail page; an enemy sits under a plain "Enemies" level. */
@@ -75,12 +85,14 @@ function detailLevels(details: Detail[], overview: QuickOverview | null, report:
 }
 
 /**
- * The fight top bar's breadcrumb: the log file, then the pull — alone on the Overview, with result
- * and duration on the report tabs, with the tab on Casts, with the detail stack on detail pages.
- * Every level but the last links somewhere.
+ * The fight top bar's breadcrumb: the log file, a Mythic+ boss pull's run, then the pull — alone on
+ * the Overview, with result and duration on the report tabs, with the tab on Casts, with the detail
+ * stack on detail pages. Every level but the last links somewhere.
  */
 export function fightCrumbs({ log, row, tab, details, overview, report, comparing }: CrumbInput): Crumb[] {
   const levels: Level[] = [{ label: log.fileName, action: { kind: 'pulls' } }];
+  const run = row.runIndex === null ? undefined : log.fights.find((fight) => fight.index === row.runIndex);
+  if (run) levels.push({ label: pullLabel(log.fights, run), action: { kind: 'fight', index: run.index } });
   const pull = pullLabel(log.fights, row);
   if (comparing) {
     levels.push({ label: pull, action: { kind: 'closeComparison' } }, { label: t('crumb.comparison'), action: null });

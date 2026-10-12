@@ -34,6 +34,11 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
+/** A Mythic+ keystone level, e.g. `+12`. */
+export function formatKeystoneLevel(level: number): string {
+  return t('runs.level', { level: formatInteger(level) });
+}
+
 /** Seconds with one decimal, e.g. `12.3 s`; the unit comes from the catalog (en-US Intl writes `sec`). */
 export function formatSeconds(ms: number): string {
   return t('unit.seconds', { value: oneDecimal.format(ms / 1000) });

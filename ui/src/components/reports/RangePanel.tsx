@@ -14,7 +14,7 @@ import { useRangeKeys } from './useRangeKeys';
  * The report tabs' "Time range" panel: pills for the full pull, its phases and the saved ranges,
  * "+ Save range", a plot with the selection as an accent brush, and the selection with its duration.
  */
-export function RangePanel({ overview, rangeKey }: { overview: QuickOverview; rangeKey: string }) {
+export function RangePanel({ overview, rangeKey, run = false }: { overview: QuickOverview; rangeKey: string; run?: boolean }) {
   const range = useApp((s) => s.range);
   const setRange = useApp((s) => s.setRange);
   const duration = overview.timeline.durationMs;
@@ -64,7 +64,7 @@ export function RangePanel({ overview, rangeKey }: { overview: QuickOverview; ra
           {t('range.title')}
         </span>
         <button type="button" className={range === null ? 'pill on' : 'pill'} aria-pressed={range === null} onClick={() => change(null)}>
-          {t('range.whole')}
+          {t(run ? 'range.wholeRun' : 'range.whole')}
         </button>
         {geometry.phases.map((phase, i) => {
           const on = range !== null && sameRange(phaseRanges[i], range);

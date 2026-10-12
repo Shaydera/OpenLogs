@@ -13,6 +13,7 @@ import './styles/fight.css';
 import './styles/overview.css';
 import './styles/shared.css';
 import './styles/compare.css';
+import './styles/runs.css';
 import './styles/settings.css';
 import './styles/reports.css';
 import './styles/details.css';

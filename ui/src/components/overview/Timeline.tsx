@@ -12,9 +12,10 @@ import { TIMELINE_VIEW_BOX, percentOf, timelineGeometry, timelineSummary } from 
 /**
  * The Overview's timeline and its range brush: drag to select, click a phase (or its
  * label) to select it, the accent handles are sliders for the keyboard. It always draws the whole pull;
- * the range filters what lies below.
+ * the range filters what lies below. `run`: a whole Mythic+ run, which has no boss HP line; its boss
+ * pulls are the named phases.
  */
-export function Timeline({ overview }: { overview: QuickOverview }) {
+export function Timeline({ overview, run = false }: { overview: QuickOverview; run?: boolean }) {
   const range = useApp((s) => s.range);
   const setRange = useApp((s) => s.setRange);
   const duration = overview.timeline.durationMs;
@@ -38,7 +39,7 @@ export function Timeline({ overview }: { overview: QuickOverview }) {
   const selectedPhase = shown === null ? -1 : phaseRanges.findIndex((phaseRange) => phaseRange !== null && sameRange(phaseRange, shown));
   const note =
     shown === null
-      ? t('timeline.fullFight')
+      ? t(run ? 'timeline.fullRun' : 'timeline.fullFight')
       : selectedPhase >= 0
         ? t('timeline.phaseSelected', { phase: geometry.phases[selectedPhase].label })
         : null;
@@ -51,10 +52,12 @@ export function Timeline({ overview }: { overview: QuickOverview }) {
           <h2 id="timeline-title" className="cap tl-title">
             {t('timeline.title')}
           </h2>
-          <span className="tl-key">
-            <span className="tl-swatch tl-swatch-boss" aria-hidden="true" />
-            {t('timeline.bossHp')}
-          </span>
+          {!run && (
+            <span className="tl-key">
+              <span className="tl-swatch tl-swatch-boss" aria-hidden="true" />
+              {t('timeline.bossHp')}
+            </span>
+          )}
           <span className="tl-key">
             <span className="tl-swatch tl-swatch-dps" aria-hidden="true" />
             {t('timeline.raidDps')}
@@ -173,7 +176,7 @@ export function Timeline({ overview }: { overview: QuickOverview }) {
       <p className="sr-only" id={hintId}>
         {t('range.keysHint')}
       </p>
-      {!geometry.hasBossData && <p className="muted tl-empty">{t('timeline.noBossData')}</p>}
+      {!geometry.hasBossData && <p className="muted tl-empty">{t(run ? 'timeline.runNoBossHp' : 'timeline.noBossData')}</p>}
     </section>
   );
 }

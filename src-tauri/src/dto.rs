@@ -1,3 +1,5 @@
+use openlogs_analysis::{BossProgress, run_result};
+use openlogs_gamedata::{DungeonTable, KeyTimer};
 use openlogs_index::{FightSummary, LogIndex, Outcome, difficulty_label};
 use openlogs_parser::Timestamp;
 use serde::Serialize;
@@ -23,6 +25,57 @@ impl From<Outcome> for OutcomeDto {
     }
 }
 
+/// Bosses of the dungeon killed in a run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct BossProgressDto {
+    pub killed: u32,
+    pub total: u32,
+}
+
+impl From<BossProgress> for BossProgressDto {
+    fn from(progress: BossProgress) -> Self {
+        Self {
+            killed: progress.killed,
+            total: progress.total,
+        }
+    }
+}
+
+/// A completed key against its time limits: `{ "kind": "inTime", "upgrades": 2 }` or
+/// `{ "kind": "overTime" }`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum TimerDto {
+    InTime { upgrades: u32 },
+    OverTime,
+}
+
+impl From<KeyTimer> for TimerDto {
+    fn from(timer: KeyTimer) -> Self {
+        match timer {
+            KeyTimer::InTime { upgrades } => Self::InTime { upgrades },
+            KeyTimer::OverTime => Self::OverTime,
+        }
+    }
+}
+
+/// Key details of a Mythic+ run row.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunDto {
+    pub challenge_mode_id: u32,
+    pub keystone_level: u32,
+    /// Raw IDs until curated affix names exist.
+    pub affix_ids: Vec<u32>,
+    /// From `CHALLENGE_MODE_END`; `None` for incomplete runs.
+    pub total_time_ms: Option<u64>,
+    /// Bosses of the dungeon killed in the run; `None` without the dungeon's boss list.
+    pub bosses: Option<BossProgressDto>,
+    /// Only for a run the boss list shows completed, with a logged time.
+    pub timer: Option<TimerDto>,
+}
+
+/// A boss pull or a whole Mythic+ run; both open the same way by `index`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FightRow {
@@ -37,6 +90,10 @@ pub struct FightRow {
     pub player_count: u32,
     pub start_unix_ms: i64,
     pub zone: Option<String>,
+    /// Set when the row is a whole Mythic+ run; its boss pulls are rows of their own.
+    pub run: Option<RunDto>,
+    /// `index` of the run this boss pull belongs to.
+    pub run_index: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -86,6 +143,7 @@ pub struct TableStatusDto {
 #[serde(rename_all = "camelCase")]
 pub struct GameDataStatusDto {
     pub spell_icons: TableStatusDto,
+    pub dungeons: TableStatusDto,
     pub boss_portraits: TableStatusDto,
     /// A sync (startup or "Refresh now") is running.
     pub refreshing: bool,
@@ -96,19 +154,35 @@ pub fn unix_ms(timestamp: Timestamp) -> i64 {
     timestamp.0.div_euclid(1_000)
 }
 
-pub fn fight_row(fight: &FightSummary) -> FightRow {
+/// A row of the pull list. A run's result comes from the dungeon data when `dungeons`
+/// knows its boss list, otherwise from the index.
+pub fn fight_row(
+    fight: &FightSummary,
+    fights: &[FightSummary],
+    dungeons: Option<&DungeonTable>,
+) -> FightRow {
+    let result = run_result(fight, fights, dungeons);
     FightRow {
         index: fight.index,
         encounter_id: fight.encounter_id,
         name: fight.name.clone(),
         difficulty: fight.difficulty,
         difficulty_label: difficulty_label(fight.difficulty).map(str::to_string),
-        outcome: fight.outcome.into(),
+        outcome: result.outcome.into(),
         duration_ms: fight.duration_ms,
         boss_hp_percent: fight.boss_hp_percent,
         player_count: fight.roster.len() as u32,
         start_unix_ms: unix_ms(fight.start),
         zone: fight.zone.clone(),
+        run: fight.challenge.as_ref().map(|challenge| RunDto {
+            challenge_mode_id: challenge.challenge_mode_id,
+            keystone_level: challenge.keystone_level,
+            affix_ids: challenge.affix_ids.clone(),
+            total_time_ms: challenge.total_time_ms,
+            bosses: result.bosses.map(Into::into),
+            timer: result.timer.map(Into::into),
+        }),
+        run_index: fight.run_index,
     }
 }
 
@@ -120,6 +194,7 @@ pub fn log_view(
     size_bytes: u64,
     cache_hit: bool,
     index: &LogIndex,
+    dungeons: Option<&DungeonTable>,
 ) -> LogView {
     let mut warnings = index.warnings.clone();
     if index.log_version.is_none() {
@@ -138,7 +213,11 @@ pub fn log_view(
         warnings,
         zone: first.and_then(|fight| fight.zone.clone()),
         start_unix_ms: first.map(|fight| unix_ms(fight.start)),
-        fights: index.fights.iter().map(fight_row).collect(),
+        fights: index
+            .fights
+            .iter()
+            .map(|fight| fight_row(fight, &index.fights, dungeons))
+            .collect(),
     }
 }
 

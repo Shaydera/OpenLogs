@@ -1,0 +1,27 @@
+/* Mythic+ runs: boss-style cards; the grid's first row opens the whole run. */
+/* "Not completed" (about 105px) needs a wider Result column than the boss cards' 92px. */
+.run-card .pull {
+  grid-template-columns: 44px 120px 64px minmax(120px, 1fr) 70px 64px 20px;
+}
+.boss-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.chip.chip-key {
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+.run-label {
+  font-size: 11px;
+}
+.run-boss {
+  flex: none;
+  width: 160px;
+  font: 600 14px var(--font-label);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

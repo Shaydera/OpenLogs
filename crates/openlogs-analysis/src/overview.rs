@@ -4,9 +4,9 @@ use openlogs_gamedata::{ConsumableKind, CooldownCategory, Curated};
 
 use crate::actors::ActorId;
 use crate::deaths::{Death, deaths};
-use crate::fight::{EventKind, Fight, SpellId};
+use crate::fight::{EventKind, Fight, FightKind, SpellId};
 use crate::filter::{Attribution, ReportFilter};
-use crate::phases::configured_phases;
+use crate::phases::{configured_phases, run_phases};
 use crate::timeline::{
     Phase, boss_hp_series, boss_units, counts_as_damage_done, damage_done_amount, detect_phases,
     hits_hostile_npc, is_aborted, name_detected_phases, raid_dps_series,
@@ -97,16 +97,21 @@ pub fn quick_overview_in(fight: &Fight, curated: &Curated, filter: &ReportFilter
     let bosses = boss_units(fight);
     let boss_set: HashSet<ActorId> = bosses.iter().copied().collect();
     let boss_hp = boss_hp_series(fight, &bosses, BOSS_HP_STEP_MS);
-    // Aborted pulls have no phases, configured or detected.
-    let phases = curated
-        .phase_config(fight.encounter_id)
-        .filter(|_| !is_aborted(fight))
-        .map(|config| configured_phases(fight, config, &boss_hp, BOSS_HP_STEP_MS))
-        .filter(|phases| !phases.is_empty())
-        .unwrap_or_else(|| {
-            let detected = detect_phases(&boss_hp, BOSS_HP_STEP_MS, fight.duration_ms as u32);
-            name_detected_phases(detected, fight.encounter_id, curated)
-        });
+    // A run's phases are its boss pulls and the trash between them. Aborted pulls have no
+    // phases, configured or detected.
+    let phases = if fight.kind == FightKind::Run {
+        run_phases(fight)
+    } else {
+        curated
+            .phase_config(fight.encounter_id)
+            .filter(|_| !is_aborted(fight))
+            .map(|config| configured_phases(fight, config, &boss_hp, BOSS_HP_STEP_MS))
+            .filter(|phases| !phases.is_empty())
+            .unwrap_or_else(|| {
+                let detected = detect_phases(&boss_hp, BOSS_HP_STEP_MS, fight.duration_ms as u32);
+                name_detected_phases(detected, fight.encounter_id, curated)
+            })
+    };
     let markers = OverviewMarkers {
         deaths: all_deaths.iter().map(|d| (d.t, d.player)).collect(),
         bloodlust: all_cooldowns

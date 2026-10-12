@@ -18,7 +18,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// List the fights (encounters) in a combat log.
+    /// List the fights (boss pulls and Mythic+ runs) in a combat log.
     DumpFights {
         /// Path to a WoWCombatLog-*.txt file.
         file: PathBuf,

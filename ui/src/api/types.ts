@@ -2,6 +2,30 @@
 export type Outcome = 'kill' | 'wipe' | 'incomplete';
 export type Role = 'tank' | 'healer' | 'damage';
 
+/** Bosses of the dungeon killed in a run (mirrors `BossProgressDto`). */
+export interface BossProgress {
+  killed: number;
+  total: number;
+}
+
+/** A completed key against its time limits (mirrors `TimerDto`). */
+export type KeyTimer = { kind: 'inTime'; upgrades: number } | { kind: 'overTime' };
+
+/** Mythic+ details of a run row (mirrors `RunDto`). */
+export interface RunInfo {
+  challengeModeId: number;
+  keystoneLevel: number;
+  /** Affix IDs as logged; shown raw until curated names exist. */
+  affixIds: number[];
+  /** Time from `CHALLENGE_MODE_END`; `null` without an end. */
+  totalTimeMs: number | null;
+  /** Bosses killed of the dungeon's boss list; `null` without dungeon data for the key. */
+  bosses: BossProgress | null;
+  /** Only when the dungeon data shows the run completed and the log has its time. */
+  timer: KeyTimer | null;
+}
+
+/** A boss pull, or a whole Mythic+ run when `run` is set; both open by `index`. */
 export interface FightRow {
   index: number;
   encounterId: number;
@@ -15,6 +39,10 @@ export interface FightRow {
   playerCount: number;
   startUnixMs: number;
   zone: string | null;
+  /** Set when this row is a whole Mythic+ run; its boss pulls are rows of their own. */
+  run: RunInfo | null;
+  /** Log index of the run this boss pull belongs to. */
+  runIndex: number | null;
 }
 
 export interface LogView {
@@ -61,11 +89,12 @@ export interface Kpis {
 }
 
 export interface Phase {
-  kind: 'boss' | 'intermission';
+  /** `trash`: time between the boss pulls of a Mythic+ run. */
+  kind: 'boss' | 'intermission' | 'trash';
   number: number;
   startMs: number;
   endMs: number;
-  /** From a phase config; `null` for detected phases. */
+  /** From a phase config or a run's boss; `null` for detected phases and trash. */
   name: string | null;
 }
 
@@ -609,6 +638,7 @@ export interface TableStatus {
 /** The Settings dialog's game-data section (mirrors `GameDataStatusDto`). */
 export interface GameDataStatus {
   spellIcons: TableStatus;
+  dungeons: TableStatus;
   bossPortraits: TableStatus;
   /** A sync (app start or "Refresh now") is running. */
   refreshing: boolean;
