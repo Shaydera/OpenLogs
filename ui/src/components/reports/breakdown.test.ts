@@ -19,14 +19,13 @@ const spells = {
   '409311': { name: 'Prescience' },
 };
 const row = (spellId: number, amount: number, kind: AbilityRow['kind'] = 'own', actorId = 4, actorName = 'Faelan-Emberfall-EU'): AbilityRow => ({
-  spellId, actorId, actorName, kind, amount, overheal: 0, hits: 1, crits: 0, maxHit: 0, ticks: 0,
+  spellId, actorId, actorName, kind, amount, support: 0, overheal: 0, hits: 1, crits: 0, maxHit: 0, ticks: 0,
 });
 
 describe('abilityBreakdown', () => {
   it('merges same-name own and pet abilities and lists the top five with "Other" after them, even when it is larger', () => {
     const missiles = [row(1, 30), row(6, 5), row(1, 5, 'pet', 40, 'Mirror Image-0')];
     const rows = abilityBreakdown([...missiles, row(2, 25), row(3, 15), row(4, 6), row(5, 5), row(7, 4), row(395152, 3, 'own', 4), row(409311, 2)], {
-      player: 4,
       total: 100,
       spells,
       roster,
@@ -41,7 +40,7 @@ describe('abilityBreakdown', () => {
     ]);
   });
 
-  it("ranks an Evoker's support rows among his abilities and folds the deductions per Evoker after \"Other\"", () => {
+  it("ranks an Evoker's support rows among his abilities and keeps unmatched support after \"Other\"", () => {
     const evoker = abilityBreakdown(
       [
         row(395152, 50, 'support_given', 5, 'Speronis-Stonevale-EU'),
@@ -50,9 +49,8 @@ describe('abilityBreakdown', () => {
         row(1, 9, 'own', 5, 'Speronis-Stonevale-EU'),
         row(3, 8, 'own', 5, 'Speronis-Stonevale-EU'),
         row(4, 7, 'own', 5, 'Speronis-Stonevale-EU'),
-        row(395152, -1, 'support_deducted', 5, 'Speronis-Stonevale-EU'),
       ],
-      { player: 5, total: 148, spells, roster },
+      { total: 149, spells, roster },
     );
     expect(evoker.map((r) => [r.name, r.tone, r.amount])).toEqual([
       ['Ebon Might', 'support', 50],
@@ -61,14 +59,8 @@ describe('abilityBreakdown', () => {
       ['Arcane Missiles', 'normal', 9],
       ['Prismatic Bolt', 'normal', 8],
       ['Other', 'other', 7],
-      ['Own buff share (deducted)', 'negative', -1],
     ]);
-    const buffed = abilityBreakdown([row(1, 40), row(2, 25), row(3, 15), row(4, 12), row(5, 5), row(7, 4), row(395152, -2, 'support_deducted', 5, 'Speronis-Stonevale-EU'), row(409311, -1, 'support_deducted', 5, 'Speronis-Stonevale-EU')], {
-      player: 4,
-      total: 98,
-      spells,
-      roster,
-    });
+    const buffed = abilityBreakdown([row(1, 40), row(2, 25), row(3, 15), row(4, 12), row(5, 5), row(7, 4), row(0, -3, 'unmatched', 0, '')], { total: 98, spells, roster });
     expect(buffed.map((r) => [r.name, r.tone, r.amount, r.share])).toEqual([
       ['Arcane Missiles', 'normal', 40, 40 / 98],
       ['Arcane Barrage', 'normal', 25, 25 / 98],
@@ -76,7 +68,7 @@ describe('abilityBreakdown', () => {
       ['Touch of the Magi', 'normal', 12, 12 / 98],
       ['Arcane Orb', 'normal', 5, 5 / 98],
       ['Other', 'other', 4, 4 / 98],
-      ['Reattributed to Speronis', 'negative', -3, null],
+      ['Unmatched hits', 'negative', -3, null],
     ]);
   });
 });

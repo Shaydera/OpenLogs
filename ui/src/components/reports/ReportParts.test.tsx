@@ -8,21 +8,23 @@ import { RankedRow, SideBreakdown } from './ReportParts';
 const FAELAN: PlayerRef = { actorId: 4, name: 'Faelan-Emberfall-EU', specId: 62, specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' };
 
 describe('RankedRow', () => {
-  it('opens its tooltip on hover and focus, closes it on leaving and Escape, and selects on click', async () => {
-    const onTip = vi.fn();
+  it('previews on hovering the name and on focus, closes on leaving and Escape, and selects on click', async () => {
+    const onPreview = vi.fn();
     const onSelect = vi.fn();
-    render(<RankedRow rank={1} player={FAELAN} barPct={100} total="1" selected={false} onSelect={onSelect} onTip={onTip} />);
+    render(<RankedRow rank={1} player={FAELAN} barPct={100} total="1" selected={false} onSelect={onSelect} onPreview={onPreview} />);
     const row = screen.getByRole('button');
-    await userEvent.hover(row);
-    expect(onTip).toHaveBeenLastCalledWith(row);
-    await userEvent.unhover(row);
-    expect(onTip).toHaveBeenLastCalledWith(null);
+    const name = within(row).getByText('Faelan');
+    await userEvent.hover(name);
+    expect(onPreview).toHaveBeenLastCalledWith(expect.any(HTMLElement), row);
+    await userEvent.unhover(name);
+    expect(onPreview).toHaveBeenLastCalledWith(null, null);
     row.focus();
-    expect(onTip).toHaveBeenLastCalledWith(row);
+    expect(onPreview).toHaveBeenLastCalledWith(expect.any(HTMLElement), row);
     await userEvent.keyboard('{Escape}');
-    expect(onTip).toHaveBeenLastCalledWith(null);
+    expect(onPreview).toHaveBeenLastCalledWith(null, null);
     await userEvent.click(row);
     expect(onSelect).toHaveBeenCalled();
+    expect(onPreview).toHaveBeenLastCalledWith(null, null);
   });
 });
 

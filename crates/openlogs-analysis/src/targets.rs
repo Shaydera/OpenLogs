@@ -4,7 +4,7 @@ use crate::ability::unit_name;
 use crate::actors::{ActorId, ActorKind};
 use crate::fight::{EventKind, Fight};
 use crate::filter::{Attribution, ReportFilter};
-use crate::reports::{Share, damage_share, sorted_by_amount};
+use crate::reports::{Share, Support, damage_share, sorted_by_amount};
 use crate::timeline::boss_units;
 use openlogs_index::Outcome;
 
@@ -257,12 +257,12 @@ pub fn target_detail(fight: &Fight, name: &str, filter: &ReportFilter) -> Option
             Some(Share::Own { player, amount, .. }) => {
                 *by_player.entry(player).or_default() += amount as i64
             }
-            Some(Share::Support {
+            Some(Share::Support(Support {
                 player,
                 evoker,
                 amount,
                 ..
-            }) if reattributed => {
+            })) if reattributed => {
                 *by_player.entry(player).or_default() -= amount as i64;
                 *by_player.entry(evoker).or_default() += amount as i64;
             }

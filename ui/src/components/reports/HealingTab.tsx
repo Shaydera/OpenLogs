@@ -4,11 +4,11 @@ import { formatMillions, formatShare, formatSignedMillions } from '../../i18n/fo
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { shortName } from '../overview/players';
-import { AugTip, useAugTip } from './AugTip';
 import { type AugSplit, augDelta, augTipLines, deltaClass } from './augSplit';
 import { abilityBreakdown } from './breakdown';
-import { GivenCallout, RankedHead, RankedRow, RecipientList, ReportHead, SideBreakdown, SideHead } from './ReportParts';
-import { rosterIndex } from './reportData';
+import { RankedPopupView, useRankedTargets } from './rankedTargets';
+import { AugSupportList, GivenCallout, RankedHead, RankedRow, RecipientList, ReportHead, SideBreakdown, SideHead } from './ReportParts';
+import { ColorBySwitch, type SideView, SideViewSwitch, TOP_TARGETS, TargetBreakdown, TargetLegend, targetRows } from './TargetParts';
 
 const healingSplit = (p: PlayerHealing): AugSplit => ({
   own: p.healing + p.absorbs,
@@ -16,6 +16,8 @@ const healingSplit = (p: PlayerHealing): AugSplit => ({
   supportGiven: p.supportGiven,
   supportSelf: p.supportSelf,
   supportReceivedFrom: p.supportReceivedFrom,
+  supportReceivedByBuff: p.supportReceivedByBuff,
+  supportCreditedByBuff: p.supportCreditedByBuff,
 });
 
 /** Healing: ranked healers with absorbs and overheal, the breakdown aside. */
@@ -25,9 +27,10 @@ export function HealingTab({ report }: { report: HealingReport }) {
   const setShowAugDelta = useApp((s) => s.setShowAugDelta);
   const openPlayer = useApp((s) => s.openPlayer);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const tipId = useId();
-  const { panel, tip, open } = useAugTip(report);
-  const roster = rosterIndex(report.roster);
+  const [sideView, setSideView] = useState<SideView>('abilities');
+  const popupId = useId();
+  const targets = useRankedTargets(report, 'healing', []);
+  const { roster, popup } = targets;
 
   if (report.players.length === 0) {
     return (
@@ -41,7 +44,6 @@ export function HealingTab({ report }: { report: HealingReport }) {
   const top = Math.max(0, ...report.players.map((p) => p.total));
   const grid = showAugDelta ? 'rrow-heal' : 'rrow-heal-nodelta';
   const reattributed = attribution === 'reattributed';
-  const tipPlayer = tip ? report.players.find((p) => p.player === tip.player) : undefined;
   const columns = [
     { label: t('report.rank') },
     { label: t('report.player') },
@@ -55,31 +57,35 @@ export function HealingTab({ report }: { report: HealingReport }) {
 
   return (
     <div className="report-layout">
-      <section className="panel report-main" aria-labelledby="heal-title" ref={panel}>
+      <section className="panel report-main" aria-labelledby="heal-title" ref={targets.panel}>
         <ReportHead id="heal-title" title={t('tabs.healing')} hint={t(reattributed ? 'aug.hintReattributed' : 'aug.hintAugmentedHealing')}>
+          <ColorBySwitch metric="healing" />
           <label className="toggle toggle-sm">
             <input type="checkbox" checked={showAugDelta} onChange={(event) => setShowAugDelta(event.target.checked)} />
             {t('aug.showDelta')}
           </label>
         </ReportHead>
+        {targets.colorByTarget && <TargetLegend groups={targets.groups} highlight={targets.highlight} onToggle={targets.toggleHighlight} />}
         <div className="scroll-x">
           <div className="report-rows report-rows-heal" role="group" aria-label={t('report.healingByPlayer')}>
             <RankedHead grid={grid} columns={columns} />
             {report.players.map((p, index) => {
               const delta = augDelta(healingSplit(p));
               const healed = p.healing + p.overheal;
+              const barPct = top > 0 ? (p.total / top) * 100 : 0;
               return (
                 <RankedRow
                   key={p.player}
                   grid={grid}
                   rank={index + 1}
                   player={roster.get(p.player)}
-                  barPct={top > 0 ? (p.total / top) * 100 : 0}
-                  total={<span className={delta !== 0 ? 'num dotted' : 'num'}>{formatMillions(p.total)}</span>}
+                  barPct={barPct}
+                  fill={targets.fill(p, barPct)}
+                  total={targets.total(p, formatMillions(p.total), delta !== 0)}
                   selected={p.player === selected.player}
                   onSelect={() => setSelectedId(p.player)}
-                  onTip={delta !== 0 ? (row) => open(p.player, row) : undefined}
-                  describedBy={tip?.player === p.player ? tipId : undefined}
+                  onPreview={targets.preview(p)}
+                  describedBy={popup?.data.player === p.player ? popupId : undefined}
                 >
                   <span className="num rrow-end">{formatMillions(p.perSecond)}</span>
                   <span className="num rrow-end">{formatMillions(p.absorbs)}</span>
@@ -91,9 +97,15 @@ export function HealingTab({ report }: { report: HealingReport }) {
             })}
           </div>
         </div>
-        {tip && tipPlayer && (
-          <AugTip id={tipId} player={roster.get(tip.player)} lines={augTipLines(healingSplit(tipPlayer), roster, 'healing')} top={tip.top} />
-        )}
+        <RankedPopupView
+          id={popupId}
+          popup={popup}
+          report={report}
+          metric="healing"
+          roster={roster}
+          colorOf={targets.colorOf}
+          augLines={(p) => augTipLines(healingSplit(p), roster, 'healing', report.spells)}
+        />
       </section>
       <aside className="panel report-side" aria-labelledby="heal-side-title">
         <SideHead
@@ -104,16 +116,31 @@ export function HealingTab({ report }: { report: HealingReport }) {
           unit={t('report.hps')}
           onDetails={() => void openPlayer(selected.player)}
         />
-        <SideBreakdown
-          caption={t('report.abilitiesOf', { name: shortName(roster.get(selected.player)?.name ?? '?') })}
-          amountLabel={t('report.healing')}
-          rows={abilityBreakdown(selected.abilities, { player: selected.player, total: selected.total, spells: report.spells, roster })}
-        />
-        {reattributed && selected.supportByRecipient.length > 0 && (
-          <RecipientList entries={selected.supportByRecipient} base={selected.supportGiven + selected.supportSelf} roster={roster} />
-        )}
-        {selected.supportReceived > 0 && (
-          <GivenCallout amount={selected.supportReceived} from={selected.supportReceivedFrom} roster={roster} metric="healing" />
+        <SideViewSwitch view={sideView} metric="healing" onChange={setSideView} />
+        {sideView === 'targets' ? (
+          <TargetBreakdown
+            caption={t('targets.healedOf', { name: shortName(roster.get(selected.player)?.name ?? '?') })}
+            nameLabel={t('targets.player')}
+            amountLabel={t('report.healing')}
+            rows={targetRows(selected.targets, { total: selected.total, roster, colorOf: targets.colorOf, top: TOP_TARGETS })}
+          />
+        ) : (
+          <>
+            <SideBreakdown
+              caption={t('report.abilitiesOf', { name: shortName(roster.get(selected.player)?.name ?? '?') })}
+              amountLabel={t('report.healing')}
+              rows={abilityBreakdown(selected.abilities, { total: selected.total, spells: report.spells, roster })}
+            />
+            {reattributed && selected.supportByRecipient.length > 0 && (
+              <RecipientList entries={selected.supportByRecipient} base={selected.supportGiven + selected.supportSelf} roster={roster} />
+            )}
+            {reattributed && selected.supportReceivedByBuff.length > 0 && (
+              <AugSupportList shares={selected.supportReceivedByBuff} spells={report.spells} roster={roster} />
+            )}
+            {!reattributed && selected.supportReceived > 0 && (
+              <GivenCallout amount={selected.supportReceived} from={selected.supportReceivedFrom} roster={roster} metric="healing" />
+            )}
+          </>
         )}
       </aside>
     </div>

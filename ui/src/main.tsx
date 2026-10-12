@@ -18,6 +18,7 @@ import './styles/settings.css';
 import './styles/reports.css';
 import './styles/details.css';
 import './styles/tabs.css';
+import './styles/breakdown.css';
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';

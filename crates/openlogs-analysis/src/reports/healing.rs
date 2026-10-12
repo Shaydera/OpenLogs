@@ -4,7 +4,9 @@ use crate::actors::ActorId;
 use crate::fight::Fight;
 use crate::filter::{Attribution, ReportFilter};
 use crate::reports::{
-    AbilityRow, PetNames, RowKind, Rows, Share, healing_share, per_second, sorted_by_amount,
+    AbilityRow, AbilityTargets, BuffShare, PetNames, RowKind, Share, SupportAcc, SupportLedger,
+    SupportShare, TargetShare, credit_support, heal_target, healing_share, per_second,
+    sorted_by_amount, support_entry,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -26,6 +28,14 @@ pub struct PlayerHealing {
     pub support_by_recipient: Vec<(ActorId, u64)>,
     /// Support received, by Evoker.
     pub support_received_from: Vec<(ActorId, u64)>,
+    /// Support received, by buff and Evoker.
+    pub support_received_by_buff: Vec<BuffShare>,
+    /// Support the player's buffs added (own share included), by buff.
+    pub support_credited_by_buff: Vec<BuffShare>,
+    /// By target, largest first, with the largest abilities on each.
+    pub targets: Vec<TargetShare>,
+    /// Each ability row by target.
+    pub ability_targets: Vec<AbilityTargets>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -34,6 +44,8 @@ pub struct HealingReport {
     pub total: u64,
     pub overheal: u64,
     pub players: Vec<PlayerHealing>,
+    /// Every support share by buff, Evoker, buffed player and ability; the same in both modes.
+    pub support: Vec<SupportShare>,
 }
 
 #[derive(Default)]
@@ -41,51 +53,20 @@ struct Acc {
     healing: u64,
     absorbs: u64,
     overheal: u64,
-    received: u64,
-    given: u64,
-    self_support: u64,
-    rows: Rows,
-    recipients: HashMap<ActorId, u64>,
-    givers: HashMap<ActorId, u64>,
-}
-
-fn move_support(
-    acc: &mut HashMap<ActorId, Acc>,
-    spell: u32,
-    player: ActorId,
-    evoker: ActorId,
-    amount: u64,
-) {
-    let buffed = acc.entry(player).or_default();
-    buffed.received += amount;
-    buffed.rows.add(
-        spell,
-        evoker,
-        RowKind::SupportDeducted,
-        -(amount as i64),
-        0,
-        false,
-        false,
-    );
-    *buffed.givers.entry(evoker).or_default() += amount;
-    let giver = acc.entry(evoker).or_default();
-    giver.given += amount;
-    giver.rows.add(
-        spell,
-        evoker,
-        RowKind::SupportGiven,
-        amount as i64,
-        0,
-        false,
-        false,
-    );
-    *giver.recipients.entry(player).or_default() += amount;
+    support: SupportAcc,
 }
 
 pub fn healing(fight: &Fight, filter: &ReportFilter) -> HealingReport {
+    let reattributed = filter.attribution == Attribution::Reattributed;
     let mut acc: HashMap<ActorId, Acc> = HashMap::new();
     let mut pets = PetNames::default();
-    for event in fight.events.iter().filter(|e| filter.contains(e.t)) {
+    let mut ledger = SupportLedger::default();
+    for (index, event) in fight
+        .events
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| filter.contains(e.t))
+    {
         match healing_share(fight, event) {
             Some(Share::Own {
                 player,
@@ -110,80 +91,63 @@ pub fn healing(fight: &Fight, filter: &ReportFilter) -> HealingReport {
                     entry.healing += amount;
                     entry.overheal += overheal;
                 }
-                entry.rows.add(
+                entry.support.rows.add(
                     spell,
                     actor,
                     kind,
+                    heal_target(fight, event.target),
                     amount as i64,
                     overheal,
                     critical,
                     periodic,
                 );
             }
-            Some(Share::Support {
-                player,
-                evoker,
-                spell,
-                amount,
-            }) => {
-                move_support(&mut acc, spell, player, evoker, amount);
-            }
-            Some(Share::SelfSupport {
-                player,
-                spell,
-                amount,
-            }) => {
-                let entry = acc.entry(player).or_default();
-                entry.self_support += amount;
-                // As in damage: credited and deducted again, so the rows add up to the total.
-                entry.rows.add(
-                    spell,
-                    player,
-                    RowKind::SupportGiven,
-                    amount as i64,
-                    0,
-                    false,
-                    false,
-                );
-                entry.rows.add(
-                    spell,
-                    player,
-                    RowKind::SupportDeducted,
-                    -(amount as i64),
-                    0,
-                    false,
-                    false,
+            Some(Share::Support(support)) => {
+                let target = heal_target(fight, support.target);
+                credit_support(
+                    &mut acc,
+                    |a| &mut a.support,
+                    &mut ledger,
+                    reattributed,
+                    support_entry(fight, &mut pets, index, support, target),
                 );
             }
             None => {}
         }
     }
 
-    let reattributed = filter.attribution == Attribution::Reattributed;
     let duration_ms = filter.duration_ms(fight);
     let all: Vec<PlayerHealing> = acc
         .into_iter()
         .map(|(player, a)| {
+            let s = a.support;
             let own = a.healing + a.absorbs;
             let total = if reattributed {
-                (own + a.given).saturating_sub(a.received)
+                (own + s.given).saturating_sub(s.received)
             } else {
                 own
             };
+            let support_received_by_buff = s.received_by_buff();
+            let support_credited_by_buff = s.credited_by_buff(player);
+            let parts = s.rows.into_parts(fight);
             PlayerHealing {
                 player,
                 healing: a.healing,
                 absorbs: a.absorbs,
                 overheal: a.overheal,
-                support_received: a.received,
-                support_given: a.given,
-                support_self: a.self_support,
+                support_received: s.received,
+                support_given: s.given,
+                support_self: s.self_support,
                 total,
                 per_second: per_second(total, duration_ms),
                 share: 0.0,
-                abilities: a.rows.into_sorted(reattributed),
-                support_by_recipient: sorted_by_amount(a.recipients),
-                support_received_from: sorted_by_amount(a.givers),
+                abilities: parts.rows,
+                support_by_recipient: sorted_by_amount(s.recipients),
+                support_received_from: sorted_by_amount(s.givers),
+                support_received_by_buff,
+                support_credited_by_buff,
+                targets: parts.targets,
+                ability_targets: parts.ability_targets,
             }
         })
         .collect();
@@ -204,5 +168,6 @@ pub fn healing(fight: &Fight, filter: &ReportFilter) -> HealingReport {
         total,
         overheal,
         players,
+        support: ledger.into_sorted(),
     }
 }

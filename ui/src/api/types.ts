@@ -239,7 +239,8 @@ export interface ReportFilter {
   attribution: Attribution;
 }
 
-export type RowKind = 'own' | 'pet' | 'support_given' | 'support_deducted';
+/** `unmatched`: Reattributed support from hits no ability could be matched to. */
+export type RowKind = 'own' | 'pet' | 'support_given' | 'unmatched';
 
 export interface AbilityRow {
   spellId: number;
@@ -247,8 +248,10 @@ export interface AbilityRow {
   /** Pet name for pet rows, the Evoker for support rows. */
   actorName: string;
   kind: RowKind;
-  /** Negative for support deducted from the player. */
+  /** Reattributed mode: net of `support` (negative for the unmatched row). */
   amount: number;
+  /** Reattributed mode: the part of the logged amount that moved to Evokers. */
+  support: number;
   overheal: number;
   hits: number;
   crits: number;
@@ -260,6 +263,37 @@ export interface AbilityRow {
 
 export interface PlayerAmount {
   player: number;
+  amount: number;
+}
+
+/** Whom an amount went to: an enemy (or friendly NPC) by name, a player of the roster, or an unnamed unit. */
+export interface TargetRef {
+  kind: 'unit' | 'player' | 'unknown';
+  /** The unit's name; empty for players and unknown units. */
+  name: string;
+  player: number | null;
+  /** Units of this name that took damage in the range; 0 when not counted. */
+  units: number;
+}
+
+export interface TargetShare {
+  target: TargetRef;
+  /** Net of Aug support in Reattributed mode. */
+  amount: number;
+  hits: number;
+  crits: number;
+}
+
+/** A player's largest abilities on one colour group (`group`: its enemy name, `null` for "Other"). */
+export interface GroupAbilities {
+  group: string | null;
+  abilities: { spellId: number; amount: number }[];
+}
+
+/** Support of one Evoker's buff ("Ebon Might · Speronis"). */
+export interface BuffShare {
+  buffId: number;
+  evoker: number;
   amount: number;
 }
 
@@ -283,10 +317,17 @@ export interface PlayerDamage {
   abilities: AbilityRow[];
   supportByRecipient: PlayerAmount[];
   supportReceivedFrom: PlayerAmount[];
+  supportReceivedByBuff: BuffShare[];
+  /** What the player's buffs added (own share included), by buff. */
+  supportCreditedByBuff: BuffShare[];
+  targets: TargetShare[];
+  groupAbilities: GroupAbilities[];
 }
 
 export interface DamageReport extends ReportBase {
   players: PlayerDamage[];
+  /** The raid's largest enemy groups in the range, largest first: the bars' colours. */
+  colorGroups: string[];
 }
 
 export interface PlayerHealing {
@@ -305,6 +346,10 @@ export interface PlayerHealing {
   supportByRecipient: PlayerAmount[];
   /** Support received, by Evoker. */
   supportReceivedFrom: PlayerAmount[];
+  supportReceivedByBuff: BuffShare[];
+  /** What the player's buffs added (own share included), by buff. */
+  supportCreditedByBuff: BuffShare[];
+  targets: TargetShare[];
 }
 
 export interface HealingReport extends ReportBase {
@@ -372,6 +417,26 @@ export interface PlayerAbility extends AbilityRow {
   aug: boolean;
   /** Pet names merged into the pet row; 0 for other rows. */
   pets: number;
+  /** Reattributed mode: the row's `support` by buff and Evoker. */
+  supportFrom: BuffShare[];
+  /** Reattributed mode, an Evoker's support rows: the players the buff supported. */
+  recipients: SupportRecipient[];
+  /** The row by target, largest first. */
+  targets: TargetShare[];
+}
+
+export interface SupportRecipient {
+  player: number;
+  amount: number;
+  abilities: SupportedAbility[];
+}
+
+export interface SupportedAbility {
+  /** `null` for hits no ability could be matched to. */
+  spellId: number | null;
+  /** The pet's name when a pet cast it. */
+  petName: string | null;
+  amount: number;
 }
 
 export interface SpellAmount {
@@ -398,7 +463,10 @@ export interface PlayerDetail {
   rankedPlayers: number;
   supportReceived: number;
   supportReceivedFrom: PlayerAmount[];
-  supportBySpell: SpellAmount[];
+  /** Whom the player damaged or healed, largest first. */
+  targets: TargetShare[];
+  /** The raid's largest enemy groups in the range (damage only): the bars' colours. */
+  colorGroups: string[];
   healingReceived: number;
   deaths: PlayerDeath[];
   consumables: { t: number; spellId: number; kind: ConsumableKind }[];

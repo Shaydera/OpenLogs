@@ -345,6 +345,22 @@
 .ab-row.ab-row-heal {
   grid-template-columns: 24px minmax(180px, 1.6fr) minmax(150px, 1.4fr) 64px 84px 60px 64px 64px 84px 84px;
 }
+/* Reattributed mode: the Aug column (support given away) after the amount. */
+.ab-rows.ab-rows-aug {
+  min-width: 1084px;
+}
+.ab-rows.ab-rows-heal.ab-rows-aug {
+  min-width: 1184px;
+}
+.ab-row.ab-row-aug {
+  grid-template-columns: 24px minmax(180px, 1.6fr) minmax(150px, 1.4fr) 72px 64px 60px 64px 64px 84px 84px;
+}
+.ab-row.ab-row-heal.ab-row-aug {
+  grid-template-columns: 24px minmax(180px, 1.6fr) minmax(150px, 1.4fr) 72px 64px 84px 60px 64px 64px 84px 84px;
+}
+.ab-aug {
+  color: var(--muted);
+}
 .ab-cap {
   font-size: 11px;
 }
@@ -386,13 +402,33 @@
   align-items: center;
   gap: 4px;
 }
-.ab-disclosure .chevron {
+.ab-disclosure .chevron,
+.ab-chevron .chevron {
   flex: none;
   color: var(--faint);
   transition: transform 0.12s ease;
 }
-.ab-disclosure .chevron.chevron-open {
+.ab-disclosure .chevron.chevron-open,
+.ab-chevron .chevron.chevron-open {
   transform: rotate(90deg);
+}
+/* An own row's disclosure next to its ability-page link. */
+.ab-chevron {
+  display: inline-flex;
+  flex: none;
+  margin-left: 2px;
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+.ab-chevron:hover .chevron,
+.ab-chevron:focus-visible .chevron {
+  color: var(--accent-hover);
+}
+.ab-sep {
+  color: var(--faint);
 }
 /* One pet ability of the expanded pet row, indented under it. */
 .ab-row.ab-row-sub {
@@ -400,6 +436,9 @@
 }
 .ab-row.ab-row-sub .ab-name-cell {
   padding-left: 16px;
+}
+.ab-row.ab-row-sub.ab-row-sub2 .ab-name-cell {
+  padding-left: 32px;
 }
 .ab-pet {
   margin-left: 8px;

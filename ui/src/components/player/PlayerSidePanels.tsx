@@ -1,18 +1,23 @@
 import type { PlayerDeath, PlayerDetail, PlayerRef, SpellAmount } from '../../api/types';
 import { spellIconUrl } from '../../icons';
-import { formatCount, formatEventTime, formatList, formatMillions } from '../../i18n/format';
+import { formatCount, formatEventTime, formatMillions } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
 import { classColor, shortName } from '../overview/players';
 import { hitIconUrl, hitName, reportSpellName, rosterIndex, sourceLabel } from '../reports/reportData';
+import { TargetBreakdown, targetRows } from '../reports/TargetParts';
+import { targetColors } from '../reports/targetGroups';
 import { deathSummary } from './deathSummary';
+
+/** How many targets the Targets panel lists before "Other". */
+const PANEL_TARGETS = 8;
 
 /** Spell rows; `environmental` marks world damage, which shares spell 0 with melee. */
 type SpellRow = SpellAmount & { environmental?: boolean };
 
 /** Icon, name over a bar, the amount in millions. */
-function SpellList({ rows, detail, label, empty, taken }: { rows: SpellRow[]; detail: PlayerDetail; label: string; empty: string; taken: boolean }) {
+function SpellList({ rows, detail, label, empty }: { rows: SpellRow[]; detail: PlayerDetail; label: string; empty: string }) {
   if (rows.length === 0) return <p className="muted pad">{empty}</p>;
   const largest = Math.max(1, ...rows.map((r) => r.amount));
   return (
@@ -28,7 +33,7 @@ function SpellList({ rows, detail, label, empty, taken }: { rows: SpellRow[]; de
             <span role="cell" className="lst-name">
               <span>{name}</span>
               <span className="bar bar-sm" aria-hidden="true">
-                <span className={taken ? 'lst-fill-taken' : 'bar-fill-support'} style={{ width: `${(row.amount / largest) * 100}%` }} />
+                <span className="lst-fill-taken" style={{ width: `${(row.amount / largest) * 100}%` }} />
               </span>
             </span>
             <span role="cell" className="num lst-amount">
@@ -46,21 +51,29 @@ export function PlayerSidePanels({ detail }: { detail: PlayerDetail }) {
   const healing = detail.metric === 'healing';
   // "Survived the range." only while a time range is set; the whole pull reads "Survived.".
   const range = useApp((s) => s.range);
-  const evokers = detail.supportReceivedFrom.map((s) => shortName(roster.get(s.player)?.name ?? '?'));
+  const { colorOf } = targetColors(detail.metric, detail.colorGroups, roster);
+  const name = shortName(detail.player.name);
   return (
     <div className="player-panels">
-      <section className="panel pp-wide" id="p-aug" aria-labelledby="player-support-title">
+      <section className="panel pp-wide" id="p-targets" aria-labelledby="player-targets-title">
         <div className="panel-head panel-head-tight">
           <div>
-            <h2 id="player-support-title" tabIndex={-1} className="h2">
-              {t('player.supportReceived')}
+            <h2 id="player-targets-title" tabIndex={-1} className="h2">
+              {t(healing ? 'targets.healedPlayers' : 'targets.title')}
             </h2>
-            {evokers.length > 0 && (
-              <div className="panel-sub">{t(healing ? 'player.supportHintHealing' : 'player.supportHint', { names: formatList(evokers) })}</div>
-            )}
+            <div className="panel-sub">{t(healing ? 'player.healedHint' : 'player.targetsHint')}</div>
           </div>
         </div>
-        <SpellList rows={detail.supportBySpell} detail={detail} label={t('player.supportReceived')} empty={t('player.noSupport')} taken={false} />
+        {detail.targets.length === 0 ? (
+          <p className="muted pad">{t('targets.none')}</p>
+        ) : (
+          <TargetBreakdown
+            caption={t(healing ? 'targets.healedOf' : 'targets.of', { name })}
+            nameLabel={t(healing ? 'targets.player' : 'targets.target')}
+            amountLabel={t(healing ? 'report.healing' : 'report.damage')}
+            rows={targetRows(detail.targets, { total: detail.total, roster, colorOf, top: PANEL_TARGETS })}
+          />
+        )}
       </section>
       <section className="panel pp-wide" id="p-taken" aria-labelledby="player-taken-title">
         <div className="panel-head panel-head-tight">
@@ -68,10 +81,10 @@ export function PlayerSidePanels({ detail }: { detail: PlayerDetail }) {
             <h2 id="player-taken-title" tabIndex={-1} className="h2">
               {t('player.damageTaken')}
             </h2>
-            <div className="panel-sub">{t('player.takenHint', { name: shortName(detail.player.name) })}</div>
+            <div className="panel-sub">{t('player.takenHint', { name })}</div>
           </div>
         </div>
-        <SpellList rows={detail.takenBySpell} detail={detail} label={t('player.damageTaken')} empty={t('player.noTaken')} taken />
+        <SpellList rows={detail.takenBySpell} detail={detail} label={t('player.damageTaken')} empty={t('player.noTaken')} />
       </section>
       <section className="panel pp-narrow" aria-labelledby="player-deaths-title">
         <div className="panel-head panel-head-tight">

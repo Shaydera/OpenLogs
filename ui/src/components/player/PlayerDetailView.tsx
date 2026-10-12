@@ -14,7 +14,8 @@ export function PlayerDetailView({ detail }: { detail: PlayerDetail }) {
       <PlayerKpis detail={detail} />
       <PlayerSectionNav healing={detail.metric === 'healing'} />
       <OverTimeChart detail={detail} />
-      <PlayerAbilities detail={detail} />
+      {/* Keyed: opened rows belong to one player and metric. */}
+      <PlayerAbilities key={`${detail.player.actorId}-${detail.metric}`} detail={detail} />
       <CastsAndBuffs detail={detail} />
       <PlayerSidePanels detail={detail} />
     </div>

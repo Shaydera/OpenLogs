@@ -11,7 +11,7 @@ use crate::overview_dto::{
     ContextDto, HitDto, PlayerRef, SpellRef, context_dtos, player_ref, without_shields,
 };
 use crate::report_dto::{
-    AbilityRowDto, AttributionDto, Names, PlayerAmount, SpellAmount, TakenSpellDto,
+    AbilityRowDto, AttributionDto, BuffShareDto, Names, PlayerAmount, TakenSpellDto, TargetShareDto,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -65,6 +65,30 @@ pub struct PlayerAbilityDto {
     pub aug: bool,
     /// Pet names merged into the pet row; 0 for other rows.
     pub pets: u32,
+    /// Reattributed mode: the row's `support` by buff and Evoker.
+    pub support_from: Vec<BuffShareDto>,
+    /// Reattributed mode, the Evoker's support rows: the supported players and abilities.
+    pub recipients: Vec<SupportRecipientDto>,
+    /// The row by target, largest first.
+    pub targets: Vec<TargetShareDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupportRecipientDto {
+    pub player: ActorId,
+    pub amount: u64,
+    pub abilities: Vec<SupportedAbilityDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupportedAbilityDto {
+    /// `None` for hits no ability could be matched to.
+    pub spell_id: Option<SpellId>,
+    /// The pet's name when a pet cast it, else `None`.
+    pub pet_name: Option<String>,
+    pub amount: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -197,7 +221,6 @@ pub struct PlayerDetailDto {
     pub ranked_players: usize,
     pub support_received: u64,
     pub support_received_from: Vec<PlayerAmount>,
-    pub support_by_spell: Vec<SpellAmount>,
     pub healing_received: u64,
     pub deaths: Vec<PlayerDeathDto>,
     pub consumables: Vec<PlayerConsumableDto>,
@@ -215,6 +238,9 @@ pub struct PlayerDetailDto {
     pub dead: Vec<[i32; 2]>,
     pub dead_since: Option<i32>,
     pub augmentation: Vec<AugTargetDto>,
+    pub targets: Vec<TargetShareDto>,
+    /// The raid's largest enemy groups in the range (damage only): the bars' colours.
+    pub color_groups: Vec<String>,
     pub mana: Vec<Option<f32>>,
     /// Players with a spec (for the switcher) plus every player the page references, by name.
     pub roster: Vec<PlayerRef>,
@@ -234,17 +260,8 @@ pub fn player_detail_dto(
     metric: MetricDto,
     attribution: AttributionDto,
 ) -> PlayerDetailDto {
-    let mut names = Names::new(fight);
-    let spell_amounts = |names: &mut Names, list: &[(SpellId, u64)]| -> Vec<SpellAmount> {
-        list.iter()
-            .map(|&(spell, amount)| SpellAmount {
-                spell_id: names.spell(spell),
-                amount,
-            })
-            .collect()
-    };
+    let mut names = Names::new(fight).with_units(&detail.units);
     let support_received_from = names.amounts(&detail.support_received_from);
-    let support_by_spell = spell_amounts(&mut names, &detail.support_by_spell);
     let taken_by_spell = detail
         .taken_by_spell
         .iter()
@@ -259,9 +276,31 @@ pub fn player_detail_dto(
         casts: a.casts,
         aug: a.aug,
         pets: a.pets,
+        support_from: names.buff_shares(&a.support_from),
+        targets: names.targets(&a.targets),
+        recipients: a
+            .recipients
+            .iter()
+            .map(|r| SupportRecipientDto {
+                player: names.player(r.player),
+                amount: r.amount,
+                abilities: r
+                    .abilities
+                    .iter()
+                    .map(|&(ability, amount)| SupportedAbilityDto {
+                        spell_id: ability.map(|a| names.spell(a.spell)),
+                        pet_name: ability
+                            .filter(|a| a.actor != r.player)
+                            .and_then(|a| fight.actors.get(a.actor).name.clone()),
+                        amount,
+                    })
+                    .collect(),
+            })
+            .collect(),
     };
     let abilities = detail.abilities.iter().map(&mut ability_dto).collect();
     let pet_abilities = detail.pet_abilities.iter().map(&mut ability_dto).collect();
+    let targets = names.targets(&detail.targets);
     let mut context_spells: BTreeMap<SpellId, SpellRef> = BTreeMap::new();
     let deaths = detail
         .deaths
@@ -399,7 +438,6 @@ pub fn player_detail_dto(
         ranked_players: detail.ranked_players,
         support_received: detail.support_received,
         support_received_from,
-        support_by_spell,
         healing_received: detail.healing_received,
         deaths,
         consumables,
@@ -415,8 +453,78 @@ pub fn player_detail_dto(
         dead: detail.dead.iter().map(|&(a, b)| [a, b]).collect(),
         dead_since: detail.dead_since,
         augmentation,
+        targets,
+        color_groups: detail.color_groups.clone(),
         mana: detail.mana.clone(),
         roster,
         spells,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use openlogs_analysis::{Actors, Attribution, NOBODY, ReportFilter, player_detail};
+    use openlogs_gamedata::Curated;
+
+    use super::*;
+    use crate::test_fight::{HOSTILE_FLAGS, PLAYER_FLAGS, damage_event, fight, unit};
+
+    #[test]
+    fn the_evokers_support_tree_names_players_pets_and_buffs() {
+        let mut actors = Actors::new();
+        let evoker = unit(
+            &mut actors,
+            "Player-1",
+            "Speronis-Stonevale-EU",
+            PLAYER_FLAGS,
+        );
+        actors.set_spec(evoker, 1473);
+        let hunter = unit(&mut actors, "Player-2", "Corin-Ashgrove-EU", PLAYER_FLAGS);
+        let wolf = unit(&mut actors, "Pet-0-1-1-1-1-01", "Wolf", 0x2114);
+        actors.set_owner(wolf, hunter);
+        let boss = unit(
+            &mut actors,
+            "Vehicle-0-1-1-1-257758-01",
+            "Ula'tek",
+            HOSTILE_FLAGS,
+        );
+        let fight = fight(
+            actors,
+            vec![
+                damage_event(1_000, wolf, boss, 17253, 800, NOBODY),
+                damage_event(1_000, wolf, boss, EBON_MIGHT, 80, evoker),
+            ],
+        );
+        let detail = player_detail(
+            &fight,
+            &Curated::bundled(),
+            evoker,
+            Metric::Damage,
+            &ReportFilter::whole(Attribution::Reattributed),
+        )
+        .unwrap();
+        let dto = player_detail_dto(
+            &fight,
+            &Curated::bundled(),
+            &detail,
+            MetricDto::Damage,
+            AttributionDto::Reattributed,
+        );
+        let ebon = &dto.abilities[0];
+        assert_eq!(ebon.row.spell_id, EBON_MIGHT);
+        assert_eq!(
+            ebon.recipients,
+            vec![SupportRecipientDto {
+                player: hunter,
+                amount: 80,
+                abilities: vec![SupportedAbilityDto {
+                    spell_id: Some(17253),
+                    pet_name: Some("Wolf".into()),
+                    amount: 80
+                }]
+            }]
+        );
+        assert!(dto.roster.iter().any(|p| p.actor_id == hunter));
+        assert!(dto.spells.contains_key(&17253));
     }
 }

@@ -29,6 +29,7 @@ import { readStored, writeStored } from './storage';
 
 const HIDE_ABORTED_KEY = 'hideAborted';
 const AUG_DELTA_KEY = 'showAugDelta';
+const COLOR_BY_TARGET_KEY = 'colorByTarget';
 const HIDE_PROCS_KEY = 'hideProcs';
 export type FightTab =
   | 'overview'
@@ -104,6 +105,8 @@ interface State {
   rangeKpis: Kpis | null;
   reportError: string | null;
   showAugDelta: boolean;
+  /** Damage Done and Healing colour their bars by target (healing: by the healed players' role). */
+  colorByTarget: boolean;
   /** Casts tab: hide curated procs and passive triggers. */
   hideProcs: boolean;
   /** Casts tab: the chosen player (`null` = the top caster) and the spell sort; kept per pull. */
@@ -147,6 +150,7 @@ interface Actions {
   setAttribution(attribution: Attribution): Promise<void>;
   setRange(range: TimeRange | null): Promise<void>;
   setShowAugDelta(show: boolean): void;
+  setColorByTarget(on: boolean): void;
   setHideProcs(hide: boolean): void;
   selectCastsPlayer(player: number): void;
   setCastsSort(sort: CastsSort): void;
@@ -202,6 +206,7 @@ export function initialState(): State {
     rangeKpis: null,
     reportError: null,
     showAugDelta: readFlag(AUG_DELTA_KEY, false),
+    colorByTarget: readFlag(COLOR_BY_TARGET_KEY, false),
     hideProcs: readFlag(HIDE_PROCS_KEY, true),
     castsPlayer: null,
     castsSort: DEFAULT_CASTS_SORT,
@@ -617,6 +622,11 @@ export const useApp = create<State & Actions>()((set, get) => ({
 
   setCastsSort(sort) {
     set({ castsSort: sort });
+  },
+
+  setColorByTarget(on) {
+    writeFlag(COLOR_BY_TARGET_KEY, on);
+    set({ colorByTarget: on });
   },
 
   setShowAugDelta(show) {

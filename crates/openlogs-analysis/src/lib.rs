@@ -50,13 +50,17 @@ pub use overview::{
 pub use phases::{configured_phases, run_phases};
 pub use player::{
     AugTarget, BuffKind, BuffRow, CAST_TIMELINE_ROWS, CastKind, CastRow, EBON_MIGHT, Metric,
-    PRESCIENCE, PlayerAbility, PlayerDeath, PlayerDetail, SERIES_STEP_MS, player_detail,
+    PRESCIENCE, PlayerAbility, PlayerDeath, PlayerDetail, SERIES_STEP_MS, SupportRecipient,
+    player_detail,
 };
 pub use recap::{DeathRecap, RECAP_WINDOW_MS, RecapEvent, RecapKind, death_recaps};
 pub use reports::damage::{DamageReport, PlayerDamage, damage_done};
 pub use reports::healing::{HealingReport, PlayerHealing, healing};
 pub use reports::taken::{DamageTakenReport, TakenAbility, TakenPlayer, damage_taken};
-pub use reports::{AbilityRow, RowKind};
+pub use reports::{
+    AbilityRow, AbilityTargets, BuffShare, BuffedAbility, COLOR_GROUPS, GroupAbilities, RowKind,
+    SupportShare, TOP_ABILITIES_PER_GROUP, TargetKey, TargetShare,
+};
 pub use resources::{
     PlayerResources, PowerTrack, RESOURCE_STEP_MS, ResourcesReport, resources_report,
 };

@@ -105,14 +105,15 @@ fn reattributed_mode_moves_support_to_the_evoker() {
         .iter()
         .find(|p| p.player == r.warrior)
         .unwrap();
-    let deduction = warrior
+    let rows: Vec<_> = warrior
         .abilities
         .iter()
-        .find(|a| a.kind == RowKind::SupportDeducted)
-        .unwrap();
+        .map(|a| (a.spell, a.kind, a.amount, a.support))
+        .collect();
     assert_eq!(
-        (deduction.spell, deduction.actor, deduction.amount),
-        (395152, r.evoker, -100)
+        rows,
+        [(1, RowKind::Own, 900, 100)],
+        "the buffed ability is net, its Aug part moved"
     );
 
     let evoker = report
@@ -218,7 +219,7 @@ fn two_evokers_buffing_each_other_swap_their_shares() {
 }
 
 #[test]
-fn own_buff_share_is_credited_and_deducted_in_reattributed_mode() {
+fn own_buff_share_moves_from_the_evokers_ability_to_his_support_row() {
     let mut r = raid();
     r.b.push(1_000, r.warrior, r.boss, 1, hit(1_000));
     r.b.push(1_000, r.warrior, r.boss, 395152, supported(100, r.evoker));
@@ -235,14 +236,13 @@ fn own_buff_share_is_credited_and_deducted_in_reattributed_mode() {
     let rows: Vec<_> = evoker
         .abilities
         .iter()
-        .map(|a| (a.spell, a.actor, a.kind, a.amount))
+        .map(|a| (a.spell, a.actor, a.kind, a.amount, a.support))
         .collect();
     assert_eq!(
         rows,
         [
-            (1, r.evoker, RowKind::Own, 500),
-            (395152, r.evoker, RowKind::SupportGiven, 150),
-            (395152, r.evoker, RowKind::SupportDeducted, -50),
+            (1, r.evoker, RowKind::Own, 450, 50),
+            (395152, r.evoker, RowKind::SupportGiven, 150, 0),
         ]
     );
     assert_eq!(

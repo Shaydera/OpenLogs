@@ -43,6 +43,16 @@
   --segment-3: #8c6646;
   --segment-4: #5f4a38;
 
+  /* Target breakdown: the raid's four largest enemy groups and the rest; healed players' roles. */
+  --target-1: #c9a54a;
+  --target-2: #9b7bd8;
+  --target-3: #4e9fe0;
+  --target-4: #d9853f;
+  --target-other: #5e6672;
+  --role-tank: #d9853f;
+  --role-healer: #7cd992;
+  --role-dps: #4e9fe0;
+
   /* Kill chip text on --kill-tint; --kill-text is for other kill-blue text. */
   --kill-chip: #7cc4fa;
   /* Bloodlust / Time Warp marker, dashed. */

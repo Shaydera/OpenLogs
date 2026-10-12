@@ -1,8 +1,9 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use openlogs_analysis::{
-    AbilityRow, ActorId, Attribution, DamageReport, DamageTakenReport, Fight, HealingReport,
-    NO_SPELL, ReportFilter, RowKind, SpellId, TakenAbility,
+    AbilityRow, ActorId, Attribution, BuffShare, DamageReport, DamageTakenReport, Fight,
+    GroupAbilities, HealingReport, NO_SPELL, ReportFilter, RowKind, SpellId, TakenAbility,
+    TargetKey, TargetShare,
 };
 use serde::{Deserialize, Serialize};
 
@@ -49,7 +50,7 @@ pub enum RowKindDto {
     Own,
     Pet,
     SupportGiven,
-    SupportDeducted,
+    Unmatched,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -60,12 +61,68 @@ pub struct AbilityRowDto {
     /// Pet name for pet rows, the Evoker for support rows.
     pub actor_name: String,
     pub kind: RowKindDto,
+    /// Reattributed mode: net of `support`.
     pub amount: i64,
+    /// Reattributed mode: the part of the logged amount that moved to Evokers.
+    pub support: u64,
     pub overheal: u64,
     pub hits: u32,
     pub crits: u32,
     pub max_hit: u64,
     pub ticks: u32,
+}
+
+/// Support of one Evoker's buff ("Ebon Might · Speronis").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuffShareDto {
+    pub buff_id: SpellId,
+    pub evoker: ActorId,
+    pub amount: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TargetKindDto {
+    Unit,
+    Player,
+    Unknown,
+}
+
+/// Whom an amount went to: an enemy (or friendly NPC) by name, a player (in the roster) or an unnamed unit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TargetRefDto {
+    pub kind: TargetKindDto,
+    /// The unit's name; empty for players and unknown units.
+    pub name: String,
+    pub player: Option<ActorId>,
+    /// Units of this name that took damage in the range; 0 when not counted.
+    pub units: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupAbilityDto {
+    pub spell_id: SpellId,
+    pub amount: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupAbilitiesDto {
+    /// A colour group's enemy name; `None` for "Other".
+    pub group: Option<String>,
+    pub abilities: Vec<GroupAbilityDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TargetShareDto {
+    pub target: TargetRefDto,
+    pub amount: i64,
+    pub hits: u32,
+    pub crits: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -90,6 +147,10 @@ pub struct PlayerDamageDto {
     pub abilities: Vec<AbilityRowDto>,
     pub support_by_recipient: Vec<PlayerAmount>,
     pub support_received_from: Vec<PlayerAmount>,
+    pub support_received_by_buff: Vec<BuffShareDto>,
+    pub support_credited_by_buff: Vec<BuffShareDto>,
+    pub targets: Vec<TargetShareDto>,
+    pub group_abilities: Vec<GroupAbilitiesDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -98,6 +159,8 @@ pub struct DamageReportDto {
     pub duration_ms: u64,
     pub total: u64,
     pub players: Vec<PlayerDamageDto>,
+    /// The raid's largest enemy groups in the range, largest first: the bars' colours.
+    pub color_groups: Vec<String>,
     pub roster: Vec<PlayerRef>,
     pub spells: BTreeMap<SpellId, SpellRef>,
 }
@@ -119,6 +182,9 @@ pub struct PlayerHealingDto {
     pub abilities: Vec<AbilityRowDto>,
     pub support_by_recipient: Vec<PlayerAmount>,
     pub support_received_from: Vec<PlayerAmount>,
+    pub support_received_by_buff: Vec<BuffShareDto>,
+    pub support_credited_by_buff: Vec<BuffShareDto>,
+    pub targets: Vec<TargetShareDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -130,13 +196,6 @@ pub struct HealingReportDto {
     pub players: Vec<PlayerHealingDto>,
     pub roster: Vec<PlayerRef>,
     pub spells: BTreeMap<SpellId, SpellRef>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SpellAmount {
-    pub spell_id: SpellId,
-    pub amount: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -182,6 +241,7 @@ pub(crate) struct Names<'a> {
     fight: &'a Fight,
     roster: Vec<ActorId>,
     spells: BTreeMap<SpellId, SpellRef>,
+    units: HashMap<String, u32>,
 }
 
 impl<'a> Names<'a> {
@@ -190,7 +250,60 @@ impl<'a> Names<'a> {
             fight,
             roster: Vec::new(),
             spells: BTreeMap::new(),
+            units: HashMap::new(),
         }
+    }
+
+    /// Unit counts by name for the targets' "58 units".
+    pub(crate) fn with_units(mut self, units: &[(String, u32)]) -> Self {
+        self.units = units.iter().cloned().collect();
+        self
+    }
+
+    pub(crate) fn targets(&mut self, list: &[TargetShare]) -> Vec<TargetShareDto> {
+        list.iter()
+            .map(|share| TargetShareDto {
+                target: match &share.target {
+                    TargetKey::Unit(name) => TargetRefDto {
+                        kind: TargetKindDto::Unit,
+                        name: name.clone(),
+                        player: None,
+                        units: self.units.get(name).copied().unwrap_or(0),
+                    },
+                    TargetKey::Player(id) => TargetRefDto {
+                        kind: TargetKindDto::Player,
+                        name: String::new(),
+                        player: Some(self.player(*id)),
+                        units: 0,
+                    },
+                    TargetKey::Unknown => TargetRefDto {
+                        kind: TargetKindDto::Unknown,
+                        name: String::new(),
+                        player: None,
+                        units: 0,
+                    },
+                },
+                amount: share.amount,
+                hits: share.hits,
+                crits: share.crits,
+            })
+            .collect()
+    }
+
+    fn group_abilities(&mut self, list: &[GroupAbilities]) -> Vec<GroupAbilitiesDto> {
+        list.iter()
+            .map(|group| GroupAbilitiesDto {
+                group: group.group.clone(),
+                abilities: group
+                    .abilities
+                    .iter()
+                    .map(|&(spell, amount)| GroupAbilityDto {
+                        spell_id: self.spell(spell),
+                        amount,
+                    })
+                    .collect(),
+            })
+            .collect()
     }
 
     pub(crate) fn player(&mut self, id: ActorId) -> ActorId {
@@ -222,9 +335,10 @@ impl<'a> Names<'a> {
                 RowKind::Own => RowKindDto::Own,
                 RowKind::Pet => RowKindDto::Pet,
                 RowKind::SupportGiven => RowKindDto::SupportGiven,
-                RowKind::SupportDeducted => RowKindDto::SupportDeducted,
+                RowKind::Unmatched => RowKindDto::Unmatched,
             },
             amount: row.amount,
+            support: row.support,
             overheal: row.overheal,
             hits: row.hits,
             crits: row.crits,
@@ -238,6 +352,16 @@ impl<'a> Names<'a> {
             .map(|&(player, amount)| PlayerAmount {
                 player: self.player(player),
                 amount,
+            })
+            .collect()
+    }
+
+    pub(crate) fn buff_shares(&mut self, list: &[BuffShare]) -> Vec<BuffShareDto> {
+        list.iter()
+            .map(|share| BuffShareDto {
+                buff_id: self.spell(share.buff),
+                evoker: self.player(share.evoker),
+                amount: share.amount,
             })
             .collect()
     }
@@ -266,7 +390,7 @@ impl<'a> Names<'a> {
 }
 
 pub fn damage_report_dto(fight: &Fight, report: &DamageReport) -> DamageReportDto {
-    let mut names = Names::new(fight);
+    let mut names = Names::new(fight).with_units(&report.units);
     let players = report
         .players
         .iter()
@@ -282,6 +406,10 @@ pub fn damage_report_dto(fight: &Fight, report: &DamageReport) -> DamageReportDt
             abilities: p.abilities.iter().map(|row| names.row(row)).collect(),
             support_by_recipient: names.amounts(&p.support_by_recipient),
             support_received_from: names.amounts(&p.support_received_from),
+            support_received_by_buff: names.buff_shares(&p.support_received_by_buff),
+            support_credited_by_buff: names.buff_shares(&p.support_credited_by_buff),
+            targets: names.targets(&p.targets),
+            group_abilities: names.group_abilities(&p.group_abilities),
         })
         .collect();
     let (roster, spells) = names.finish();
@@ -289,6 +417,7 @@ pub fn damage_report_dto(fight: &Fight, report: &DamageReport) -> DamageReportDt
         duration_ms: report.duration_ms,
         total: report.total,
         players,
+        color_groups: report.color_groups.clone(),
         roster,
         spells,
     }
@@ -313,6 +442,9 @@ pub fn healing_report_dto(fight: &Fight, report: &HealingReport) -> HealingRepor
             abilities: p.abilities.iter().map(|row| names.row(row)).collect(),
             support_by_recipient: names.amounts(&p.support_by_recipient),
             support_received_from: names.amounts(&p.support_received_from),
+            support_received_by_buff: names.buff_shares(&p.support_received_by_buff),
+            support_credited_by_buff: names.buff_shares(&p.support_credited_by_buff),
+            targets: names.targets(&p.targets),
         })
         .collect();
     let (roster, spells) = names.finish();
@@ -359,5 +491,61 @@ pub fn taken_report_dto(fight: &Fight, report: &DamageTakenReport) -> DamageTake
         by_player,
         roster,
         spells,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use openlogs_analysis::{Attribution, ReportFilter};
+
+    use super::*;
+
+    #[test]
+    fn targets_carry_unit_counts_and_put_healed_players_in_the_roster() {
+        use crate::test_fight::{
+            HOSTILE_FLAGS, PLAYER_FLAGS, damage_event, fight, heal_event, unit,
+        };
+        use openlogs_analysis::{Actors, NOBODY, damage_done, healing};
+        let mut actors = Actors::new();
+        let mage = unit(&mut actors, "Player-1", "Faelan-Emberfall-EU", PLAYER_FLAGS);
+        let tank = unit(&mut actors, "Player-2", "Aleth-Emberfall-EU", PLAYER_FLAGS);
+        let adds = [
+            unit(
+                &mut actors,
+                "Creature-0-1-1-1-2-01",
+                "Blightscale Rawling",
+                HOSTILE_FLAGS,
+            ),
+            unit(
+                &mut actors,
+                "Creature-0-1-1-1-2-02",
+                "Blightscale Rawling",
+                HOSTILE_FLAGS,
+            ),
+        ];
+        let fight = fight(
+            actors,
+            vec![
+                damage_event(1_000, mage, adds[0], 1, 300, NOBODY),
+                damage_event(2_000, mage, adds[1], 1, 200, NOBODY),
+                heal_event(3_000, mage, tank, 2, 400),
+            ],
+        );
+        let filter = ReportFilter::whole(Attribution::Reattributed);
+        let damage = damage_report_dto(&fight, &damage_done(&fight, &filter));
+        let rawlings = &damage.players[0].targets[0];
+        assert_eq!(
+            (
+                rawlings.target.kind,
+                rawlings.target.name.as_str(),
+                rawlings.target.units,
+                rawlings.amount
+            ),
+            (TargetKindDto::Unit, "Blightscale Rawling", 2, 500)
+        );
+        assert_eq!(damage.color_groups, ["Blightscale Rawling"]);
+        let heals = healing_report_dto(&fight, &healing(&fight, &filter));
+        assert_eq!(heals.players[0].targets[0].target.player, Some(tank));
+        assert!(heals.roster.iter().any(|p| p.actor_id == tank));
     }
 }

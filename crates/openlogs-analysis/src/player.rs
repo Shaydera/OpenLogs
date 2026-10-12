@@ -12,7 +12,10 @@ use crate::links::{AbilityIndex, AbilityLink, SpellKey, spell_key};
 use crate::reports::damage::damage_done;
 use crate::reports::healing::healing;
 use crate::reports::taken::taken_amount;
-use crate::reports::{AbilityRow, RowKind, Share, damage_share, healing_share, sorted_by_amount};
+use crate::reports::{
+    AbilityRow, AbilityTargets, BuffShare, BuffedAbility, RowKind, Share, Support, SupportShare,
+    TargetKey, TargetShare, buff_totals, damage_share, healing_share, sorted_by_amount,
+};
 use crate::resources::power_series;
 use crate::usage::{ConsumableUse, DeathContext, consumable_uses, death_context, defensive_uses};
 
@@ -84,7 +87,7 @@ pub enum Metric {
     Healing,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlayerAbility {
     pub row: AbilityRow,
     /// The player's own casts of a spell of this name in the range; `None` without casts and
@@ -94,6 +97,22 @@ pub struct PlayerAbility {
     pub aug: bool,
     /// Pet names merged into the pet row; 0 for other rows.
     pub pets: u32,
+    /// Reattributed mode: `row.support` by buff and Evoker, largest first.
+    pub support_from: Vec<BuffShare>,
+    /// Reattributed mode, the Evoker's support rows: the players the buff supported, largest
+    /// first (the Evoker too for his own share).
+    pub recipients: Vec<SupportRecipient>,
+    /// The row by target, largest first; merged rows sum their parts.
+    pub targets: Vec<TargetShare>,
+}
+
+/// A player one of the Evoker's buffs supported, and the abilities it supported.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SupportRecipient {
+    pub player: ActorId,
+    pub amount: u64,
+    /// Merged by spell name per caster, largest first; `None` for unmatched hits.
+    pub abilities: Vec<(Option<BuffedAbility>, u64)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -113,8 +132,6 @@ pub struct PlayerDetail {
     pub support_received: u64,
     /// Support received, by Evoker.
     pub support_received_from: Vec<(ActorId, u64)>,
-    /// Support received, by support spell.
-    pub support_by_spell: Vec<(SpellId, u64)>,
     /// Effective healing and absorbs on the player.
     pub healing_received: u64,
     pub deaths: Vec<PlayerDeath>,
@@ -142,6 +159,12 @@ pub struct PlayerDetail {
     pub dead_since: Option<i32>,
     /// Evokers only: support and Ebon Might/Prescience uptime per buffed player.
     pub augmentation: Vec<AugTarget>,
+    /// Whom the player damaged or healed, largest first.
+    pub targets: Vec<TargetShare>,
+    /// Units of each enemy name that took damage in the range (damage only).
+    pub units: Vec<(String, u32)>,
+    /// The raid's largest enemy groups in the range, the bars' colours (damage only).
+    pub color_groups: Vec<String>,
     /// Mana percent per series step; empty without mana samples.
     pub mana: Vec<Option<f32>>,
 }
@@ -152,41 +175,71 @@ struct Standing {
     rank: usize,
     ranked: usize,
     abilities: Vec<AbilityRow>,
+    support: Vec<SupportShare>,
+    targets: Vec<TargetShare>,
+    ability_targets: Vec<AbilityTargets>,
+    units: Vec<(String, u32)>,
+    color_groups: Vec<String>,
 }
 
 fn standing(fight: &Fight, player: ActorId, metric: Metric, filter: &ReportFilter) -> Standing {
-    let (ranked, index, total, per_second, abilities) = match metric {
+    let empty = |ranked: usize, support: Vec<SupportShare>, units, color_groups| Standing {
+        total: 0,
+        per_second: 0.0,
+        rank: 0,
+        ranked,
+        abilities: Vec::new(),
+        support,
+        targets: Vec::new(),
+        ability_targets: Vec::new(),
+        units,
+        color_groups,
+    };
+    match metric {
         Metric::Damage => {
             let report = damage_done(fight, filter);
-            let index = report.players.iter().position(|p| p.player == player);
-            let row = index.map(|i| &report.players[i]);
-            (
-                report.players.len(),
-                index,
-                row.map_or(0, |p| p.total),
-                row.map_or(0.0, |p| p.per_second),
-                row.map(|p| p.abilities.clone()),
-            )
+            let ranked = report.players.len();
+            match report.players.iter().position(|p| p.player == player) {
+                Some(index) => {
+                    let row = report.players[index].clone();
+                    Standing {
+                        total: row.total,
+                        per_second: row.per_second,
+                        rank: index + 1,
+                        ranked,
+                        abilities: row.abilities,
+                        support: report.support,
+                        targets: row.targets,
+                        ability_targets: row.ability_targets,
+                        units: report.units,
+                        color_groups: report.color_groups,
+                    }
+                }
+                None => empty(ranked, report.support, report.units, report.color_groups),
+            }
         }
         Metric::Healing => {
             let report = healing(fight, filter);
-            let index = report.players.iter().position(|p| p.player == player);
-            let row = index.map(|i| &report.players[i]);
-            (
-                report.players.len(),
-                index,
-                row.map_or(0, |p| p.total),
-                row.map_or(0.0, |p| p.per_second),
-                row.map(|p| p.abilities.clone()),
-            )
+            let ranked = report.players.len();
+            match report.players.iter().position(|p| p.player == player) {
+                Some(index) => {
+                    let row = report.players[index].clone();
+                    Standing {
+                        total: row.total,
+                        per_second: row.per_second,
+                        rank: index + 1,
+                        ranked,
+                        abilities: row.abilities,
+                        support: report.support,
+                        targets: row.targets,
+                        ability_targets: row.ability_targets,
+                        units: Vec::new(),
+                        color_groups: Vec::new(),
+                    }
+                }
+                None => empty(ranked, report.support, Vec::new(), Vec::new()),
+            }
         }
-    };
-    Standing {
-        total,
-        per_second,
-        rank: index.map_or(0, |i| i + 1),
-        ranked,
-        abilities: abilities.unwrap_or_default(),
     }
 }
 
@@ -212,11 +265,12 @@ fn series(
             Some(Share::Own {
                 player: p, amount, ..
             }) if p == player => amount as i64,
-            Some(Share::Support {
-                player: p, amount, ..
-            }) if reattributed && p == player => -(amount as i64),
-            Some(Share::Support { evoker, amount, .. }) if reattributed && evoker == player => {
-                amount as i64
+            Some(Share::Support(s)) if reattributed => {
+                match (s.evoker == player, s.player == player) {
+                    (true, false) => s.amount as i64,
+                    (false, true) => -(s.amount as i64),
+                    _ => 0,
+                }
             }
             _ => 0,
         };
@@ -421,12 +475,38 @@ fn merged_abilities(
 
 fn absorb(into: &mut PlayerAbility, part: &PlayerAbility) {
     into.row.amount += part.row.amount;
+    into.row.support += part.row.support;
+    into.support_from = buff_totals(into.support_from.iter().chain(&part.support_from).copied());
     into.row.overheal += part.row.overheal;
     into.row.hits += part.row.hits;
     into.row.crits += part.row.crits;
     into.row.ticks += part.row.ticks;
     into.row.max = into.row.max.max(part.row.max);
     into.aug |= part.aug;
+    into.targets = merged_targets(into.targets.iter().chain(&part.targets));
+}
+
+/// Sums target shares by target, largest first.
+fn merged_targets<'a>(parts: impl Iterator<Item = &'a TargetShare>) -> Vec<TargetShare> {
+    let mut sums: HashMap<&TargetKey, (i64, u32, u32)> = HashMap::new();
+    for part in parts {
+        let sum = sums.entry(&part.target).or_default();
+        sum.0 += part.amount;
+        sum.1 += part.hits;
+        sum.2 += part.crits;
+    }
+    let mut list: Vec<TargetShare> = sums
+        .into_iter()
+        .filter(|(_, sum)| sum.0 != 0)
+        .map(|(target, (amount, hits, crits))| TargetShare {
+            target: target.clone(),
+            amount,
+            hits,
+            crits,
+        })
+        .collect();
+    list.sort_by(|a, b| b.amount.cmp(&a.amount).then(a.target.cmp(&b.target)));
+    list
 }
 
 /// The spell that summoned the player's pet of this name, if the log has it.
@@ -533,6 +613,54 @@ fn buff_rows(
     rows
 }
 
+fn shares_by_buff<'a>(shares: impl Iterator<Item = &'a SupportShare>) -> Vec<BuffShare> {
+    buff_totals(shares.map(|s| BuffShare {
+        buff: s.buff,
+        evoker: s.evoker,
+        amount: s.amount,
+    }))
+}
+
+/// The players `evoker`'s `buff` supported, with their abilities merged by spell name per caster
+/// like the player page's rows (the largest part's ID stays).
+fn recipients(
+    fight: &Fight,
+    support: &[SupportShare],
+    evoker: ActorId,
+    buff: SpellId,
+) -> Vec<SupportRecipient> {
+    let mut by_player: HashMap<ActorId, SupportRecipient> = HashMap::new();
+    // `support` is sorted largest first, so the first ability of a name is the largest part.
+    for share in support
+        .iter()
+        .filter(|s| s.evoker == evoker && s.buff == buff)
+    {
+        let recipient = by_player.entry(share.player).or_insert(SupportRecipient {
+            player: share.player,
+            amount: 0,
+            abilities: Vec::new(),
+        });
+        recipient.amount += share.amount;
+        let key = |a: Option<BuffedAbility>| a.map(|a| (spell_key(fight, a.spell), a.actor));
+        match recipient
+            .abilities
+            .iter_mut()
+            .find(|(ability, _)| key(*ability) == key(share.ability))
+        {
+            Some((_, amount)) => *amount += share.amount,
+            None => recipient.abilities.push((share.ability, share.amount)),
+        }
+    }
+    let mut list: Vec<SupportRecipient> = by_player.into_values().collect();
+    for recipient in &mut list {
+        recipient
+            .abilities
+            .sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    }
+    list.sort_by(|a, b| b.amount.cmp(&a.amount).then(a.player.cmp(&b.player)));
+    list
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AugTarget {
     pub player: ActorId,
@@ -567,13 +695,14 @@ fn augmentation(
             Metric::Damage => damage_share(fight, event),
             Metric::Healing => healing_share(fight, event),
         };
-        if let Some(Share::Support {
+        if let Some(Share::Support(Support {
             player,
             evoker: e,
             amount,
             ..
-        }) = share
+        })) = share
             && e == evoker
+            && player != evoker
         {
             *support.entry(player).or_default() += amount;
         }
@@ -691,23 +820,18 @@ pub fn player_detail(
             ..*filter
         },
     );
-    let reattributed_rows = if filter.attribution == Attribution::Reattributed {
-        &current.abilities
-    } else {
-        &other.abilities
-    };
-
-    let mut by_spell: HashMap<SpellId, u64> = HashMap::new();
-    let mut by_evoker: HashMap<ActorId, u64> = HashMap::new();
-    for row in reattributed_rows
+    let received: Vec<&SupportShare> = current
+        .support
         .iter()
-        // The Evoker's own buff share is deducted from himself; it is not support received.
-        .filter(|r| r.kind == RowKind::SupportDeducted && r.actor != player)
-    {
-        *by_spell.entry(row.spell).or_default() += row.amount.unsigned_abs();
-        *by_evoker.entry(row.actor).or_default() += row.amount.unsigned_abs();
+        // The Evoker's own buff share is not support received.
+        .filter(|s| s.player == player && s.evoker != player)
+        .collect();
+    let support_received = received.iter().map(|s| s.amount).sum();
+    let mut by_evoker: HashMap<ActorId, u64> = HashMap::new();
+    for share in &received {
+        *by_evoker.entry(share.evoker).or_default() += share.amount;
     }
-    let support_received = by_spell.values().sum();
+    let buffs: HashSet<SpellId> = received.iter().map(|s| s.buff).collect();
 
     // Presses by spell name: procs and follow-up casts of multi-ID spells do not count.
     let not_pressed = non_press_casts(fight, curated, player);
@@ -746,6 +870,25 @@ pub fn player_detail(
         }
     }
 
+    let support_from = |row: &AbilityRow| -> Vec<BuffShare> {
+        let ability = match row.kind {
+            RowKind::Own | RowKind::Pet => Some(BuffedAbility {
+                spell: row.spell,
+                actor: row.actor,
+            }),
+            RowKind::Unmatched => None,
+            RowKind::SupportGiven => return Vec::new(),
+        };
+        if row.support == 0 {
+            return Vec::new();
+        }
+        shares_by_buff(
+            current
+                .support
+                .iter()
+                .filter(|s| s.player == player && s.ability == ability),
+        )
+    };
     let rows: Vec<PlayerAbility> = current
         .abilities
         .iter()
@@ -756,16 +899,26 @@ pub fn player_detail(
             } else {
                 None
             },
-            aug: matches!(row.kind, RowKind::Own | RowKind::Pet)
-                && by_spell.contains_key(&row.spell),
+            aug: matches!(row.kind, RowKind::Own | RowKind::Pet) && buffs.contains(&row.spell),
             pets: 0,
+            support_from: support_from(&row),
+            targets: current
+                .ability_targets
+                .iter()
+                .find(|t| t.spell == row.spell && t.actor == row.actor && t.kind == row.kind)
+                .map_or_else(Vec::new, |t| t.targets.clone()),
+            recipients: if row.kind == RowKind::SupportGiven {
+                recipients(fight, &current.support, player, row.spell)
+            } else {
+                Vec::new()
+            },
         })
         .collect();
     // The pet row's parts (rows arrive largest first), shown when the row is expanded.
     let pet_abilities: Vec<PlayerAbility> = rows
         .iter()
         .filter(|a| a.row.kind == RowKind::Pet)
-        .copied()
+        .cloned()
         .collect();
     let abilities = merged_abilities(fight, player, rows);
 
@@ -821,7 +974,6 @@ pub fn player_detail(
         ranked_players: current.ranked,
         support_received,
         support_received_from: sorted_by_amount(by_evoker),
-        support_by_spell: sorted_by_amount(by_spell),
         healing_received,
         deaths,
         consumables,
@@ -844,6 +996,9 @@ pub fn player_detail(
         dead,
         dead_since,
         augmentation: augmentation(fight, player, metric, filter),
+        targets: current.targets,
+        units: current.units,
+        color_groups: current.color_groups,
         mana: power_series(fight, player, 0, start_ms, end_ms, SERIES_STEP_MS),
     })
 }

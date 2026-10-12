@@ -1,8 +1,8 @@
 mod support;
 
 use openlogs_analysis::{
-    Attribution, AuraAction, AuraType, BuffKind, CastKind, Damage, DamageVia, EventKind, Metric,
-    NO_SPELL, NOBODY, ReportFilter, RowKind, player_detail,
+    Attribution, AuraAction, AuraType, BuffKind, BuffShare, CastKind, Damage, DamageVia, EventKind,
+    Metric, NO_SPELL, NOBODY, ReportFilter, RowKind, player_detail,
 };
 use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS, damage, heal};
@@ -109,7 +109,6 @@ fn summary_totals_rank_and_support() {
     );
     assert_eq!(aug.support_received, 100);
     assert_eq!(aug.support_received_from, vec![(r.evoker, 100)]);
-    assert_eq!(aug.support_by_spell, vec![(395152, 100)]);
     assert_eq!(aug.healing_received, 300);
     assert_eq!(aug.taken_by_spell, vec![(1, false, 700)]);
     assert_eq!(aug.deaths.len(), 1);
@@ -121,12 +120,19 @@ fn summary_totals_rank_and_support() {
         (re.total, re.other_mode_total, re.ranked_players),
         (900, 1_000, 3)
     );
-    let deduction = re
-        .abilities
-        .iter()
-        .find(|a| a.row.kind == RowKind::SupportDeducted)
-        .unwrap();
-    assert_eq!((deduction.row.amount, deduction.casts), (-100, None));
+    let barrage = re.abilities.iter().find(|a| a.row.spell == 44425).unwrap();
+    assert_eq!(
+        (barrage.row.amount, barrage.row.support, barrage.casts),
+        (900, 100, Some(1))
+    );
+    assert_eq!(
+        barrage.support_from,
+        vec![BuffShare {
+            buff: 395152,
+            evoker: r.evoker,
+            amount: 100
+        }]
+    );
 }
 
 #[test]

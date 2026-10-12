@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initialState, useApp } from '../../store';
@@ -28,14 +28,17 @@ describe('OverTimeChart', () => {
 });
 
 describe('PlayerAbilities', () => {
-  it('lists the abilities in a grid and formats', () => {
+  const table = () => screen.getByRole('table', { name: /^Abilities of/ });
+  const rows = () => within(table()).getAllByRole('row');
+  const cells = (row: HTMLElement) => within(row).getAllByRole('cell').map((c) => c.textContent);
+
+  it('lists net abilities with the Aug column in Reattributed mode', () => {
     render(<PlayerAbilities detail={playerDetailFixture} />);
-    const table = screen.getByRole('table', { name: 'Abilities of Faelan' });
-    const rows = within(table).getAllByRole('row');
-    expect(within(rows[0]).getAllByRole('columnheader').map((c) => c.textContent)).toEqual([
+    expect(within(rows()[0]).getAllByRole('columnheader').map((c) => c.textContent)).toEqual([
       'Icon',
       'Ability',
       'Damage',
+      'Aug',
       'Share',
       'Casts',
       'Hits',
@@ -43,40 +46,46 @@ describe('PlayerAbilities', () => {
       'Avg hit',
       'Max hit',
     ]);
-    const cells = (i: number) => within(rows[i]).getAllByRole('cell').map((c) => c.textContent);
-    expect(cells(1)).toEqual(['', 'Arcane Missiles', '37.99M', '36.8%', '85', '1325', '25.7%', '28.7k', '242.7k']);
-    expect(cells(4)).toEqual(['', 'Mirror Image & other pets', '1.32M', '1.3%', '—', '—', '—', '—', '—']);
-    expect(cells(5)).toEqual(['', 'Reattributed to Speronis', '−5.98M', '', '—', '—', '—', '—', '—']);
-    expect(rows[5]).toHaveClass('ab-row-negative');
+    expect(cells(rows()[1])).toEqual(['', 'Arcane Missiles', '37.99M', '—', '36.8%', '85', '1325', '25.7%', '28.7k', '242.7k']);
+    // Avg hit as logged: (22.49M net + 5.98M Aug) / 117.
+    expect(cells(rows()[2])).toEqual(['', 'Arcane Barrage', '22.49M', '−5.98M', '21.8%', '67', '117', '40.2%', '243.3k', '1.06M']);
+    expect(cells(rows()[4])).toEqual(['', 'Mirror Image & other pets', '1.32M', '—', '1.3%', '—', '—', '—', '—', '—']);
+    expect(cells(rows()[5])).toEqual(['…', 'Unmatched hits', '−12.0k', '−12.0k', '', '—', '—', '—', '—', '—']);
   });
 
-  it('opens the ability page from own rows only', async () => {
+  it('opens an own row into its targets by group, and the ability page from its name', async () => {
     render(<PlayerAbilities detail={playerDetailFixture} />);
+    const toggle = screen.getByRole('button', { name: 'Targets of Arcane Barrage' });
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const group = screen.getByRole('rowgroup', { name: 'Targets of Arcane Barrage' });
+    expect(within(group).getAllByRole('row').map(cells)).toEqual([
+      ['', 'Targets · 3', '', '', 'of ability', '', '', '', '', ''],
+      ['', "Ula'tek", '12.00M', '', '53.4%', '', '60', '40.0%', '', ''],
+      ['', 'Blightscale Rawling · 58 units', '8.00M', '', '35.6%', '', '40', '40.0%', '', ''],
+      ['', 'Doomscale Warden · 2 units', '2.49M', '', '11.1%', '', '17', '41.2%', '', ''],
+    ]);
+    const strip = within(group).getByRole('img', { name: "Split of Arcane Barrage by target, Ula'tek 53.4%, Blightscale Rawling 35.6%, Other 11.1%" });
+    await userEvent.hover(strip.querySelectorAll('.tseg')[1]);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('35.6% of Arcane Barrage · 58 units · 40 hits · 40.0% crit');
+    await userEvent.click(toggle);
+    expect(screen.queryByRole('rowgroup')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Arcane Barrage' }));
     expect(openAbility).toHaveBeenCalledWith(44425, null);
-    expect(screen.queryByRole('button', { name: 'Reattributed to Speronis' })).toBeNull();
   });
 
-  it("folds an Evoker's own buff share into his support row on his own page", () => {
-    const speronis = playerDetailFixture.roster.find((p) => p.name.startsWith('Speronis'))!;
-    const row = { actorId: speronis.actorId, actorName: speronis.name, overheal: 0, hits: 0, crits: 0, maxHit: 0, ticks: 0, casts: null, aug: false, pets: 0 };
-    render(
-      <PlayerAbilities
-        detail={{
-          ...playerDetailFixture,
-          player: speronis,
-          total: 30_000_000,
-          abilities: [
-            { ...row, spellId: 395152, kind: 'support_given', amount: 30_170_000 },
-            { ...row, spellId: 409311, kind: 'support_given', amount: 5_000_000 },
-            { ...row, spellId: 409311, kind: 'support_deducted', amount: -78_000 },
-          ],
-        }}
-      />,
-    );
-    const rows = within(screen.getByRole('table')).getAllByRole('row').slice(1);
-    expect(rows.map((r) => within(r).getAllByRole('cell')[1].textContent)).toEqual(['Ebon MightSupport', 'PrescienceSupport']);
-    expect(within(rows[1]).getAllByRole('cell')[2]).toHaveTextContent('4.92M');
-    expect(screen.queryByText(/to Speronis|Own buff share/)).toBeNull();
+  it("explains a row's Aug value by buff and Evoker on hover and focus", async () => {
+    render(<PlayerAbilities detail={playerDetailFixture} />);
+    const value = within(rows()[2]).getByRole('button', { name: '−5.98M' });
+    await userEvent.hover(value);
+    const tip = screen.getByRole('tooltip');
+    expect(value).toHaveAttribute('aria-describedby', tip.id);
+    expect(tip).toHaveTextContent('As logged28.47MPrescience · Speronis−3.98MEbon Might · Speronis−2.00MShown (Reattributed)22.49M');
+    await userEvent.unhover(value);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    act(() => value.focus());
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('tooltip')).toBeNull();
   });
 });

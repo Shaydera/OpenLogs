@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import type { PlayerAmount, PlayerRef } from '../../api/types';
+import type { BuffShare, PlayerAmount, PlayerRef } from '../../api/types';
+import { spellIconUrl } from '../../icons';
 import { formatMillions, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { GameIcon } from '../GameIcon';
@@ -7,7 +8,7 @@ import { classColor, shortName } from '../overview/players';
 import type { AugMetric } from './augSplit';
 import type { BreakdownRow, BreakdownTone } from './breakdown';
 import { PlayerIcon, PlayerName } from './PlayerName';
-import { barWidth } from './reportData';
+import { barWidth, reportSpellName, type SpellNames } from './reportData';
 
 const classes = (...names: (string | false | null | undefined)[]) => names.filter(Boolean).join(' ');
 const playerLabel = (player: PlayerRef | undefined) => (player ? shortName(player.name) : t('report.unknownPlayer'));
@@ -56,32 +57,45 @@ interface RankedRowProps {
   total: ReactNode;
   selected: boolean;
   onSelect: () => void;
-  /** Hover and focus of the whole row open its Aug tooltip; `null` closes it. */
-  onTip?: (row: HTMLElement | null) => void;
+  /**
+   * Hover on the name and focus of the row preview what selecting it shows (the player card); `name`
+   * is the anchor, `row` the row; `null` closes it.
+   */
+  onPreview?: (name: HTMLElement | null, row: HTMLElement | null) => void;
+  /** The bar's fill when it is split by target; the class-coloured fill otherwise. */
+  fill?: ReactNode;
   describedBy?: string;
   children?: ReactNode;
 }
 
 /** A whole-row button: rank, player, a class-coloured bar with the total, then `children`. */
-export function RankedRow({ grid, rank, player, barPct, total, selected, onSelect, onTip, describedBy, children }: RankedRowProps) {
+export function RankedRow({ grid, rank, player, barPct, total, selected, onSelect, onPreview, fill, describedBy, children }: RankedRowProps) {
+  const rowOf = (element: HTMLElement) => element.closest<HTMLElement>('.rrow');
   return (
     <button
       type="button"
       className={classes('rrow', grid, selected && 'rrow-sel')}
       aria-pressed={selected}
       aria-describedby={describedBy}
-      onClick={onSelect}
-      onMouseEnter={onTip && ((event) => onTip(event.currentTarget))}
-      onMouseLeave={onTip && (() => onTip(null))}
-      onFocus={onTip && ((event) => onTip(event.currentTarget))}
-      onBlur={onTip && (() => onTip(null))}
-      onKeyDown={onTip && ((event) => event.key === 'Escape' && onTip(null))}
+      onClick={() => {
+        onSelect();
+        onPreview?.(null, null);
+      }}
+      onFocus={onPreview && ((event) => onPreview(event.currentTarget.querySelector<HTMLElement>('.player-name') ?? event.currentTarget, event.currentTarget))}
+      onBlur={onPreview && (() => onPreview(null, null))}
+      onKeyDown={onPreview && ((event) => event.key === 'Escape' && onPreview(null, null))}
     >
       <span className="num rrow-rank">{rank}</span>
-      <PlayerName player={player} />
+      <span
+        className="rrow-name"
+        onMouseEnter={onPreview && ((event) => onPreview(event.currentTarget, rowOf(event.currentTarget)))}
+        onMouseLeave={onPreview && (() => onPreview(null, null))}
+      >
+        <PlayerName player={player} />
+      </span>
       <span className="rrow-bar">
         <span className="bar bar-lg" aria-hidden="true">
-          <span style={{ width: barWidth(barPct), background: classColor(player?.classToken ?? null) }} />
+          {fill ?? <span style={{ width: barWidth(barPct), background: classColor(player?.classToken ?? null) }} />}
         </span>
         <span className="rrow-total">{total}</span>
       </span>
@@ -230,7 +244,43 @@ export function RecipientList({ entries, base, roster }: { entries: PlayerAmount
   );
 }
 
-/** A buffed player: how much of the damage or healing came from which Evokers' buffs. */
+/** Reattributed, a buffed player: the Aug support credited to Evokers, by buff and Evoker. */
+export function AugSupportList({ shares, spells, roster }: { shares: BuffShare[]; spells: SpellNames; roster: Map<number, PlayerRef> }) {
+  return (
+    <>
+      <div className="side-section">
+        <span className="cap">{t('aug.movedToEvokers')}</span>
+      </div>
+      <div role="table" aria-label={t('aug.movedToEvokers')}>
+        {shares.map((share) => {
+          const buff = reportSpellName(spells, share.buffId);
+          const evoker = roster.get(share.evoker);
+          return (
+            <div role="row" className="side-row" key={`${share.buffId}-${share.evoker}`}>
+              <span role="cell">
+                <GameIcon src={spellIconUrl(share.buffId)} name={buff} />
+              </span>
+              <span role="cell" className="side-cell">
+                <span className="side-label">
+                  {buff}
+                  <span className="side-note" style={{ color: classColor(evoker?.classToken ?? null) }}>
+                    {playerLabel(evoker)}
+                  </span>
+                </span>
+              </span>
+              <span role="cell" className="num side-amount side-amount-negative">
+                {formatMillions(-share.amount)}
+              </span>
+              <span role="cell" className="num side-share" />
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+/** Augmented, a buffed player: how much of the damage or healing came from which Evokers' buffs. */
 export function GivenCallout({ amount, from, roster, metric }: { amount: number; from: PlayerAmount[]; roster: Map<number, PlayerRef>; metric: AugMetric }) {
   const names = from.map((entry) => playerLabel(roster.get(entry.player))).join(', ') || t('aug.givenAnEvoker');
   return (

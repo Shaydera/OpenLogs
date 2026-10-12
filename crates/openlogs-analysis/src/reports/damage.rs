@@ -4,7 +4,9 @@ use crate::actors::ActorId;
 use crate::fight::Fight;
 use crate::filter::{Attribution, ReportFilter};
 use crate::reports::{
-    AbilityRow, PetNames, RowKind, Rows, Share, damage_share, per_second, sorted_by_amount,
+    AbilityRow, AbilityTargets, BuffShare, GroupAbilities, PetNames, RowKind, Share, SupportAcc,
+    SupportLedger, SupportShare, TargetShare, UnitCounts, color_groups, credit_support,
+    damage_share, damage_target, group_abilities, per_second, sorted_by_amount, support_entry,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -27,6 +29,16 @@ pub struct PlayerDamage {
     pub support_by_recipient: Vec<(ActorId, u64)>,
     /// Support received, by Evoker.
     pub support_received_from: Vec<(ActorId, u64)>,
+    /// Support received, by buff and Evoker.
+    pub support_received_by_buff: Vec<BuffShare>,
+    /// Support the player's buffs added (own share included), by buff.
+    pub support_credited_by_buff: Vec<BuffShare>,
+    /// By target, largest first.
+    pub targets: Vec<TargetShare>,
+    /// Each ability row by target.
+    pub ability_targets: Vec<AbilityTargets>,
+    /// The largest abilities on each of the report's colour groups.
+    pub group_abilities: Vec<GroupAbilities>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -34,23 +46,32 @@ pub struct DamageReport {
     pub duration_ms: u64,
     pub total: u64,
     pub players: Vec<PlayerDamage>,
+    /// Every support share by buff, Evoker, buffed player and ability; the same in both modes.
+    pub support: Vec<SupportShare>,
+    /// Units of each enemy name that took damage in the range.
+    pub units: Vec<(String, u32)>,
+    /// The raid's largest enemy groups in the range, largest first; the bars' colours.
+    pub color_groups: Vec<String>,
 }
 
 #[derive(Default)]
 struct Acc {
     own: u64,
-    received: u64,
-    given: u64,
-    self_support: u64,
-    rows: Rows,
-    recipients: HashMap<ActorId, u64>,
-    givers: HashMap<ActorId, u64>,
+    support: SupportAcc,
 }
 
 pub fn damage_done(fight: &Fight, filter: &ReportFilter) -> DamageReport {
+    let reattributed = filter.attribution == Attribution::Reattributed;
     let mut acc: HashMap<ActorId, Acc> = HashMap::new();
     let mut pets = PetNames::default();
-    for event in fight.events.iter().filter(|e| filter.contains(e.t)) {
+    let mut ledger = SupportLedger::default();
+    let mut units = UnitCounts::default();
+    for (index, event) in fight
+        .events
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| filter.contains(e.t))
+    {
         match damage_share(fight, event) {
             Some(Share::Own {
                 player,
@@ -69,96 +90,65 @@ pub fn damage_done(fight: &Fight, filter: &ReportFilter) -> DamageReport {
                 };
                 let entry = acc.entry(player).or_default();
                 entry.own += amount;
-                entry
-                    .rows
-                    .add(spell, actor, kind, amount as i64, 0, critical, periodic);
-            }
-            Some(Share::Support {
-                player,
-                evoker,
-                spell,
-                amount,
-            }) => {
-                let buffed = acc.entry(player).or_default();
-                buffed.received += amount;
-                buffed.rows.add(
+                entry.support.rows.add(
                     spell,
-                    evoker,
-                    RowKind::SupportDeducted,
-                    -(amount as i64),
-                    0,
-                    false,
-                    false,
-                );
-                *buffed.givers.entry(evoker).or_default() += amount;
-                let giver = acc.entry(evoker).or_default();
-                giver.given += amount;
-                giver.rows.add(
-                    spell,
-                    evoker,
-                    RowKind::SupportGiven,
+                    actor,
+                    kind,
+                    damage_target(event.target),
                     amount as i64,
                     0,
-                    false,
-                    false,
+                    critical,
+                    periodic,
                 );
-                *giver.recipients.entry(player).or_default() += amount;
             }
-            Some(Share::SelfSupport {
-                player,
-                spell,
-                amount,
-            }) => {
-                let entry = acc.entry(player).or_default();
-                entry.self_support += amount;
-                // Reattributed rows credit the own share like any support and deduct it again,
-                // so the rows add up to the total.
-                entry.rows.add(
-                    spell,
-                    player,
-                    RowKind::SupportGiven,
-                    amount as i64,
-                    0,
-                    false,
-                    false,
-                );
-                entry.rows.add(
-                    spell,
-                    player,
-                    RowKind::SupportDeducted,
-                    -(amount as i64),
-                    0,
-                    false,
-                    false,
+            Some(Share::Support(support)) => {
+                let target = damage_target(support.target);
+                credit_support(
+                    &mut acc,
+                    |a| &mut a.support,
+                    &mut ledger,
+                    reattributed,
+                    support_entry(fight, &mut pets, index, support, target),
                 );
             }
             None => {}
         }
     }
 
-    let reattributed = filter.attribution == Attribution::Reattributed;
     let duration_ms = filter.duration_ms(fight);
+    let mut target_spells = HashMap::new();
     let mut players: Vec<PlayerDamage> = acc
         .into_iter()
         .map(|(player, a)| {
+            let s = a.support;
             // Saturating: a support share whose main hit fell outside the range must not underflow.
             let total = if reattributed {
-                (a.own + a.given).saturating_sub(a.received)
+                (a.own + s.given).saturating_sub(s.received)
             } else {
                 a.own
             };
+            let support_received_by_buff = s.received_by_buff();
+            let support_credited_by_buff = s.credited_by_buff(player);
+            units.extend(s.rows.units());
+            let parts = s.rows.into_parts(fight);
+            target_spells.insert(player, parts.target_spells);
             PlayerDamage {
                 player,
                 own: a.own,
-                support_received: a.received,
-                support_given: a.given,
-                support_self: a.self_support,
+                support_received: s.received,
+                support_given: s.given,
+                support_self: s.self_support,
                 total,
                 per_second: per_second(total, duration_ms),
                 share: 0.0,
-                abilities: a.rows.into_sorted(reattributed),
-                support_by_recipient: sorted_by_amount(a.recipients),
-                support_received_from: sorted_by_amount(a.givers),
+                abilities: parts.rows,
+                support_by_recipient: sorted_by_amount(s.recipients),
+                support_received_from: sorted_by_amount(s.givers),
+                support_received_by_buff,
+                support_credited_by_buff,
+                targets: parts.targets,
+                ability_targets: parts.ability_targets,
+                group_abilities: Vec::new(),
             }
         })
         .filter(|p| p.total > 0)
@@ -172,9 +162,16 @@ pub fn damage_done(fight: &Fight, filter: &ReportFilter) -> DamageReport {
         };
     }
     players.sort_by(|a, b| b.total.cmp(&a.total).then(a.player.cmp(&b.player)));
+    let color_groups = color_groups(players.iter().flat_map(|p| &p.targets));
+    for p in &mut players {
+        p.group_abilities = group_abilities(&target_spells[&p.player], &color_groups);
+    }
     DamageReport {
         duration_ms,
         total,
         players,
+        support: ledger.into_sorted(),
+        units: units.into_sorted(fight),
+        color_groups,
     }
 }

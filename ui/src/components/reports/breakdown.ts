@@ -29,7 +29,6 @@ export interface BreakdownRow {
 }
 
 export interface BreakdownContext {
-  player: number;
   total: number;
   spells: SpellNames;
   roster: Map<number, PlayerRef>;
@@ -59,7 +58,7 @@ function topWithOther(entries: Entry[], top: number): Entry[] {
   return shown;
 }
 
-/** Keeps the order: the top rows by amount, "Other", then the deductions. */
+/** Keeps the order: the top rows by amount, "Other", then unmatched support. */
 function finish(entries: Entry[], total: number): BreakdownRow[] {
   const max = Math.max(0, ...entries.map((entry) => entry.amount));
   return entries.map((entry) => ({
@@ -71,11 +70,11 @@ function finish(entries: Entry[], total: number): BreakdownRow[] {
 
 /**
  * Damage Done / Healing side panel: the top abilities by amount — own and pet abilities (same name merged, pets
- * included) and an Evoker's support rows — then "Other" and the deductions folded per Evoker.
+ * included; net of Aug support in Reattributed mode) and an Evoker's support rows — then "Other" and unmatched support.
  */
 export function abilityBreakdown(rows: AbilityRow[], ctx: BreakdownContext): BreakdownRow[] {
   const abilities: Entry[] = [];
-  const deducted: Entry[] = [];
+  const unmatched: Entry[] = [];
   for (const row of rows) {
     const name = reportSpellName(ctx.spells, row.spellId);
     const icon = spellIconUrl(row.spellId);
@@ -85,12 +84,10 @@ export function abilityBreakdown(rows: AbilityRow[], ctx: BreakdownContext): Bre
     } else if (row.kind === 'support_given') {
       abilities.push({ key: `support:${name}`, tone: 'support', icon, name, note: null, noteColor: null, amount: row.amount });
     } else {
-      const evoker = shortName(ctx.roster.get(row.actorId)?.name ?? row.actorName);
-      const label = row.actorId === ctx.player ? t('report.ownShareDeducted') : t('report.reattributedTo', { name: evoker });
-      deducted.push({ key: `deducted:${row.actorId}`, tone: 'negative', icon: null, name: label, note: null, noteColor: null, amount: row.amount });
+      unmatched.push({ key: 'unmatched', tone: 'negative', icon: null, name: t('report.unmatchedHits'), note: null, noteColor: null, amount: row.amount });
     }
   }
-  return finish([...topWithOther(merged(abilities), ctx.top ?? TOP_ABILITIES), ...merged(deducted).sort(byAmount)], ctx.total);
+  return finish([...topWithOther(merged(abilities), ctx.top ?? TOP_ABILITIES), ...unmatched], ctx.total);
 }
 
 /** The source of damage taken: a player by short name in the class colour, else the log's name. */
@@ -104,7 +101,7 @@ export function takenSource(
 }
 
 /** Damage Taken side panel: the player's damage by ability and source, top rows and "Other". */
-export function takenBreakdown(abilities: TakenAbility[], ctx: Omit<BreakdownContext, 'player'>): BreakdownRow[] {
+export function takenBreakdown(abilities: TakenAbility[], ctx: BreakdownContext): BreakdownRow[] {
   const entries = abilities.map((hit): Entry => {
     const name = hitName(hit, (id) => reportSpellName(ctx.spells, id));
     const source = takenSource(hit, ctx.roster);

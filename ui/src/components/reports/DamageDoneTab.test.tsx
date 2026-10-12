@@ -31,43 +31,47 @@ describe('DamageDoneTab', () => {
     const abilities = within(side()).getByRole('table', { name: 'Abilities of Speronis' });
     expect(within(abilities).getAllByRole('row').slice(1).map((row) => within(row).getAllByRole('cell')[2].textContent)).toEqual([
       '50.18M',
-      '38.00M',
+      '37.82M',
       '37.29M',
-      '−0.18M',
     ]);
   });
 
-  it("opens the selected player's page from the side panel", async () => {
+  it("drills into the selected player's targets and opens the player page", async () => {
     const openPlayer = vi.fn(async () => {});
     useApp.setState({ openPlayer });
     render(<DamageDoneTab report={damageReportFixture} />);
     await userEvent.click(rowOf('Faelan'));
+    await userEvent.click(within(side()).getByRole('button', { name: 'Targets' }));
+    const targets = within(side()).getByRole('table', { name: 'Targets of Faelan' });
+    expect(within(targets).getByText("Ula'tek")).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Player details →' }));
     expect(openPlayer).toHaveBeenCalledWith(4);
   });
 
   it("moves a buffed player's Aug support to the Evoker only in Reattributed mode", async () => {
     render(<DamageDoneTab report={damageReportFixture} />);
-    await userEvent.click(rowOf('Faelan'));
-    expect(within(side()).getByRole('table', { name: 'Abilities of Faelan' })).toHaveTextContent('Reattributed to Speronis−13.86M');
-    expect(side()).toHaveTextContent("13.86M of this damage came from Speronis's Augmentation buffs.");
     await userEvent.click(rowOf('Speronis'));
     expect(screen.getByRole('table', { name: 'Support by recipient' })).toBeInTheDocument();
+    await userEvent.click(rowOf('Faelan'));
+    const credited = screen.getByRole('table', { name: 'Aug support credited to Evokers' });
+    expect(credited).toHaveTextContent('Prescience');
+    expect(credited).toHaveTextContent('−13.86M');
 
     act(() => useApp.setState({ attribution: 'augmented' }));
-    expect(screen.queryByRole('table', { name: 'Support by recipient' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: 'Aug support credited to Evokers' })).not.toBeInTheDocument();
+    expect(side()).toHaveTextContent("13.86M of this damage came from Speronis's Augmentation buffs.");
   });
 
-  it("explains a player's Aug split in a tooltip below the row", async () => {
+  it("explains a player's Aug split in a tooltip on the total", async () => {
     render(<DamageDoneTab report={damageReportFixture} />);
-    expect(within(rowOf('Faelan')).getByText('103.23M')).toHaveClass('dotted');
-    await userEvent.hover(rowOf('Faelan'));
+    const total = within(rowOf('Faelan')).getByText('103.23M');
+    await userEvent.hover(total);
     const tip = screen.getByRole('tooltip');
     expect(tip).toHaveTextContent('Damage as logged (Augmented)117.09M');
     expect(tip).toHaveTextContent('From Speronis’s buffs−13.86M');
     expect(tip).toHaveTextContent('Shown in table: Reattributed');
     expect(rowOf('Faelan')).toHaveAttribute('aria-describedby', tip.id);
-    await userEvent.unhover(rowOf('Faelan'));
+    await userEvent.unhover(total);
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 
