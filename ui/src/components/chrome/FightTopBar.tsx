@@ -5,6 +5,7 @@ import { useApp } from '../../store';
 import { CompareMenu } from '../compare/CompareMenu';
 import { type CrumbAction, fightCrumbs } from './crumbs';
 import { RangeChip } from './RangeChip';
+import { ThemeSwitch } from './ThemeSwitch';
 
 /**
  * The top bar of every fight screen: the app name back to the pull list, the breadcrumb, the range pill
@@ -52,7 +53,7 @@ export function FightTopBar({ row, currentRef }: { row: FightRow; currentRef?: R
   }
 
   return (
-    <header className="appbar">
+    <header className="appbar brand-island">
       <button type="button" className="appbar-home" aria-label={t('chrome.home')} onClick={backToPulls}>
         <span className="appbar-brand">{t('app.name')}</span>
       </button>
@@ -88,6 +89,7 @@ export function FightTopBar({ row, currentRef }: { row: FightRow; currentRef?: R
       <div className="appbar-end">
         {!comparing && details.length > 0 && range !== null && <RangeChip range={range} onClear={clearRange} />}
         {!comparing && <CompareMenu row={row} />}
+        <ThemeSwitch />
       </div>
     </header>
   );

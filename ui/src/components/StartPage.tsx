@@ -7,6 +7,7 @@ import { t } from '../i18n/i18n';
 import { groupPulls, groupRuns } from '../pulls/groupPulls';
 import { logStartMs } from '../pulls/logStart';
 import { useApp } from '../store';
+import { ThemeSwitch } from './chrome/ThemeSwitch';
 import { DropZone } from './DropZone';
 import { PullList, RunCards } from './PullList';
 import { RecentLogs } from './RecentLogs';
@@ -36,12 +37,13 @@ export function StartPage({ dragOver }: { dragOver: boolean }) {
 
   return (
     <div>
-      <header className="topbar">
+      <header className="topbar brand-island">
         <div className="brand-row">
           <div className="brand">{t('app.name')}</div>
           <div className="tagline">{t('app.tagline')}</div>
         </div>
         <div className="topbar-actions">
+          <ThemeSwitch />
           <button type="button" className="btn" onClick={() => void openSettings()}>
             {t('settings.open')}
           </button>

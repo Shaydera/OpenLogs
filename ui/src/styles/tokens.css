@@ -1,4 +1,6 @@
-/* Colour tokens: data colours (classes, kill/wipe, targets, …), then surfaces, text and the accent. */
+/* Colour tokens. Data colours (classes, kill/wipe, targets, …) have one set per mode; surfaces, text and the
+   accent one set per theme and mode. The root's data-theme and data-mode pick them (theme.ts); without
+   them the default, Slate & Ember in dark, applies. */
 :root {
   --font-label: 'Barlow Semi Condensed', sans-serif;
   --font-text: 'IBM Plex Sans', sans-serif;
@@ -11,8 +13,10 @@
   --shadow: #000000;
 }
 
-/* Data colours. */
-:root {
+/* Data colours, dark. Bark & Paper keeps its top bars dark in light mode too (.brand-island). */
+:root,
+:root[data-mode="dark"],
+:root[data-theme="bark"][data-mode="light"] .brand-island {
   color-scheme: dark;
   --kill: #4e9fe0;
   --kill-text: #86c8fa;
@@ -63,7 +67,7 @@
   --support-tint-soft: #101a18;
   --support-tint-line: #1f3a33;
 
-  /* Blizzard class colours; DK, DH, Shaman and Evoker brightened for text on dark. */
+  /* Blizzard class colours; DK, DH, Shaman and Evoker brightened for text on dark, all darkened for light. */
   --class-warrior: #c69b6d;
   --class-paladin: #f48cba;
   --class-hunter: #aad372;
@@ -90,8 +94,176 @@
   --dialog-scrim: color-mix(in srgb, var(--scrim) 72%, transparent);
 }
 
-/* Surfaces, text and the accent. */
-:root {
+:root[data-mode="light"] {
+  color-scheme: light;
+  --kill: #2f7fc9;
+  --kill-text: #1d6ab0;
+  --wipe: #c2681f;
+  --wipe-text: #a14d0c;
+  --death: #b8372d;
+
+  /* The two pulls of a comparison (A earlier, B later). Checked on --panel for
+     lightness band, chroma, colour-blind separation (ΔE 25) and ≥ 3:1 contrast. B's line is also dashed. */
+  --pull-a: #94680f;
+  --pull-b: #6a58cf;
+
+  /* Bloodlust line on the cooldown rows; the timeline marker is --lust. */
+  --lust-line: #6885a0;
+  /* Tinted backgrounds and borders of chips, badges and selected filters. */
+  --kill-tint: #e2eef9;
+  --kill-tint-soft: #eef5fc;
+  --kill-tint-line: #afcdec;
+  --wipe-tint: #f8e4d0;
+  --wipe-tint-soft: #fcf1e6;
+  --wipe-tint-line: #e6b98c;
+  --death-tint: #fbe3e1;
+  --death-tint-line: #edb7b3;
+
+  /* Damage segments of the last 5 s before a death, largest first. */
+  --segment-1: #c8701f;
+  --segment-2: #a8693a;
+  --segment-3: #8a5f42;
+  --segment-4: #6a5444;
+
+  /* Target breakdown: the raid's four largest enemy groups and the rest; healed players' roles. */
+  --target-1: #a37f14;
+  --target-2: #7c5cc4;
+  --target-3: #2f7fc9;
+  --target-4: #c2681f;
+  --target-other: #7c838e;
+  --role-tank: #c2681f;
+  --role-healer: #2a8f51;
+  --role-dps: #2f7fc9;
+
+  /* Kill chip text on --kill-tint; --kill-text is for other kill-blue text. */
+  --kill-chip: #1a5f9e;
+  /* Bloodlust / Time Warp marker, dashed. */
+  --lust: #1a78c2;
+  /* Aug support: SUPPORT tag, gains, the "given" callout. */
+  --support-text: #1b7461;
+  --support-tint: #ddf3ee;
+  --support-tint-soft: #eef9f6;
+  --support-tint-line: #a8dccf;
+
+  /* Blizzard class colours; DK, DH, Shaman and Evoker brightened for text on dark, all darkened for light. */
+  --class-warrior: #8a5f34;
+  --class-paladin: #b23e76;
+  --class-hunter: #4e7518;
+  --class-rogue: #7a6800;
+  --class-priest: #626974;
+  --class-deathknight: #c41e3a;
+  --class-shaman: #0062c4;
+  --class-mage: #0e7295;
+  --class-warlock: #5959d2;
+  --class-monk: #007950;
+  --class-druid: #ad4a0a;
+  --class-demonhunter: #9b35c0;
+  --class-evoker: #1e7664;
+
+  /* The player chart's dashed mana line. */
+  --mana: #6656d6;
+  /* The legend swatch of a dead band: two hatch stripes. */
+  --dead-hatch-a: #f1d6d6;
+  --dead-hatch-b: #faeeee;
+  /* The killing blow's row in the death recap's events. */
+  --death-row: #fbe6e4;
+  /* Veils: outside the selected range on a plot, behind a dialog. */
+  --plot-dim: color-mix(in srgb, var(--panel) 75%, transparent);
+  --dialog-scrim: color-mix(in srgb, var(--scrim) 40%, transparent);
+}
+
+/* Bark & Paper, dark. */
+:root[data-theme="bark"][data-mode="dark"],
+:root[data-theme="bark"][data-mode="light"] .brand-island {
+  --bg: #101010;
+  --header: #24160d;
+  --panel: #181818;
+  --panel-raised: #1f1f1f;
+  --line: #282827;
+  --line-strong: #343333;
+  --line-soft: #252524;
+  --line-faint: #1f1f1f;
+  --text: #eeeae4;
+  --text-soft: #cfc9c0;
+  --muted: #a19a90;
+  /* Dashes and the pull-list chevron; at least 4.5:1 on --panel and --panel-raised. */
+  --faint: #908a82;
+  /* "None" dash of the Overview tables; 3:1 on --panel, a non-text symbol. */
+  --dash: #6a665f;
+  /* Links, the selected tab, primary buttons; tints for chips and selected filters. */
+  --accent: #e8913a;
+  --accent-hover: #f2a65a;
+  --on-accent: #1f1206;
+  --accent-line: #42301f;
+  --accent-tint: #35291d;
+  --accent-tint-soft: #27201a;
+  --accent-tint-line: #674625;
+  --hover: #1d1d1d;
+  --hover-soft: #1b1b1b;
+  --tile: #222121;
+  --neutral-tint: #222121;
+  --neutral-tint-soft: #1d1d1d;
+  --neutral-text: #908a82;
+  --neutral-fill: #3f3e3d;
+  --dropzone: #131313;
+  --icon-ring: #3c3c3b;
+  --icon-tile: #282827;
+  /* Timeline and range plots, report bars, role pills, the hit chart's baseline. */
+  --plot: #141414;
+  --dps-area: #253e51;
+  --hatch: #191919;
+  --bar-track: #212020;
+  --tag-bg: #252524;
+  --chart-baseline: #2b2b2a;
+}
+
+/* Bark & Paper, light. */
+:root[data-theme="bark"][data-mode="light"] {
+  --bg: #f4f1ec;
+  --header: #ffffff;
+  --panel: #ffffff;
+  --panel-raised: #f8f6f2;
+  --line: #e4e4e3;
+  --line-strong: #d3d1d0;
+  --line-soft: #ededec;
+  --line-faint: #f4f4f3;
+  --text: #221a13;
+  --text-soft: #44382d;
+  --muted: #5f554b;
+  /* Dashes and the pull-list chevron; at least 4.5:1 on --panel and --panel-raised. */
+  --faint: #6a5f53;
+  /* "None" dash of the Overview tables; 3:1 on --panel, a non-text symbol. */
+  --dash: #918879;
+  /* Links, the selected tab, primary buttons; tints for chips and selected filters. */
+  --accent: #a1500d;
+  --accent-hover: #83410a;
+  --on-accent: #ffffff;
+  --accent-line: #ecdccf;
+  --accent-tint: #f4eae2;
+  --accent-tint-soft: #f9f4f0;
+  --accent-tint-line: #dec2aa;
+  --hover: #f7f7f7;
+  --hover-soft: #fbfbfb;
+  --tile: #f5f5f4;
+  --neutral-tint: #f4f4f3;
+  --neutral-tint-soft: #f8f8f8;
+  --neutral-text: #6a5f53;
+  --neutral-fill: #c6c3c2;
+  --dropzone: #f1eee9;
+  --icon-ring: #cecdcb;
+  --icon-tile: #ededec;
+  /* Timeline and range plots, report bars, role pills, the hit chart's baseline. */
+  --plot: #fbfaf8;
+  --dps-area: #c2d8eb;
+  --hatch: #f2f1ef;
+  --bar-track: #f0efee;
+  --tag-bg: #f0efee;
+  --chart-baseline: #e0dfde;
+}
+
+/* Slate & Ember (default), dark. */
+:root,
+:root[data-theme="slate"][data-mode="dark"] {
   --bg: #0c0e12;
   --header: #0f1116;
   --panel: #13161c;
@@ -132,6 +304,55 @@
   --bar-track: #1a1e25;
   --tag-bg: #1e2533;
   --chart-baseline: #252a34;
+}
+
+/* Slate & Ember (default), light. */
+:root[data-theme="slate"][data-mode="light"] {
+  --bg: #f3f4f6;
+  --header: #ffffff;
+  --panel: #ffffff;
+  --panel-raised: #f7f8fa;
+  --line: #e4e4e5;
+  --line-strong: #d1d2d3;
+  --line-soft: #ededed;
+  --line-faint: #f4f4f4;
+  --text: #1b1f24;
+  --text-soft: #3d444d;
+  --muted: #59616c;
+  /* Dashes and the pull-list chevron; at least 4.5:1 on --panel and --panel-raised. */
+  --faint: #646c78;
+  /* "None" dash of the Overview tables; 3:1 on --panel, a non-text symbol. */
+  --dash: #8a919b;
+  /* Links, the selected tab, primary buttons; tints for chips and selected filters. */
+  --accent: #a1500d;
+  --accent-hover: #83410a;
+  --on-accent: #ffffff;
+  --accent-line: #ecdccf;
+  --accent-tint: #f4eae2;
+  --accent-tint-soft: #f9f4f0;
+  --accent-tint-line: #dec2aa;
+  --hover: #f7f7f7;
+  --hover-soft: #fbfbfb;
+  --tile: #f5f5f5;
+  --neutral-tint: #f4f4f4;
+  --neutral-tint-soft: #f8f8f8;
+  --neutral-text: #646c78;
+  --neutral-fill: #c4c5c6;
+  --dropzone: #f0f1f3;
+  --icon-ring: #cdcecf;
+  --icon-tile: #ededed;
+  /* Timeline and range plots, report bars, role pills, the hit chart's baseline. */
+  --plot: #fbfbfc;
+  --dps-area: #c2d8ee;
+  --hatch: #f2f2f3;
+  --bar-track: #efeff0;
+  --tag-bg: #efeff0;
+  --chart-baseline: #dfe0e0;
+}
+
+/* The branded bar is a little lighter than the dark page behind it. */
+:root[data-theme="bark"][data-mode="light"] .brand-island {
+  --header: #3a2414;
 }
 
 html,

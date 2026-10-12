@@ -5,6 +5,7 @@ import { StartPage } from './components/StartPage';
 import { useLogDrop } from './hooks/useLogDrop';
 import { t } from './i18n/i18n';
 import { useApp } from './store';
+import { applyTheme, followSystemScheme } from './theme';
 
 export function App() {
   const refreshRecent = useApp((s) => s.refreshRecent);
@@ -14,10 +15,18 @@ export function App() {
   const view = useApp((s) => s.view);
   const settingsOpen = useApp((s) => s.settingsOpen);
   const dragOver = useLogDrop(openLog);
+  const theme = useApp((s) => s.theme);
+  const themeMode = useApp((s) => s.themeMode);
 
   useEffect(() => {
     void refreshRecent();
   }, [refreshRecent]);
+
+  useEffect(() => {
+    applyTheme(theme, themeMode);
+    if (themeMode !== 'system') return;
+    return followSystemScheme(() => applyTheme(theme, themeMode));
+  }, [theme, themeMode]);
 
   return (
     <>

@@ -19,10 +19,15 @@ import './styles/reports.css';
 import './styles/details.css';
 import './styles/tabs.css';
 import './styles/breakdown.css';
+import './styles/theme.css';
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { applyTheme, readTheme, readThemeMode } from './theme';
+
+// Before the first render, so the stored theme paints from the start.
+applyTheme(readTheme(), readThemeMode());
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

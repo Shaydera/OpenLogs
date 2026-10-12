@@ -1,14 +1,21 @@
-import { type KeyboardEvent, useEffect, useRef } from 'react';
+import { type KeyboardEvent, useEffect, useId, useRef } from 'react';
 import type { GameDataStatus, TableStatus } from '../api/types';
 import { formatLocalDate } from '../i18n/format';
 import { type MessageKey, t } from '../i18n/i18n';
 import { useApp } from '../store';
+import { THEMES, type ThemeName } from '../theme';
+import { ThemeSwitch } from './chrome/ThemeSwitch';
 
 const TABLES: { key: keyof Omit<GameDataStatus, 'refreshing'>; name: MessageKey; entries: MessageKey }[] = [
   { key: 'spellIcons', name: 'settings.spellIcons', entries: 'settings.entries.spellIcons' },
   { key: 'dungeons', name: 'settings.dungeons', entries: 'settings.entries.dungeons' },
   { key: 'bossPortraits', name: 'settings.bossPortraits', entries: 'settings.entries.bossPortraits' },
 ];
+
+const THEME_TEXT: Record<ThemeName, { name: MessageKey; hint: MessageKey }> = {
+  slate: { name: 'theme.slate', hint: 'theme.slateHint' },
+  bark: { name: 'theme.bark', hint: 'theme.barkHint' },
+};
 
 /** How often the dialog asks for the status while a sync runs. */
 const POLL_MS = 2000;
@@ -29,6 +36,8 @@ export function SettingsDialog() {
   const setHideAborted = useApp((s) => s.setHideAborted);
   const hideProcs = useApp((s) => s.hideProcs);
   const setHideProcs = useApp((s) => s.setHideProcs);
+  const theme = useApp((s) => s.theme);
+  const setTheme = useApp((s) => s.setTheme);
   const showAugDelta = useApp((s) => s.showAugDelta);
   const setShowAugDelta = useApp((s) => s.setShowAugDelta);
   const gameData = useApp((s) => s.gameData);
@@ -37,6 +46,7 @@ export function SettingsDialog() {
   const loadStatus = useApp((s) => s.loadGameDataStatus);
   const refresh = useApp((s) => s.refreshGameData);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const hintId = useId();
   const backendBusy = gameData?.refreshing ?? false;
   const refreshing = requested || backendBusy;
   // Until the first status answers, a sync may already run (app start): offer nothing to start yet.
@@ -79,6 +89,31 @@ export function SettingsDialog() {
           </button>
         </div>
         <div className="settings-body">
+          <h3 className="cap settings-label">{t('theme.title')}</h3>
+          <fieldset className="theme-choices">
+            <legend className="sr-only">{t('theme.theme')}</legend>
+            {THEMES.map((name) => (
+              <label key={name} className={name === theme ? 'theme-choice theme-choice-on' : 'theme-choice'}>
+                <input
+                  type="radio"
+                  name="theme"
+                  value={name}
+                  checked={name === theme}
+                  aria-describedby={`${hintId}-${name}`}
+                  onChange={() => setTheme(name)}
+                />
+                <span className="theme-choice-name">{t(THEME_TEXT[name].name)}</span>
+                {/* Out of the radio's name; read as its description instead. */}
+                <span id={`${hintId}-${name}`} className="theme-choice-hint" aria-hidden="true">
+                  {t(THEME_TEXT[name].hint)}
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          <div className="settings-mode">
+            <span>{t('theme.mode')}</span>
+            <ThemeSwitch labelled />
+          </div>
           <h3 className="cap settings-label">{t('settings.preferences')}</h3>
           <label className="toggle">
             <input type="checkbox" checked={hideAborted} onChange={(event) => setHideAborted(event.target.checked)} />

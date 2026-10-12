@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import tokensCss from './tokens.css?raw';
+import { themeTokens } from '../test/themeTokens';
 
 /** WCAG 2 relative luminance of `#rrggbb`. */
 function luminance(hex: string): number {
@@ -37,12 +38,11 @@ const FIXED_PAIRS: [foreground: string, background: string, minimum: number][] =
   ),
 ];
 
-const tokens = Object.fromEntries(
-  [...tokensCss.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/--([\w-]+):([^;]+);/g)].map(([, name, value]) => [name, value.trim()]),
-);
+const combinations = (['slate', 'bark'] as const).flatMap((theme) => (['dark', 'light'] as const).map((mode) => [theme, mode] as const));
 
-describe('colour tokens', () => {
-  it('meet WCAG contrast minimums', () => {
+describe('theme colours', () => {
+  it.each(combinations)('meet WCAG contrast minimums in %s, %s', (theme, mode) => {
+    const tokens = themeTokens(tokensCss, theme, mode);
     const classPairs = Object.keys(tokens)
       .filter((name) => name.startsWith('class-'))
       .flatMap((name) => ['panel', 'panel-raised', 'tile'].map((background): [string, string, number] => [name, background, TEXT]));

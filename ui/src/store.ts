@@ -26,6 +26,7 @@ import type {
 } from './api/types';
 import { t } from './i18n/i18n';
 import { readStored, writeStored } from './storage';
+import { type ThemeMode, type ThemeName, readTheme, readThemeMode, storeTheme, storeThemeMode } from './theme';
 
 const HIDE_ABORTED_KEY = 'hideAborted';
 const AUG_DELTA_KEY = 'showAugDelta';
@@ -109,6 +110,8 @@ interface State {
   colorByTarget: boolean;
   /** Casts tab: hide curated procs and passive triggers. */
   hideProcs: boolean;
+  theme: ThemeName;
+  themeMode: ThemeMode;
   /** Casts tab: the chosen player (`null` = the top caster) and the spell sort; kept per pull. */
   castsPlayer: number | null;
   castsSort: CastsSort;
@@ -152,6 +155,8 @@ interface Actions {
   setShowAugDelta(show: boolean): void;
   setColorByTarget(on: boolean): void;
   setHideProcs(hide: boolean): void;
+  setTheme(theme: ThemeName): void;
+  setThemeMode(mode: ThemeMode): void;
   selectCastsPlayer(player: number): void;
   setCastsSort(sort: CastsSort): void;
   setAuraScope(scope: AuraScope): Promise<void>;
@@ -208,6 +213,8 @@ export function initialState(): State {
     showAugDelta: readFlag(AUG_DELTA_KEY, false),
     colorByTarget: readFlag(COLOR_BY_TARGET_KEY, false),
     hideProcs: readFlag(HIDE_PROCS_KEY, true),
+    theme: readTheme(),
+    themeMode: readThemeMode(),
     castsPlayer: null,
     castsSort: DEFAULT_CASTS_SORT,
     auraScope: 'buffs_on_players',
@@ -614,6 +621,16 @@ export const useApp = create<State & Actions>()((set, get) => ({
   setHideProcs(hide) {
     writeFlag(HIDE_PROCS_KEY, hide);
     set({ hideProcs: hide });
+  },
+
+  setTheme(theme) {
+    storeTheme(theme);
+    set({ theme });
+  },
+
+  setThemeMode(mode) {
+    storeThemeMode(mode);
+    set({ themeMode: mode });
   },
 
   selectCastsPlayer(player) {

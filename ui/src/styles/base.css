@@ -163,7 +163,7 @@
   min-height: 44px;
   cursor: pointer;
 }
-/* The native box stays white when unchecked. */
+/* The native box stays white when unchecked, in dark mode too. */
 .toggle input {
   width: 18px;
   height: 18px;
