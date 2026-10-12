@@ -5,12 +5,19 @@
   --font-label: 'Barlow Semi Condensed', sans-serif;
   --font-text: 'IBM Plex Sans', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
+  --font-brand: 'Fraunces', serif;
 
   /* Game icon frame: 1px black border. */
   --icon-edge: #000000;
   /* Base of the dark veils (--plot-dim, --dialog-scrim) and of shadows (at 55%). */
   --scrim: #08090c;
   --shadow: #000000;
+  /* The logo's wood and the dark brown of its crack, ring and pith. */
+  --logo-wood: #e8913a;
+  --logo-ink: #4a2511;
+  /* Luminance masks of the logo glyphs: white keeps, black cuts. */
+  --mask-keep: #ffffff;
+  --mask-cut: #000000;
 }
 
 /* Data colours, dark. Bark & Paper keeps its top bars dark in light mode too (.brand-island). */
@@ -89,6 +96,9 @@
   --dead-hatch-b: #1a1214;
   /* The killing blow's row in the death recap's events. */
   --death-row: #2a1514;
+  /* The logo: letters and bark ring (wood and crack stay the same in both modes). */
+  --logo-letters: #f4eadb;
+  --logo-bark: #8b5a35;
   /* Veils: outside the selected range on a plot, behind a dialog. */
   --plot-dim: color-mix(in srgb, var(--scrim) 72%, transparent);
   --dialog-scrim: color-mix(in srgb, var(--scrim) 72%, transparent);
@@ -167,6 +177,9 @@
   --dead-hatch-b: #faeeee;
   /* The killing blow's row in the death recap's events. */
   --death-row: #fbe6e4;
+  /* The logo: letters and bark ring (wood and crack stay the same in both modes). */
+  --logo-letters: #4a2511;
+  --logo-bark: #4a2511;
   /* Veils: outside the selected range on a plot, behind a dialog. */
   --plot-dim: color-mix(in srgb, var(--panel) 75%, transparent);
   --dialog-scrim: color-mix(in srgb, var(--scrim) 40%, transparent);
@@ -190,7 +203,7 @@
   --faint: #908a82;
   /* "None" dash of the Overview tables; 3:1 on --panel, a non-text symbol. */
   --dash: #6a665f;
-  /* Links, the selected tab, primary buttons; tints for chips and selected filters. */
+  /* The logo's wood: links, the selected tab, primary buttons; tints for chips and selected filters. */
   --accent: #e8913a;
   --accent-hover: #f2a65a;
   --on-accent: #1f1206;
@@ -234,7 +247,7 @@
   --faint: #6a5f53;
   /* "None" dash of the Overview tables; 3:1 on --panel, a non-text symbol. */
   --dash: #918879;
-  /* Links, the selected tab, primary buttons; tints for chips and selected filters. */
+  /* The logo's wood: links, the selected tab, primary buttons; tints for chips and selected filters. */
   --accent: #a1500d;
   --accent-hover: #83410a;
   --on-accent: #ffffff;
@@ -279,7 +292,7 @@
   --faint: #7d8592;
   /* "None" dash of the Overview tables; 3:1 on --panel, a non-text symbol. */
   --dash: #5e6672;
-  /* Links, the selected tab, primary buttons; tints for chips and selected filters. */
+  /* The logo's wood: links, the selected tab, primary buttons; tints for chips and selected filters. */
   --accent: #e8913a;
   --accent-hover: #f2a65a;
   --on-accent: #1f1206;
@@ -323,7 +336,7 @@
   --faint: #646c78;
   /* "None" dash of the Overview tables; 3:1 on --panel, a non-text symbol. */
   --dash: #8a919b;
-  /* Links, the selected tab, primary buttons; tints for chips and selected filters. */
+  /* The logo's wood: links, the selected tab, primary buttons; tints for chips and selected filters. */
   --accent: #a1500d;
   --accent-hover: #83410a;
   --on-accent: #ffffff;

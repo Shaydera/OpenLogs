@@ -7,6 +7,7 @@ import { t } from '../i18n/i18n';
 import { groupPulls, groupRuns } from '../pulls/groupPulls';
 import { logStartMs } from '../pulls/logStart';
 import { useApp } from '../store';
+import { AppWordmark } from './AppLogo';
 import { ThemeSwitch } from './chrome/ThemeSwitch';
 import { DropZone } from './DropZone';
 import { PullList, RunCards } from './PullList';
@@ -39,7 +40,7 @@ export function StartPage({ dragOver }: { dragOver: boolean }) {
     <div>
       <header className="topbar brand-island">
         <div className="brand-row">
-          <div className="brand">{t('app.name')}</div>
+          <AppWordmark size={32} />
           <div className="tagline">{t('app.tagline')}</div>
         </div>
         <div className="topbar-actions">

@@ -6,6 +6,7 @@ import '@fontsource/ibm-plex-sans/500.css';
 import '@fontsource/ibm-plex-sans/600.css';
 import '@fontsource/ibm-plex-mono/400.css';
 import '@fontsource/ibm-plex-mono/500.css';
+import '@fontsource/fraunces/700.css';
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/start.css';
@@ -19,6 +20,7 @@ import './styles/reports.css';
 import './styles/details.css';
 import './styles/tabs.css';
 import './styles/breakdown.css';
+import './styles/brand.css';
 import './styles/theme.css';
 
 import { StrictMode } from 'react';

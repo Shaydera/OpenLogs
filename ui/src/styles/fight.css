@@ -19,11 +19,6 @@
   color: var(--text);
   cursor: pointer;
 }
-.appbar-brand {
-  font: 700 20px var(--font-label);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
 .appbar-end {
   margin-left: auto;
   display: flex;

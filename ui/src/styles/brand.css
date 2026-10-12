@@ -1,0 +1,43 @@
+/* The wordmark: Fraunces with the beaver and the log mark as its two "o". */
+.wordmark {
+  display: inline-block;
+  font-family: var(--font-brand);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  color: var(--logo-letters);
+}
+.wm-glyph {
+  display: inline-block;
+}
+.wm-beaver {
+  width: 0.66em;
+  height: 0.66em;
+  margin-right: 0.01em;
+  vertical-align: -0.08em;
+}
+.wm-log {
+  width: 0.62em;
+  height: 0.62em;
+  margin-left: 0.02em;
+  vertical-align: -0.06em;
+}
+.wm-mask-keep {
+  fill: var(--mask-keep);
+}
+.wm-mask-cut {
+  fill: var(--mask-cut);
+}
+.wm-letter {
+  fill: var(--logo-letters);
+}
+.wm-bark {
+  fill: var(--logo-bark);
+}
+.wm-wood {
+  fill: var(--logo-wood);
+}
+.wm-ink {
+  fill: var(--logo-ink);
+}

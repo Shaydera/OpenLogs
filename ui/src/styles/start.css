@@ -14,11 +14,6 @@
   align-items: center;
   gap: 14px;
 }
-.brand {
-  font: 700 22px var(--font-label);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
 .tagline {
   font-size: 13px;
   color: var(--muted);

@@ -2,13 +2,14 @@ import { Fragment, type RefObject, useRef } from 'react';
 import type { FightRow } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
+import { AppWordmark } from '../AppLogo';
 import { CompareMenu } from '../compare/CompareMenu';
 import { type CrumbAction, fightCrumbs } from './crumbs';
 import { RangeChip } from './RangeChip';
 import { ThemeSwitch } from './ThemeSwitch';
 
 /**
- * The top bar of every fight screen: the app name back to the pull list, the breadcrumb, the range pill
+ * The top bar of every fight screen: the logo back to the pull list, the breadcrumb, the range pill
  * on a ranged detail page and "Compare with…". `currentRef` gets the last level: the focus target of
  * a page without a title.
  */
@@ -55,7 +56,7 @@ export function FightTopBar({ row, currentRef }: { row: FightRow; currentRef?: R
   return (
     <header className="appbar brand-island">
       <button type="button" className="appbar-home" aria-label={t('chrome.home')} onClick={backToPulls}>
-        <span className="appbar-brand">{t('app.name')}</span>
+        <AppWordmark size={26} />
       </button>
       <nav className="crumbs" aria-label={t('chrome.breadcrumb')}>
         {crumbs.map((crumb, i) => {
