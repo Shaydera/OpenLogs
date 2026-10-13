@@ -6,6 +6,7 @@ members = ["crates/openlogs-parser", "crates/openlogs-index", "crates/openlogs-c
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
+license = "AGPL-3.0-or-later"
 
 [workspace.dependencies]
 clap = { version = "4.5", features = ["derive"] }

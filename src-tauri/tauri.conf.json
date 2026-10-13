@@ -29,6 +29,8 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "license": "AGPL-3.0-or-later",
+    "copyright": "Copyright 2026 Shaydera",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
   }
 }

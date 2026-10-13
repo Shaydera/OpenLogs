@@ -92,3 +92,15 @@ cargo run -p openlogs-cli -- dump-fights path/to/WoWCombatLog.txt
 Spell, class and boss images come from the Wowhead CDN; spell icon names, dungeon and boss data from [wago.tools](https://wago.tools). The game data is exported with each release (`npm --prefix ui run gamedata`) and ships with the app. Without a network connection the app still works; missing images show the initials of their name instead.
 
 World of Warcraft is a trademark of Blizzard Entertainment. OpenLogs is not affiliated with Blizzard or Warcraft Logs.
+
+## Contributing
+
+Pull requests go against `development`; `main` holds the latest release. See [CONTRIBUTING.md](CONTRIBUTING.md), including the contributor license agreement.
+
+## License
+
+Copyright 2026 Shaydera
+
+OpenLogs is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It comes without any warranty; see [LICENSE](LICENSE) for the full terms. If you run a modified version for others over a network, you have to offer them its source code.
+
+The license covers OpenLogs itself. Third-party components such as the fonts keep their own licenses, and World of Warcraft game data and images belong to Blizzard Entertainment.

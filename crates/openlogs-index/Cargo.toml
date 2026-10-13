@@ -3,6 +3,7 @@ name = "openlogs-index"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 description = "Encounter and Mythic+ index of a combat log, with an on-disk cache"
 
 [dependencies]

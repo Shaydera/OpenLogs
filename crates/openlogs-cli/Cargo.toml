@@ -3,6 +3,7 @@ name = "openlogs-cli"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 description = "Command-line tools for OpenLogs"
 
 [[bin]]

@@ -3,6 +3,7 @@ name = "openlogs-gamedata"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 description = "Spell icons, dungeon data and curated cooldown lists for OpenLogs"
 
 [features]

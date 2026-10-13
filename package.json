@@ -1,6 +1,7 @@
 {
   "name": "openlogs",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "tauri": "tauri",
     "icons": "tauri icon brand/openlogs-mark.svg && node -e \"for (const d of ['android', 'ios']) require('fs').rmSync('src-tauri/icons/' + d, { recursive: true, force: true })\""

@@ -3,6 +3,7 @@ name = "openlogs-service"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 description = "Report DTOs shared by every OpenLogs front end"
 
 [dependencies]
