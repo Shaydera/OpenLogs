@@ -13,6 +13,7 @@ mod refs;
 pub mod report_dto;
 mod reports;
 pub mod resources_dto;
+pub mod scope_dto;
 #[cfg(test)]
 mod test_fight;
 

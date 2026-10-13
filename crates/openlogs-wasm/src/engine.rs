@@ -5,6 +5,7 @@ use openlogs_service::auras_dto::AuraScopeDto;
 use openlogs_service::log_dto::log_view;
 use openlogs_service::player_dto::MetricDto;
 use openlogs_service::report_dto::{AttributionDto, FilterDto};
+use openlogs_service::scope_dto::{DimensionDto, ScopeDto, ScopeMetricDto};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
@@ -143,6 +144,26 @@ impl Engine {
                     args.filter,
                 ))
             }
+            "breakdown_report" => {
+                let args: BreakdownArgs = parse(args_json)?;
+                json(openlogs_service::breakdown_report(
+                    self.fight(args.fight_index)?,
+                    args.filter,
+                    args.scope,
+                    args.metric,
+                    args.group,
+                ))
+            }
+            "filter_options" => {
+                let args: OptionsArgs = parse(args_json)?;
+                json(openlogs_service::filter_options(
+                    self.fight(args.fight_index)?,
+                    args.filter,
+                    args.scope,
+                    args.metric,
+                    args.dimension,
+                ))
+            }
             "player_detail" => {
                 let args: PlayerArgs = parse(args_json)?;
                 json(openlogs_service::player_detail(
@@ -272,6 +293,28 @@ struct OverviewArgs {
 struct FightArgs {
     fight_index: u32,
     filter: FilterDto,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BreakdownArgs {
+    fight_index: u32,
+    filter: FilterDto,
+    #[serde(default)]
+    scope: ScopeDto,
+    metric: ScopeMetricDto,
+    group: DimensionDto,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OptionsArgs {
+    fight_index: u32,
+    filter: FilterDto,
+    #[serde(default)]
+    scope: ScopeDto,
+    metric: ScopeMetricDto,
+    dimension: DimensionDto,
 }
 
 #[derive(Deserialize)]
