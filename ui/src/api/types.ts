@@ -240,6 +240,61 @@ export interface ReportFilter {
   attribution: Attribution;
 }
 
+export type Side = 'friendly' | 'enemy';
+export type UnitRef =
+  | { kind: 'player'; actorId: number }
+  | { kind: 'pet'; owner: number; name: string }
+  | { kind: 'unit'; name: string }
+  | { kind: 'instance'; actorId: number }
+  | { kind: 'environment' };
+export type AbilityRef = { kind: 'name'; name: string } | { kind: 'id'; spellId: number };
+export interface Scope {
+  perspective: Side;
+  source: UnitRef[];
+  target: UnitRef[];
+  ability: AbilityRef[];
+}
+export type ScopeMetric = 'damageDone' | 'healing' | 'damageTaken';
+export type Dimension = 'source' | 'ability' | 'target';
+export type BreakdownRowKind = 'own' | 'support' | 'unmatched';
+export type RowKey = { kind: 'unit'; unit: UnitRef } | { kind: 'ability'; ability: AbilityRef; rowKind: BreakdownRowKind };
+/** `name` is as logged and empty when the log has none; `number` numbers one instance among the units of its name. */
+export interface BreakdownRow {
+  key: RowKey;
+  name: string;
+  number: number | null;
+  spellId: number;
+  amount: number;
+  share: number;
+  /** Damage: the absorbed amount logged on these hits; 0 for healing and Aug support rows. */
+  absorbed: number;
+  hits: number;
+  crits: number;
+}
+export interface GroupedRow extends BreakdownRow {
+  perSecond: number;
+  splits: { dimension: Dimension; rows: BreakdownRow[] }[];
+}
+export interface Breakdown {
+  group: Dimension;
+  side: Dimension[];
+  total: number;
+  durationMs: number;
+  perSecond: number;
+  rows: GroupedRow[];
+  roster: PlayerRef[];
+}
+export interface FilterOption {
+  value: { kind: 'unit'; unit: UnitRef } | { kind: 'ability'; ability: AbilityRef };
+  name: string;
+  number: number | null;
+  npcId: number | null;
+  instances: { actorId: number; number: number }[];
+  pets: string[];
+  primarySpell: number | null;
+  variants: { spellId: number; casts: number; hits: number; heals: number; auras: number }[];
+}
+
 /** `unmatched`: Reattributed support from hits no ability could be matched to. */
 export type RowKind = 'own' | 'pet' | 'support_given' | 'unmatched';
 

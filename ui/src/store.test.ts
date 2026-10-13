@@ -7,6 +7,7 @@ import { overviewFixture } from './test/overviewFixture';
 import {
   abilityDetailFixture,
   aurasReportFixture,
+  breakdownFixture,
   castsReportFixture,
   damageReportFixture,
   deathsReportFixture,
@@ -38,6 +39,8 @@ vi.mock('./api/client', () => ({
     interruptsReport: vi.fn(),
     resourcesReport: vi.fn(),
     comparePulls: vi.fn(),
+    breakdownReport: vi.fn(),
+    filterOptions: vi.fn(),
   },
 }));
 
@@ -72,6 +75,7 @@ beforeEach(() => {
   vi.mocked(api.recentLogs).mockResolvedValue([]);
   vi.mocked(api.openLog).mockResolvedValue(LOG);
   vi.mocked(api.quickOverview).mockResolvedValue(overviewFixture);
+  vi.mocked(api.breakdownReport).mockResolvedValue(breakdownFixture);
   vi.mocked(api.damageDoneReport).mockResolvedValue(damageReportFixture);
   vi.mocked(api.healingReport).mockResolvedValue(healingReportFixture);
   vi.mocked(api.damageTakenReport).mockResolvedValue(takenReportFixture);
@@ -542,5 +546,73 @@ describe('pull comparison', () => {
     await useApp.getState().closeComparison();
     expect(api.damageDoneReport).toHaveBeenCalledTimes(3);
     expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 60_000, attribution: 'augmented' });
+  });
+});
+
+describe('view filters', () => {
+  it('sends the scope with the breakdown and resets it for another pull', async () => {
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().select('source', { kind: 'player', actorId: 3 });
+    const last = vi.mocked(api.breakdownReport).mock.calls.at(-1)!;
+    expect(last[3]).toEqual({ perspective: 'friendly', source: [{ kind: 'player', actorId: 3 }], target: [], ability: [] });
+    expect(last[5]).toBe('source');
+    expect(useApp.getState().breakdown).toBe(breakdownFixture);
+    await useApp.getState().openFight(2);
+    expect(useApp.getState().scope.source).toEqual([]);
+  });
+
+  it('keeps each selection on its side across tabs', async () => {
+    const player = { kind: 'player', actorId: 3 } as const;
+    const enemy = { kind: 'unit', name: ENEMY } as const;
+    const execute = { kind: 'name', name: 'Execute' } as const;
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().select('source', player);
+    await useApp.getState().select('target', enemy);
+    await useApp.getState().select('ability', execute);
+    await useApp.getState().setTab('taken');
+    const taken = { perspective: 'friendly', source: [enemy], target: [player], ability: [execute] };
+    expect(useApp.getState().scope).toEqual(taken);
+    expect(vi.mocked(api.breakdownReport).mock.calls.at(-1)![3]).toEqual(taken);
+    await useApp.getState().select('target', null);
+    await useApp.getState().setTab('healing');
+    expect(useApp.getState().scope).toEqual({ perspective: 'friendly', source: [], target: [enemy], ability: [execute] });
+  });
+
+  it('keeps the scope object while neither the filters nor the tab change', async () => {
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().select('source', { kind: 'player', actorId: 3 });
+    const scope = useApp.getState().scope;
+    await useApp.getState().setRange({ startMs: 10_000, endMs: 20_000 });
+    useApp.getState().setColorByTarget(true);
+    expect(useApp.getState().scope).toBe(scope);
+  });
+
+  it('swaps the sides when the perspective changes and drops the ability', async () => {
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().select('source', { kind: 'player', actorId: 3 });
+    await useApp.getState().select('ability', { kind: 'name', name: 'Execute' });
+    await useApp.getState().setPerspective('enemy');
+    expect(useApp.getState().scope).toEqual({ perspective: 'enemy', source: [], target: [{ kind: 'player', actorId: 3 }], ability: [] });
+  });
+
+  it('remembers the chosen grouping per tab', async () => {
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().setGrouping('ability');
+    await useApp.getState().setTab('taken');
+    expect(useApp.getState().grouping).toEqual({ damage: 'ability', healing: 'source', taken: 'target' });
+  });
+
+  it('drops the breakdown when the next tab fails to load', async () => {
+    await openPull();
+    await useApp.getState().setTab('damage');
+    expect(useApp.getState().breakdown).toBe(breakdownFixture);
+    vi.mocked(api.deathsReport).mockRejectedValue(new Error('boom'));
+    await useApp.getState().setTab('deaths');
+    expect(useApp.getState().breakdown).toBeNull();
   });
 });

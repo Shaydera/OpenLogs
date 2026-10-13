@@ -1,5 +1,6 @@
-import { type FocusEvent, type KeyboardEvent, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { FightRow } from '../../api/types';
+import { useDismiss } from '../../hooks/useDismiss';
 import { t } from '../../i18n/i18n';
 import { comparablePulls } from '../../pulls/groupPulls';
 import { useApp } from '../../store';
@@ -16,24 +17,20 @@ export function CompareMenu({ row }: { row: FightRow }) {
   const log = useApp((s) => s.log);
   const openComparison = useApp((s) => s.openComparison);
   const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
+  useDismiss(root, open, {
+    onDismiss: () => setOpen(false),
+    onEscape: () => {
+      setOpen(false);
+      toggleRef.current?.focus();
+    },
+  });
   const pulls = comparablePulls(log?.fights ?? [], row);
   if (pulls.length === 0) return null;
 
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key !== 'Escape' || !open) return;
-    event.preventDefault();
-    setOpen(false);
-    toggleRef.current?.focus();
-  }
-
-  function onBlur(event: FocusEvent<HTMLDivElement>) {
-    // Focus left the menu (Tab past the list, a click elsewhere): close it.
-    if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-  }
-
   return (
-    <div className="compare-menu" onKeyDown={onKeyDown} onBlur={onBlur}>
+    <div ref={root} className="compare-menu">
       <button
         ref={toggleRef}
         type="button"

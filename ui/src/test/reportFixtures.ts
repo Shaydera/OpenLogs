@@ -1,4 +1,4 @@
-import type { AbilityDetail, AurasReport, CastsReport, DamageReport, DamageTakenReport, DeathRecap, DeathsReport, HealingReport, InterruptsReport, PlayerAbility, PlayerDetail, PlayerRef, ResourcesReport, TargetDetail } from '../api/types';
+import type { AbilityDetail, AurasReport, CastsReport, Breakdown, DamageReport, DamageTakenReport, DeathRecap, DeathsReport, HealingReport, InterruptsReport, PlayerAbility, PlayerDetail, PlayerRef, ResourcesReport, TargetDetail } from '../api/types';
 
 const roster: PlayerRef[] = [
   { actorId: 3, name: 'Wendel-Emberfall-EU', specId: 71, specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
@@ -458,3 +458,30 @@ export const recapFixture: DeathsReport = {
 };
 
 export const deathsReportFixture: DeathsReport = recapFixture;
+
+export const breakdownFixture: Breakdown = {
+  group: 'source',
+  side: ['ability', 'target'],
+  total: 3_000_000,
+  durationMs: 10_000,
+  perSecond: 300_000,
+  roster: damageReportFixture.roster,
+  rows: [
+    {
+      key: { kind: 'unit', unit: { kind: 'player', actorId: 3 } },
+      name: 'Wendel', number: null, spellId: 0, amount: 2_000_000, share: 2 / 3, absorbed: 250_000, hits: 10, crits: 3, perSecond: 200_000,
+      splits: [
+        { dimension: 'ability', rows: [{ key: { kind: 'ability', ability: { kind: 'name', name: 'Mortal Strike' }, rowKind: 'own' }, name: 'Mortal Strike', number: null, spellId: 12294, amount: 2_000_000, share: 1, absorbed: 0, hits: 10, crits: 3 }] },
+        { dimension: 'target', rows: [{ key: { kind: 'unit', unit: { kind: 'unit', name: "Ula'tek" } }, name: "Ula'tek", number: null, spellId: 0, amount: 2_000_000, share: 1, absorbed: 0, hits: 10, crits: 3 }] },
+      ],
+    },
+    {
+      key: { kind: 'unit', unit: { kind: 'player', actorId: 5 } },
+      name: 'Speronis', number: null, spellId: 0, amount: 1_000_000, share: 1 / 3, absorbed: 0, hits: 5, crits: 1, perSecond: 100_000,
+      splits: [
+        { dimension: 'ability', rows: [{ key: { kind: 'ability', ability: { kind: 'name', name: 'Ebon Might' }, rowKind: 'support' }, name: 'Ebon Might', number: null, spellId: 395152, amount: 1_000_000, share: 1, absorbed: 0, hits: 0, crits: 0 }] },
+        { dimension: 'target', rows: [{ key: { kind: 'unit', unit: { kind: 'unit', name: "Ula'tek" } }, name: "Ula'tek", number: null, spellId: 0, amount: 1_000_000, share: 1, absorbed: 0, hits: 5, crits: 1 }] },
+      ],
+    },
+  ],
+};

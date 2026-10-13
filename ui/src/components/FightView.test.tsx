@@ -6,7 +6,7 @@ import type { LogView } from '../api/types';
 import { initialState, useApp } from '../store';
 import { compareLogFixture, comparisonFixture } from '../test/compareFixture';
 import { overviewFixture } from '../test/overviewFixture';
-import { damageReportFixture, resourcesReportFixture } from '../test/reportFixtures';
+import { breakdownFixture, damageReportFixture, resourcesReportFixture } from '../test/reportFixtures';
 import { FightView } from './FightView';
 
 vi.mock('../api/client', () => ({
@@ -24,6 +24,7 @@ vi.mock('../api/client', () => ({
     interruptsReport: vi.fn(),
     resourcesReport: vi.fn(),
     comparePulls: vi.fn(),
+    breakdownReport: vi.fn(),
   },
 }));
 
@@ -74,18 +75,24 @@ describe('FightView', () => {
 
   it('switches to Damage Done and reloads it with the Aug attribution', async () => {
     vi.mocked(api.damageDoneReport).mockResolvedValue(damageReportFixture);
+    vi.mocked(api.breakdownReport).mockResolvedValue(breakdownFixture);
     useApp.setState({ overview: overviewFixture });
     render(<FightView />);
     await userEvent.click(screen.getByRole('tab', { name: 'Damage Done' }));
     expect(screen.getByRole('tab', { name: 'Damage Done' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'false');
-    const toggle = screen.getByRole('group', { name: 'Aug damage' });
-    await userEvent.click(within(toggle).getByRole('button', { name: 'Augmented' }));
-    expect(within(toggle).getByRole('button', { name: 'Augmented' })).toHaveAttribute('aria-pressed', 'true');
-    expect(api.damageDoneReport).toHaveBeenLastCalledWith(
+    await userEvent.click(screen.getByRole('button', { name: 'Options' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: /Credit Aug support to the Evoker/ }));
+    expect(screen.getByRole('button', { name: /Aug support stays with the buffed player/ })).toBeInTheDocument();
+    const augmented = { startMs: null, endMs: null, attribution: 'augmented' };
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith('WoWCombatLog-100726_185823.txt', 1, augmented);
+    expect(api.breakdownReport).toHaveBeenLastCalledWith(
       'WoWCombatLog-100726_185823.txt',
       1,
-      { startMs: null, endMs: null, attribution: 'augmented' },
+      augmented,
+      { perspective: 'friendly', source: [], target: [], ability: [] },
+      'damageDone',
+      'source',
     );
   });
 

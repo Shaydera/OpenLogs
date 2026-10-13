@@ -4,7 +4,6 @@ import { formatLocalDate } from '../i18n/format';
 import { type MessageKey, t } from '../i18n/i18n';
 import { useApp } from '../store';
 import { THEMES, type ThemeName } from '../theme';
-import { ThemeSwitch } from './chrome/ThemeSwitch';
 
 const TABLES: { key: keyof Omit<GameDataManifest, 'fetchedUnixMs'>; name: MessageKey; entries: MessageKey }[] = [
   { key: 'spellIcons', name: 'settings.spellIcons', entries: 'settings.entries.spellIcons' },
@@ -17,17 +16,11 @@ const THEME_TEXT: Record<ThemeName, { name: MessageKey; hint: MessageKey }> = {
   bark: { name: 'theme.bark', hint: 'theme.barkHint' },
 };
 
-/** The persisted preferences and the shipped game data. */
+/** The theme and the shipped game data. */
 export function SettingsDialog() {
   const closeSettings = useApp((s) => s.closeSettings);
-  const hideAborted = useApp((s) => s.hideAborted);
-  const setHideAborted = useApp((s) => s.setHideAborted);
-  const hideProcs = useApp((s) => s.hideProcs);
-  const setHideProcs = useApp((s) => s.setHideProcs);
   const theme = useApp((s) => s.theme);
   const setTheme = useApp((s) => s.setTheme);
-  const showAugDelta = useApp((s) => s.showAugDelta);
-  const setShowAugDelta = useApp((s) => s.setShowAugDelta);
   const gameData = useApp((s) => s.gameData);
   const loading = useApp((s) => s.gameDataLoading);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -84,23 +77,6 @@ export function SettingsDialog() {
               </label>
             ))}
           </fieldset>
-          <div className="settings-mode">
-            <span>{t('theme.mode')}</span>
-            <ThemeSwitch labelled />
-          </div>
-          <h3 className="cap settings-label">{t('settings.preferences')}</h3>
-          <label className="toggle">
-            <input type="checkbox" checked={hideAborted} onChange={(event) => setHideAborted(event.target.checked)} />
-            {t('pulls.hideAborted')}
-          </label>
-          <label className="toggle">
-            <input type="checkbox" checked={hideProcs} onChange={(event) => setHideProcs(event.target.checked)} />
-            {t('casts.hideProcs')}
-          </label>
-          <label className="toggle">
-            <input type="checkbox" checked={showAugDelta} onChange={(event) => setShowAugDelta(event.target.checked)} />
-            {t('aug.showDelta')}
-          </label>
           <h3 className="cap settings-label">{t('settings.gameData')}</h3>
           {gameData === null ? (
             <p className="settings-note">{loading ? t('settings.loading') : t('settings.statusUnavailable')}</p>

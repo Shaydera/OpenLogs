@@ -14,6 +14,7 @@ import { PANEL_ID, TabBar, tabId } from './chrome/TabBar';
 import { PullComparisonView } from './compare/PullComparisonView';
 import { DeathsTab } from './deaths/DeathsTab';
 import { ErrorBoundary } from './ErrorBoundary';
+import { ViewLens } from './filters/ViewLens';
 import { InterruptsTab } from './interrupts/InterruptsTab';
 import { ConsumablesPanel } from './overview/ConsumablesPanel';
 import { CooldownsPanel } from './overview/CooldownsPanel';
@@ -69,6 +70,7 @@ export function FightView() {
       <FightTopBar row={row} currentRef={crumbRef} />
       <main className={onOverview ? 'fight-page fight-page-overview' : 'fight-page'}>
         <FightHeader row={row} tiles={tiles} titleRef={titleRef} />
+        <ViewLens />
         <TabBar />
         <div role="tabpanel" id={PANEL_ID} aria-labelledby={tabId(tab)} className="tabpanel">
           {failed ? (

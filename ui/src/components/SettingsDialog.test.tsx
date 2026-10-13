@@ -26,12 +26,11 @@ async function openDialog() {
 }
 
 describe('Settings dialog', () => {
-  it('changes the persisted preferences', async () => {
+  it('applies and remembers the chosen theme', async () => {
     const dialog = await openDialog();
-    await userEvent.click(within(dialog).getByLabelText('Show Aug Δ column'));
-    await userEvent.click(within(dialog).getByLabelText('Hide aborted pulls (< 10 s)'));
-    expect(useApp.getState()).toMatchObject({ showAugDelta: true, hideAborted: false });
-    expect(localStorage.getItem('openlogs.showAugDelta')).toBe('true');
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'Bark & Paper' }));
+    expect(document.documentElement.dataset.theme).toBe('bark');
+    expect(localStorage.getItem('openlogs.theme')).toBe('bark');
   });
 
   it('shows the game data the app ships with', async () => {

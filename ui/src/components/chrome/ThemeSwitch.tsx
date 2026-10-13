@@ -21,26 +21,25 @@ const ICONS: Record<ThemeMode, ReactNode> = {
   dark: <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />,
 };
 
-/** System · Light · Dark as icon buttons (top bars); `labelled` writes the names next to the icons (Settings). */
-export function ThemeSwitch({ labelled = false }: { labelled?: boolean }) {
+/** System · Light · Dark as icon buttons in the top bars. */
+export function ThemeSwitch() {
   const mode = useApp((s) => s.themeMode);
   const setMode = useApp((s) => s.setThemeMode);
   return (
-    <div className={labelled ? 'theme-switch theme-switch-labelled' : 'theme-switch'} role="group" aria-label={t('theme.mode')}>
+    <div className="theme-switch" role="group" aria-label={t('theme.mode')}>
       {THEME_MODES.map((option) => (
         <button
           key={option}
           type="button"
           className={option === mode ? 'theme-switch-on' : undefined}
           aria-pressed={option === mode}
-          aria-label={labelled ? undefined : t(LABELS[option])}
-          title={labelled ? undefined : t(LABELS[option])}
+          aria-label={t(LABELS[option])}
+          title={t(LABELS[option])}
           onClick={() => setMode(option)}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
             {ICONS[option]}
           </svg>
-          {labelled && <span>{t(LABELS[option])}</span>}
         </button>
       ))}
     </div>
