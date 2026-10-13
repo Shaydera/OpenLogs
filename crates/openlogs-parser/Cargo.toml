@@ -3,6 +3,7 @@ name = "openlogs-parser"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+description = "Streaming parser for World of Warcraft combat logs"
 
 [dependencies]
 memchr.workspace = true

@@ -3,6 +3,7 @@ name = "openlogs"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+description = "OpenLogs desktop app"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

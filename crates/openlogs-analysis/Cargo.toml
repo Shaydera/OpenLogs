@@ -3,6 +3,7 @@ name = "openlogs-analysis"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+description = "Fight model and reports: damage, healing, deaths, auras, Augmentation support"
 
 [dependencies]
 memmap2.workspace = true
