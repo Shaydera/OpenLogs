@@ -1,4 +1,11 @@
-# OpenLogs
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/openlogs-wordmark-on-dark.svg">
+    <img src="brand/openlogs-wordmark-on-light.svg" alt="OpenLogs" width="440">
+  </picture>
+</h1>
+
+<p align="center">World of Warcraft combat logs, analysed on your own machine</p>
 
 OpenLogs analyses World of Warcraft combat logs on your own machine, in the browser or as a desktop app. Open a `WoWCombatLog-*.txt`, pick a pull and dig into it — no upload, no account, no waiting for a server. The log never leaves your computer: even the website reads and analyses it locally.
 
