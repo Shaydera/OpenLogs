@@ -1,5 +1,5 @@
 import type { CastsReport, SpellCasts } from '../../api/types';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { formatCpm, formatDuration, formatInteger, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { type CastsSortKey, useApp } from '../../store';
@@ -167,7 +167,7 @@ export function CastsTab({ report }: { report: CastsReport }) {
                   return (
                     <div role="row" className="cast-srow" key={s.spellId}>
                       <span role="cell">
-                        <GameIcon name={spellName} src={spellIconUrl(s.spellId)} />
+                        <GameIcon name={spellName} icon={spellIcon(s.spellId)} />
                       </span>
                       <span role="cell" className="cast-spell">
                         {s.link ? (

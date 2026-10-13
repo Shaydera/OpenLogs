@@ -1,6 +1,6 @@
-import { open } from '@tauri-apps/plugin-dialog';
 import { useMemo, useRef } from 'react';
 import { useFocusRequest } from '../hooks/useFocusRequest';
+import { type ChosenLog, chooseLog as pickLog } from '../api/logSource';
 import type { LogView } from '../api/types';
 import { formatBytes, formatDateTime } from '../i18n/format';
 import { t } from '../i18n/i18n';
@@ -16,24 +16,21 @@ import { RecentLogs } from './RecentLogs';
 export function StartPage({ dragOver }: { dragOver: boolean }) {
   const recent = useApp((s) => s.recent);
   const log = useApp((s) => s.log);
-  const openingFile = useApp((s) => s.openingFile);
+  const opening = useApp((s) => s.opening);
   const openLog = useApp((s) => s.openLog);
+  const openRecent = useApp((s) => s.openRecent);
   const showError = useApp((s) => s.showError);
   const openSettings = useApp((s) => s.openSettings);
 
   async function chooseLog() {
-    let selected: unknown;
+    let chosen: ChosenLog | null;
     try {
-      selected = await open({
-        multiple: false,
-        directory: false,
-        filters: [{ name: t('start.dialogFilter'), extensions: ['txt'] }],
-      });
+      chosen = await pickLog();
     } catch (err) {
       showError(t('error.dialogFailed', { reason: String(err) }));
       return;
     }
-    if (typeof selected === 'string') await openLog(selected);
+    if (chosen) await openLog(chosen);
   }
 
   return (
@@ -55,8 +52,8 @@ export function StartPage({ dragOver }: { dragOver: boolean }) {
       </header>
       <div className="layout">
         <aside className="sidebar">
-          <DropZone over={dragOver} busyFile={openingFile} />
-          <RecentLogs recent={recent} selectedPath={log?.path ?? null} onOpen={(path) => void openLog(path)} />
+          <DropZone over={dragOver} opening={opening} />
+          <RecentLogs recent={recent} selectedId={log?.id ?? null} onOpen={(entry) => void openRecent(entry)} />
         </aside>
         <main className="content">{log ? <LogPulls log={log} /> : <EmptyState title={t('start.emptyTitle')} text={t('start.empty')} />}</main>
       </div>

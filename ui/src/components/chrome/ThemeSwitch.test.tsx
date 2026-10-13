@@ -4,15 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../App';
 import { api } from '../../api/client';
 import { initialState, useApp } from '../../store';
-import { gameDataFixture } from '../../test/gameDataFixture';
 
 vi.mock('../../api/client', () => ({
-  api: { recentLogs: vi.fn(), openLog: vi.fn(), gameDataStatus: vi.fn(), refreshGameData: vi.fn() },
+  api: { recentLogs: vi.fn(), openLog: vi.fn() },
 }));
-vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
-vi.mock('@tauri-apps/api/webview', () => ({
-  getCurrentWebview: () => ({ onDragDropEvent: vi.fn().mockResolvedValue(() => {}) }),
-}));
+vi.mock('../../gameData', () => ({ gameDataManifest: vi.fn().mockResolvedValue(null) }));
 
 const root = document.documentElement;
 let osDark = true;
@@ -20,7 +16,6 @@ const listeners = new Set<() => void>();
 
 beforeEach(() => {
   vi.mocked(api.recentLogs).mockReset().mockResolvedValue([]);
-  vi.mocked(api.gameDataStatus).mockReset().mockResolvedValue(gameDataFixture);
   localStorage.clear();
   osDark = true;
   listeners.clear();

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fmt::Write;
 
 use thiserror::Error;
 
@@ -11,8 +10,6 @@ pub enum SpellIconError {
     Csv(#[from] csv::Error),
     #[error("CSV is missing the column {0}")]
     MissingColumn(&'static str),
-    #[error("line {0} of the spell icon table is malformed")]
-    Malformed(usize),
 }
 
 /// Spell ID → zamimg icon name.
@@ -78,34 +75,25 @@ impl SpellIconTable {
         self.icons.is_empty()
     }
 
-    /// `spell_id<TAB>icon` lines, sorted by spell ID.
-    pub fn to_tsv(&self) -> String {
+    /// The table for the web app: spell IDs in ascending order as differences to the previous
+    /// ID, and for each spell the position of its icon in `names`.
+    pub fn to_json(&self) -> String {
         let mut entries: Vec<_> = self.icons.iter().collect();
         entries.sort_unstable_by_key(|(id, _)| **id);
-        let mut out = String::with_capacity(entries.len() * 32);
-        for (id, name) in entries {
-            let _ = writeln!(out, "{id}\t{name}");
+        let mut names: Vec<&str> = Vec::new();
+        let mut positions: HashMap<&str, usize> = HashMap::new();
+        let mut ids = Vec::with_capacity(entries.len());
+        let mut icons = Vec::with_capacity(entries.len());
+        let mut previous = 0;
+        for (&id, name) in entries {
+            ids.push(id - previous);
+            previous = id;
+            icons.push(*positions.entry(name).or_insert_with(|| {
+                names.push(name);
+                names.len() - 1
+            }));
         }
-        out
-    }
-
-    /// Parses [`Self::to_tsv`] output; lines starting with `#` are comments.
-    pub fn from_tsv(text: &str) -> Result<Self, SpellIconError> {
-        let mut icons = HashMap::new();
-        for (index, line) in text.lines().enumerate() {
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-            let entry = line
-                .split_once('\t')
-                .and_then(|(id, name)| Some((id.parse::<u32>().ok()?, name)))
-                .filter(|(_, name)| is_valid_icon_name(name));
-            let Some((id, name)) = entry else {
-                return Err(SpellIconError::Malformed(index + 1));
-            };
-            icons.insert(id, name.to_string());
-        }
-        Ok(Self { icons })
+        serde_json::json!({ "names": names, "ids": ids, "icons": icons }).to_string()
     }
 }
 

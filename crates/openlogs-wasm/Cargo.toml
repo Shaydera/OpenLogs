@@ -1,0 +1,22 @@
+[package]
+name = "openlogs-wasm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "The OpenLogs engine for the browser: indexing, pull loading and reports as WebAssembly"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+openlogs-analysis.workspace = true
+openlogs-gamedata.workspace = true
+openlogs-index.workspace = true
+openlogs-service.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+wasm-bindgen = "=0.2.129"
+
+[dev-dependencies]
+openlogs-parser.workspace = true

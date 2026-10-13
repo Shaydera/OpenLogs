@@ -1,8 +1,8 @@
 import type { AbilityRow, PlayerRef, TakenAbility } from '../../api/types';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { t } from '../../i18n/i18n';
 import { classColor, shortName } from '../overview/players';
-import { hitIconUrl, hitName, reportSpellName, sourceLabel, type SpellNames } from './reportData';
+import { hitIcon, hitName, reportSpellName, sourceLabel, type SpellNames } from './reportData';
 
 /** How many abilities the side panel lists before "Other", which always comes after them. */
 const TOP_ABILITIES = 5;
@@ -77,7 +77,7 @@ export function abilityBreakdown(rows: AbilityRow[], ctx: BreakdownContext): Bre
   const unmatched: Entry[] = [];
   for (const row of rows) {
     const name = reportSpellName(ctx.spells, row.spellId);
-    const icon = spellIconUrl(row.spellId);
+    const icon = spellIcon(row.spellId);
     if (row.kind === 'own' || row.kind === 'pet') {
       // A pet's ability merges into the own row of the same name (Eruption = own + Future Self).
       abilities.push({ key: `own:${name}`, tone: 'normal', icon, name, note: null, noteColor: null, amount: row.amount });
@@ -105,7 +105,7 @@ export function takenBreakdown(abilities: TakenAbility[], ctx: BreakdownContext)
   const entries = abilities.map((hit): Entry => {
     const name = hitName(hit, (id) => reportSpellName(ctx.spells, id));
     const source = takenSource(hit, ctx.roster);
-    return { key: `${hit.environmental}:${name}:${source.label}`, tone: 'normal', icon: hitIconUrl(hit), name, note: source.label, noteColor: source.color, amount: hit.amount };
+    return { key: `${hit.environmental}:${name}:${source.label}`, tone: 'normal', icon: hitIcon(hit), name, note: source.label, noteColor: source.color, amount: hit.amount };
   });
   return finish(topWithOther(merged(entries), ctx.top ?? TOP_ABILITIES), ctx.total);
 }

@@ -1,6 +1,6 @@
 import { type ReactNode, useRef, useState } from 'react';
 import type { PlayerRef, TargetShare } from '../../api/types';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { formatCount, formatMillions, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
@@ -272,7 +272,7 @@ export function PlayerCard({ id, at, player, total, abilities, targets, targetsL
           {abilities.map((row) => (
             <PopupRow
               key={row.key}
-              icon={row.icon ? <GameIcon src={row.icon} name={row.name} size={18} /> : <span className="ph-ico ph-ico-s" aria-hidden="true">…</span>}
+              icon={row.icon ? <GameIcon icon={row.icon} name={row.name} size={18} /> : <span className="ph-ico ph-ico-s" aria-hidden="true">…</span>}
               name={row.name}
               barPct={row.barPct}
               barColor={row.tone === 'support' ? 'var(--class-evoker)' : 'var(--faint)'}
@@ -349,7 +349,7 @@ export function SegmentPopup({
         }))
       : abilities.map(({ spellId, amount }) => ({
           key: `${spellId}`,
-          icon: <GameIcon src={spellIconUrl(spellId)} name={reportSpellName(spells, spellId)} size={18} />,
+          icon: <GameIcon icon={spellIcon(spellId)} name={reportSpellName(spells, spellId)} size={18} />,
           name: reportSpellName(spells, spellId),
           nameColor: null,
           amount,

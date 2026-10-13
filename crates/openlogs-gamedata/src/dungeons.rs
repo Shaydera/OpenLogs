@@ -150,9 +150,9 @@ impl DungeonTable {
         self.dungeons.is_empty()
     }
 
-    /// The table as JSON, for the cache file.
+    /// The table as JSON, for the web app.
     pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(self).expect("the dungeon table serializes")
+        serde_json::to_string(self).expect("the dungeon table serializes")
     }
 
     /// Parses [`Self::to_json`] output.

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import type { AbilityDetail, AbilityHit } from '../../api/types';
 import { useFocusRequest } from '../../hooks/useFocusRequest';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { formatAmount, formatAmountTenths, formatCount, formatEventTime, formatEventTimeTenths, formatFixed, formatInteger, formatSeconds, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
@@ -46,7 +46,7 @@ export function AbilityDetailView({ detail }: { detail: AbilityDetail }) {
         <button type="button" className="accent-link" onClick={() => void back()}>
           {t('ability.back', { name })}
         </button>
-        <GameIcon name={title} src={spellIconUrl(detail.spellId)} large />
+        <GameIcon name={title} icon={spellIcon(detail.spellId)} large />
         <div className="dhead-id">
           <h1 ref={titleRef} tabIndex={-1} className="dhead-title">
             {title}

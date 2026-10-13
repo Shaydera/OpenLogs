@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { PowerTrack, ResourcesReport } from '../../api/types';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { formatAmount, formatDuration, formatPercent, formatSeconds, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
@@ -199,7 +199,7 @@ function ResourceTrack({
             {track.gains.map((g) => (
               <div key={g.spellId} role="row" className="res-gain">
                 <span role="cell">
-                  <GameIcon name={spellName(g.spellId)} src={spellIconUrl(g.spellId)} size={22} />
+                  <GameIcon name={spellName(g.spellId)} icon={spellIcon(g.spellId)} size={22} />
                 </span>
                 <span role="cell" className="res-gain-name">
                   {spellName(g.spellId)}

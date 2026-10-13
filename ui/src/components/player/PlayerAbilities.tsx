@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode, useId, useState } from 'react';
 import type { PlayerAbility, PlayerDetail, PlayerRef, SupportRecipient, TargetRef } from '../../api/types';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { formatAmountTenths, formatCount, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
@@ -271,7 +271,7 @@ function AbilityLine({ row, table, onOpen, toggle, part = false }: LineProps) {
   const stats = own && row.hits > 0;
   return (
     <div className={classes(grid, part && 'ab-row-sub', unmatched && 'ab-row-negative')} role="row">
-      <span role="cell">{unmatched ? <DotsIcon /> : <GameIcon name={label} src={spellIconUrl(row.spellId)} />}</span>
+      <span role="cell">{unmatched ? <DotsIcon /> : <GameIcon name={label} icon={spellIcon(row.spellId)} />}</span>
       <span role="cell" className="ab-name-cell">
         {own ? (
           <>
@@ -440,7 +440,7 @@ function AugPopup({ at, popup, table }: { at: PopupAnchor; popup: AbilityPopup; 
   return (
     <div role="tooltip" id={table.popupId} className="aug-tip" style={{ top: at.top, left: at.left }}>
       <div className="aug-tip-head">
-        {row.kind === 'unmatched' ? <DotsIcon /> : <GameIcon name={label} src={spellIconUrl(row.spellId)} size={18} />}
+        {row.kind === 'unmatched' ? <DotsIcon /> : <GameIcon name={label} icon={spellIcon(row.spellId)} size={18} />}
         <span className="rpop-title">{label}</span>
         <span className="cap rrow-cap aug-tip-cap">{t('aug.popupTitle')}</span>
       </div>
@@ -455,7 +455,7 @@ function AugPopup({ at, popup, table }: { at: PopupAnchor; popup: AbilityPopup; 
         return (
           <div key={index} className="aug-tip-line">
             <span className="aug-tip-label aug-tip-buff">
-              <GameIcon name={buff} src={spellIconUrl(share.buffId)} size={16} />
+              <GameIcon name={buff} icon={spellIcon(share.buffId)} size={16} />
               {buff}
               <span className="ab-sep"> · </span>
               <span style={{ color: classColor(evoker?.classToken ?? null) }}>{evoker ? shortName(evoker.name) : t('report.unknownPlayer')}</span>
@@ -531,7 +531,7 @@ function RecipientLines({ recipient, table, idPrefix, open, onToggle }: { recipi
               id={rowId(i)}
               table={table}
               depth={2}
-              icon={ability.spellId === null ? <DotsIcon /> : <GameIcon name={spell} src={spellIconUrl(ability.spellId)} />}
+              icon={ability.spellId === null ? <DotsIcon /> : <GameIcon name={spell} icon={spellIcon(ability.spellId)} />}
               name={
                 <>
                   <span className="ab-name">{spell}</span>

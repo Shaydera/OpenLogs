@@ -1,13 +1,13 @@
 import { useRef } from 'react';
 import type { DeathRecap, DeathsReport } from '../../api/types';
 import { useFocusRequest } from '../../hooks/useFocusRequest';
-import { classIconUrl } from '../../icons';
+import { classIcon } from '../../icons';
 import { formatAmount, formatEventTime, formatEventTimeTenths, formatPercent } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { GameIcon, MonogramTile } from '../GameIcon';
 import { classColor, shortName } from '../overview/players';
-import { hitIconUrl, hitName, reportSpellName, rosterIndex } from '../reports/reportData';
+import { hitIcon, hitName, reportSpellName, rosterIndex } from '../reports/reportData';
 import { hitSource, recapCallout, recapPlot } from './recapModel';
 
 export function RecapPanel({ recap, report }: { recap: DeathRecap; report: DeathsReport }) {
@@ -37,7 +37,7 @@ export function RecapPanel({ recap, report }: { recap: DeathRecap; report: Death
     <section className="panel" aria-labelledby="recap-title">
       <div className="panel-head panel-head-recap">
         {player?.classId != null ? (
-          <GameIcon src={classIconUrl(player.classId)} size={44} name={name} />
+          <GameIcon icon={classIcon(player.classId)} size={44} name={name} />
         ) : (
           <MonogramTile name={name} size={44} />
         )}
@@ -82,7 +82,7 @@ export function RecapPanel({ recap, report }: { recap: DeathRecap; report: Death
       </div>
       {callout && (
         <div className="recap-callout">
-          {kb && <GameIcon src={hitIconUrl(kb)} size={28} name={hitName(kb, spellName)} />}
+          {kb && <GameIcon icon={hitIcon(kb)} size={28} name={hitName(kb, spellName)} />}
           <p className="recap-callout-text">
             <span className="recap-lead">{callout.lead}</span>
             {callout.body}

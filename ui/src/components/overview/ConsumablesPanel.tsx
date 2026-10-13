@@ -1,5 +1,5 @@
 import type { ConsumableEntry, QuickOverview } from '../../api/types';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
@@ -27,7 +27,7 @@ export function ConsumablesPanel({ overview }: { overview: QuickOverview }) {
           <ul className="plain cons-legend" aria-label={t('consumables.legend')}>
             {legend.map((item) => (
               <li key={item.kind}>
-                <GameIcon name={item.name} src={spellIconUrl(item.spellId)} size={18} />
+                <GameIcon name={item.name} icon={spellIcon(item.spellId)} size={18} />
                 {item.name}
               </li>
             ))}
@@ -81,7 +81,7 @@ function Cell({ overview, column, uses, inRange }: { overview: QuickOverview; co
       <span role="cell">
         {uses.map((use) => (
           <span key={use.t} className="tchip">
-            <GameIcon name={spellName(overview, use.spellId)} src={spellIconUrl(use.spellId)} size={18} />
+            <GameIcon name={spellName(overview, use.spellId)} icon={spellIcon(use.spellId)} size={18} />
             {usedAtLabel(use.t)}
           </span>
         ))}

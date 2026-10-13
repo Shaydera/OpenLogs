@@ -4,8 +4,6 @@ use openlogs_index::{FightSummary, LogIndex, Outcome, difficulty_label};
 use openlogs_parser::Timestamp;
 use serde::Serialize;
 
-use crate::recent::RecentEntry;
-
 /// JSON shapes mirrored by `ui/src/api/types.ts`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -99,7 +97,8 @@ pub struct FightRow {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogView {
-    pub path: String,
+    /// Identifies the log across sessions: its file name.
+    pub id: String,
     pub file_name: String,
     pub size_bytes: u64,
     pub cache_hit: bool,
@@ -111,42 +110,6 @@ pub struct LogView {
     pub zone: Option<String>,
     pub start_unix_ms: Option<i64>,
     pub fights: Vec<FightRow>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RecentLog {
-    pub path: String,
-    pub file_name: String,
-    pub size_bytes: u64,
-    pub zone: Option<String>,
-    pub start_unix_ms: Option<i64>,
-    pub pull_count: u32,
-    pub opened_at_unix_ms: i64,
-    pub exists: bool,
-}
-
-/// One downloaded game-data table in the Settings dialog.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TableStatusDto {
-    /// Entries of the table in use; `None` while the app has none.
-    pub entries: Option<usize>,
-    /// When the stored table was downloaded (a real instant, Unix ms).
-    pub fetched_unix_ms: Option<i64>,
-    /// Why the last download failed; `None` after a successful one.
-    pub error: Option<String>,
-}
-
-/// The Settings dialog's game-data section.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GameDataStatusDto {
-    pub spell_icons: TableStatusDto,
-    pub dungeons: TableStatusDto,
-    pub boss_portraits: TableStatusDto,
-    /// A sync (startup or "Refresh now") is running.
-    pub refreshing: bool,
 }
 
 /// Zone-less log wall-clock time as Unix milliseconds (the UI formats it as UTC).
@@ -189,7 +152,7 @@ pub fn fight_row(
 pub const NOT_A_LOG_WARNING: &str = "This file does not look like a WoW combat log.";
 
 pub fn log_view(
-    path: &str,
+    id: &str,
     file_name: &str,
     size_bytes: u64,
     cache_hit: bool,
@@ -202,7 +165,7 @@ pub fn log_view(
     }
     let first = index.fights.first();
     LogView {
-        path: path.to_string(),
+        id: id.to_string(),
         file_name: file_name.to_string(),
         size_bytes,
         cache_hit,
@@ -218,18 +181,5 @@ pub fn log_view(
             .iter()
             .map(|fight| fight_row(fight, &index.fights, dungeons))
             .collect(),
-    }
-}
-
-pub fn recent_log(entry: &RecentEntry, exists: bool) -> RecentLog {
-    RecentLog {
-        path: entry.path.clone(),
-        file_name: entry.file_name.clone(),
-        size_bytes: entry.size_bytes,
-        zone: entry.zone.clone(),
-        start_unix_ms: entry.start_unix_ms,
-        pull_count: entry.pull_count,
-        opened_at_unix_ms: entry.opened_at_unix_ms,
-        exists,
     }
 }

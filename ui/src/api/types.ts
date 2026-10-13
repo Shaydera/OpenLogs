@@ -1,4 +1,4 @@
-/** Mirrors `src-tauri/src/dto.rs` (serde camelCase). Times are zone-less log wall-clock values sent as Unix ms. */
+/** Mirrors the DTOs of `crates/openlogs-service` (serde camelCase). Times are zone-less log wall-clock values sent as Unix ms. */
 export type Outcome = 'kill' | 'wipe' | 'incomplete';
 export type Role = 'tank' | 'healer' | 'damage';
 
@@ -46,7 +46,8 @@ export interface FightRow {
 }
 
 export interface LogView {
-  path: string;
+  /** Identifies the log across sessions: its file name. */
+  id: string;
   fileName: string;
   sizeBytes: number;
   cacheHit: boolean;
@@ -61,14 +62,14 @@ export interface LogView {
 }
 
 export interface RecentLog {
-  path: string;
+  id: string;
   fileName: string;
   sizeBytes: number;
   zone: string | null;
   startUnixMs: number | null;
   pullCount: number;
   openedAtUnixMs: number;
-  /** False when the file no longer exists on disk. */
+  /** False when the browser cannot open the log again without the user choosing its file. */
   exists: boolean;
 }
 
@@ -184,7 +185,7 @@ export interface CooldownEntry {
   durationMs: number;
 }
 
-/** Mirrors `src-tauri/src/overview_dto.rs`. */
+/** Mirrors `crates/openlogs-service/src/overview_dto.rs`. */
 export interface QuickOverview {
   kpis: Kpis;
   timeline: OverviewTimeline;
@@ -196,7 +197,7 @@ export interface QuickOverview {
   cooldowns: CooldownEntry[];
 }
 
-/** Mirrors `src-tauri/src/compare_dto.rs`. */
+/** Mirrors `crates/openlogs-service/src/compare_dto.rs`. */
 export interface PlayerSide {
   /** The player's actor in that pull; ids differ between pulls. */
   actorId: number;
@@ -691,23 +692,4 @@ export interface ResourcesReport {
   }[];
   roster: PlayerRef[];
   spells: Record<string, { name: string }>;
-}
-
-/** One downloaded game-data table (mirrors `TableStatusDto`). */
-export interface TableStatus {
-  /** Entries of the table in use; `null` while the app has none. */
-  entries: number | null;
-  /** When the stored table was downloaded: a real instant (Unix ms), not a log time. */
-  fetchedUnixMs: number | null;
-  /** Why the last download failed; `null` after a successful one. */
-  error: string | null;
-}
-
-/** The Settings dialog's game-data section (mirrors `GameDataStatusDto`). */
-export interface GameDataStatus {
-  spellIcons: TableStatus;
-  dungeons: TableStatus;
-  bossPortraits: TableStatus;
-  /** A sync (app start or "Refresh now") is running. */
-  refreshing: boolean;
 }

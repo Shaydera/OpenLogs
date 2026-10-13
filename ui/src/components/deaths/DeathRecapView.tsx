@@ -1,9 +1,9 @@
 import type { DeathRecap, DeathsReport } from '../../api/types';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { t } from '../../i18n/i18n';
 import { GameIcon } from '../GameIcon';
 import { shortName } from '../overview/players';
-import { hitIconUrl, reportSpellName } from '../reports/reportData';
+import { hitIcon, reportSpellName } from '../reports/reportData';
 import { RecapPanel } from './RecapPanel';
 import { contextRows, recapRows, type ContextRow } from './recapModel';
 
@@ -57,7 +57,7 @@ export function DeathRecapView({ recap, report }: { recap: DeathRecap; report: D
                         {row.time}
                       </span>
                       <span role="cell">
-                        <GameIcon name={row.name} src={hitIconUrl(row.event)} size={18} />
+                        <GameIcon name={row.name} icon={hitIcon(row.event)} size={18} />
                       </span>
                       <span role="cell" className={damage ? 'rev-ability rev-ability-dmg' : 'rev-ability'}>
                         {row.name}
@@ -101,7 +101,7 @@ function ContextGroup({ caption, rows, first }: { caption: string; rows: Context
       <ul className="ctx-list" aria-label={caption}>
         {rows.map((row) => (
           <li key={row.key} className="ctx-row">
-            <GameIcon name={row.name} src={spellIconUrl(row.spellId)} size={18} />
+            <GameIcon name={row.name} icon={spellIcon(row.spellId)} size={18} />
             <span className="ctx-name">
               {row.name}
               {row.when && (

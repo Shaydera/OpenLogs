@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { api } from './api/client';
-import type { DamageReport, LogView, PullComparison, QuickOverview } from './api/types';
+import type { ChosenLog, LogSource } from './api/logSource';
+import type { DamageReport, LogView, PullComparison, QuickOverview, RecentLog } from './api/types';
 import { comparisonFixture } from './test/compareFixture';
-import { gameDataFixture } from './test/gameDataFixture';
 import { overviewFixture } from './test/overviewFixture';
 import {
   abilityDetailFixture,
@@ -23,6 +23,7 @@ vi.mock('./api/client', () => ({
   api: {
     openLog: vi.fn(),
     recentLogs: vi.fn(),
+    reopenRecent: vi.fn(),
     removeRecent: vi.fn(),
     quickOverview: vi.fn(),
     damageDoneReport: vi.fn(),
@@ -37,13 +38,11 @@ vi.mock('./api/client', () => ({
     interruptsReport: vi.fn(),
     resourcesReport: vi.fn(),
     comparePulls: vi.fn(),
-    gameDataStatus: vi.fn(),
-    refreshGameData: vi.fn(),
   },
 }));
 
 const LOG: LogView = {
-  path: 'C:\\Logs\\WoWCombatLog-100726_185823.txt',
+  id: 'WoWCombatLog-100726_185823.txt',
   fileName: 'WoWCombatLog-100726_185823.txt',
   sizeBytes: 230_331_451,
   cacheHit: false,
@@ -58,6 +57,14 @@ const LOG: LogView = {
 };
 
 const WHOLE_PULL = { startMs: null, endMs: null, attribution: 'reattributed' };
+
+function sourceOf(log: LogView): LogSource {
+  return { id: log.id, name: log.fileName, size: log.sizeBytes, lastModified: 0, read: vi.fn() };
+}
+
+function chosen(log: LogView): ChosenLog {
+  return { name: log.fileName, open: async () => sourceOf(log) };
+}
 const ENEMY = 'Blightscale Rawling';
 
 beforeEach(() => {
@@ -89,35 +96,71 @@ function deferred<T>() {
 }
 
 async function openPull() {
-  await useApp.getState().openLog(LOG.path);
+  await useApp.getState().openLog(chosen(LOG));
   await useApp.getState().openFight(1);
 }
 
 describe('logs and pulls', () => {
   it('opens a log, refreshes the recent list and loads a pull', async () => {
-    await useApp.getState().openLog(LOG.path);
-    expect(useApp.getState()).toMatchObject({ log: LOG, openingFile: null });
+    await useApp.getState().openLog(chosen(LOG));
+    expect(useApp.getState()).toMatchObject({ log: LOG, opening: null });
     expect(api.recentLogs).toHaveBeenCalled();
 
     await useApp.getState().openFight(1);
-    expect(api.quickOverview).toHaveBeenCalledWith(LOG.path, 1, null);
+    expect(api.quickOverview).toHaveBeenCalledWith(LOG.id, 1, null);
     expect(useApp.getState()).toMatchObject({ view: { kind: 'fight', fightIndex: 1 }, overview: overviewFixture });
     useApp.getState().backToPulls();
     expect(useApp.getState().view).toEqual({ kind: 'start' });
   });
 
+  it('shows the indexing progress while a log opens', async () => {
+    const indexed = deferred<LogView>();
+    let report: (bytesRead: number, totalBytes: number) => void = () => {};
+    vi.mocked(api.openLog).mockImplementation((_, onProgress) => {
+      report = onProgress ?? report;
+      return indexed.promise;
+    });
+    const opening = useApp.getState().openLog(chosen(LOG));
+    await vi.waitFor(() => expect(api.openLog).toHaveBeenCalled());
+    report(8 << 20, LOG.sizeBytes);
+    expect(useApp.getState().opening).toEqual({ file: LOG.fileName, bytesRead: 8 << 20, totalBytes: LOG.sizeBytes });
+    indexed.resolve(LOG);
+    await opening;
+    expect(useApp.getState()).toMatchObject({ log: LOG, opening: null });
+  });
+
+  it('opens a recent log again through its stored entry', async () => {
+    const entry: RecentLog = { id: LOG.id, fileName: LOG.fileName, sizeBytes: LOG.sizeBytes, zone: null, startUnixMs: null, pullCount: 3, openedAtUnixMs: 0, exists: true };
+    vi.mocked(api.reopenRecent).mockResolvedValue(sourceOf(LOG));
+    await useApp.getState().openRecent(entry);
+    expect(api.reopenRecent).toHaveBeenCalledWith(LOG.id);
+    expect(useApp.getState().log).toEqual(LOG);
+  });
+
+  it('keeps the open log when another cannot be reached, and drops it once reading the other failed', async () => {
+    await openPull();
+    const unreachable: ChosenLog = { name: 'gone.txt', open: () => Promise.reject(new DOMException('gone', 'NotFoundError')) };
+    await useApp.getState().openLog(unreachable);
+    expect(useApp.getState()).toMatchObject({ log: LOG, view: { kind: 'fight', fightIndex: 1 } });
+
+    vi.mocked(api.openLog).mockRejectedValueOnce('The log changed on disk since it was opened. Open it again to read it.');
+    await useApp.getState().openLog(chosen({ ...LOG, id: 'other.txt', fileName: 'other.txt' }));
+    expect(useApp.getState()).toMatchObject({ log: null, view: { kind: 'start' }, overview: null });
+    expect(useApp.getState().error).toContain('Could not open other.txt');
+  });
+
   it('turns a failed open into a readable error and still refreshes the recent list', async () => {
-    vi.mocked(api.openLog).mockRejectedValue('File not found: C:\\Logs\\gone.txt');
-    await useApp.getState().openLog('C:\\Logs\\gone.txt');
-    expect(useApp.getState().error).toBe('Could not open gone.txt: File not found: C:\\Logs\\gone.txt');
+    const gone: ChosenLog = { name: 'gone.txt', open: () => Promise.reject(new DOMException('The file could not be found.', 'NotFoundError')) };
+    await useApp.getState().openLog(gone);
+    expect(useApp.getState().error).toBe('Could not open gone.txt: NotFoundError: The file could not be found.');
     expect(useApp.getState().log).toBeNull();
     expect(api.recentLogs).toHaveBeenCalledTimes(1);
   });
 
   it('records a failed pull load for the fight view and clears it on the next load', async () => {
-    vi.mocked(api.quickOverview).mockRejectedValueOnce(`File not found: ${LOG.path}`);
+    vi.mocked(api.quickOverview).mockRejectedValueOnce(`File not found: ${LOG.id}`);
     await openPull();
-    expect(useApp.getState()).toMatchObject({ fightError: `File not found: ${LOG.path}`, fightLoading: false });
+    expect(useApp.getState()).toMatchObject({ fightError: `File not found: ${LOG.id}`, fightLoading: false });
 
     await useApp.getState().openFight(1);
     expect(useApp.getState().fightError).toBeNull();
@@ -147,14 +190,14 @@ describe('reports', () => {
   it('reloads the shown report with the current range and Aug mode', async () => {
     await openPull();
     await useApp.getState().setTab('damage');
-    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.path, 1, WHOLE_PULL);
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, WHOLE_PULL);
     expect(useApp.getState().report).toEqual({ tab: 'damage', data: damageReportFixture });
 
     await useApp.getState().setAttribution('augmented');
-    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.path, 1, { ...WHOLE_PULL, attribution: 'augmented' });
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { ...WHOLE_PULL, attribution: 'augmented' });
 
     await useApp.getState().setRange({ startMs: 158_000, endMs: 273_000 });
-    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.path, 1, { startMs: 158_000, endMs: 273_000, attribution: 'augmented' });
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 158_000, endMs: 273_000, attribution: 'augmented' });
   });
 
   it('loads a range overview, also when coming back to the tab, and falls back to the pull overview', async () => {
@@ -162,14 +205,14 @@ describe('reports', () => {
     const ranged = { ...overviewFixture, deaths: [] };
     vi.mocked(api.quickOverview).mockResolvedValue(ranged);
     await useApp.getState().setRange({ startMs: 40_000, endMs: 60_000 });
-    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.path, 1, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed' });
+    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed' });
     expect(useApp.getState().report).toEqual({ tab: 'overview', data: ranged });
     expect(useApp.getState().overview).toBe(overviewFixture);
 
     await useApp.getState().setTab('damage');
     await useApp.getState().setRange({ startMs: 0, endMs: 30_000 });
     await useApp.getState().setTab('overview');
-    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.path, 1, { startMs: 0, endMs: 30_000, attribution: 'reattributed' });
+    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 30_000, attribution: 'reattributed' });
 
     await useApp.getState().setRange(null);
     expect(useApp.getState().report).toBeNull();
@@ -192,7 +235,7 @@ describe('reports', () => {
     // The whole-pull overview arrives with the pull; only a range makes Overview request a report.
     useApp.setState({ range: { startMs: 40_000, endMs: 60_000 }, auraScope: 'debuffs_on_enemies' });
     await useApp.getState().setTab(tab);
-    expect(load).toHaveBeenLastCalledWith(LOG.path, 1, ...scope, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed' });
+    expect(load).toHaveBeenLastCalledWith(LOG.id, 1, ...scope, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed' });
     expect(useApp.getState().report).toEqual({ tab, data });
   });
 });
@@ -203,15 +246,15 @@ describe('detail stack', () => {
     await useApp.getState().setTab('healing');
     await useApp.getState().setRange({ startMs: 0, endMs: 60_000 });
     await useApp.getState().openPlayer(2);
-    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.path, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'reattributed' });
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'reattributed' });
     expect(useApp.getState().report).toEqual({ tab: 'player', data: playerDetailFixture });
 
     await useApp.getState().setAttribution('augmented');
-    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.path, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'augmented' });
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'augmented' });
 
     await useApp.getState().closeDetail();
     expect(useApp.getState().details).toEqual([]);
-    expect(api.healingReport).toHaveBeenLastCalledWith(LOG.path, 1, { startMs: 0, endMs: 60_000, attribution: 'augmented' });
+    expect(api.healingReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 60_000, attribution: 'augmented' });
   });
 
   it('opens players from Damage Taken in the damage view and forgets that origin on a tab change', async () => {
@@ -219,7 +262,7 @@ describe('detail stack', () => {
     await useApp.getState().setTab('taken');
     await useApp.getState().openPlayer(4);
     expect(useApp.getState().tab).toBe('damage');
-    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.path, 1, 4, 'damage', WHOLE_PULL);
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 4, 'damage', WHOLE_PULL);
 
     await useApp.getState().setTab('healing');
     await useApp.getState().closeDetail();
@@ -236,7 +279,7 @@ describe('detail stack', () => {
     await useApp.getState().openAbility(44425, null);
     const ability = { kind: 'ability', player: 4, spellId: 44425, pet: null, spellName: 'Arcane Barrage' };
     expect(useApp.getState().details).toEqual([{ kind: 'player', player: 4 }, ability]);
-    expect(api.abilityDetail).toHaveBeenLastCalledWith(LOG.path, 1, 4, 44425, null, 'damage', WHOLE_PULL);
+    expect(api.abilityDetail).toHaveBeenLastCalledWith(LOG.id, 1, 4, 44425, null, 'damage', WHOLE_PULL);
     expect(useApp.getState().report).toEqual({ tab: 'ability', data: abilityDetailFixture });
 
     await useApp.getState().openTarget(ENEMY);
@@ -254,7 +297,7 @@ describe('detail stack', () => {
     await useApp.getState().openAbility(44425, null);
     await useApp.getState().setTab('healing');
     expect(useApp.getState().details).toEqual([{ kind: 'player', player: 4 }]);
-    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.path, 1, 4, 'healing', WHOLE_PULL);
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 4, 'healing', WHOLE_PULL);
     expect(api.abilityDetail).toHaveBeenCalledTimes(1);
   });
 
@@ -263,10 +306,10 @@ describe('detail stack', () => {
     await openPull();
     await useApp.getState().openTarget('');
     expect(useApp.getState().tab).toBe('damage');
-    expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.path, 1, '', WHOLE_PULL);
+    expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.id, 1, '', WHOLE_PULL);
     expect(useApp.getState().details).toEqual([{ kind: 'target', name: "Ula'tek" }]);
     await useApp.getState().setRange({ startMs: 120_000, endMs: 140_000 });
-    expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.path, 1, "Ula'tek", { startMs: 120_000, endMs: 140_000, attribution: 'reattributed' });
+    expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.id, 1, "Ula'tek", { startMs: 120_000, endMs: 140_000, attribution: 'reattributed' });
 
     await useApp.getState().openTarget(ENEMY);
     expect(useApp.getState().details).toEqual([{ kind: 'target', name: ENEMY }]);
@@ -343,7 +386,7 @@ describe('detail origin', () => {
       { kind: 'player', player: 2 },
       { kind: 'ability', player: 2, spellId: 774, pet: null },
     ]);
-    expect(api.abilityDetail).toHaveBeenLastCalledWith(LOG.path, 1, 2, 774, null, 'healing', WHOLE_PULL);
+    expect(api.abilityDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 774, null, 'healing', WHOLE_PULL);
 
     await useApp.getState().back();
     expect(useApp.getState().details).toEqual([{ kind: 'player', player: 2 }]);
@@ -387,14 +430,14 @@ describe('request races', () => {
     ['finishes', (old: ReturnType<typeof deferred<LogView>>) => old.resolve(LOG)],
     ['fails', (old: ReturnType<typeof deferred<LogView>>) => old.reject('File not found')],
   ])('keeps the newest log when an older open %s last', async (_, settle) => {
-    const other = { ...LOG, path: 'C:\\Logs\\other.txt', fileName: 'other.txt' };
+    const other = { ...LOG, id: 'other.txt', fileName: 'other.txt' };
     const old = deferred<LogView>();
     vi.mocked(api.openLog).mockReturnValueOnce(old.promise).mockResolvedValueOnce(other);
-    const pending = useApp.getState().openLog(LOG.path);
-    await useApp.getState().openLog(other.path);
+    const pending = useApp.getState().openLog(chosen(LOG));
+    await useApp.getState().openLog(chosen(other));
     settle(old);
     await pending;
-    expect(useApp.getState()).toMatchObject({ log: other, openingFile: null, error: null });
+    expect(useApp.getState()).toMatchObject({ log: other, opening: null, error: null });
   });
 
   const fresh = { ...overviewFixture, deaths: [] };
@@ -411,9 +454,9 @@ describe('request races', () => {
     },
     { overtaken: 'another pull opens', overtake: () => useApp.getState().openFight(2), fails: true, expected: { overview: overviewFixture } },
     { overtaken: 'the pull list is shown', overtake: async () => useApp.getState().backToPulls(), fails: true, expected: { overview: null } },
-    { overtaken: 'another log opens', overtake: () => useApp.getState().openLog(LOG.path), fails: false, expected: { view: { kind: 'start' }, overview: null } },
+    { overtaken: 'another log opens', overtake: () => useApp.getState().openLog(chosen(LOG)), fails: false, expected: { view: { kind: 'start' }, overview: null } },
   ])('drops a pull load once $overtaken', async ({ overtake, fails, expected }) => {
-    await useApp.getState().openLog(LOG.path);
+    await useApp.getState().openLog(chosen(LOG));
     const old = deferred<QuickOverview>();
     vi.mocked(api.quickOverview).mockReturnValueOnce(old.promise);
     const pending = useApp.getState().openFight(1);
@@ -463,13 +506,13 @@ describe('pull comparison', () => {
 
     await useApp.getState().openFight(3);
     await useApp.getState().openComparison(1);
-    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.path, 1, 3, 'reattributed');
+    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.id, 1, 3, 'reattributed');
     expect(useApp.getState().comparison).toEqual({ a: 1, b: 3, data: comparisonFixture, loading: false, error: null, reportAttribution: 'reattributed' });
     expect(useApp.getState().focusRequest).toBe('compare');
     expect(useApp.getState().view).toEqual({ kind: 'fight', fightIndex: 3 });
 
     await useApp.getState().setAttribution('augmented');
-    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.path, 1, 3, 'augmented');
+    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.id, 1, 3, 'augmented');
 
     vi.mocked(api.comparePulls).mockRejectedValueOnce('Pull 9 does not exist in this log.');
     await useApp.getState().openComparison(9);
@@ -498,28 +541,6 @@ describe('pull comparison', () => {
     expect(api.damageDoneReport).toHaveBeenCalledTimes(2);
     await useApp.getState().closeComparison();
     expect(api.damageDoneReport).toHaveBeenCalledTimes(3);
-    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.path, 1, { startMs: 0, endMs: 60_000, attribution: 'augmented' });
-  });
-});
-
-describe('settings', () => {
-  it('loads the game-data status and refreshes it one request at a time', async () => {
-    vi.mocked(api.gameDataStatus).mockResolvedValue(gameDataFixture);
-    await useApp.getState().openSettings();
-    expect(useApp.getState()).toMatchObject({ settingsOpen: true, gameData: gameDataFixture, gameDataLoading: false });
-
-    const refreshed = { ...gameDataFixture, bossPortraits: { entries: 1_157, fetchedUnixMs: 1, error: null } };
-    const refresh = deferred<typeof gameDataFixture>();
-    vi.mocked(api.refreshGameData).mockReturnValueOnce(refresh.promise);
-    const first = useApp.getState().refreshGameData();
-    await useApp.getState().refreshGameData();
-    expect(api.refreshGameData).toHaveBeenCalledTimes(1);
-    refresh.resolve(refreshed);
-    await first;
-    expect(useApp.getState().gameData).toEqual(refreshed);
-
-    vi.mocked(api.refreshGameData).mockRejectedValueOnce('shell gone');
-    await useApp.getState().refreshGameData();
-    expect(useApp.getState()).toMatchObject({ error: 'Could not refresh the game data: shell gone', gameDataRefreshing: false });
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 60_000, attribution: 'augmented' });
   });
 });

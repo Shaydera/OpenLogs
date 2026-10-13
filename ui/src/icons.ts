@@ -1,19 +1,57 @@
-function onWindows(): boolean {
-  return typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
+import { useEffect, useSyncExternalStore } from 'react';
+import classesSpecs from '../../crates/openlogs-gamedata/data/classes_specs.json';
+import { type IconTables, iconTables, loadIconTables, spellIconName, subscribeIconTables } from './gameData';
+
+/** What a game icon shows: `spell/<id>`, `class/<id>`, `spec/<id>`, `icon/<name>` or `boss/<encounter id>`. */
+export type IconRef = string;
+
+export const spellIcon = (spellId: number): IconRef => `spell/${spellId}`;
+export const classIcon = (classId: number): IconRef => `class/${classId}`;
+export const specIcon = (specId: number): IconRef => `spec/${specId}`;
+export const namedIcon = (name: string): IconRef => `icon/${name}`;
+/** A boss's Encounter Journal portrait; none for encounters without one. */
+export const bossIcon = (encounterId: number): IconRef => `boss/${encounterId}`;
+
+const ICONS = 'https://wow.zamimg.com/images/wow/icons/large/';
+const JOURNAL = 'https://wow.zamimg.com/images/wow/journal/';
+/** Spell 0 is a melee swing. */
+const MELEE_ICON = 'ability_meleedamage';
+
+const classTokens = new Map(classesSpecs.classes.map((c) => [c.id, c.token]));
+const specIcons = new Map(classesSpecs.specs.map((s) => [s.id, s.icon]));
+
+/** The image URL of `ref`; `null` when there is none, also while the tables are loading. */
+export function iconSrc(ref: IconRef, tables: IconTables): string | null {
+  const slash = ref.indexOf('/');
+  const kind = ref.slice(0, slash);
+  const value = ref.slice(slash + 1);
+  const icon = (name: string | null | undefined) => (name ? `${ICONS}${encodeURIComponent(name)}.jpg` : null);
+  switch (kind) {
+    case 'spell': {
+      const id = Number(value);
+      if (id === 0) return icon(MELEE_ICON);
+      return tables.spells ? icon(spellIconName(tables.spells, id)) : null;
+    }
+    case 'class': {
+      const token = classTokens.get(Number(value));
+      return icon(token && `classicon_${token.toLowerCase()}`);
+    }
+    case 'spec':
+      return icon(specIcons.get(Number(value)));
+    case 'icon':
+      return icon(value);
+    case 'boss': {
+      const portrait = tables.portraits?.[value];
+      return portrait ? `${JOURNAL}${encodeURIComponent(portrait)}.png` : null;
+    }
+    default:
+      return null;
+  }
 }
 
-/**
- * URL of an image served by the `wowicon` protocol. Tauri exposes custom schemes as
- * `http://<scheme>.localhost` on Windows and as `<scheme>://localhost` elsewhere.
- */
-export function iconUrl(path: string, windows = onWindows()): string {
-  return windows ? `http://wowicon.localhost/${path}` : `wowicon://localhost/${path}`;
+/** Resolves an icon for an `<img>`, loading the icon tables on first use. */
+export function useIconSrc(ref: IconRef | null): string | null {
+  const tables = useSyncExternalStore(subscribeIconTables, iconTables);
+  useEffect(loadIconTables, []);
+  return ref === null ? null : iconSrc(ref, tables);
 }
-
-export const spellIconUrl = (spellId: number) => iconUrl(`spell/${spellId}`);
-export const classIconUrl = (classId: number) => iconUrl(`class/${classId}`);
-export const specIconUrl = (specId: number) => iconUrl(`spec/${specId}`);
-export const namedIconUrl = (name: string) => iconUrl(`icon/${encodeURIComponent(name)}`);
-
-/** A boss portrait (Warcraft Logs, Encounter Journal or shipped icon); 404 when there is none. */
-export const bossIconUrl = (encounterId: number) => iconUrl(`boss/${encounterId}`);

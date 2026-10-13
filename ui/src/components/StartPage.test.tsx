@@ -1,27 +1,26 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { open } from '@tauri-apps/plugin-dialog';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
 import { api } from '../api/client';
+import type { LogSource } from '../api/logSource';
 import type { FightRow, LogView, RecentLog } from '../api/types';
+import { chooseLog } from '../api/logSource';
 import { initialState, useApp } from '../store';
 import { overviewFixture } from '../test/overviewFixture';
 import { runLogFixture } from '../test/runFixture';
 
 vi.mock('../api/client', () => ({
-  api: { openLog: vi.fn(), recentLogs: vi.fn(), removeRecent: vi.fn(), quickOverview: vi.fn() },
+  api: { openLog: vi.fn(), recentLogs: vi.fn(), reopenRecent: vi.fn(), removeRecent: vi.fn(), quickOverview: vi.fn() },
 }));
-vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
-vi.mock('@tauri-apps/api/webview', () => ({
-  getCurrentWebview: () => ({ onDragDropEvent: vi.fn().mockResolvedValue(() => {}) }),
-}));
+vi.mock('../api/logSource', () => ({ chooseLog: vi.fn() }));
 
-const PATH = 'C:\\Logs\\WoWCombatLog-100726_185823.txt';
+const LOG_ID = 'WoWCombatLog-100726_185823.txt';
+const SOURCE: LogSource = { id: LOG_ID, name: 'WoWCombatLog-100726_185823.txt', size: 230_331_451, lastModified: 0, read: vi.fn() };
 
 const RECENT: RecentLog[] = [
   {
-    path: PATH,
+    id: LOG_ID,
     fileName: 'WoWCombatLog-100726_185823.txt',
     sizeBytes: 230_331_451,
     zone: 'The Venomous Abyss',
@@ -52,7 +51,7 @@ function row(index: number, name: string, encounterId: number, outcome: FightRow
 }
 
 const LOG: LogView = {
-  path: PATH,
+  id: LOG_ID,
   fileName: 'WoWCombatLog-100726_185823.txt',
   sizeBytes: 230_331_451,
   cacheHit: false,
@@ -73,8 +72,9 @@ const LOG: LogView = {
 beforeEach(() => {
   vi.mocked(api.recentLogs).mockReset().mockResolvedValue(RECENT);
   vi.mocked(api.openLog).mockReset().mockResolvedValue(LOG);
+  vi.mocked(api.reopenRecent).mockReset().mockResolvedValue(SOURCE);
   vi.mocked(api.quickOverview).mockReset().mockResolvedValue(overviewFixture);
-  vi.mocked(open).mockReset();
+  vi.mocked(chooseLog).mockReset();
   localStorage.clear();
   useApp.setState(initialState());
 });
@@ -85,23 +85,24 @@ describe('start page', () => {
     const entry = await screen.findByRole('button', { name: /^WoWCombatLog-100726_185823\.txt/ });
     expect(entry).toHaveTextContent('3 pulls');
     await userEvent.click(entry);
-    expect(api.openLog).toHaveBeenCalledWith(PATH);
+    expect(api.reopenRecent).toHaveBeenCalledWith(LOG_ID);
+    expect(api.openLog).toHaveBeenCalledWith(SOURCE, expect.any(Function));
     expect(await screen.findByRole('region', { name: "Ula'tek" })).toBeInTheDocument();
   });
 
-  it('flags recent logs whose file is gone', async () => {
+  it('flags recent logs that cannot be opened without choosing them again', async () => {
     vi.mocked(api.recentLogs).mockResolvedValue([{ ...RECENT[0], exists: false }]);
     render(<App />);
     const entry = await screen.findByRole('button', { name: /^WoWCombatLog/ });
-    expect(entry).toHaveTextContent('File not found');
+    expect(entry).toHaveTextContent('Choose the file again to open it');
     expect(entry).toBeDisabled();
   });
 
   it('opens a log chosen in the file dialog', async () => {
-    vi.mocked(open).mockResolvedValue(PATH);
+    vi.mocked(chooseLog).mockResolvedValue({ name: SOURCE.name, open: async () => SOURCE });
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Open log…' }));
-    expect(api.openLog).toHaveBeenCalledWith(PATH);
+    expect(api.openLog).toHaveBeenCalledWith(SOURCE, expect.any(Function));
   });
 
   it('groups pulls and hides aborted ones until the toggle is cleared', async () => {
@@ -119,7 +120,7 @@ describe('start page', () => {
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: /^WoWCombatLog/ }));
     await userEvent.click(await screen.findByRole('button', { name: "Open pull 1 of Ula'tek" }));
-    expect(api.quickOverview).toHaveBeenCalledWith(PATH, 1, null);
+    expect(api.quickOverview).toHaveBeenCalledWith(LOG_ID, 1, null);
   });
 });
 
@@ -139,9 +140,9 @@ describe('Mythic+ runs', () => {
       'Open Prioress Murrpray, pull 5 of the run',
     ]);
     await userEvent.click(within(run).getByRole('button', { name: 'Open Baron Braunpyke, pull 4 of the run' }));
-    expect(api.quickOverview).toHaveBeenLastCalledWith(runLogFixture.path, 5, null);
+    expect(api.quickOverview).toHaveBeenLastCalledWith(runLogFixture.id, 5, null);
     useApp.setState({ view: { kind: 'start' } });
     await userEvent.click(await screen.findByRole('button', { name: 'Open run Priory of the Sacred Flame +12' }));
-    expect(api.quickOverview).toHaveBeenLastCalledWith(runLogFixture.path, 1, null);
+    expect(api.quickOverview).toHaveBeenLastCalledWith(runLogFixture.id, 1, null);
   });
 });

@@ -8,4 +8,4 @@ mod scan;
 pub use builder::{IndexBuilder, LineSpan};
 pub use cache::{CacheKey, CacheStatus, load_or_build};
 pub use model::*;
-pub use scan::{index_bytes, index_file};
+pub use scan::{Indexer, index_bytes, index_file};

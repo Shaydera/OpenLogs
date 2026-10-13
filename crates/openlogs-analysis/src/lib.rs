@@ -42,7 +42,7 @@ pub use interrupts::{
     DispelEntry, InterruptEntry, InterruptsReport, MissedCast, interrupts_report,
 };
 pub use links::AbilityLink;
-pub use load::{load_fight, load_fight_file};
+pub use load::{load_fight, load_fight_file, load_fight_slice};
 pub use overview::{
     BOSS_HP_STEP_MS, DPS_STEP_MS, DeathReport, Kpis, OverviewMarkers, OverviewTimeline,
     QuickOverview, quick_overview, quick_overview_in,

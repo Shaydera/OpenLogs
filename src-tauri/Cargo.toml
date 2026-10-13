@@ -9,14 +9,5 @@ description = "OpenLogs desktop app"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-openlogs-analysis.workspace = true
-openlogs-gamedata.workspace = true
-openlogs-index.workspace = true
-openlogs-parser.workspace = true
-serde.workspace = true
-serde_json.workspace = true
 tauri = { version = "2", features = [] }
-tauri-plugin-dialog = "2"
 
-[dev-dependencies]
-tempfile.workspace = true

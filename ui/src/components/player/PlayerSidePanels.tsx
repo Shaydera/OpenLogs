@@ -1,11 +1,11 @@
 import type { PlayerDeath, PlayerDetail, PlayerRef, SpellAmount } from '../../api/types';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { formatCount, formatEventTime, formatMillions } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
 import { classColor, shortName } from '../overview/players';
-import { hitIconUrl, hitName, reportSpellName, rosterIndex, sourceLabel } from '../reports/reportData';
+import { hitIcon, hitName, reportSpellName, rosterIndex, sourceLabel } from '../reports/reportData';
 import { TargetBreakdown, targetRows } from '../reports/TargetParts';
 import { targetColors } from '../reports/targetGroups';
 import { deathSummary } from './deathSummary';
@@ -28,7 +28,7 @@ function SpellList({ rows, detail, label, empty }: { rows: SpellRow[]; detail: P
         return (
           <div key={`${row.spellId}-${hit.environmental}`} className="lst-row" role="row">
             <span role="cell">
-              <GameIcon name={name} src={hitIconUrl(hit)} size={18} />
+              <GameIcon name={name} icon={hitIcon(hit)} size={18} />
             </span>
             <span role="cell" className="lst-name">
               <span>{name}</span>
@@ -118,7 +118,7 @@ function DeathBlock({ detail, death, roster }: { detail: PlayerDetail; death: Pl
   return (
     <div className="pdeath-entry">
       <div className="pdeath-line">
-        {kb && <GameIcon name={hitName(kb, spell)} src={hitIconUrl(kb)} />}
+        {kb && <GameIcon name={hitName(kb, spell)} icon={hitIcon(kb)} />}
         <span>
           <span className="num pdeath-time">{formatEventTime(death.t)}</span>
           {' · '}
@@ -128,7 +128,7 @@ function DeathBlock({ detail, death, roster }: { detail: PlayerDetail; death: Pl
       {summary && <div className="pdeath-note">{summary}</div>}
       {death.resurrectedAt !== null && (
         <div className="pdeath-line">
-          {rez && <GameIcon name={spell(rez.spellId)} src={spellIconUrl(rez.spellId)} />}
+          {rez && <GameIcon name={spell(rez.spellId)} icon={spellIcon(rez.spellId)} />}
           <span>
             <span className="num pdeath-res">{formatEventTime(death.resurrectedAt)}</span>
             {rez && (

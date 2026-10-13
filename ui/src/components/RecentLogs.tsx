@@ -5,11 +5,11 @@ import { logStartMs } from '../pulls/logStart';
 
 interface Props {
   recent: RecentLog[];
-  selectedPath: string | null;
-  onOpen: (path: string) => void;
+  selectedId: string | null;
+  onOpen: (entry: RecentLog) => void;
 }
 
-export function RecentLogs({ recent, selectedPath, onOpen }: Props) {
+export function RecentLogs({ recent, selectedId, onOpen }: Props) {
   return (
     <section className="recent" aria-labelledby="recent-title">
       <h2 id="recent-title" className="cap section-label">
@@ -22,12 +22,12 @@ export function RecentLogs({ recent, selectedPath, onOpen }: Props) {
           {recent.map((log) => {
             const start = logStartMs(log.fileName, log.startUnixMs);
             return (
-              <li key={log.path}>
+              <li key={log.id}>
                 <button
                   type="button"
-                  className={log.path === selectedPath ? 'logbtn on' : 'logbtn'}
+                  className={log.id === selectedId ? 'logbtn on' : 'logbtn'}
                   disabled={!log.exists}
-                  onClick={() => onOpen(log.path)}
+                  onClick={() => onOpen(log)}
                 >
                   <span className="num recent-file">{log.fileName}</span>
                   {log.exists ? (
@@ -43,7 +43,7 @@ export function RecentLogs({ recent, selectedPath, onOpen }: Props) {
                       <span>{t('pulls.count', { count: log.pullCount })}</span>
                     </span>
                   ) : (
-                    <span className="recent-missing">{t('start.fileMissing')}</span>
+                    <span className="recent-missing">{t('start.chooseAgain')}</span>
                   )}
                   {log.zone && <span className="recent-zone">{log.zone}</span>}
                 </button>

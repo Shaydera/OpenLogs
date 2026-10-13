@@ -3,22 +3,18 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
 import { api } from '../api/client';
-import type { GameDataStatus } from '../api/types';
+import { gameDataManifest } from '../gameData';
 import { initialState, useApp } from '../store';
 import { gameDataFixture } from '../test/gameDataFixture';
 
 vi.mock('../api/client', () => ({
-  api: { recentLogs: vi.fn(), openLog: vi.fn(), gameDataStatus: vi.fn(), refreshGameData: vi.fn() },
+  api: { recentLogs: vi.fn(), openLog: vi.fn() },
 }));
-vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
-vi.mock('@tauri-apps/api/webview', () => ({
-  getCurrentWebview: () => ({ onDragDropEvent: vi.fn().mockResolvedValue(() => {}) }),
-}));
+vi.mock('../gameData', () => ({ gameDataManifest: vi.fn() }));
 
 beforeEach(() => {
   vi.mocked(api.recentLogs).mockReset().mockResolvedValue([]);
-  vi.mocked(api.gameDataStatus).mockReset().mockResolvedValue(gameDataFixture);
-  vi.mocked(api.refreshGameData).mockReset();
+  vi.mocked(gameDataManifest).mockReset().mockResolvedValue(gameDataFixture);
   localStorage.clear();
   useApp.setState(initialState());
 });
@@ -38,18 +34,9 @@ describe('Settings dialog', () => {
     expect(localStorage.getItem('openlogs.showAugDelta')).toBe('true');
   });
 
-  it('refreshes the game data on request', async () => {
-    let finish: (status: GameDataStatus) => void = () => {};
-    vi.mocked(api.refreshGameData).mockReturnValue(new Promise((resolve) => (finish = resolve)));
+  it('shows the game data the app ships with', async () => {
     const dialog = await openDialog();
-    await within(dialog).findAllByRole('listitem');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Refresh now' }));
-    expect(within(dialog).getByRole('button', { name: 'Refreshing…' })).toBeDisabled();
-    finish({
-      ...gameDataFixture,
-      bossPortraits: { entries: 1_157, fetchedUnixMs: new Date(2026, 9, 12, 9, 0).getTime(), error: null },
-    });
-    expect(await within(dialog).findByText('1,157 bosses · updated Oct 12, 2026')).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: 'Refresh now' })).toBeEnabled();
+    expect(await within(dialog).findByText('410,805 spells')).toBeInTheDocument();
+    expect(within(dialog).getByText('From wago.tools as of Oct 11, 2026; updated with each release.')).toBeInTheDocument();
   });
 });

@@ -3,7 +3,7 @@ import { formatEventTime } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { GameIcon } from '../GameIcon';
 import { classColor, playerIndex, shortName, spellName } from '../overview/players';
-import { hitIconUrl, hitName, sourceLabel } from '../reports/reportData';
+import { hitIcon, hitName, sourceLabel } from '../reports/reportData';
 
 /** Every death of both pulls in time order: time, player, killing blow. */
 export function CompareDeaths({ data, labelA, labelB }: { data: PullComparison; labelA: string; labelB: string }) {
@@ -56,7 +56,7 @@ function DeathLine({ death, overview, color }: { death: DeathEntry; overview: Qu
       </span>
       {kb ? (
         <span className="spell-line">
-          <GameIcon name={hitName(kb, (id) => spellName(overview, id))} src={hitIconUrl(kb)} size={18} />
+          <GameIcon name={hitName(kb, (id) => spellName(overview, id))} icon={hitIcon(kb)} size={18} />
           <span>{t('recap.killedBy', { spell: hitName(kb, (id) => spellName(overview, id)), source: sourceLabel(kb) })}</span>
         </span>
       ) : (

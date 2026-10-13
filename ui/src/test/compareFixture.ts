@@ -73,7 +73,7 @@ function pull(index: number, outcome: Outcome, durationMs: number, bossHpPercent
 
 /** Ula'tek Heroic: a wipe, an aborted pull and the kill. */
 export const compareLogFixture: LogView = {
-  path: 'C:\\Logs\\WoWCombatLog-100726_185823.txt',
+  id: 'WoWCombatLog-100726_185823.txt',
   fileName: 'WoWCombatLog-100726_185823.txt',
   sizeBytes: 230_331_451,
   cacheHit: true,

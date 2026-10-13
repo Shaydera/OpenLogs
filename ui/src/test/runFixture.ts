@@ -42,7 +42,7 @@ function row(
  * (2–6; pull 3 is an aborted 4 s wipe), then Ula'tek Heroic outside the run (7).
  */
 export const runLogFixture: LogView = {
-  path: 'C:\\Logs\\WoWCombatLog-100826_195800.txt',
+  id: 'WoWCombatLog-100826_195800.txt',
   fileName: 'WoWCombatLog-100826_195800.txt',
   sizeBytes: 52_428_800,
   cacheHit: false,

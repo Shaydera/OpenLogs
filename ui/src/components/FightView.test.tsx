@@ -28,7 +28,7 @@ vi.mock('../api/client', () => ({
 }));
 
 const LOG = {
-  path: 'C:\\Logs\\WoWCombatLog-100726_185823.txt',
+  id: 'WoWCombatLog-100726_185823.txt',
   fileName: 'WoWCombatLog-100726_185823.txt',
   fights: [
     {
@@ -83,7 +83,7 @@ describe('FightView', () => {
     await userEvent.click(within(toggle).getByRole('button', { name: 'Augmented' }));
     expect(within(toggle).getByRole('button', { name: 'Augmented' })).toHaveAttribute('aria-pressed', 'true');
     expect(api.damageDoneReport).toHaveBeenLastCalledWith(
-      'C:\\Logs\\WoWCombatLog-100726_185823.txt',
+      'WoWCombatLog-100726_185823.txt',
       1,
       { startMs: null, endMs: null, attribution: 'augmented' },
     );
@@ -136,7 +136,7 @@ describe('compare with…', () => {
       'Pull #4 · Wipe · 4:07 · 33.8%',
     ]);
     await userEvent.click(within(list).getByRole('button', { name: 'Pull #1 · Wipe · 2:22 · 60.4%' }));
-    expect(api.comparePulls).toHaveBeenLastCalledWith(PULLS.path, 1, 3, 'reattributed');
+    expect(api.comparePulls).toHaveBeenLastCalledWith(PULLS.id, 1, 3, 'reattributed');
     expect(await screen.findByRole('table', { name: 'Key figures' })).toBeInTheDocument();
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
 

@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import type { PlayerDetail } from '../../api/types';
 import { useFocusRequest } from '../../hooks/useFocusRequest';
-import { classIconUrl } from '../../icons';
+import { classIcon } from '../../icons';
 import { formatAmount, formatInteger } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
@@ -26,7 +26,7 @@ export function PlayerHeader({ detail }: { detail: PlayerDetail }) {
         {t(nested ? 'detail.back' : 'player.back')}
       </button>
       {player.classId !== null && (
-        <GameIcon name={name} src={classIconUrl(player.classId)} large ring={`color-mix(in srgb, ${color} 50%, var(--bg))`} />
+        <GameIcon name={name} icon={classIcon(player.classId)} large ring={`color-mix(in srgb, ${color} 50%, var(--bg))`} />
       )}
       <div className="dhead-id">
         <h1 ref={titleRef} tabIndex={-1} className="dhead-title" style={{ color }}>

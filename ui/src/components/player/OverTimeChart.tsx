@@ -1,5 +1,5 @@
 import type { PlayerDetail } from '../../api/types';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { formatAmount, formatAxisAmount, formatPercent } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { TimeAxis } from '../detail/TimeAxis';
@@ -86,13 +86,13 @@ export function OverTimeChart({ detail }: { detail: PlayerDetail }) {
           )}
           {cooldowns.map((row) => (
             <li key={row.spellId} className="chart-key">
-              <GameIcon name={name(row.spellId)} src={spellIconUrl(row.spellId)} size={18} />
+              <GameIcon name={name(row.spellId)} icon={spellIcon(row.spellId)} size={18} />
               {name(row.spellId)}
             </li>
           ))}
           {ebonBands.length > 0 && (
             <li className="chart-key">
-              <GameIcon name={name(EBON_MIGHT)} src={spellIconUrl(EBON_MIGHT)} size={18} />
+              <GameIcon name={name(EBON_MIGHT)} icon={spellIcon(EBON_MIGHT)} size={18} />
               {name(EBON_MIGHT)}
             </li>
           )}

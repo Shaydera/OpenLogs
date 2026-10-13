@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AbilityRow, PlayerRef, TakenAbility } from '../../api/types';
-import { namedIconUrl } from '../../icons';
+import { namedIcon } from '../../icons';
 import { abilityBreakdown, takenBreakdown } from './breakdown';
 
 const roster = new Map<number, PlayerRef>([
@@ -100,6 +100,6 @@ describe('takenBreakdown', () => {
       ['Prismatic Bolt', 'Unknown source', null, 4],
       ['Other', null, null, 5],
     ]);
-    expect(rows[2].icon).toBe(namedIconUrl('ability_meleedamage'));
+    expect(rows[2].icon).toBe(namedIcon('ability_meleedamage'));
   });
 });

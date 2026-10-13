@@ -1,6 +1,9 @@
-import { invoke } from '@tauri-apps/api/core';
+import { type Engine, workerEngine } from '../engine/engine';
+import { dungeonsJson } from '../gameData';
+import { browserDatabase, type Database } from './db';
+import { type LogSource, reopenHandle } from './logSource';
+import { type RecentRecord, recentRecords, rememberLog } from './recent';
 import type {
-  GameDataStatus,
   Attribution,
   AuraScope,
   AurasReport,
@@ -22,37 +25,188 @@ import type {
   ReportFilter,
 } from './types';
 
-/** Typed wrappers around the Tauri commands in `src-tauri/src/commands.rs`. */
-export const api = {
-  openLog: (path: string) => invoke<LogView>('open_log', { path }),
-  recentLogs: () => invoke<RecentLog[]>('recent_logs'),
-  removeRecent: (path: string) => invoke<void>('remove_recent', { path }),
-  quickOverview: (path: string, fightIndex: number, filter: ReportFilter | null) =>
-    invoke<QuickOverview>('quick_overview', { path, fightIndex, filter }),
-  damageDoneReport: (path: string, fightIndex: number, filter: ReportFilter) =>
-    invoke<DamageReport>('damage_done_report', { path, fightIndex, filter }),
-  healingReport: (path: string, fightIndex: number, filter: ReportFilter) =>
-    invoke<HealingReport>('healing_report', { path, fightIndex, filter }),
-  damageTakenReport: (path: string, fightIndex: number, filter: ReportFilter) =>
-    invoke<DamageTakenReport>('damage_taken_report', { path, fightIndex, filter }),
-  playerDetail: (path: string, fightIndex: number, player: number, metric: Metric, filter: ReportFilter) =>
-    invoke<PlayerDetail>('player_detail', { path, fightIndex, player, metric, filter }),
-  abilityDetail: (path: string, fightIndex: number, player: number, spell: number, pet: string | null, metric: Metric, filter: ReportFilter) =>
-    invoke<AbilityDetail>('ability_detail', { path, fightIndex, player, spell, pet, metric, filter }),
-  targetDetail: (path: string, fightIndex: number, name: string, filter: ReportFilter) =>
-    invoke<TargetDetail>('target_detail', { path, fightIndex, name, filter }),
-  deathsReport: (path: string, fightIndex: number, filter: ReportFilter) =>
-    invoke<DeathsReport>('deaths_report', { path, fightIndex, filter }),
-  castsReport: (path: string, fightIndex: number, filter: ReportFilter) =>
-    invoke<CastsReport>('casts_report', { path, fightIndex, filter }),
-  aurasReport: (path: string, fightIndex: number, scope: AuraScope, filter: ReportFilter) =>
-    invoke<AurasReport>('auras_report', { path, fightIndex, scope, filter }),
-  interruptsReport: (path: string, fightIndex: number, filter: ReportFilter) =>
-    invoke<InterruptsReport>('interrupts_report', { path, fightIndex, filter }),
-  resourcesReport: (path: string, fightIndex: number, filter: ReportFilter) =>
-    invoke<ResourcesReport>('resources_report', { path, fightIndex, filter }),
-  comparePulls: (path: string, fightA: number, fightB: number, attribution: Attribution) =>
-    invoke<PullComparison>('compare_pulls', { path, fightA, fightB, attribution }),
-  gameDataStatus: () => invoke<GameDataStatus>('game_data_status'),
-  refreshGameData: () => invoke<GameDataStatus>('refresh_game_data'),
-};
+const CHUNK_BYTES = 8 << 20;
+/** Logs whose index is kept, so they open again without being read. */
+const MAX_STORED_INDEXES = 20;
+
+interface StoredIndex {
+  key: string;
+  json: string;
+}
+
+/** When a stored index was last used; kept apart so choosing what to evict reads no index. */
+interface IndexUse {
+  key: string;
+  usedAtUnixMs: number;
+}
+
+export interface ClientDeps {
+  engine: () => Engine;
+  dungeons: () => Promise<string | null>;
+  db: Database;
+  now: () => number;
+}
+
+/** Losing the cache or the recent list must not fail opening a log. */
+async function quietly<T>(task: () => Promise<T>): Promise<T | undefined> {
+  try {
+    return await task();
+  } catch {
+    return undefined;
+  }
+}
+
+export function createClient({ engine: getEngine, dungeons, db, now }: ClientDeps) {
+  let current: { source: LogSource; engineRestarts: number } | null = null;
+  let dungeonsLoaded = false;
+  let latestOpen = 0;
+  let queue: Promise<unknown> = Promise.resolve();
+
+  /** One engine operation at a time: a report must not load pulls while another log opens. */
+  function serial<T>(task: () => Promise<T>): Promise<T> {
+    const run = queue.then(task, task);
+    queue = run.catch(() => undefined);
+    return run;
+  }
+
+  const useIndex = (key: string) => db.put('indexes-used', { key, usedAtUnixMs: now() } satisfies IndexUse);
+
+  /** Evicts first, so a full quota does not keep the newest index out. */
+  async function storeIndex(key: string, json: string) {
+    const uses = await db.all<IndexUse>('indexes-used');
+    uses.sort((a, b) => b.usedAtUnixMs - a.usedAtUnixMs);
+    for (const stale of uses.slice(MAX_STORED_INDEXES - 1)) {
+      await db.delete('indexes', stale.key);
+      await db.delete('indexes-used', stale.key);
+    }
+    await db.put('indexes', { key, json } satisfies StoredIndex);
+    await useIndex(key);
+  }
+
+  async function loadDungeons(engine: Engine) {
+    if (dungeonsLoaded) return;
+    // Without the dungeon table, runs still open; their results come from the log alone.
+    const json = await dungeons().catch(() => null);
+    if (json === null) return;
+    await engine.setDungeons(json);
+    dungeonsLoaded = true;
+  }
+
+  async function index(
+    source: LogSource,
+    onProgress: (bytesRead: number, totalBytes: number) => void,
+    superseded: () => boolean,
+  ): Promise<LogView> {
+    const engine = getEngine();
+    await loadDungeons(engine);
+    const key = `${source.id}|${source.size}|${source.lastModified}|${await engine.indexFormatVersion()}`;
+    const stored = await quietly(() => db.get<StoredIndex>('indexes', key));
+    if (stored) {
+      const view = await quietly(() => engine.restoreIndex(stored.json, source.id, source.name, source.size));
+      if (view) {
+        await quietly(() => useIndex(key));
+        return view;
+      }
+    }
+    await engine.beginIndex();
+    let feeding: Promise<void> = Promise.resolve();
+    for (let offset = 0; offset < source.size; offset += CHUNK_BYTES) {
+      if (superseded()) throw 'Another log is being opened.';
+      const bytes = await source.read(offset, Math.min(CHUNK_BYTES, source.size - offset));
+      await feeding;
+      onProgress(offset + bytes.length, source.size);
+      feeding = engine.feed(bytes);
+    }
+    await feeding;
+    const view = await engine.finishIndex(source.id, source.name, source.size);
+    const json = await engine.indexJson();
+    await quietly(() => storeIndex(key, json));
+    return view;
+  }
+
+  /** Runs `command` once the pulls it needs are loaded from the open log. */
+  function report<T>(logId: string, fights: number[], command: string, args: object): Promise<T> {
+    return serial(async () => {
+      const engine = getEngine();
+      if (current && current.engineRestarts !== engine.restarts()) current = null;
+      if (current?.source.id !== logId) throw 'This log is no longer open. Open it again.';
+      const source = current.source;
+      try {
+        for (const fight of fights) {
+          if (await engine.touchFight(fight)) continue;
+          const [start, end] = await engine.fightRange(fight);
+          const bytes = await source.read(start, Math.max(0, Math.min(end, source.size) - start));
+          await engine.loadFight(bytes, start, fight);
+        }
+        return await engine.call<T>(command, args);
+      } finally {
+        if (current && current.engineRestarts !== engine.restarts()) current = null;
+      }
+    });
+  }
+
+  const pull =
+    <T>(command: string) =>
+    (logId: string, fightIndex: number, filter: ReportFilter) =>
+      report<T>(logId, [fightIndex], command, { fightIndex, filter });
+
+  return {
+    /** A later call supersedes an open that is still reading; it fails without reading on. */
+    openLog: (source: LogSource, onProgress: (bytesRead: number, totalBytes: number) => void = () => {}) => {
+      const open = ++latestOpen;
+      return serial(async () => {
+        current = null;
+        const view = await index(source, onProgress, () => open !== latestOpen);
+        current = { source, engineRestarts: getEngine().restarts() };
+        // Only real combat logs are remembered.
+        if (view.logVersion !== null) await quietly(() => rememberLog(db, source, view, now()));
+        return view;
+      });
+    },
+    recentLogs: async (): Promise<RecentLog[]> =>
+      (await recentRecords(db)).map((record) => ({
+        id: record.id,
+        fileName: record.fileName,
+        sizeBytes: record.sizeBytes,
+        zone: record.zone,
+        startUnixMs: record.startUnixMs,
+        pullCount: record.pullCount,
+        openedAtUnixMs: record.openedAtUnixMs,
+        exists: record.handle !== undefined,
+      })),
+    reopenRecent: async (id: string): Promise<LogSource> => {
+      const record = await db.get<RecentRecord>('recent', id);
+      if (!record) throw 'This log is no longer in the recent list.';
+      return reopenHandle(record.handle);
+    },
+    removeRecent: (id: string) => db.delete('recent', id),
+    quickOverview: (logId: string, fightIndex: number, filter: ReportFilter | null) =>
+      report<QuickOverview>(logId, [fightIndex], 'quick_overview', { fightIndex, filter }),
+    damageDoneReport: pull<DamageReport>('damage_done_report'),
+    healingReport: pull<HealingReport>('healing_report'),
+    damageTakenReport: pull<DamageTakenReport>('damage_taken_report'),
+    playerDetail: (logId: string, fightIndex: number, player: number, metric: Metric, filter: ReportFilter) =>
+      report<PlayerDetail>(logId, [fightIndex], 'player_detail', { fightIndex, player, metric, filter }),
+    abilityDetail: (logId: string, fightIndex: number, player: number, spell: number, pet: string | null, metric: Metric, filter: ReportFilter) =>
+      report<AbilityDetail>(logId, [fightIndex], 'ability_detail', { fightIndex, player, spell, pet, metric, filter }),
+    targetDetail: (logId: string, fightIndex: number, name: string, filter: ReportFilter) =>
+      report<TargetDetail>(logId, [fightIndex], 'target_detail', { fightIndex, name, filter }),
+    deathsReport: pull<DeathsReport>('deaths_report'),
+    castsReport: pull<CastsReport>('casts_report'),
+    aurasReport: (logId: string, fightIndex: number, scope: AuraScope, filter: ReportFilter) =>
+      report<AurasReport>(logId, [fightIndex], 'auras_report', { fightIndex, scope, filter }),
+    interruptsReport: pull<InterruptsReport>('interrupts_report'),
+    resourcesReport: pull<ResourcesReport>('resources_report'),
+    comparePulls: (logId: string, fightA: number, fightB: number, attribution: Attribution) =>
+      report<PullComparison>(logId, [fightA, fightB], 'compare_pulls', { fightA, fightB, attribution }),
+  };
+}
+
+let sharedEngine: Engine | null = null;
+
+export const api = createClient({
+  engine: () => (sharedEngine ??= workerEngine()),
+  dungeons: dungeonsJson,
+  db: browserDatabase,
+  now: Date.now,
+});

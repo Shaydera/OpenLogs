@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { CooldownEntry, QuickOverview } from '../../api/types';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { formatEventTime } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { GameIcon } from '../GameIcon';
@@ -87,7 +87,7 @@ export function CooldownsPanel({ overview }: { overview: QuickOverview }) {
                           const label = t('cooldowns.use', { spell: name, time: formatEventTime(use.t) });
                           return (
                             <span key={`${use.spellId}-${use.t}`} className="cd" style={{ left: `${percentOf(use.t, duration)}%` }} title={label}>
-                              <GameIcon name={name} src={spellIconUrl(use.spellId)} size={22} label={label} />
+                              <GameIcon name={name} icon={spellIcon(use.spellId)} size={22} label={label} />
                             </span>
                           );
                         })}

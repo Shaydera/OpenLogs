@@ -4,8 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "wasm": "node scripts/build-wasm.mjs",
+    "gamedata": "cargo run --release -p openlogs-cli -- export-game-data public/game-data",
+    "dev": "npm run wasm && vite",
+    "build": "npm run wasm && tsc --noEmit && vite build",
     "lint": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -14,8 +16,6 @@
     "@fontsource/fraunces": "^5.3.0",
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/ibm-plex-sans": "^5.3.0",
-    "@tauri-apps/api": "^2.12.2",
-    "@tauri-apps/plugin-dialog": "^2.8.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zustand": "^5.0.15"

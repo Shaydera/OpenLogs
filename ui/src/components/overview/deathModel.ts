@@ -2,7 +2,7 @@ import type { ContextEntry, ContextItem, DeathEntry, Hit, QuickOverview } from '
 import { formatAgo, formatAmountWhole } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import type { MessageKey } from '../../i18n/i18n';
-import { hitIconUrl, hitName } from '../reports/reportData';
+import { hitIcon, hitName } from '../reports/reportData';
 import { spellName, usedAtLabel } from './players';
 
 /** Parts of the last 5 s shown, one per segment tone; smaller parts leave the track colour. */
@@ -11,7 +11,7 @@ export const MAX_PARTS = 4;
 export interface DamagePart {
   key: string;
   name: string;
-  iconUrl: string;
+  icon: string;
   amount: string;
   /** Share of all damage taken in the last 5 s, 0–100. */
   widthPct: number;
@@ -23,7 +23,7 @@ export function damageParts(overview: QuickOverview, death: DeathEntry): DamageP
   return death.damageLast5s.slice(0, MAX_PARTS).map((part, i) => ({
     key: `${part.spellId}-${part.environmental}`,
     name: hitName(part, (id) => spellName(overview, id)),
-    iconUrl: hitIconUrl(part),
+    icon: hitIcon(part),
     amount: formatAmountWhole(part.amount),
     widthPct: death.damageTaken5s > 0 ? (part.amount / death.damageTaken5s) * 100 : 0,
     tone: i + 1,

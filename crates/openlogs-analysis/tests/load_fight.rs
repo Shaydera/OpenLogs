@@ -1,4 +1,6 @@
-use openlogs_analysis::{ActorKind, Damage, DamageVia, EventKind, NO_SPELL, UnitHp, load_fight};
+use openlogs_analysis::{
+    ActorKind, Damage, DamageVia, EventKind, NO_SPELL, UnitHp, load_fight, load_fight_slice,
+};
 use openlogs_index::{Outcome, index_bytes};
 
 const FIXTURE: &str = include_str!("../../openlogs-index/tests/fixtures/mini_raid.txt");
@@ -128,4 +130,20 @@ fn hostility_is_recorded_per_event() {
         .unwrap();
     assert!(hit.target_hostile, "it was hostile when it was hit");
     assert!(!hit.source_hostile);
+}
+
+#[test]
+fn a_fight_loads_the_same_from_its_part_of_the_log() {
+    let mythic_plus = include_str!("../../openlogs-index/tests/fixtures/mythic_plus.txt");
+    for log in [FIXTURE, mythic_plus].map(str::as_bytes) {
+        let index = index_bytes(log);
+        for summary in &index.fights {
+            let start = summary.prelude_offset as usize;
+            let end = (summary.end_offset as usize).min(log.len());
+            assert_eq!(
+                load_fight_slice(&log[start..end], summary.prelude_offset, summary),
+                load_fight(log, summary)
+            );
+        }
+    }
 }

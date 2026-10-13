@@ -1,11 +1,13 @@
 import { t } from '../i18n/i18n';
+import type { Opening } from '../store';
 
 interface Props {
   over: boolean;
-  busyFile: string | null;
+  opening: Opening | null;
 }
 
-export function DropZone({ over, busyFile }: Props) {
+export function DropZone({ over, opening }: Props) {
+  const percent = opening?.totalBytes ? Math.min(100, Math.round((opening.bytesRead / opening.totalBytes) * 100)) : null;
   return (
     <div className={over ? 'dropzone over' : 'dropzone'} role="status" aria-live="polite">
       <svg className="dropzone-icon" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true">
@@ -18,8 +20,14 @@ export function DropZone({ over, busyFile }: Props) {
           strokeLinejoin="round"
         />
       </svg>
-      <div className="dropzone-title">{busyFile ? t('start.indexing', { file: busyFile }) : t('start.dropTitle')}</div>
-      <div className="dropzone-hint">{t('start.dropHint')}</div>
+      <div className="dropzone-title">{opening ? t('start.indexing', { file: opening.file }) : t('start.dropTitle')}</div>
+      {percent !== null ? (
+        <div className="dropzone-progress" role="progressbar" aria-label={t('start.progress')} aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+          <span style={{ width: `${percent}%` }} />
+        </div>
+      ) : (
+        <div className="dropzone-hint">{t('start.dropHint')}</div>
+      )}
     </div>
   );
 }

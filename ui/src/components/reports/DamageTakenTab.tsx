@@ -7,7 +7,7 @@ import { GameIcon } from '../GameIcon';
 import { shortName } from '../overview/players';
 import { takenBreakdown, takenSource } from './breakdown';
 import { RankedHead, RankedRow, ReportHead, SideBreakdown, SideHead } from './ReportParts';
-import { barWidth, hitIconUrl, hitName, reportSpellName, rosterIndex } from './reportData';
+import { barWidth, hitIcon, hitName, reportSpellName, rosterIndex } from './reportData';
 
 /**
  * Damage Taken: players ranked, the selected player's damage by ability and source aside, and below
@@ -109,7 +109,7 @@ export function DamageTakenTab({ report }: { report: DamageTakenReport }) {
               return (
                 <div role="row" className="taken-row" key={`${row.spellId}-${row.environmental}-${row.sourceName ?? ''}`}>
                   <span role="cell">
-                    <GameIcon name={spell} src={hitIconUrl(row)} />
+                    <GameIcon name={spell} icon={hitIcon(row)} />
                   </span>
                   <span role="cell" className="side-cell">
                     <span className="side-label">

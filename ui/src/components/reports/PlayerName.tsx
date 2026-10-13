@@ -1,5 +1,5 @@
 import type { PlayerRef } from '../../api/types';
-import { classIconUrl, specIconUrl } from '../../icons';
+import { classIcon, specIcon } from '../../icons';
 import { t } from '../../i18n/i18n';
 import { GameIcon, MonogramTile } from '../GameIcon';
 import { classColor, shortName } from '../overview/players';
@@ -10,8 +10,8 @@ import { classColor, shortName } from '../overview/players';
  */
 export function PlayerIcon({ player, size = 22 }: { player: PlayerRef | undefined; size?: number }) {
   const name = player ? shortName(player.name) : t('report.unknownPlayer');
-  if (player?.specId != null) return <GameIcon src={specIconUrl(player.specId)} size={size} name={name} />;
-  if (player?.classId != null) return <GameIcon src={classIconUrl(player.classId)} size={size} name={name} />;
+  if (player?.specId != null) return <GameIcon icon={specIcon(player.specId)} size={size} name={name} />;
+  if (player?.classId != null) return <GameIcon icon={classIcon(player.classId)} size={size} name={name} />;
   return <MonogramTile name={name} size={size} />;
 }
 

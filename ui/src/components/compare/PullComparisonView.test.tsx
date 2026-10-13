@@ -38,7 +38,7 @@ describe('PullComparisonView', () => {
     vi.mocked(api.comparePulls).mockReset().mockResolvedValue(comparisonFixture);
     render(<PullComparisonView row={KILL} />);
     await userEvent.click(within(screen.getByRole('group', { name: 'Aug support' })).getByRole('button', { name: 'Reattributed' }));
-    expect(api.comparePulls).toHaveBeenLastCalledWith(compareLogFixture.path, 1, 3, 'reattributed');
+    expect(api.comparePulls).toHaveBeenLastCalledWith(compareLogFixture.id, 1, 3, 'reattributed');
     await userEvent.click(screen.getByRole('button', { name: '← Back to pull #3' }));
     expect(useApp.getState().comparison).toBeNull();
   });

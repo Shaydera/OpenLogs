@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { bossIconUrl } from '../../icons';
+import { bossIcon, useIconSrc } from '../../icons';
 import { bossMonogram, initials } from '../../monogram';
 import { useApp } from '../../store';
 
@@ -13,7 +13,7 @@ export function EnemyTile({ name, primary, large = false }: { name: string; prim
     if (view.kind !== 'fight') return 0;
     return s.log?.fights.find((f) => f.index === view.fightIndex)?.encounterId ?? 0;
   });
-  const src = primary && encounterId > 0 ? bossIconUrl(encounterId) : null;
+  const src = useIconSrc(primary && encounterId > 0 ? bossIcon(encounterId) : null);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   if (src !== null && failedSrc !== src) {
     return <img className={large ? 'enemy-icon enemy-icon-lg' : 'enemy-icon'} src={src} alt="" onError={() => setFailedSrc(src)} />;

@@ -1,4 +1,4 @@
-//! Developer CLI for inspecting combat logs.
+//! Developer CLI: inspects combat logs and exports the game data the app ships.
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -8,9 +8,13 @@ use clap::{Parser, Subcommand};
 use openlogs_index::{index_file, load_or_build};
 
 mod format;
+mod game_data;
 
 #[derive(Parser)]
-#[command(name = "openlogs-cli", about = "Inspect World of Warcraft combat logs")]
+#[command(
+    name = "openlogs-cli",
+    about = "Inspect World of Warcraft combat logs and export game data"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -29,6 +33,11 @@ enum Command {
         #[arg(long)]
         cache_dir: Option<PathBuf>,
     },
+    /// Download spell icons, Mythic+ dungeons and boss portraits from wago.tools for the app.
+    ExportGameData {
+        /// Directory the app serves as `game-data/`, e.g. `ui/public/game-data`.
+        out_dir: PathBuf,
+    },
 }
 
 fn main() -> ExitCode {
@@ -41,6 +50,13 @@ fn main() -> ExitCode {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
                 eprintln!("error: cannot index {}: {err}", file.display());
+                ExitCode::FAILURE
+            }
+        },
+        Command::ExportGameData { out_dir } => match game_data::export(&out_dir) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("error: cannot export game data: {err}");
                 ExitCode::FAILURE
             }
         },

@@ -1,5 +1,5 @@
 import type { PlayerRef } from '../../api/types';
-import { namedIconUrl, spellIconUrl } from '../../icons';
+import { namedIcon, spellIcon } from '../../icons';
 import { t } from '../../i18n/i18n';
 
 export type SpellNames = Record<string, { name: string }>;
@@ -31,9 +31,9 @@ const MELEE_ICON = 'ability_meleedamage';
 const ENVIRONMENT_ICON = 'spell_nature_earthquake';
 
 /** Icon of a hit: melee swings and world damage (both spell 0) get named icons. */
-export function hitIconUrl(hit: { spellId: number; environmental: boolean }): string {
-  if (hit.environmental) return namedIconUrl(ENVIRONMENT_ICON);
-  return hit.spellId === 0 ? namedIconUrl(MELEE_ICON) : spellIconUrl(hit.spellId);
+export function hitIcon(hit: { spellId: number; environmental: boolean }): string {
+  if (hit.environmental) return namedIcon(ENVIRONMENT_ICON);
+  return hit.spellId === 0 ? namedIcon(MELEE_ICON) : spellIcon(hit.spellId);
 }
 
 /**

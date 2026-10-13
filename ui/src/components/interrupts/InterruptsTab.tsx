@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { InterruptsReport, PlayerRef } from '../../api/types';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { formatEventTime, formatInteger } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { GameIcon } from '../GameIcon';
@@ -35,7 +35,7 @@ export function InterruptsTab({ report }: { report: InterruptsReport }) {
   );
   const spellCell = (id: number, extra: ReactNode = null, warn = false) => (
     <span role="cell" className="kick-cell">
-      <GameIcon name={spell(id)} src={spellIconUrl(id)} size={18} />
+      <GameIcon name={spell(id)} icon={spellIcon(id)} size={18} />
       <span className={warn ? 'kick-text kick-text-warn' : 'kick-text'}>{spell(id)}</span>
       {extra}
     </span>

@@ -39,21 +39,11 @@ fn an_encounter_gets_the_portrait_of_its_first_journal_creature() {
 }
 
 #[test]
-fn the_table_round_trips_through_tsv_and_rejects_unusable_input() {
-    let table = table();
-    let text = table.to_tsv();
+fn the_web_table_maps_encounters_to_portraits_and_unusable_exports_fail() {
     assert_eq!(
-        text,
-        "3379\tui-ej-boss-nagasorcerer\n3445\tui-ej-boss-golems\n3492\tui-ej-boss-ulatek\n"
+        table().to_json(),
+        r#"{"3379":"ui-ej-boss-nagasorcerer","3445":"ui-ej-boss-golems","3492":"ui-ej-boss-ulatek"}"#
     );
-    assert_eq!(
-        BossPortraitTable::from_tsv(&format!("# comment\n\n{text}")).unwrap(),
-        table
-    );
-    assert!(matches!(
-        BossPortraitTable::from_tsv("3492\tUI-EJ\n"),
-        Err(BossPortraitError::Malformed(1))
-    ));
     assert!(matches!(
         BossPortraitTable::from_csv(b"<!DOCTYPE html>\n", JOURNAL_ENCOUNTER_CREATURE, MANIFEST),
         Err(BossPortraitError::MissingColumn("ID"))

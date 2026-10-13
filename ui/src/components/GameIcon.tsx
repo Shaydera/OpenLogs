@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { type IconRef, useIconSrc } from '../icons';
 import { initials } from '../monogram';
 
 const ICON_SIZE = 22;
@@ -7,7 +8,7 @@ const SMALL_ICON_SIZE = 18;
 const hasStockSize = (size: number) => size === ICON_SIZE || size === SMALL_ICON_SIZE;
 
 interface Props {
-  src: string;
+  icon: IconRef;
   /** Edge in px; sizes other than the stylesheet's 22 and 18 are set inline. */
   size?: number;
   /** Accessible name; omit for decorative icons. */
@@ -21,13 +22,14 @@ interface Props {
 }
 
 /**
- * A framed game icon. A missing image (the icon protocol answers 404 for unknown spells, failed
- * downloads and offline starts) becomes a monogram tile.
+ * A framed game icon. A missing image (an unknown spell, game data not loaded yet, offline)
+ * becomes a monogram tile.
  */
-export function GameIcon({ src, size = ICON_SIZE, label, name, large = false, ring }: Props) {
+export function GameIcon({ icon, size = ICON_SIZE, label, name, large = false, ring }: Props) {
+  const src = useIconSrc(icon);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const ringStyle = ring ? { boxShadow: `0 0 0 1px ${ring}` } : undefined;
-  if (failedSrc === src) {
+  if (src === null || failedSrc === src) {
     if (!large) return <MonogramTile name={name} size={size} label={label} />;
     return (
       <span

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { api } from './api/client';
+import type { ChosenLog } from './api/logSource';
 import type {
-  GameDataStatus,
   AuraScope,
   AurasReport,
   InterruptsReport,
@@ -24,6 +24,7 @@ import type {
   ReportFilter,
   TargetDetail,
 } from './api/types';
+import { type GameDataManifest, gameDataManifest } from './gameData';
 import { t } from './i18n/i18n';
 import { readStored, writeStored } from './storage';
 import { type ThemeMode, type ThemeName, readTheme, readThemeMode, storeTheme, storeThemeMode } from './theme';
@@ -84,11 +85,18 @@ export interface ComparisonState {
   reportAttribution: Attribution;
 }
 
+/** The log being opened; `totalBytes` is `null` until its size is known. */
+export interface Opening {
+  file: string;
+  bytesRead: number;
+  totalBytes: number | null;
+}
+
 interface State {
   recent: RecentLog[];
   log: LogView | null;
-  /** File name currently being indexed, for the drop zone status. */
-  openingFile: string | null;
+  /** The log being opened, for the drop zone status. */
+  opening: Opening | null;
   error: string | null;
   hideAborted: boolean;
   view: View;
@@ -131,18 +139,16 @@ interface State {
    */
   focusRequest: FocusTarget | null;
   settingsOpen: boolean;
-  /** Game-data status for the dialog; `null` until loaded, or when the shell cannot tell. */
-  gameData: GameDataStatus | null;
-  /** A status request is running (opening the dialog, or its poll during a sync). */
+  /** The shipped game data for the dialog; `null` until loaded, or when the app has none. */
+  gameData: GameDataManifest | null;
   gameDataLoading: boolean;
-  /** "Refresh now" was clicked and its sync has not answered yet. */
-  gameDataRefreshing: boolean;
 }
 
 interface Actions {
   refreshRecent(): Promise<void>;
-  openLog(path: string): Promise<void>;
-  removeRecent(path: string): Promise<void>;
+  openLog(chosen: ChosenLog): Promise<void>;
+  openRecent(entry: RecentLog): Promise<void>;
+  removeRecent(entry: RecentLog): Promise<void>;
   setHideAborted(hide: boolean): void;
   openFight(fightIndex: number): Promise<void>;
   backToPulls(): void;
@@ -176,11 +182,6 @@ interface Actions {
   openSettings(): Promise<void>;
   closeSettings(): void;
   loadGameDataStatus(): Promise<void>;
-  refreshGameData(): Promise<void>;
-}
-
-export function fileName(path: string): string {
-  return path.split(/[\\/]/).pop() || path;
 }
 
 function readFlag(key: string, fallback: boolean): boolean {
@@ -196,7 +197,7 @@ export function initialState(): State {
   return {
     recent: [],
     log: null,
-    openingFile: null,
+    opening: null,
     error: null,
     hideAborted: readFlag(HIDE_ABORTED_KEY, true),
     view: { kind: 'start' },
@@ -226,7 +227,6 @@ export function initialState(): State {
     settingsOpen: false,
     gameData: null,
     gameDataLoading: false,
-    gameDataRefreshing: false,
   };
 }
 
@@ -252,7 +252,7 @@ function dropPendingComparison() {
 
 /** The tab's report, or the detail page on top of the stack for Damage Done and Healing. */
 async function fetchReport(
-  path: string,
+  logId: string,
   fight: number,
   tab: FightTab,
   top: Detail | undefined,
@@ -261,29 +261,29 @@ async function fetchReport(
 ): Promise<ReportData> {
   const metric: Metric = tab === 'healing' ? 'healing' : 'damage';
   if (tab === 'damage' || tab === 'healing') {
-    if (top?.kind === 'player') return { tab: 'player', data: await api.playerDetail(path, fight, top.player, metric, filter) };
-    if (top?.kind === 'ability') return { tab: 'ability', data: await api.abilityDetail(path, fight, top.player, top.spellId, top.pet, metric, filter) };
-    if (top?.kind === 'target') return { tab: 'target', data: await api.targetDetail(path, fight, top.name, filter) };
+    if (top?.kind === 'player') return { tab: 'player', data: await api.playerDetail(logId, fight, top.player, metric, filter) };
+    if (top?.kind === 'ability') return { tab: 'ability', data: await api.abilityDetail(logId, fight, top.player, top.spellId, top.pet, metric, filter) };
+    if (top?.kind === 'target') return { tab: 'target', data: await api.targetDetail(logId, fight, top.name, filter) };
   }
   switch (tab) {
     case 'overview':
-      return { tab, data: await api.quickOverview(path, fight, filter) };
+      return { tab, data: await api.quickOverview(logId, fight, filter) };
     case 'damage':
-      return { tab, data: await api.damageDoneReport(path, fight, filter) };
+      return { tab, data: await api.damageDoneReport(logId, fight, filter) };
     case 'healing':
-      return { tab, data: await api.healingReport(path, fight, filter) };
+      return { tab, data: await api.healingReport(logId, fight, filter) };
     case 'taken':
-      return { tab, data: await api.damageTakenReport(path, fight, filter) };
+      return { tab, data: await api.damageTakenReport(logId, fight, filter) };
     case 'deaths':
-      return { tab, data: await api.deathsReport(path, fight, filter) };
+      return { tab, data: await api.deathsReport(logId, fight, filter) };
     case 'casts':
-      return { tab, data: await api.castsReport(path, fight, filter) };
+      return { tab, data: await api.castsReport(logId, fight, filter) };
     case 'buffs':
-      return { tab, data: await api.aurasReport(path, fight, auraScope, filter) };
+      return { tab, data: await api.aurasReport(logId, fight, auraScope, filter) };
     case 'interrupts':
-      return { tab, data: await api.interruptsReport(path, fight, filter) };
+      return { tab, data: await api.interruptsReport(logId, fight, filter) };
     case 'resources':
-      return { tab, data: await api.resourcesReport(path, fight, filter) };
+      return { tab, data: await api.resourcesReport(logId, fight, filter) };
   }
 }
 
@@ -302,8 +302,8 @@ async function loadReport(get: () => State & Actions, set: (partial: Partial<Sta
   try {
     // Resources' header shows the Overview's figures; a failure only leaves it at "…".
     const rangeKpis =
-      tab === 'resources' && range !== null ? api.quickOverview(log.path, view.fightIndex, filter).then((o) => o.kpis, () => null) : null;
-    const report = await fetchReport(log.path, view.fightIndex, tab, details[details.length - 1], auraScope, filter);
+      tab === 'resources' && range !== null ? api.quickOverview(log.id, view.fightIndex, filter).then((o) => o.kpis, () => null) : null;
+    const report = await fetchReport(log.id, view.fightIndex, tab, details[details.length - 1], auraScope, filter);
     if (request === reportRequest) {
       // Pin the enemy that the empty "Enemies" entry resolved to, so range changes keep it.
       const shown = get().details;
@@ -339,7 +339,7 @@ async function loadComparison(get: () => State & Actions, set: (partial: Partial
     if (request === comparisonRequest && current) set({ comparison: { ...current, ...partial } });
   };
   try {
-    update({ data: await api.comparePulls(log.path, comparison.a, comparison.b, attribution) });
+    update({ data: await api.comparePulls(log.id, comparison.a, comparison.b, attribution) });
   } catch (err) {
     update({ data: null, error: String(err) });
   } finally {
@@ -365,35 +365,48 @@ export const useApp = create<State & Actions>()((set, get) => ({
     try {
       set({ recent: await api.recentLogs() });
     } catch {
-      // Outside the desktop shell (tests, browser preview) there is no recent list.
+      // Without a browser database (private windows, tests) there is no recent list.
     }
   },
 
-  async openLog(path) {
+  async openLog(chosen) {
     const request = ++logRequest;
-    set({ openingFile: fileName(path), error: null });
+    const file = chosen.name;
+    set({ opening: { file, bytesRead: 0, totalBytes: null }, error: null });
+    let replacing = false;
+    const show = (log: LogView | null) => {
+      dropPendingFight();
+      dropPendingReports();
+      dropPendingComparison();
+      set({ log, view: { kind: 'start' }, overview: null, fightLoading: false, fightError: null, comparison: null });
+    };
     try {
-      const log = await api.openLog(path);
-      if (request === logRequest) {
-        dropPendingFight();
-        dropPendingReports();
-        dropPendingComparison();
-        set({ log, view: { kind: 'start' }, overview: null, fightLoading: false, fightError: null, comparison: null });
-      }
+      const source = await chosen.open();
+      replacing = true;
+      const log = await api.openLog(source, (bytesRead, totalBytes) => {
+        if (request === logRequest) set({ opening: { file, bytesRead, totalBytes } });
+      });
+      if (request === logRequest) show(log);
     } catch (err) {
-      if (request === logRequest) set({ error: t('error.openFailed', { file: fileName(path), reason: String(err) }) });
+      if (request !== logRequest) return;
+      // Once reading started, the engine no longer holds the log on screen.
+      if (replacing) show(null);
+      set({ error: t('error.openFailed', { file, reason: String(err) }) });
     } finally {
-      if (request === logRequest) set({ openingFile: null });
-      // The backend may have added or dropped the entry either way.
+      if (request === logRequest) set({ opening: null });
       await get().refreshRecent();
     }
   },
 
-  async removeRecent(path) {
+  async openRecent(entry) {
+    await get().openLog({ name: entry.fileName, open: () => api.reopenRecent(entry.id) });
+  },
+
+  async removeRecent(entry) {
     try {
-      await api.removeRecent(path);
+      await api.removeRecent(entry.id);
     } catch (err) {
-      set({ error: t('error.removeFailed', { file: fileName(path), reason: String(err) }) });
+      set({ error: t('error.removeFailed', { file: entry.fileName, reason: String(err) }) });
     }
     await get().refreshRecent();
   },
@@ -430,7 +443,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
       castsSort: DEFAULT_CASTS_SORT,
     });
     try {
-      const overview = await api.quickOverview(log.path, fightIndex, null);
+      const overview = await api.quickOverview(log.id, fightIndex, null);
       if (request === fightRequest) set({ overview });
     } catch (err) {
       if (request === fightRequest) set({ error: t('error.loadFailed', { reason: String(err) }), fightError: String(err) });
@@ -662,25 +675,6 @@ export const useApp = create<State & Actions>()((set, get) => ({
 
   async loadGameDataStatus() {
     set({ gameDataLoading: true });
-    try {
-      set({ gameData: await api.gameDataStatus() });
-    } catch {
-      // Outside the desktop shell (tests, browser preview) there is no status.
-      set({ gameData: null });
-    } finally {
-      set({ gameDataLoading: false });
-    }
-  },
-
-  async refreshGameData() {
-    if (get().gameDataRefreshing) return;
-    set({ gameDataRefreshing: true });
-    try {
-      set({ gameData: await api.refreshGameData() });
-    } catch (err) {
-      set({ error: t('error.refreshFailed', { reason: String(err) }) });
-    } finally {
-      set({ gameDataRefreshing: false });
-    }
+    set({ gameData: await gameDataManifest(), gameDataLoading: false });
   },
 }));

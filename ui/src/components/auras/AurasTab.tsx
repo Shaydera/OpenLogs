@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react';
 import type { AuraScope, AurasReport, PlayerRef } from '../../api/types';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { formatDuration, formatInteger, formatShare } from '../../i18n/format';
 import { t, type MessageKey } from '../../i18n/i18n';
 import { useApp } from '../../store';
@@ -115,7 +115,7 @@ export function AurasTab({ report }: { report: AurasReport }) {
                   <Fragment key={row.spellId}>
                     <div role="row" className={expanded ? 'aura-row aura-row-sel' : 'aura-row'}>
                       <span role="cell">
-                        <GameIcon name={name(row.spellId)} src={spellIconUrl(row.spellId)} size={22} />
+                        <GameIcon name={name(row.spellId)} icon={spellIcon(row.spellId)} size={22} />
                       </span>
                       <span role="cell" className="aura-name-cell">
                         <button type="button" className="aura-name" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : row.spellId)}>

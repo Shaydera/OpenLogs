@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AbilityLink, PlayerDetail } from '../../api/types';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { formatEventTime, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
@@ -100,7 +100,7 @@ export function CastsAndBuffs({ detail }: { detail: PlayerDetail }) {
                     return (
                       <li key={row.spellId} className="pcb-row">
                         <span className="pcb-label">
-                          <GameIcon name={name(row.spellId)} src={spellIconUrl(row.spellId)} size={18} />
+                          <GameIcon name={name(row.spellId)} icon={spellIcon(row.spellId)} size={18} />
                           {spellLink(row)}
                         </span>
                         <span className="track" {...(dots ? laneProps(laneLabel) : {})}>
@@ -114,7 +114,7 @@ export function CastsAndBuffs({ detail }: { detail: PlayerDetail }) {
                             if (dots) return <span key={key} className="pcb-dot" style={{ left: `${at.leftPct}%` }} title={label} />;
                             return (
                               <span key={key} className="pcb-cast" style={{ left: `${at.leftPct}%` }} title={label}>
-                                <GameIcon name={name(row.spellId)} src={spellIconUrl(row.spellId)} label={label} />
+                                <GameIcon name={name(row.spellId)} icon={spellIcon(row.spellId)} label={label} />
                               </span>
                             );
                           })}
@@ -138,7 +138,7 @@ export function CastsAndBuffs({ detail }: { detail: PlayerDetail }) {
                     return (
                       <li key={`${row.spellId}-${row.source}`} className="pcb-row">
                         <span className="pcb-label">
-                          <GameIcon name={name(row.spellId)} src={spellIconUrl(row.spellId)} size={18} />
+                          <GameIcon name={name(row.spellId)} icon={spellIcon(row.spellId)} size={18} />
                           <span className="pcb-name">{name(row.spellId)}</span>
                           {external && <span className="pcb-source">{t('player.buffFrom', { name: shortName(source?.name ?? '?') })}</span>}
                         </span>

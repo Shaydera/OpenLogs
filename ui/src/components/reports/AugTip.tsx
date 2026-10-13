@@ -1,5 +1,5 @@
 import type { PlayerRef } from '../../api/types';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
@@ -20,7 +20,7 @@ export function AugTip({ id, player, lines, top, left }: { id: string; player: P
         <div key={index} className={['aug-tip-line', line.total && 'aug-tip-line-total', line.buff !== undefined && 'aug-tip-line-buff'].filter(Boolean).join(' ')}>
           {line.buff !== undefined ? (
             <span className="aug-tip-label aug-tip-buff">
-              <GameIcon name={line.label} src={spellIconUrl(line.buff)} size={16} />
+              <GameIcon name={line.label} icon={spellIcon(line.buff)} size={16} />
               <span className="sr-only">{t('aug.tipPartOf')}</span>
               {line.label}
             </span>

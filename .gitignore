@@ -17,6 +17,8 @@ Thumbs.db
 
 # UI build output
 ui/dist/
+ui/src/engine/pkg/
+ui/public/game-data/
 
 # Tauri generated schemas
 src-tauri/gen/

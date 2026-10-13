@@ -1,0 +1,16 @@
+[package]
+name = "openlogs-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Report DTOs shared by every OpenLogs front end"
+
+[dependencies]
+openlogs-analysis.workspace = true
+openlogs-gamedata.workspace = true
+openlogs-index.workspace = true
+openlogs-parser.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

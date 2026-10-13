@@ -40,18 +40,18 @@ fn maps_spells_to_zamimg_names_through_the_manifest() {
 }
 
 #[test]
-fn the_table_round_trips_through_tsv_and_rejects_malformed_input() {
-    let table = table();
-    let text = table.to_tsv();
-    assert!(text.starts_with("5\t"), "sorted by spell id");
+fn the_web_table_lists_spells_in_order_and_names_each_icon_once() {
+    let spell_misc = format!("{SPELL_MISC}8,0,236205,44426\n");
+    let table = SpellIconTable::from_csv(spell_misc.as_bytes(), MANIFEST.as_bytes()).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&table.to_json()).unwrap();
     assert_eq!(
-        SpellIconTable::from_tsv(&format!("# a comment\n{text}")).unwrap(),
-        table
+        json,
+        serde_json::json!({
+            "names": ["spell_normal", "130646", "warlock_-healthstone", "ability_mage_arcanebarrage", "8026696"],
+            "ids": [5, 94, 6163, 38163, 1, 69625],
+            "icons": [0, 1, 2, 3, 3, 4],
+        })
     );
-    assert!(matches!(
-        SpellIconTable::from_tsv("5\tok\nnot-a-row\n"),
-        Err(SpellIconError::Malformed(2))
-    ));
     assert!(matches!(
         SpellIconTable::from_csv(b"ID,DifficultyID,SpellID\n1,0,5\n", MANIFEST.as_bytes()),
         Err(SpellIconError::MissingColumn("SpellIconFileDataID"))

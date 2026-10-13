@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/openlogs-parser", "crates/openlogs-index", "crates/openlogs-cli", "crates/openlogs-analysis", "crates/openlogs-gamedata", "src-tauri"]
+members = ["crates/openlogs-parser", "crates/openlogs-index", "crates/openlogs-cli", "crates/openlogs-analysis", "crates/openlogs-gamedata", "crates/openlogs-service", "crates/openlogs-wasm", "src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
@@ -13,9 +13,10 @@ csv = "1.4"
 memchr = "2.7"
 memmap2 = "0.9"
 openlogs-analysis = { path = "crates/openlogs-analysis" }
-openlogs-gamedata = { path = "crates/openlogs-gamedata" }
+openlogs-gamedata = { path = "crates/openlogs-gamedata", default-features = false }
 openlogs-index = { path = "crates/openlogs-index" }
 openlogs-parser = { path = "crates/openlogs-parser" }
+openlogs-service = { path = "crates/openlogs-service" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"

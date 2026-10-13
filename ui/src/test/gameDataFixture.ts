@@ -1,9 +1,9 @@
-import type { GameDataStatus } from '../api/types';
+import type { GameDataManifest } from '../gameData';
 
-/** Spell icons and dungeons downloaded at local noon on Oct 11, 2026; boss portraits failed offline. */
-export const gameDataFixture: GameDataStatus = {
-  spellIcons: { entries: 410_805, fetchedUnixMs: new Date(2026, 9, 11, 12, 0).getTime(), error: null },
-  dungeons: { entries: 87, fetchedUnixMs: new Date(2026, 9, 11, 12, 0).getTime(), error: null },
-  bossPortraits: { entries: null, fetchedUnixMs: null, error: 'download failed: network error: offline' },
-  refreshing: false,
+/** Game data exported at local noon on Oct 11, 2026. */
+export const gameDataFixture: GameDataManifest = {
+  fetchedUnixMs: new Date(2026, 9, 11, 12, 0).getTime(),
+  spellIcons: 410_805,
+  dungeons: 87,
+  bossPortraits: 1_083,
 };

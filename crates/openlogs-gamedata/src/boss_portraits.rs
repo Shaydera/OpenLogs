@@ -1,9 +1,8 @@
 //! Encounter Journal portraits by `DungeonEncounter` ID, from the wago.tools exports
 //! `JournalEncounter`, `JournalEncounterCreature` and `ManifestInterfaceData`. The image itself
-//! comes from zamimg (`journal/<name>.png`, see `IconCache::get_journal`).
+//! comes from zamimg (`journal/<name>.png`, see `ui/src/icons.ts`).
 
 use std::collections::{BTreeMap, HashMap};
-use std::fmt::Write;
 
 use thiserror::Error;
 
@@ -20,8 +19,6 @@ pub enum BossPortraitError {
     Csv(#[from] csv::Error),
     #[error("CSV is missing the column {0}")]
     MissingColumn(&'static str),
-    #[error("line {0} of the boss portrait table is malformed")]
-    Malformed(usize),
     #[error("the exports hold no boss portrait")]
     Empty,
 }
@@ -118,32 +115,9 @@ impl BossPortraitTable {
         self.portraits.is_empty()
     }
 
-    /// `encounter_id<TAB>name` lines, sorted by encounter ID.
-    pub fn to_tsv(&self) -> String {
-        let mut out = String::with_capacity(self.portraits.len() * 32);
-        for (id, name) in &self.portraits {
-            let _ = writeln!(out, "{id}\t{name}");
-        }
-        out
-    }
-
-    /// Parses [`Self::to_tsv`] output; lines starting with `#` are comments.
-    pub fn from_tsv(text: &str) -> Result<Self, BossPortraitError> {
-        let mut portraits = BTreeMap::new();
-        for (index, line) in text.lines().enumerate() {
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-            let entry = line
-                .split_once('\t')
-                .and_then(|(id, name)| Some((id.parse::<u32>().ok()?, name)))
-                .filter(|(_, name)| is_valid_icon_name(name));
-            let Some((id, name)) = entry else {
-                return Err(BossPortraitError::Malformed(index + 1));
-            };
-            portraits.insert(id, name.to_string());
-        }
-        Ok(Self { portraits })
+    /// The table for the web app: encounter ID → portrait name.
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(&self.portraits).expect("the portrait table serializes")
     }
 }
 

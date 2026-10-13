@@ -4,7 +4,7 @@ import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { GameIcon, MonogramTile } from '../GameIcon';
 import { classColor, shortName } from '../overview/players';
-import { hitIconUrl, hitName, reportSpellName, rosterIndex } from '../reports/reportData';
+import { hitIcon, hitName, reportSpellName, rosterIndex } from '../reports/reportData';
 import { DeathRecapView } from './DeathRecapView';
 import { hitSource } from './recapModel';
 
@@ -51,7 +51,7 @@ export function DeathsTab({ report }: { report: DeathsReport }) {
                 onClick={() => selectDeath(death.player, death.t)}
               >
                 <span className="num dlink-time">{formatEventTime(death.t)}</span>
-                {kb ? <GameIcon name={blow} src={hitIconUrl(kb)} size={22} /> : <MonogramTile name={name} size={22} />}
+                {kb ? <GameIcon name={blow} icon={hitIcon(kb)} size={22} /> : <MonogramTile name={name} size={22} />}
                 <span className="dlink-text">
                   <span className="dlink-name" style={{ color: classColor(roster.get(death.player)?.classToken ?? null) }} title={name}>
                     {name}

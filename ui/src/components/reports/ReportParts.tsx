@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { BuffShare, PlayerAmount, PlayerRef } from '../../api/types';
-import { spellIconUrl } from '../../icons';
+import { spellIcon } from '../../icons';
 import { formatMillions, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { GameIcon } from '../GameIcon';
@@ -170,7 +170,7 @@ export function SideBreakdown({ caption, amountLabel, rows }: { caption: string;
         <div role="row" className="side-row" key={row.key}>
           <span role="cell">
             {row.icon ? (
-              <GameIcon src={row.icon} name={row.name} />
+              <GameIcon icon={row.icon} name={row.name} />
             ) : (
               <span className="ph-ico" aria-hidden="true">
                 …
@@ -258,7 +258,7 @@ export function AugSupportList({ shares, spells, roster }: { shares: BuffShare[]
           return (
             <div role="row" className="side-row" key={`${share.buffId}-${share.evoker}`}>
               <span role="cell">
-                <GameIcon src={spellIconUrl(share.buffId)} name={buff} />
+                <GameIcon icon={spellIcon(share.buffId)} name={buff} />
               </span>
               <span role="cell" className="side-cell">
                 <span className="side-label">

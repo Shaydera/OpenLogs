@@ -17,7 +17,16 @@ use crate::fight::{
 
 /// Loads one fight, including its prelude, from the complete log bytes.
 pub fn load_fight(data: &[u8], summary: &FightSummary) -> Fight {
-    let clamp = |offset: u64| usize::try_from(offset).map_or(data.len(), |o| o.min(data.len()));
+    load_fight_slice(data, 0, summary)
+}
+
+/// Loads one fight from a part of the log that starts at byte `base_offset` and covers the
+/// fight from its prelude to its end.
+pub fn load_fight_slice(data: &[u8], base_offset: u64, summary: &FightSummary) -> Fight {
+    let clamp = |offset: u64| {
+        usize::try_from(offset.saturating_sub(base_offset))
+            .map_or(data.len(), |o| o.min(data.len()))
+    };
     let start = clamp(summary.prelude_offset);
     let end = clamp(summary.end_offset).max(start);
     let mut builder = FightBuilder::new(summary);

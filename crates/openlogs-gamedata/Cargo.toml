@@ -5,12 +5,20 @@ edition.workspace = true
 rust-version.workspace = true
 description = "Spell icons, dungeon data and curated cooldown lists for OpenLogs"
 
+[features]
+default = ["http"]
+http = ["dep:ureq"]
+
 [dependencies]
 csv.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-ureq.workspace = true
+ureq = { workspace = true, optional = true }
+
+[[test]]
+name = "online"
+required-features = ["http"]
 
 [dev-dependencies]
 tempfile.workspace = true

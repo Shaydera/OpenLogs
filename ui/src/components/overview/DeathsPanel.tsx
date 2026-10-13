@@ -1,10 +1,10 @@
 import type { DeathEntry, PlayerRef, QuickOverview } from '../../api/types';
-import { specIconUrl, spellIconUrl } from '../../icons';
+import { specIcon, spellIcon } from '../../icons';
 import { formatAmountWhole, formatEventTime, formatPercent } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
-import { hitIconUrl, hitName } from '../reports/reportData';
+import { hitIcon, hitName } from '../reports/reportData';
 import { contextBadges, damageParts, deathSource } from './deathModel';
 import { classColor, playerIndex, shortName, spellName } from './players';
 
@@ -69,7 +69,7 @@ function DeathRow({ n, death, player, overview }: { n: number; death: DeathEntry
         <span className="death-n">{t('deaths.ordinal', { n })}</span>
       </div>
       <div className="death-player">
-        {player && player.specId !== null && <GameIcon src={specIconUrl(player.specId)} size={22} name={name} />}
+        {player && player.specId !== null && <GameIcon icon={specIcon(player.specId)} size={22} name={name} />}
         <button
           type="button"
           className="link-btn death-who"
@@ -85,7 +85,7 @@ function DeathRow({ n, death, player, overview }: { n: number; death: DeathEntry
       <div className="death-kb">
         {kb ? (
           <>
-            <GameIcon name={kbName} src={hitIconUrl(kb)} size={32} />
+            <GameIcon name={kbName} icon={hitIcon(kb)} size={32} />
             <div className="death-kb-text">
               <span className="death-kb-name">{kbName}</span>
               <span className="death-by">{t('deaths.by', { source: deathSource(kb) })}</span>
@@ -116,7 +116,7 @@ function DeathRow({ n, death, player, overview }: { n: number; death: DeathEntry
           {parts.map((part) => (
             <li key={part.key}>
               <span className="seg5-dot" style={{ background: `var(--segment-${part.tone})` }} />
-              <GameIcon name={part.name} src={part.iconUrl} size={18} />
+              <GameIcon name={part.name} icon={part.icon} size={18} />
               <span>{part.name}</span>
               <span className="num">{part.amount}</span>
             </li>
@@ -127,7 +127,7 @@ function DeathRow({ n, death, player, overview }: { n: number; death: DeathEntry
         {contextBadges(overview, death).map((badge) => (
           <li key={badge.key}>
             <span className={`badge ${badge.tone}`}>
-              <GameIcon name={badge.name} src={spellIconUrl(badge.spellId)} size={18} />
+              <GameIcon name={badge.name} icon={spellIcon(badge.spellId)} size={18} />
               <span>{badge.name}</span>
               <span className="badge-state">{badge.state}</span>
             </span>
