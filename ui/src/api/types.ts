@@ -254,9 +254,9 @@ export interface Scope {
   target: UnitRef[];
   ability: AbilityRef[];
 }
-export type ScopeMetric = 'damageDone' | 'healing' | 'damageTaken';
+export type ScopeMetric = 'damageDone' | 'healing' | 'damageTaken' | 'casts' | 'interrupts' | 'buffs' | 'debuffs' | 'deaths' | 'resources';
 export type Dimension = 'source' | 'ability' | 'target';
-export type BreakdownRowKind = 'own' | 'support' | 'unmatched';
+export type BreakdownRowKind = 'own' | 'support' | 'unmatched' | 'proc';
 export type RowKey = { kind: 'unit'; unit: UnitRef } | { kind: 'ability'; ability: AbilityRef; rowKind: BreakdownRowKind };
 /** `name` is as logged and empty when the log has none; `number` numbers one instance among the units of its name. */
 export interface BreakdownRow {
@@ -658,18 +658,47 @@ export interface DeathRecap extends DeathEntry {
   buffs: { spellId: number; sourceName: string | null }[];
 }
 
+/** An enemy's death. */
+export interface Kill {
+  t: number;
+  /** The unit with its number among the units of its name. */
+  unit: ReportUnit;
+  killingBlow: Hit | null;
+  /** Who landed the killing blow; a pet's is its owner's. */
+  killer: ReportUnit | null;
+  aliveMs: number | null;
+}
+
 export interface DeathsReport {
+  /** Friendlies: player deaths with their recap. */
   deaths: DeathRecap[];
+  /** Enemies: kills. */
+  kills: Kill[];
+  /** The killing spell that killed most often; the earlier on a tie. */
+  mostLethal: { spellId: number; environmental: boolean; count: number } | null;
+  /** Deaths a resurrect ended. */
+  rezzed: number;
+  /** Units that died at least once. */
+  deadUnits: number;
+  /** Time dead inside the range over the listed deaths. */
+  deadMs: number;
+  /** Enemies: the unit with the most killing blows. */
+  topKiller: { unit: ReportUnit; count: number } | null;
+  avgAliveMs: number | null;
   roster: PlayerRef[];
   spells: Record<string, { name: string }>;
 }
 
-export interface SpellCasts {
+/** One player's row of one ability, with what the breakdown does not carry. */
+export interface CastExtra {
+  player: number;
+  ability: AbilityRef;
+  procTrigger: boolean;
+  /** The row's cast ID with the most casts. */
   spellId: number;
   casts: number;
   /** The first cast in the range (ms from the pull); equal counts are ordered by it. */
   firstCastMs: number;
-  procTrigger: boolean;
   uptime: number | null;
   /** The ability page with this spell's hits; `null` when it has none. */
   link: AbilityLink | null;
@@ -682,47 +711,92 @@ export interface AbilityLink {
 }
 
 export interface CastsReport {
-  durationMs: number;
-  players: { player: number; spells: SpellCasts[] }[];
+  breakdown: Breakdown;
+  /** One per player and ability row in scope. */
+  extras: CastExtra[];
+}
+
+export type AuraKind = 'buffs' | 'debuffs';
+
+/** Who has an aura: a player (in `roster`), or every enemy of one name. */
+export interface AuraHolder {
+  name: string;
+  player: number | null;
+}
+
+/** One aura on one holder. */
+export interface AuraLane {
+  holder: AuraHolder;
+  spellId: number;
+  spellIds: number[];
+  /** The players who applied it (in `roster`), most applications first. */
+  sources: number[];
+  applications: number;
+  uptime: number;
+  intervals: [number, number][];
+}
+
+/** One aura (by aura: a lane per holder) or one holder (by target: a lane per aura). */
+export interface AuraRow {
+  key: RowKey;
+  name: string;
+  /** By aura: the aura and every spell ID of its name, `spellId` first; 0 and empty by target. */
+  spellId: number;
+  spellIds: number[];
+  holder: AuraHolder | null;
+  sources: number[];
+  applications: number;
+  /** Mean uptime over the lanes. */
+  uptime: number;
+  lanes: AuraLane[];
+}
+
+export interface AurasReport {
+  group: Dimension;
+  startMs: number;
+  endMs: number;
+  rows: AuraRow[];
+  ebonMight: { uptime: number; holders: number } | null;
+  /** Friendlies: players with an aura; enemies: players who applied one. */
+  players: number;
   roster: PlayerRef[];
   spells: Record<string, { name: string }>;
 }
 
-export type AuraScope = 'buffs_on_players' | 'debuffs_on_players' | 'debuffs_on_enemies';
+/** A unit of a report list; `name` and `number` as for breakdown rows. */
+export interface ReportUnit {
+  unit: UnitRef;
+  name: string;
+  number: number | null;
+}
 
-export interface AurasReport {
-  startMs: number;
-  endMs: number;
-  rows: {
-    spellId: number;
-    /** Every spell ID of the row's name (one row per name), `spellId` first. */
-    spellIds: number[];
-    /** The players who applied it (in `roster`), most applications first. */
-    sources: number[];
-    applications: number;
-    uptime: number;
-    targets: { name: string; player: number | null; uptime: number; intervals: [number, number][] }[];
-  }[];
-  roster: PlayerRef[];
-  spells: Record<string, { name: string }>;
+/** Interrupts and dispels of one unit or one stopped spell. */
+export interface KickRow {
+  key: RowKey;
+  name: string;
+  number: number | null;
+  spellId: number;
+  interrupts: number;
+  dispels: number;
 }
 
 export interface InterruptsReport {
-  interrupts: { t: number; player: number; spellId: number; targetName: string | null; interruptedId: number }[];
-  dispels: {
-    t: number;
-    player: number;
-    spellId: number;
-    targetName: string | null;
-    /** The target when it is a player (in `roster`). */
-    target: number | null;
-    removedId: number;
-    stolen: boolean;
-  }[];
-  missed: { t: number; sourceName: string | null; spellId: number }[];
+  group: Dimension;
+  rows: KickRow[];
+  interrupts: { t: number; source: ReportUnit; spellId: number; target: ReportUnit; interruptedId: number }[];
+  dispels: { t: number; source: ReportUnit; spellId: number; target: ReportUnit; removedId: number; stolen: boolean }[];
+  /** Friendlies only: casts of spells the raid interrupted at least once, completed without an interrupt. */
+  missed: { t: number; source: ReportUnit; spellId: number }[];
+  mostInterrupted: { spellId: number; count: number } | null;
+  /** Units that interrupted and units that dispelled. */
+  kickers: number;
+  dispellers: number;
   roster: PlayerRef[];
   spells: Record<string, { name: string }>;
 }
+
+/** The power type of a unit's health track; its gains are the heals it received. */
+export const HEALTH = -2;
 
 export interface PowerTrack {
   powerType: number;
@@ -739,8 +813,11 @@ export interface ResourcesReport {
   startMs: number;
   endMs: number;
   stepMs: number;
-  players: {
-    player: number;
+  /** Players for friendlies, enemy units for enemies. */
+  units: {
+    unit: ReportUnit;
+    /** One of the encounter's boss units. */
+    boss: boolean;
     tracks: PowerTrack[];
     /** Dead phases in the range, clipped to it. */
     dead: [number, number][];

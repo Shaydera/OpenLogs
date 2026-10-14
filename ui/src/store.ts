@@ -3,7 +3,7 @@ import { api } from './api/client';
 import type { ChosenLog } from './api/logSource';
 import type {
   AbilityRef,
-  AuraScope,
+  AuraKind,
   AurasReport,
   InterruptsReport,
   ResourcesReport,
@@ -27,7 +27,6 @@ import type {
   RecentLog,
   ReportFilter,
   Scope,
-  ScopeMetric,
   Side,
   TargetDetail,
   UnitRef,
@@ -53,7 +52,6 @@ export type FightTab =
   | 'interrupts'
   | 'resources';
 export type MetricTab = 'damage' | 'healing' | 'taken';
-export const METRIC_OF: Record<MetricTab, ScopeMetric> = { damage: 'damageDone', healing: 'healing', taken: 'damageTaken' };
 export const isMetricTab = (tab: FightTab): tab is MetricTab => tab === 'damage' || tab === 'healing' || tab === 'taken';
 /** The view filters by role: `own` is the perspective's side (Damage Taken: the target), `other` the side it faces. */
 interface Filters {
@@ -170,15 +168,15 @@ interface State {
   showAugDelta: boolean;
   /** Damage Done and Healing colour their bars by target (healing: by the healed players' role). */
   colorByTarget: boolean;
-  /** Casts tab: hide curated procs and passive triggers. */
+  /** Casts tab: hide curated procs and passive triggers unless an ability is selected. */
   hideProcs: boolean;
   theme: ThemeName;
   themeMode: ThemeMode;
-  /** Casts tab: the chosen player (`null` = the top caster) and the spell sort; kept per pull. */
-  castsPlayer: number | null;
+  /** Casts tab: the chosen row's key (`null` = the top row) and the spell sort; kept per pull. */
+  castsRow: string | null;
   castsSort: CastsSort;
-  /** Buffs & Debuffs tab: which auras to list. */
-  auraScope: AuraScope;
+  /** Buffs & Debuffs tab: buffs or debuffs on the perspective's side. */
+  auraKind: AuraKind;
   /** Drilldown stack; the last entry is shown instead of the report. */
   details: Detail[];
   /** Tab a detail stack was opened from; shown again once the stack is empty. */
@@ -219,12 +217,12 @@ interface Actions {
   setRange(range: TimeRange | null): Promise<void>;
   setShowAugDelta(show: boolean): void;
   setColorByTarget(on: boolean): void;
-  setHideProcs(hide: boolean): void;
+  setHideProcs(hide: boolean): Promise<void>;
   setTheme(theme: ThemeName): void;
   setThemeMode(mode: ThemeMode): void;
-  selectCastsPlayer(player: number): void;
+  selectCastsRow(key: string): void;
   setCastsSort(sort: CastsSort): void;
-  setAuraScope(scope: AuraScope): Promise<void>;
+  setAuraKind(kind: AuraKind): Promise<void>;
   openPlayer(player: number): Promise<void>;
   openAbility(spellId: number, pet: string | null): Promise<void>;
   openTarget(name: string): Promise<void>;
@@ -279,9 +277,9 @@ export function initialState(): State {
     hideProcs: readFlag(HIDE_PROCS_KEY, true),
     theme: readTheme(),
     themeMode: readThemeMode(),
-    castsPlayer: null,
+    castsRow: null,
     castsSort: DEFAULT_CASTS_SORT,
-    auraScope: 'buffs_on_players',
+    auraKind: 'buffs',
     details: [],
     detailOrigin: null,
     focusDeath: null,
@@ -313,15 +311,15 @@ function dropPendingComparison() {
   comparisonRequest += 1;
 }
 
+type ReportInput = Pick<State, 'tab' | 'details' | 'auraKind' | 'scope' | 'grouping' | 'hideProcs'>;
+
+/** The core's fact family of a tab: Buffs & Debuffs follows its toggle. */
+const metricOf = (tab: FilterTab, auraKind: AuraKind) => (tab === 'buffs' ? auraKind : SIDES[tab].metric);
+
 /** The tab's report, or the detail page on top of the stack for Damage Done and Healing. */
-async function fetchReport(
-  logId: string,
-  fight: number,
-  tab: FightTab,
-  top: Detail | undefined,
-  auraScope: AuraScope,
-  filter: ReportFilter,
-): Promise<ReportData> {
+async function fetchReport(logId: string, fight: number, input: ReportInput, filter: ReportFilter): Promise<ReportData> {
+  const { tab, details, auraKind, scope, grouping, hideProcs } = input;
+  const top: Detail | undefined = details[details.length - 1];
   const metric: Metric = tab === 'healing' ? 'healing' : 'damage';
   if (tab === 'damage' || tab === 'healing') {
     if (top?.kind === 'player') return { tab: 'player', data: await api.playerDetail(logId, fight, top.player, metric, filter) };
@@ -338,21 +336,21 @@ async function fetchReport(
     case 'taken':
       return { tab, data: await api.damageTakenReport(logId, fight, filter) };
     case 'deaths':
-      return { tab, data: await api.deathsReport(logId, fight, filter) };
+      return { tab, data: await api.deathsReport(logId, fight, filter, scope) };
     case 'casts':
-      return { tab, data: await api.castsReport(logId, fight, filter) };
+      return { tab, data: await api.castsReport(logId, fight, filter, scope, groupOf(grouping, tab), hideProcs) };
     case 'buffs':
-      return { tab, data: await api.aurasReport(logId, fight, auraScope, filter) };
+      return { tab, data: await api.aurasReport(logId, fight, filter, scope, auraKind, groupOf(grouping, tab)) };
     case 'interrupts':
-      return { tab, data: await api.interruptsReport(logId, fight, filter) };
+      return { tab, data: await api.interruptsReport(logId, fight, filter, scope, groupOf(grouping, tab)) };
     case 'resources':
-      return { tab, data: await api.resourcesReport(logId, fight, filter) };
+      return { tab, data: await api.resourcesReport(logId, fight, filter, scope) };
   }
 }
 
 /** Loads the report of the current tab; only the newest request may write the result. */
 async function loadReport(get: () => State & Actions, set: SetState) {
-  const { log, view, tab, range, details, auraScope, scope, grouping } = get();
+  const { log, view, tab, range, details, scope, grouping } = get();
   if (!log || view.kind !== 'fight') return;
   const request = ++reportRequest;
   if (tab === 'overview' && range === null) {
@@ -368,8 +366,8 @@ async function loadReport(get: () => State & Actions, set: SetState) {
       tab === 'resources' && range !== null ? api.quickOverview(log.id, view.fightIndex, filter).then((o) => o.kpis, () => null) : null;
     const metricTab = isMetricTab(tab) && details.length === 0 ? tab : null;
     const [report, breakdown] = await Promise.all([
-      fetchReport(log.id, view.fightIndex, tab, details[details.length - 1], auraScope, filter),
-      metricTab ? api.breakdownReport(log.id, view.fightIndex, filter, scope, METRIC_OF[metricTab], groupOf(grouping, metricTab)) : Promise.resolve(null),
+      fetchReport(log.id, view.fightIndex, get(), filter),
+      metricTab ? api.breakdownReport(log.id, view.fightIndex, filter, scope, SIDES[metricTab].metric, groupOf(grouping, metricTab)) : Promise.resolve(null),
     ]);
     if (request === reportRequest) {
       // Pin the enemy that the empty "Enemies" entry resolved to, so range changes keep it.
@@ -514,14 +512,14 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   },
   async setGrouping(dimension) {
     const { tab } = get();
-    if (!isFilterTab(tab) || groupOf(get().grouping, tab) === dimension) return;
+    if (!isFilterTab(tab) || SIDES[tab].rows.length < 2 || groupOf(get().grouping, tab) === dimension) return;
     set({ grouping: { ...get().grouping, [tab]: dimension } });
     await loadReport(get, set);
   },
   async filterOptions(dimension) {
     const { log, view, tab, scope } = get();
-    if (!log || view.kind !== 'fight' || !isMetricTab(tab)) return [];
-    return api.filterOptions(log.id, view.fightIndex, reportFilter(get()), scope, METRIC_OF[tab], dimension);
+    if (!log || view.kind !== 'fight' || !isFilterTab(tab)) return [];
+    return api.filterOptions(log.id, view.fightIndex, reportFilter(get()), scope, metricOf(tab, get().auraKind), dimension);
   },
 
   async openFight(fightIndex) {
@@ -549,7 +547,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
       focusDeath: null,
       comparison: null,
       focusRequest: 'fight',
-      castsPlayer: null,
+      castsRow: null,
       castsSort: DEFAULT_CASTS_SORT,
     });
     try {
@@ -582,7 +580,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
       focusDeath: null,
       comparison: null,
       focusRequest: 'start',
-      castsPlayer: null,
+      castsRow: null,
       castsSort: DEFAULT_CASTS_SORT,
     });
   },
@@ -644,7 +642,9 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   },
 
   async openDeathRecap(player, t) {
-    set({ tab: 'deaths', details: [], detailOrigin: null, focusDeath: { player, t }, report: null, breakdown: null, reportError: null, focusRequest: 'page' });
+    // A navigation to one death: show that player's deaths, whatever the page was filtered to.
+    const filters: Filters = { perspective: 'friendly', own: [{ kind: 'player', actorId: player }], other: [], ability: [] };
+    set({ tab: 'deaths', filters, details: [], detailOrigin: null, focusDeath: { player, t }, report: null, breakdown: null, reportError: null, focusRequest: 'page' });
     await loadReport(get, set);
   },
 
@@ -723,7 +723,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   },
 
   async setAttribution(attribution) {
-    // Filter changes never move focus; drop a request that no heading has taken (also in setRange and setAuraScope).
+    // Filter changes never move focus; drop a request that no heading has taken (also in setRange and setAuraKind).
     set({ attribution, focusRequest: null });
     // The Aug toggle on the comparison recalculates the comparison; Back recalculates the pull.
     if (get().comparison) await loadComparison(get, set);
@@ -735,15 +735,16 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     await loadReport(get, set);
   },
 
-  async setAuraScope(scope) {
-    // Keep the shown report while the new scope loads, so the tab keeps its filter and focus.
-    set({ auraScope: scope, focusRequest: null });
+  async setAuraKind(kind) {
+    // Keep the shown report while the other kind loads, so the tab keeps its filter and focus.
+    set({ auraKind: kind, focusRequest: null });
     await loadReport(get, set);
   },
 
-  setHideProcs(hide) {
+  async setHideProcs(hide) {
     writeFlag(HIDE_PROCS_KEY, hide);
     set({ hideProcs: hide });
+    if (get().tab === 'casts') await loadReport(get, set);
   },
 
   setTheme(theme) {
@@ -756,8 +757,8 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     set({ themeMode: mode });
   },
 
-  selectCastsPlayer(player) {
-    set({ castsPlayer: player });
+  selectCastsRow(key) {
+    set({ castsRow: key });
   },
 
   setCastsSort(sort) {

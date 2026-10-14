@@ -6,6 +6,7 @@ use openlogs_analysis::{
     Attribution, Cell, CellKind, Damage, DamageVia, EventKind, NO_SPELL, ReportFilter, ScopeMetric,
     Side, UnitRef, cells, damage_done, damage_taken,
 };
+use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS, damage};
 
 fn hit(amount: u64) -> EventKind {
@@ -62,7 +63,13 @@ fn friendly_damage_done_matches_the_damage_report_in_both_modes() {
         let report = damage_done(&fight, &filter);
         let sums = by_grouped_source(
             &fight,
-            &cells(&fight, &filter, Side::Friendly, ScopeMetric::DamageDone),
+            &cells(
+                &fight,
+                &Curated::bundled(),
+                &filter,
+                Side::Friendly,
+                ScopeMetric::DamageDone,
+            ),
         );
         for p in &report.players {
             assert_eq!(sums[&UnitRef::Player(p.player)], p.total as i64, "{mode:?}");
@@ -70,6 +77,7 @@ fn friendly_damage_done_matches_the_damage_report_in_both_modes() {
     }
     let reattributed = cells(
         &fight,
+        &Curated::bundled(),
         &ReportFilter::whole(Attribution::Reattributed),
         Side::Friendly,
         ScopeMetric::DamageDone,
@@ -88,10 +96,16 @@ fn friendly_damage_done_matches_the_damage_report_in_both_modes() {
 fn friendly_damage_taken_matches_the_taken_report() {
     let fight = raid().b.build();
     let filter = ReportFilter::whole(Attribution::Reattributed);
-    let total: i64 = cells(&fight, &filter, Side::Friendly, ScopeMetric::DamageTaken)
-        .iter()
-        .map(|c| c.amount)
-        .sum();
+    let total: i64 = cells(
+        &fight,
+        &Curated::bundled(),
+        &filter,
+        Side::Friendly,
+        ScopeMetric::DamageTaken,
+    )
+    .iter()
+    .map(|c| c.amount)
+    .sum();
     assert_eq!(total, damage_taken(&fight, &filter).total as i64);
 }
 
@@ -103,16 +117,34 @@ fn the_enemy_side_swaps_who_did_and_who_took() {
         b.build()
     };
     let filter = ReportFilter::whole(Attribution::Reattributed);
-    let enemy_done = cells(&fight, &filter, Side::Enemy, ScopeMetric::DamageDone);
+    let enemy_done = cells(
+        &fight,
+        &Curated::bundled(),
+        &filter,
+        Side::Enemy,
+        ScopeMetric::DamageDone,
+    );
     assert!(
         enemy_done
             .iter()
             .all(|c| matches!(c.source, UnitRef::Instance(id) if id == r.boss))
     );
     assert_eq!(enemy_done.iter().map(|c| c.amount).sum::<i64>(), 900);
-    let enemy_taken = cells(&fight, &filter, Side::Enemy, ScopeMetric::DamageTaken);
+    let enemy_taken = cells(
+        &fight,
+        &Curated::bundled(),
+        &filter,
+        Side::Enemy,
+        ScopeMetric::DamageTaken,
+    );
     assert_eq!(
         enemy_taken,
-        cells(&fight, &filter, Side::Friendly, ScopeMetric::DamageDone)
+        cells(
+            &fight,
+            &Curated::bundled(),
+            &filter,
+            Side::Friendly,
+            ScopeMetric::DamageDone
+        )
     );
 }

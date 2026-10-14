@@ -27,6 +27,13 @@ describe('OptionsMenu', () => {
     expect(screen.getByRole('checkbox', { name: /Credit Aug support to the Evoker/ })).toBeDisabled();
   });
 
+  it('disables Hide procs for enemies, whose procs are unknown', async () => {
+    useApp.setState({ tab: 'casts', filters: { ...initialState().filters, perspective: 'enemy' } });
+    render(<OptionsMenu />);
+    await userEvent.click(screen.getByRole('button', { name: 'Options' }));
+    expect(screen.getByRole('checkbox', { name: 'Hide procs' })).toBeDisabled();
+  });
+
   it('closes on Escape and when focus leaves', async () => {
     render(<OptionsMenu />);
     const button = screen.getByRole('button', { name: 'Options' });

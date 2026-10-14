@@ -171,7 +171,7 @@ fn revive(death: &mut Death, t: i32) {
     death.dead_until.get_or_insert(t);
 }
 
-fn death_at(fight: &Fight, player: ActorId, t: i32, life_start: i32) -> Death {
+pub(crate) fn death_at(fight: &Fight, player: ActorId, t: i32, life_start: i32) -> Death {
     let window_start = t - DEATH_WINDOW_MS;
     let first = fight
         .events

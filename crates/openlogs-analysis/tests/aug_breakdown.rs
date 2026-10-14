@@ -2,7 +2,7 @@ mod support;
 
 use openlogs_analysis::{
     AbilityRow, Absorbed, ActorId, Attribution, BuffedAbility, Damage, DamageReport, DamageVia,
-    EventKind, Fight, Heal, Metric, NO_SPELL, NOBODY, ReportFilter, RowKind, SupportShare,
+    EventKind, Fight, Heal, Metric, NO_SPELL, NOBODY, ReportFilter, RowKind, Scope, SupportShare,
     damage_done, healing, player_detail,
 };
 use openlogs_gamedata::Curated;
@@ -288,6 +288,7 @@ fn detail(fight: &Fight, player: ActorId) -> openlogs_analysis::PlayerDetail {
         player,
         Metric::Damage,
         &whole(Attribution::Reattributed),
+        &Scope::default(),
     )
     .unwrap()
 }

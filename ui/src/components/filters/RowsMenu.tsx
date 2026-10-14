@@ -5,9 +5,9 @@ import { type MessageKey, t } from '../../i18n/i18n';
 import { type FilterTab, SIDES } from '../../scopeSides';
 import { useApp } from '../../store';
 
-const VERB = { damage: 'done', healing: 'healing', taken: 'taken' } as const satisfies Record<FilterTab, string>;
+const VERB = { damage: 'done', healing: 'healing', taken: 'taken', casts: 'casts', interrupts: 'kicks', buffs: 'auras' } as const satisfies Partial<Record<FilterTab, string>>;
 
-const rowsLabel = (tab: FilterTab, dimension: Dimension) => t(`rows.${VERB[tab]}.${dimension}` as MessageKey);
+const rowsLabel = (tab: FilterTab, dimension: Dimension) => t(`rows.${VERB[tab as keyof typeof VERB]}.${dimension}` as MessageKey);
 
 /** The tab's row groupings; a tab with one grouping or none has no menu. */
 export function RowsMenu({ tab, group }: { tab: FilterTab; group: Dimension }) {

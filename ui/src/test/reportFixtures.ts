@@ -1,4 +1,4 @@
-import type { AbilityDetail, AurasReport, CastsReport, Breakdown, DamageReport, DamageTakenReport, DeathRecap, DeathsReport, HealingReport, InterruptsReport, PlayerAbility, PlayerDetail, PlayerRef, ResourcesReport, TargetDetail } from '../api/types';
+import type { AbilityDetail, AuraLane, AuraRow, AurasReport, CastsReport, Breakdown, DamageReport, DamageTakenReport, DeathRecap, DeathsReport, HealingReport, InterruptsReport, PlayerAbility, PlayerDetail, PlayerRef, ReportUnit, ResourcesReport, TargetDetail } from '../api/types';
 
 const roster: PlayerRef[] = [
   { actorId: 3, name: 'Wendel-Emberfall-EU', specId: 71, specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
@@ -290,71 +290,111 @@ export const targetDetailFixture: TargetDetail = {
   roster,
 };
 
+const playerKey = (actorId: number) => ({ kind: 'unit' as const, unit: { kind: 'player' as const, actorId } });
+const spellKey = (name: string) => ({ kind: 'ability' as const, ability: { kind: 'name' as const, name }, rowKind: 'own' as const });
+const castRow = (key: ReturnType<typeof playerKey> | ReturnType<typeof spellKey>, name: string, spellId: number, amount: number, total: number) => ({
+  key,
+  name,
+  number: null,
+  spellId,
+  amount,
+  share: amount / total,
+  absorbed: 0,
+  hits: amount,
+  crits: 0,
+});
+
+/** Two minutes of casts with Hide procs on: Pyrrin's 50 Soul Fragment procs are left out. */
 export const castsReportFixture: CastsReport = {
-  durationMs: 120_000,
-  roster,
-  spells: { ...spells, '204255': { name: 'Soul Fragment' }, '774': { name: 'Rejuvenation' }, '8936': { name: 'Regrowth' } },
-  players: [
-    {
-      player: 2,
-      spells: [
-        { spellId: 204255, casts: 50, firstCastMs: 0, procTrigger: true, uptime: null, link: null },
-        { spellId: 774, casts: 30, firstCastMs: 1_000, procTrigger: false, uptime: 0.8, link: { spellId: 774, metric: 'healing' } },
-        { spellId: 8936, casts: 6, firstCastMs: 500, procTrigger: false, uptime: null, link: null },
-      ],
-    },
-    { player: 4, spells: [{ spellId: 44425, casts: 40, firstCastMs: 0, procTrigger: false, uptime: null, link: { spellId: 44425, metric: 'damage' } }] },
+  breakdown: {
+    group: 'source',
+    side: ['ability'],
+    total: 76,
+    durationMs: 120_000,
+    perSecond: 76 / 120,
+    roster: [roster[1], roster[3]],
+    rows: [
+      {
+        ...castRow(playerKey(4), 'Faelan', 0, 40, 76),
+        perSecond: 40 / 120,
+        splits: [{ dimension: 'ability', rows: [castRow(spellKey('Arcane Barrage'), 'Arcane Barrage', 44425, 40, 40)] }],
+      },
+      {
+        ...castRow(playerKey(2), 'Pyrrin', 0, 36, 76),
+        perSecond: 36 / 120,
+        splits: [
+          {
+            dimension: 'ability',
+            rows: [castRow(spellKey('Rejuvenation'), 'Rejuvenation', 774, 30, 36), castRow(spellKey('Regrowth'), 'Regrowth', 8936, 6, 36)],
+          },
+        ],
+      },
+    ],
+  },
+  extras: [
+    { player: 2, ability: { kind: 'name', name: 'Regrowth' }, procTrigger: false, spellId: 8936, casts: 6, firstCastMs: 500, uptime: null, link: null },
+    { player: 2, ability: { kind: 'name', name: 'Rejuvenation' }, procTrigger: false, spellId: 774, casts: 30, firstCastMs: 1_000, uptime: 0.8, link: { spellId: 774, metric: 'healing' } },
+    { player: 4, ability: { kind: 'name', name: 'Arcane Barrage' }, procTrigger: false, spellId: 44425, casts: 40, firstCastMs: 0, uptime: null, link: { spellId: 44425, metric: 'damage' } },
   ],
 };
 
+const faelanHolder = { name: 'Faelan-Emberfall-EU', player: 4 };
+const wendelHolder = { name: 'Wendel-Emberfall-EU', player: 3 };
+const lane = (holder: AuraLane['holder'], spellId: number, sources: number[], applications: number, uptime: number, intervals: [number, number][]): AuraLane => ({
+  holder,
+  spellId,
+  spellIds: [spellId],
+  sources,
+  applications,
+  uptime,
+  intervals,
+});
+const auraRow = (name: string, spellId: number, sources: number[], uptime: number, lanes: AuraLane[]): AuraRow => ({
+  key: spellKey(name),
+  name,
+  spellId,
+  spellIds: [spellId],
+  holder: null,
+  sources,
+  applications: lanes.reduce((sum, l) => sum + l.applications, 0),
+  uptime,
+  lanes,
+});
+
+/** Buffs on players by aura. */
 export const aurasReportFixture: AurasReport = {
+  group: 'ability',
   startMs: 0,
   endMs: 20_000,
   roster,
   spells: { ...spells, '10060': { name: 'Power Infusion' }, '1459': { name: 'Arcane Intellect' }, '2825': { name: 'Bloodlust' } },
   rows: [
-    {
-      spellId: 1459,
-      spellIds: [1459],
-      sources: [4],
-      applications: 4,
-      uptime: 1,
-      targets: [
-        { name: 'Faelan-Emberfall-EU', player: 4, uptime: 1, intervals: [[0, 20_000]] },
-        { name: 'Wendel-Emberfall-EU', player: 3, uptime: 1, intervals: [[0, 20_000]] },
-      ],
-    },
-    {
-      spellId: 2825,
-      spellIds: [2825],
-      sources: [],
-      applications: 2,
-      uptime: 0.4,
-      targets: [
-        { name: 'Faelan-Emberfall-EU', player: 4, uptime: 0.4, intervals: [[2_000, 10_000]] },
-        { name: 'Wendel-Emberfall-EU', player: 3, uptime: 0.4, intervals: [[2_000, 10_000]] },
-      ],
-    },
-    {
-      spellId: 10060,
-      spellIds: [10060],
-      sources: [2],
-      applications: 1,
-      uptime: 0.75,
-      targets: [{ name: 'Faelan-Emberfall-EU', player: 4, uptime: 0.75, intervals: [[5_000, 20_000]] }],
-    },
+    auraRow('Arcane Intellect', 1459, [4], 1, [lane(faelanHolder, 1459, [4], 2, 1, [[0, 20_000]]), lane(wendelHolder, 1459, [4], 2, 1, [[0, 20_000]])]),
+    auraRow('Bloodlust', 2825, [], 0.4, [lane(faelanHolder, 2825, [], 1, 0.4, [[2_000, 10_000]]), lane(wendelHolder, 2825, [], 1, 0.4, [[2_000, 10_000]])]),
+    auraRow('Power Infusion', 10060, [2], 0.75, [lane(faelanHolder, 10060, [2], 1, 0.75, [[5_000, 20_000]])]),
   ],
+  ebonMight: null,
+  players: 2,
 };
 
+const reportPlayer = (actorId: number, name: string): ReportUnit => ({ unit: { kind: 'player', actorId }, name, number: null });
+const ulatek: ReportUnit = { unit: { kind: 'unit', name: "Ula'tek" }, name: "Ula'tek", number: null };
+const kickRow = (actorId: number, name: string, interrupts: number, dispels: number) => ({ key: playerKey(actorId), name, number: null, spellId: 0, interrupts, dispels });
+
 export const interruptsReportFixture: InterruptsReport = {
+  group: 'source',
+  rows: [kickRow(4, 'Faelan', 1, 0), kickRow(3, 'Wendel', 1, 0), kickRow(2, 'Pyrrin', 0, 1)],
   roster,
   spells: { ...spells, '2139': { name: 'Counterspell' }, '6552': { name: 'Pummel' }, '527': { name: 'Purify' }, '5': { name: 'Venom Bolt' }, '9': { name: 'Toxic Spores' } },
   interrupts: [
-    { t: 12_000, player: 4, spellId: 2139, targetName: "Ula'tek", interruptedId: 5 },
-    { t: 30_000, player: 3, spellId: 6552, targetName: "Ula'tek", interruptedId: 5 },
+    { t: 12_000, source: reportPlayer(4, 'Faelan'), spellId: 2139, target: ulatek, interruptedId: 5 },
+    { t: 30_000, source: reportPlayer(3, 'Wendel'), spellId: 6552, target: ulatek, interruptedId: 5 },
   ],
-  dispels: [{ t: 20_000, player: 2, spellId: 527, targetName: 'Wendel-Emberfall-EU', target: 3, removedId: 9, stolen: false }],
-  missed: [{ t: 45_000, sourceName: "Ula'tek", spellId: 5 }],
+  dispels: [{ t: 20_000, source: reportPlayer(2, 'Pyrrin'), spellId: 527, target: reportPlayer(3, 'Wendel'), removedId: 9, stolen: false }],
+  missed: [{ t: 45_000, source: ulatek, spellId: 5 }],
+  mostInterrupted: { spellId: 5, count: 2 },
+  kickers: 2,
+  dispellers: 1,
 };
 
 export const resourcesReportFixture: ResourcesReport = {
@@ -363,9 +403,10 @@ export const resourcesReportFixture: ResourcesReport = {
   stepMs: 5_000,
   roster,
   spells: { ...spells, '12051': { name: 'Evocation' } },
-  players: [
+  units: [
     {
-      player: 4,
+      unit: reportPlayer(4, 'Faelan'),
+      boss: false,
       dead: [[5_000, 10_000]],
       tracks: [
         {
@@ -382,7 +423,8 @@ export const resourcesReportFixture: ResourcesReport = {
       ],
     },
     {
-      player: 3,
+      unit: reportPlayer(3, 'Wendel'),
+      boss: false,
       dead: [],
       tracks: [{ powerType: 1, series: [0, 40, 10], avgPct: 16.7, minPct: 0, cappedMs: 0, gained: 300, wasted: 20, gains: [] }],
     },
@@ -455,6 +497,13 @@ export const recapFixture: DeathsReport = {
     '20484': { name: 'Rebirth' },
   },
   deaths: [faelanRecap],
+  kills: [],
+  mostLethal: { spellId: 1302982, environmental: false, count: 1 },
+  rezzed: 1,
+  deadUnits: 1,
+  deadMs: 20_448,
+  topKiller: null,
+  avgAliveMs: null,
 };
 
 export const deathsReportFixture: DeathsReport = recapFixture;

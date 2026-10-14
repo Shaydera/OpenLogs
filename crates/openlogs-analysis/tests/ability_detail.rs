@@ -2,7 +2,7 @@ mod support;
 
 use openlogs_analysis::{
     Attribution, AuraAction, AuraType, Damage, DamageVia, EventKind, Metric, NO_SPELL, NOBODY,
-    ReportFilter, ability_detail,
+    ReportFilter, Scope, UnitRef, ability_detail,
 };
 use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS, PET_FLAGS, damage};
@@ -75,6 +75,7 @@ fn ability_hits_casts_and_targets() {
         None,
         Metric::Damage,
         &whole(),
+        &Scope::default(),
     )
     .unwrap();
     assert_eq!((detail.total, detail.player_total), (1_100, 2_100));
@@ -113,6 +114,7 @@ fn pet_abilities_are_matched_by_pet_name() {
         Some("Wild Imp"),
         Metric::Damage,
         &whole(),
+        &Scope::default(),
     )
     .unwrap();
     assert_eq!((pets.total, pets.hits.len()), (120, 2));
@@ -124,6 +126,7 @@ fn pet_abilities_are_matched_by_pet_name() {
         None,
         Metric::Damage,
         &whole(),
+        &Scope::default(),
     )
     .unwrap();
     assert_eq!(own.total, 1_000);
@@ -160,7 +163,37 @@ fn dot_uptime_unions_debuffs_on_all_targets() {
         None,
         Metric::Damage,
         &whole(),
+        &Scope::default(),
     )
     .unwrap();
     assert_eq!(detail.uptime, Some(0.6));
+}
+
+#[test]
+fn a_target_selection_narrows_the_hits_and_the_players_total() {
+    let mut s = scene();
+    s.b.push(1_100, s.mage, s.boss, 44425, hit(300));
+    s.b.push(1_100, s.mage, s.add1, 44425, hit(500));
+    s.b.push(6_000, s.mage, s.boss, 5143, hit(1_000));
+    let on_boss = Scope {
+        target: vec![UnitRef::Unit("Ula'tek".into())],
+        ..Scope::default()
+    };
+    let detail = ability_detail(
+        &s.b.build(),
+        &Curated::bundled(),
+        s.mage,
+        44425,
+        None,
+        Metric::Damage,
+        &whole(),
+        &on_boss,
+    )
+    .unwrap();
+    assert_eq!((detail.total, detail.player_total), (300, 1_300));
+    assert_eq!(detail.hits.len(), 1);
+    assert!(
+        detail.by_target.is_empty(),
+        "one target needs no by-target block"
+    );
 }

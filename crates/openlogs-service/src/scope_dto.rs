@@ -54,6 +54,12 @@ pub enum ScopeMetricDto {
     DamageDone,
     Healing,
     DamageTaken,
+    Casts,
+    Interrupts,
+    Buffs,
+    Debuffs,
+    Deaths,
+    Resources,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -70,6 +76,9 @@ pub enum RowKindDto {
     Own,
     Support,
     Unmatched,
+    Proc,
+    Unattributed,
+    State,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -86,6 +95,16 @@ pub enum RowKeyDto {
         ability: AbilityRefDto,
         row_kind: RowKindDto,
     },
+}
+
+/// A unit with its display name and instance number, for report lists.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitDto {
+    pub unit: UnitRefDto,
+    /// Same rules as [`BreakdownRowDto::name`].
+    pub name: String,
+    pub number: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -202,7 +221,7 @@ impl UnitRefDto {
         }
     }
 
-    fn of(unit: &UnitRef) -> Self {
+    pub(crate) fn of(unit: &UnitRef) -> Self {
         match unit {
             UnitRef::Player(id) => Self::Player { actor_id: *id },
             UnitRef::Pet { owner, name } => Self::Pet {
@@ -224,7 +243,7 @@ impl AbilityRefDto {
         }
     }
 
-    fn of(ability: &AbilityRef) -> Self {
+    pub(crate) fn of(ability: &AbilityRef) -> Self {
         match ability {
             AbilityRef::Name(name) => Self::Name { name: name.clone() },
             AbilityRef::Id(id) => Self::Id { spell_id: *id },
@@ -238,6 +257,12 @@ impl ScopeMetricDto {
             Self::DamageDone => ScopeMetric::DamageDone,
             Self::Healing => ScopeMetric::Healing,
             Self::DamageTaken => ScopeMetric::DamageTaken,
+            Self::Casts => ScopeMetric::Casts,
+            Self::Interrupts => ScopeMetric::Interrupts,
+            Self::Buffs => ScopeMetric::Buffs,
+            Self::Debuffs => ScopeMetric::Debuffs,
+            Self::Deaths => ScopeMetric::Deaths,
+            Self::Resources => ScopeMetric::Resources,
         }
     }
 }
@@ -251,7 +276,7 @@ impl DimensionDto {
         }
     }
 
-    fn of(dimension: Dimension) -> Self {
+    pub(crate) fn of(dimension: Dimension) -> Self {
         match dimension {
             Dimension::Source => Self::Source,
             Dimension::Ability => Self::Ability,
@@ -295,6 +320,49 @@ fn unit_name(fight: &Fight, unit: &UnitRef) -> (String, Option<u32>) {
     }
 }
 
+pub(crate) fn unit_dto(fight: &Fight, unit: &UnitRef) -> UnitDto {
+    let (name, number) = unit_name(fight, unit);
+    UnitDto {
+        unit: UnitRefDto::of(unit),
+        name,
+        number,
+    }
+}
+
+/// A row key with its display name and instance number.
+pub(crate) fn key_dto(fight: &Fight, key: &RowKey) -> (RowKeyDto, String, Option<u32>) {
+    match key {
+        RowKey::Unit(unit) => {
+            let (name, number) = unit_name(fight, unit);
+            (
+                RowKeyDto::Unit {
+                    unit: UnitRefDto::of(unit),
+                },
+                name,
+                number,
+            )
+        }
+        RowKey::Ability { ability, kind } => {
+            let row_kind = match kind {
+                CellKind::Own => RowKindDto::Own,
+                CellKind::Support => RowKindDto::Support,
+                CellKind::Unmatched => RowKindDto::Unmatched,
+                CellKind::Proc => RowKindDto::Proc,
+                CellKind::Unattributed => RowKindDto::Unattributed,
+                CellKind::State => RowKindDto::State,
+            };
+            (
+                RowKeyDto::Ability {
+                    ability: AbilityRefDto::of(ability),
+                    row_kind,
+                },
+                ability_name(ability),
+                None,
+            )
+        }
+    }
+}
+
 fn ability_name(ability: &AbilityRef) -> String {
     match ability {
         AbilityRef::Name(name) => name.clone(),
@@ -317,35 +385,12 @@ struct RowDtos<'a> {
 
 impl RowDtos<'_> {
     fn row(&mut self, row: &BreakdownRow, total: i64) -> BreakdownRowDto {
-        let (key, (name, number)) = match &row.key {
-            RowKey::Unit(unit) => {
-                if let UnitRef::Player(id) | UnitRef::Pet { owner: id, .. } = unit
-                    && !self.roster.contains(id)
-                {
-                    self.roster.push(*id);
-                }
-                (
-                    RowKeyDto::Unit {
-                        unit: UnitRefDto::of(unit),
-                    },
-                    unit_name(self.fight, unit),
-                )
-            }
-            RowKey::Ability { ability, kind } => {
-                let row_kind = match kind {
-                    CellKind::Own => RowKindDto::Own,
-                    CellKind::Support => RowKindDto::Support,
-                    CellKind::Unmatched => RowKindDto::Unmatched,
-                };
-                (
-                    RowKeyDto::Ability {
-                        ability: AbilityRefDto::of(ability),
-                        row_kind,
-                    },
-                    (ability_name(ability), None),
-                )
-            }
-        };
+        if let RowKey::Unit(UnitRef::Player(id) | UnitRef::Pet { owner: id, .. }) = &row.key
+            && !self.roster.contains(id)
+        {
+            self.roster.push(*id);
+        }
+        let (key, name, number) = key_dto(self.fight, &row.key);
         BreakdownRowDto {
             key,
             name,
@@ -490,6 +535,7 @@ mod tests {
             serde_json::from_str(r#"{"source":[{"kind":"player","actorId":1}]}"#).unwrap();
         let dto = breakdown_report(
             &f,
+            &openlogs_gamedata::Curated::bundled(),
             filter,
             scope,
             ScopeMetricDto::DamageDone,

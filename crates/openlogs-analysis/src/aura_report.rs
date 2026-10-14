@@ -2,42 +2,65 @@ use std::collections::{HashMap, HashSet};
 
 use crate::ability::unit_name;
 use crate::actors::{ActorId, ActorKind};
-use crate::auras::{aura_intervals, merged, union_ms};
+use crate::auras::{AuraInterval, aura_intervals, merged, union_ms};
+use crate::breakdown::{Dimension, effective_group};
+use crate::cells::{CellKind, Facts, ScopeMetric, book};
 use crate::fight::{AuraType, Fight, SpellId};
 use crate::filter::ReportFilter;
+use crate::player::EBON_MIGHT;
+use crate::scope::{Scope, Side, side_of, unit_of};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AuraScope {
-    BuffsOnPlayers,
-    DebuffsOnPlayers,
-    /// Debuffs players (or their pets) put on hostile units, grouped by unit name.
-    DebuffsOnEnemies,
+/// Who has an aura: a player, or every enemy of one name.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct AuraHolder {
+    pub name: String,
+    /// The player for player holders; `None` for an enemy group.
+    pub player: Option<ActorId>,
 }
 
+/// One aura on one holder.
 #[derive(Debug, Clone, PartialEq)]
-pub struct AuraTarget {
-    pub name: String,
-    /// The player for player targets; `None` for an enemy group.
-    pub player: Option<ActorId>,
+pub struct AuraLane {
+    pub holder: AuraHolder,
+    /// The aura's spell ID with the most applications on this holder; `spells` are every ID of it.
+    pub spell: SpellId,
+    pub spells: Vec<SpellId>,
+    /// The players who applied it (pets credited to their owner), most applications first.
+    pub sources: Vec<ActorId>,
+    pub applications: u32,
     pub uptime: f64,
     /// Merged and clipped to the range.
     pub intervals: Vec<(i32, i32)>,
 }
 
+/// One aura (grouped by aura) or one holder (grouped by target) with its lanes.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AuraRow {
-    /// The row's spell ID with the most applications: its icon, name and identity.
+    /// By aura: the row's spell ID with the most applications, its identity and icon; 0 by target.
     pub spell: SpellId,
-    /// Every spell ID of the row's name (Blessing of the Bronze logs 381750 and 381758), most
-    /// applications first.
+    /// By aura: every spell ID of the row's name (Blessing of the Bronze logs 381750 and 381758),
+    /// most applications first.
     pub spells: Vec<SpellId>,
-    /// The players who applied it (pets credited to their owner), most applications first.
+    /// By target: the holder.
+    pub holder: Option<AuraHolder>,
+    /// The players who applied the row's auras, most applications first.
     pub sources: Vec<ActorId>,
     /// Intervals overlapping the range.
     pub applications: u32,
-    /// Mean uptime over the targets.
+    /// Mean uptime over the lanes.
     pub uptime: f64,
-    pub targets: Vec<AuraTarget>,
+    /// By aura: one lane per holder; by target: one per aura.
+    pub lanes: Vec<AuraLane>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AurasReport {
+    pub group: Dimension,
+    pub rows: Vec<AuraRow>,
+    /// Ebon Might among the lanes: mean uptime and holders.
+    pub ebon_might: Option<(f64, u32)>,
+    /// Friendlies: players with an aura; enemies: players who applied one.
+    pub players: u32,
 }
 
 /// The spec of the player behind an aura's source; `None` for no player or an unknown spec.
@@ -90,13 +113,6 @@ fn row_keys(
     keys
 }
 
-/// The spell IDs and appliers of one row, with their application counts.
-#[derive(Default)]
-struct RowMeta {
-    spells: HashMap<SpellId, u32>,
-    sources: HashMap<ActorId, u32>,
-}
-
 /// Keys of a count map, most counted first, ties by the smaller key.
 fn by_count<K: Copy + Ord>(counts: &HashMap<K, u32>) -> Vec<K> {
     let mut keys: Vec<(K, u32)> = counts.iter().map(|(&k, &n)| (k, n)).collect();
@@ -104,47 +120,112 @@ fn by_count<K: Copy + Ord>(counts: &HashMap<K, u32>) -> Vec<K> {
     keys.into_iter().map(|(k, _)| k).collect()
 }
 
-/// A target's player (if any), intervals and application count.
-type Group = (Option<ActorId>, Vec<(i32, i32)>, u32);
+/// Friendly holders are players (their pets' auras are not counted); enemy holders are units
+/// hostile when the aura came.
+fn holds(fight: &Fight, interval: &AuraInterval, side: Side) -> bool {
+    match side {
+        Side::Friendly => fight.actors.get(interval.target).kind == ActorKind::Player,
+        Side::Enemy => {
+            side_of(fight, interval.target, interval.target_hostile) == Some(Side::Enemy)
+        }
+    }
+}
 
-pub fn auras_report(fight: &Fight, filter: &ReportFilter, scope: AuraScope) -> Vec<AuraRow> {
+fn holder_of(fight: &Fight, target: ActorId) -> AuraHolder {
+    let player = fight.actors.get(target).kind == ActorKind::Player;
+    AuraHolder {
+        name: unit_name(fight, target),
+        player: player.then_some(target),
+    }
+}
+
+/// Auras of `aura_type` on `side`'s holders in the range, before the selections.
+fn side_intervals(
+    fight: &Fight,
+    filter: &ReportFilter,
+    side: Side,
+    aura_type: AuraType,
+) -> Vec<AuraInterval> {
+    let (start, end) = filter.clipped(fight);
+    aura_intervals(fight)
+        .into_iter()
+        .filter(|i| i.end_ms > start && i.start_ms < end)
+        .filter(|i| i.aura_type == aura_type && holds(fight, i, side))
+        .collect()
+}
+
+pub(crate) fn book_auras(
+    fight: &Fight,
+    filter: &ReportFilter,
+    side: Side,
+    aura_type: AuraType,
+    map: &mut Facts,
+) {
+    for interval in side_intervals(fight, filter, side, aura_type) {
+        book(
+            map,
+            (
+                unit_of(fight, interval.source),
+                interval.spell,
+                CellKind::Own,
+                unit_of(fight, interval.target),
+            ),
+            1,
+            0,
+            true,
+            false,
+        );
+    }
+}
+
+/// A row: one aura (its name and spec cluster) or one holder.
+#[derive(PartialEq, Eq, Hash)]
+enum RowId {
+    Aura(String),
+    Holder(AuraHolder),
+}
+
+/// The intervals of one lane and what it counts.
+#[derive(Default)]
+struct LaneAcc {
+    intervals: Vec<(i32, i32)>,
+    spells: HashMap<SpellId, u32>,
+    sources: HashMap<ActorId, u32>,
+}
+
+/// Auras by `wanted` (or its fallback): by aura with a lane per holder, or by target with a lane
+/// per aura. Uptime is the union of a lane's intervals, never a sum.
+pub fn auras_report(
+    fight: &Fight,
+    filter: &ReportFilter,
+    scope: &Scope,
+    aura_type: AuraType,
+    wanted: Dimension,
+) -> AurasReport {
+    let metric = match aura_type {
+        AuraType::Buff => ScopeMetric::Buffs,
+        AuraType::Debuff => ScopeMetric::Debuffs,
+    };
+    let group = effective_group(scope, metric, wanted);
     let (start, end) = filter.clipped(fight);
     let len = end - start;
     if len <= 0 {
-        return Vec::new();
+        return AurasReport {
+            group,
+            rows: Vec::new(),
+            ebon_might: None,
+            players: 0,
+        };
     }
-    // Reaction changes during a pull (adds turn neutral), so a unit counts as an enemy
-    // when any event saw it hostile, not by its latest flags.
-    let hostile: HashSet<ActorId> = if scope == AuraScope::DebuffsOnEnemies {
-        fight
-            .events
-            .iter()
-            .flat_map(|e| {
-                [
-                    e.source_hostile.then_some(e.source),
-                    e.target_hostile.then_some(e.target),
-                ]
-            })
-            .flatten()
-            .collect()
-    } else {
-        HashSet::new()
-    };
-    let intervals: Vec<_> = aura_intervals(fight)
+    let intervals: Vec<AuraInterval> = side_intervals(fight, filter, scope.perspective, aura_type)
         .into_iter()
-        .filter(|i| i.end_ms > start && i.start_ms < end)
-        .filter(|interval| {
-            let is_player = fight.actors.get(interval.target).kind == ActorKind::Player;
-            match scope {
-                AuraScope::BuffsOnPlayers => is_player && interval.aura_type == AuraType::Buff,
-                AuraScope::DebuffsOnPlayers => is_player && interval.aura_type == AuraType::Debuff,
-                AuraScope::DebuffsOnEnemies => {
-                    !is_player
-                        && interval.aura_type == AuraType::Debuff
-                        && hostile.contains(&interval.target)
-                        && fight.actors.credited_player(interval.source).is_some()
-                }
-            }
+        .filter(|i| {
+            scope.accepts(
+                fight,
+                Some(&unit_of(fight, i.source)),
+                Some(i.spell),
+                Some(&unit_of(fight, i.target)),
+            )
         })
         .collect();
     let mut specs: HashMap<SpellId, HashSet<SourceSpec>> = HashMap::new();
@@ -156,70 +237,104 @@ pub fn auras_report(fight: &Fight, filter: &ReportFilter, scope: AuraScope) -> V
         specs.entry(interval.spell).or_default().insert(spec);
     }
     let keys = row_keys(fight, &specs);
-    // Keyed by (row key, player id or enemy name).
-    let mut groups: HashMap<(String, String), Group> = HashMap::new();
-    let mut metas: HashMap<String, RowMeta> = HashMap::new();
-    for interval in intervals {
-        let is_player = fight.actors.get(interval.target).kind == ActorKind::Player;
-        let player = is_player.then_some(interval.target);
-        let row = keys[&interval.spell].clone();
-        let meta = metas.entry(row.clone()).or_default();
-        *meta.spells.entry(interval.spell).or_default() += 1;
+    // Keyed by (aura key, holder); a holder is a player or every enemy of one name.
+    let mut lanes: HashMap<(String, AuraHolder), LaneAcc> = HashMap::new();
+    for interval in &intervals {
+        let holder = holder_of(fight, interval.target);
+        let lane = lanes
+            .entry((keys[&interval.spell].clone(), holder))
+            .or_default();
+        lane.intervals.push((interval.start_ms, interval.end_ms));
+        *lane.spells.entry(interval.spell).or_default() += 1;
         if let Some(source) = fight.actors.credited_player(interval.source) {
-            *meta.sources.entry(source).or_default() += 1;
+            *lane.sources.entry(source).or_default() += 1;
         }
-        let key = (
-            row,
-            if is_player {
-                interval.target.to_string()
-            } else {
-                unit_name(fight, interval.target)
-            },
-        );
-        let entry = groups.entry(key).or_insert((player, Vec::new(), 0));
-        entry.1.push((interval.start_ms, interval.end_ms));
-        entry.2 += 1;
     }
-    let mut rows: HashMap<String, AuraRow> = HashMap::new();
-    for ((row_key, target_key), (player, intervals, count)) in groups {
-        let name = match player {
-            Some(id) => unit_name(fight, id),
-            None => target_key,
+    let mut players: HashSet<ActorId> = HashSet::new();
+    let mut by_row: HashMap<RowId, Vec<(AuraLane, LaneAcc)>> = HashMap::new();
+    for ((aura, holder), acc) in lanes {
+        match scope.perspective {
+            Side::Friendly => players.extend(holder.player),
+            Side::Enemy => players.extend(acc.sources.keys().copied()),
+        }
+        let spells = by_count(&acc.spells);
+        let lane = AuraLane {
+            spell: spells[0],
+            spells,
+            sources: by_count(&acc.sources),
+            applications: acc.spells.values().sum(),
+            uptime: union_ms(&acc.intervals, start, end) as f64 / f64::from(len),
+            intervals: merged(&acc.intervals, start, end),
+            holder: holder.clone(),
         };
-        let uptime = union_ms(&intervals, start, end) as f64 / f64::from(len);
-        let row = rows.entry(row_key.clone()).or_insert_with(|| {
-            let meta = &metas[&row_key];
-            let spells = by_count(&meta.spells);
-            AuraRow {
-                spell: spells[0],
-                spells,
-                sources: by_count(&meta.sources),
-                applications: 0,
-                uptime: 0.0,
-                targets: Vec::new(),
-            }
-        });
-        row.applications += count;
-        row.targets.push(AuraTarget {
-            name,
-            player,
-            uptime,
-            intervals: merged(&intervals, start, end),
-        });
+        let row = match group {
+            Dimension::Target => RowId::Holder(holder),
+            _ => RowId::Aura(aura),
+        };
+        by_row.entry(row).or_default().push((lane, acc));
     }
-    let mut rows: Vec<AuraRow> = rows
-        .into_values()
-        .map(|mut row| {
-            row.targets.sort_by(|a, b| {
+    let mut ebon: Vec<f64> = Vec::new();
+    let mut rows: Vec<AuraRow> = by_row
+        .into_iter()
+        .map(|(row, parts)| {
+            let holder = match row {
+                RowId::Holder(holder) => Some(holder),
+                RowId::Aura(_) => None,
+            };
+            let mut spells: HashMap<SpellId, u32> = HashMap::new();
+            let mut sources: HashMap<ActorId, u32> = HashMap::new();
+            for (_, acc) in &parts {
+                for (&spell, &n) in &acc.spells {
+                    *spells.entry(spell).or_default() += n;
+                }
+                for (&source, &n) in &acc.sources {
+                    *sources.entry(source).or_default() += n;
+                }
+            }
+            let mut lanes: Vec<AuraLane> = parts.into_iter().map(|(lane, _)| lane).collect();
+            ebon.extend(
+                lanes
+                    .iter()
+                    .filter(|l| l.spells.contains(&EBON_MIGHT))
+                    .map(|l| l.uptime),
+            );
+            lanes.sort_by(|a, b| {
                 b.uptime
                     .total_cmp(&a.uptime)
-                    .then_with(|| a.name.cmp(&b.name))
+                    .then_with(|| a.holder.cmp(&b.holder))
+                    .then(a.spell.cmp(&b.spell))
             });
-            row.uptime =
-                row.targets.iter().map(|t| t.uptime).sum::<f64>() / row.targets.len() as f64;
-            row
+            let spells = if holder.is_some() {
+                Vec::new()
+            } else {
+                by_count(&spells)
+            };
+            AuraRow {
+                spell: spells.first().copied().unwrap_or(0),
+                spells,
+                holder,
+                sources: by_count(&sources),
+                applications: lanes.iter().map(|l| l.applications).sum(),
+                uptime: lanes.iter().map(|l| l.uptime).sum::<f64>() / lanes.len() as f64,
+                lanes,
+            }
         })
         .collect();
-    rows.sort_by(|a, b| b.uptime.total_cmp(&a.uptime).then(a.spell.cmp(&b.spell)));
-    rows
+    rows.sort_by(|a, b| {
+        b.uptime
+            .total_cmp(&a.uptime)
+            .then(a.spell.cmp(&b.spell))
+            .then_with(|| a.holder.cmp(&b.holder))
+    });
+    AurasReport {
+        group,
+        rows,
+        ebon_might: (!ebon.is_empty()).then(|| {
+            (
+                ebon.iter().sum::<f64>() / ebon.len() as f64,
+                ebon.len() as u32,
+            )
+        }),
+        players: players.len() as u32,
+    }
 }

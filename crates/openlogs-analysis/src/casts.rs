@@ -4,19 +4,24 @@ use openlogs_gamedata::Curated;
 
 use crate::actors::{ActorId, ActorKind};
 use crate::auras::{aura_intervals, union_ms};
+use crate::breakdown::{Breakdown, Dimension, group_cells};
+use crate::cells::{Cell, CellKind, Facts, ScopeMetric, book, in_scope, into_cells};
 use crate::fight::{Event, EventKind, Fight, SpellId};
 use crate::filter::ReportFilter;
 use crate::links::{AbilityIndex, AbilityLink, SpellKey, spell_key};
+use crate::scope::{AbilityRef, Scope, Side, UnitRef, side_of, unit_of};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SpellCasts {
-    /// The spell's cast ID with the most casts; other IDs of the same name are counted in.
+/// A row of one player and one ability, with what the breakdown does not carry.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CastExtra {
+    pub player: ActorId,
+    pub ability: AbilityRef,
+    pub kind: CellKind,
+    /// The row's cast ID with the most casts; other IDs of the same name are counted in.
     pub spell: SpellId,
     pub casts: u32,
-    /// Time of the first cast in the range (ms from the pull); equal counts are ordered by it.
+    /// The first cast in the range; equal counts are ordered by it.
     pub first_cast_ms: i32,
-    /// Curated as a proc or passive trigger, not a player action.
-    pub proc_trigger: bool,
     /// Share of the range during which the player's own aura with this spell's name (or ID,
     /// without a known name) was on any target; `None` when there is no such aura.
     pub uptime: Option<f64>,
@@ -25,19 +30,11 @@ pub struct SpellCasts {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct PlayerCasts {
-    pub player: ActorId,
-    pub spells: Vec<SpellCasts>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub struct CastsReport {
-    pub duration_ms: u64,
-    pub players: Vec<PlayerCasts>,
+    pub breakdown: Breakdown,
+    /// One per player and ability row in scope.
+    pub extras: Vec<CastExtra>,
 }
-
-/// A cast ID with its casts and the time of its first cast.
-type CastIdCount = (SpellId, u32, i32);
 
 /// A cast that comes at most this long after a counted cast of the same name with another ID is
 /// part of that press (Exterminate's second swing 0.5 s later, Flame Shock's and Verdant Embrace's
@@ -115,90 +112,142 @@ pub(crate) fn non_press_casts(fight: &Fight, curated: &Curated, player: ActorId)
     skip
 }
 
-pub fn casts_report(fight: &Fight, curated: &Curated, filter: &ReportFilter) -> CastsReport {
-    let (start, end) = filter.clipped(fight);
-    let is_player = |actor: ActorId| fight.actors.get(actor).kind == ActorKind::Player;
-    // One cast per press, as on the player and ability pages; curated procs keep their own rows.
-    let follow_ups = follow_up_casts(fight, curated, is_player);
-    // Casts and the first cast's time per player and cast ID.
-    let mut counts: HashMap<ActorId, HashMap<SpellId, (u32, i32)>> = HashMap::new();
-    for (i, event) in fight
+/// Casts of `side`'s casters in the range, one per press: players for friendlies (their pets'
+/// casts are not counted), units hostile at the cast for enemies.
+pub(crate) fn presses<'a>(
+    fight: &'a Fight,
+    curated: &Curated,
+    filter: &ReportFilter,
+    side: Side,
+) -> Vec<&'a Event> {
+    let caster = |actor: ActorId| match side {
+        Side::Friendly => fight.actors.get(actor).kind == ActorKind::Player,
+        Side::Enemy => fight.actors.credited_player(actor).is_none(),
+    };
+    let follow_ups = follow_up_casts(fight, curated, caster);
+    fight
         .events
         .iter()
         .enumerate()
-        .filter(|(_, e)| filter.contains(e.t))
-    {
-        if matches!(event.kind, EventKind::CastSuccess)
-            && is_player(event.source)
-            && !follow_ups.contains(&i)
-        {
-            let entry = counts
-                .entry(event.source)
+        .filter(|(i, event)| {
+            filter.contains(event.t)
+                && matches!(event.kind, EventKind::CastSuccess)
+                && caster(event.source)
+                && !follow_ups.contains(i)
+                && (side == Side::Friendly
+                    || side_of(fight, event.source, event.source_hostile) == Some(Side::Enemy))
+        })
+        .map(|(_, event)| event)
+        .collect()
+}
+
+/// Only player procs are curated, so enemy casts are all presses.
+pub(crate) fn book_casts(fight: &Fight, curated: &Curated, presses: &[&Event], map: &mut Facts) {
+    for event in presses {
+        let player = fight.actors.get(event.source).kind == ActorKind::Player;
+        let kind = if player && curated.is_proc(event.spell) {
+            CellKind::Proc
+        } else {
+            CellKind::Own
+        };
+        book(
+            map,
+            (
+                unit_of(fight, event.source),
+                event.spell,
+                kind,
+                unit_of(fight, event.target),
+            ),
+            1,
+            0,
+            true,
+            false,
+        );
+    }
+}
+
+fn spell_key_of(ability: &AbilityRef) -> SpellKey<'_> {
+    match ability {
+        AbilityRef::Name(name) => SpellKey::Name(name),
+        AbilityRef::Id(id) => SpellKey::Id(*id),
+    }
+}
+
+/// Casts in the scope by `wanted` (or its fallback). Hide procs drops curated procs unless an
+/// ability is selected: a selection always shows what it names.
+pub fn casts_report(
+    fight: &Fight,
+    curated: &Curated,
+    filter: &ReportFilter,
+    scope: &Scope,
+    wanted: Dimension,
+    hide_procs: bool,
+) -> CastsReport {
+    let presses = presses(fight, curated, filter, scope.perspective);
+    let mut map = Facts::new();
+    book_casts(fight, curated, &presses, &mut map);
+    let hidden =
+        |cell: &Cell| hide_procs && scope.ability.is_empty() && cell.kind == CellKind::Proc;
+    let all: Vec<Cell> = into_cells(map).into_iter().filter(|c| !hidden(c)).collect();
+    let breakdown = group_cells(fight, filter, scope, ScopeMetric::Casts, &all, wanted);
+
+    // Casts per cast ID of each player and ability row.
+    let mut rows: HashMap<(ActorId, AbilityRef, CellKind), HashMap<SpellId, u32>> = HashMap::new();
+    for cell in all.iter().filter(|c| in_scope(scope, fight, c)) {
+        if let UnitRef::Player(player) = cell.source {
+            *rows
+                .entry((player, AbilityRef::of(fight, cell.spell), cell.kind))
                 .or_default()
-                .entry(event.spell)
-                .or_insert((0, event.t));
-            entry.0 += 1;
-            entry.1 = entry.1.min(event.t);
+                .entry(cell.spell)
+                .or_default() += cell.hits;
         }
     }
+    let mut first: HashMap<(ActorId, SpellId), i32> = HashMap::new();
+    for event in &presses {
+        first.entry((event.source, event.spell)).or_insert(event.t);
+    }
+    let players: HashSet<ActorId> = rows.keys().map(|(player, _, _)| *player).collect();
     let mut auras: HashMap<(ActorId, SpellKey<'_>), Vec<(i32, i32)>> = HashMap::new();
     for interval in aura_intervals(fight) {
-        if counts.contains_key(&interval.source) {
+        if players.contains(&interval.source) {
             auras
                 .entry((interval.source, spell_key(fight, interval.spell)))
                 .or_default()
                 .push((interval.start_ms, interval.end_ms));
         }
     }
-    let index = AbilityIndex::new(fight, filter, None);
-    let len = end - start;
-    let uptime = |intervals: &[(i32, i32)]| {
-        if len > 0 {
-            union_ms(intervals, start, end) as f64 / f64::from(len)
+    let (start, end) = filter.clipped(fight);
+    let uptime = |intervals: &Vec<(i32, i32)>| {
+        if end > start {
+            union_ms(intervals, start, end) as f64 / f64::from(end - start)
         } else {
             0.0
         }
     };
-    let mut players: Vec<PlayerCasts> = counts
+    let index = AbilityIndex::new(fight, filter, None);
+    let mut extras: Vec<CastExtra> = rows
         .into_iter()
-        .map(|(player, spells)| {
-            // One row per name and proc flag; the ID with the most casts represents it.
-            let mut groups: HashMap<(SpellKey<'_>, bool), Vec<CastIdCount>> = HashMap::new();
-            for (spell, (casts, first)) in spells {
-                groups
-                    .entry((spell_key(fight, spell), curated.is_proc(spell)))
-                    .or_default()
-                    .push((spell, casts, first));
+        .map(|((player, ability, kind), casts)| {
+            let mut ids: Vec<(SpellId, u32)> = casts.into_iter().collect();
+            ids.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+            CastExtra {
+                spell: ids[0].0,
+                casts: ids.iter().map(|(_, casts)| casts).sum(),
+                first_cast_ms: ids
+                    .iter()
+                    .filter_map(|(spell, _)| first.get(&(player, *spell)).copied())
+                    .min()
+                    .unwrap_or(0),
+                uptime: auras.get(&(player, spell_key_of(&ability))).map(uptime),
+                link: ids
+                    .iter()
+                    .find_map(|&(spell, _)| index.link(fight, player, spell)),
+                player,
+                ability,
+                kind,
             }
-            let mut spells: Vec<SpellCasts> = groups
-                .into_iter()
-                .map(|((key, proc_trigger), mut ids)| {
-                    ids.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-                    SpellCasts {
-                        spell: ids[0].0,
-                        casts: ids.iter().map(|&(_, casts, _)| casts).sum(),
-                        first_cast_ms: ids.iter().map(|&(_, _, first)| first).min().unwrap_or(0),
-                        proc_trigger,
-                        uptime: auras.get(&(player, key)).map(Vec::as_slice).map(uptime),
-                        link: ids
-                            .iter()
-                            .find_map(|&(spell, _, _)| index.link(fight, player, spell)),
-                    }
-                })
-                .collect();
-            spells.sort_by(|a, b| {
-                b.casts
-                    .cmp(&a.casts)
-                    .then(a.first_cast_ms.cmp(&b.first_cast_ms))
-                    .then(a.spell.cmp(&b.spell))
-            });
-            PlayerCasts { player, spells }
         })
         .collect();
-    let total = |p: &PlayerCasts| p.spells.iter().map(|s| s.casts).sum::<u32>();
-    players.sort_by(|a, b| total(b).cmp(&total(a)).then(a.player.cmp(&b.player)));
-    CastsReport {
-        duration_ms: filter.duration_ms(fight),
-        players,
-    }
+    extras.sort_by(|a, b| (a.player, &a.ability, a.kind).cmp(&(b.player, &b.ability, b.kind)));
+    CastsReport { breakdown, extras }
 }

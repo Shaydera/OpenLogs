@@ -331,11 +331,6 @@
   min-width: 0;
   overflow: hidden;
 }
-.panel-head.panel-head-casts {
-  align-items: baseline;
-  gap: 10px;
-  padding: 16px 14px 10px;
-}
 .casts-summary {
   font-size: 13px;
   color: var(--muted);
@@ -484,8 +479,6 @@
   color: var(--muted);
   line-height: 1.5;
 }
-.casts-empty {
-  padding: 12px 16px;
-  font-size: 13px;
-  color: var(--muted);
+.cast-srow.cast-srow-plain {
+  grid-template-columns: 24px minmax(160px, 1.2fr) minmax(160px, 1.4fr) 64px;
 }

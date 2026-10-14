@@ -3,8 +3,10 @@ use std::collections::{HashMap, HashSet};
 use crate::ability::unit_name;
 use crate::actors::{ActorId, ActorKind};
 use crate::fight::{EventKind, Fight};
-use crate::filter::{Attribution, ReportFilter};
-use crate::reports::{Share, Support, damage_share, sorted_by_amount};
+use crate::filter::ReportFilter;
+use crate::reports::damage::damage_done_in;
+use crate::reports::{Share, damage_share, keeps_own};
+use crate::scope::{Scope, UnitRef};
 use crate::timeline::boss_units;
 use openlogs_index::Outcome;
 
@@ -60,15 +62,26 @@ pub struct TargetDetail {
     pub shares_boss_hp: bool,
     pub units: Vec<UnitLife>,
     pub waves: Vec<Wave>,
-    /// Damage on this enemy by player in the current mode.
+    /// Damage on this enemy by player in the current mode; empty while a source is selected.
     pub by_player: Vec<(ActorId, u64)>,
 }
 
-/// Damage done per unit with its first and last hit, for events the filter keeps.
-fn hits_by_unit(fight: &Fight, keep: impl Fn(i32) -> bool) -> HashMap<ActorId, (u64, i32, i32)> {
+/// Damage done per unit with its first and last hit, for events the filter and `scope` keep.
+pub(crate) fn hits_by_unit(
+    fight: &Fight,
+    keep: impl Fn(i32) -> bool,
+    scope: &Scope,
+) -> HashMap<ActorId, (u64, i32, i32)> {
     let mut units: HashMap<ActorId, (u64, i32, i32)> = HashMap::new();
     for event in fight.events.iter().filter(|e| keep(e.t)) {
-        if let Some(Share::Own { amount, .. }) = damage_share(fight, event) {
+        if let Some(Share::Own {
+            amount,
+            actor,
+            spell,
+            ..
+        }) = damage_share(fight, event)
+            && keeps_own(fight, scope, actor, spell, event.target)
+        {
             let entry = units.entry(event.target).or_insert((0, event.t, event.t));
             entry.0 += amount;
             entry.1 = entry.1.min(event.t);
@@ -127,7 +140,7 @@ fn group_max_hp(units: impl Iterator<Item = ActorId>, hp: &HashMap<ActorId, u64>
 }
 
 pub fn enemy_groups(fight: &Fight, filter: &ReportFilter) -> Vec<EnemyGroup> {
-    let hits = hits_by_unit(fight, |t| filter.contains(t));
+    let hits = hits_by_unit(fight, |t| filter.contains(t), &Scope::default());
     let hp = max_hp_by_unit(fight);
     let bosses = bosses(fight, &hp);
     let mut groups: HashMap<String, (Vec<ActorId>, u64)> = HashMap::new();
@@ -192,7 +205,14 @@ fn waves(units: &[UnitLife]) -> Vec<Wave> {
     out
 }
 
-pub fn target_detail(fight: &Fight, name: &str, filter: &ReportFilter) -> Option<TargetDetail> {
+/// The page's subject is every enemy of one name; of `scope`, the source and ability selections
+/// apply to the damage taken, its share of the raid's and the by-player block.
+pub fn target_detail(
+    fight: &Fight,
+    name: &str,
+    filter: &ReportFilter,
+    scope: &Scope,
+) -> Option<TargetDetail> {
     let known = fight
         .actors
         .iter()
@@ -204,8 +224,12 @@ pub fn target_detail(fight: &Fight, name: &str, filter: &ReportFilter) -> Option
     let pull_end = fight.duration_ms.min(i32::MAX as u64) as i32;
     let hp = max_hp_by_unit(fight);
     let bosses = bosses(fight, &hp);
-    let in_range = hits_by_unit(fight, |t| filter.contains(t));
-    let whole = hits_by_unit(fight, |t| t >= 0);
+    let rest = Scope {
+        target: Vec::new(),
+        ..scope.clone()
+    };
+    let in_range = hits_by_unit(fight, |t| filter.contains(t), &rest);
+    let whole = hits_by_unit(fight, |t| t >= 0, &Scope::default());
 
     let mut deaths: HashMap<ActorId, i32> = HashMap::new();
     for event in &fight.events {
@@ -246,36 +270,19 @@ pub fn target_detail(fight: &Fight, name: &str, filter: &ReportFilter) -> Option
         .sum();
     let raid_damage = in_range.values().map(|&(d, _, _)| d).sum();
 
-    let reattributed = filter.attribution == Attribution::Reattributed;
-    let mut by_player: HashMap<ActorId, i64> = HashMap::new();
-    for event in fight
-        .events
-        .iter()
-        .filter(|e| filter.contains(e.t) && ours.contains(&e.target))
-    {
-        match damage_share(fight, event) {
-            Some(Share::Own { player, amount, .. }) => {
-                *by_player.entry(player).or_default() += amount as i64
-            }
-            Some(Share::Support(Support {
-                player,
-                evoker,
-                amount,
-                ..
-            })) if reattributed => {
-                *by_player.entry(player).or_default() -= amount as i64;
-                *by_player.entry(evoker).or_default() += amount as i64;
-            }
-            _ => {}
-        }
-    }
-    let by_player = sorted_by_amount(
-        by_player
-            .into_iter()
-            .filter(|&(_, v)| v > 0)
-            .map(|(p, v)| (p, v as u64))
-            .collect(),
-    );
+    let on_this = Scope {
+        target: vec![UnitRef::Unit(name.to_string())],
+        ..rest
+    };
+    let by_player = if scope.source.is_empty() {
+        damage_done_in(fight, filter, &on_this)
+            .players
+            .iter()
+            .map(|p| (p.player, p.total))
+            .collect()
+    } else {
+        Vec::new()
+    };
 
     let is_boss = bosses.names.contains(name);
     let max_hp = group_max_hp(ours.iter().copied(), &hp);

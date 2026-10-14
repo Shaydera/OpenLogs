@@ -1,7 +1,7 @@
 use openlogs_analysis::{Fight, load_fight_slice};
 use openlogs_gamedata::{Curated, DungeonTable};
 use openlogs_index::{FightSummary, Indexer, LogIndex};
-use openlogs_service::auras_dto::AuraScopeDto;
+use openlogs_service::auras_dto::AuraKindDto;
 use openlogs_service::log_dto::log_view;
 use openlogs_service::player_dto::MetricDto;
 use openlogs_service::report_dto::{AttributionDto, FilterDto};
@@ -148,6 +148,7 @@ impl Engine {
                 let args: BreakdownArgs = parse(args_json)?;
                 json(openlogs_service::breakdown_report(
                     self.fight(args.fight_index)?,
+                    curated,
                     args.filter,
                     args.scope,
                     args.metric,
@@ -158,6 +159,7 @@ impl Engine {
                 let args: OptionsArgs = parse(args_json)?;
                 json(openlogs_service::filter_options(
                     self.fight(args.fight_index)?,
+                    curated,
                     args.filter,
                     args.scope,
                     args.metric,
@@ -172,6 +174,7 @@ impl Engine {
                     args.player,
                     args.metric,
                     args.filter,
+                    args.scope,
                 )?)
             }
             "ability_detail" => {
@@ -184,6 +187,7 @@ impl Engine {
                     args.pet.as_deref(),
                     args.metric,
                     args.filter,
+                    args.scope,
                 )?)
             }
             "target_detail" => {
@@ -193,41 +197,54 @@ impl Engine {
                     fight,
                     args.name,
                     args.filter,
+                    args.scope,
                 )?)
             }
             "deaths_report" => {
-                let args: FightArgs = parse(args_json)?;
+                let args: ScopedArgs = parse(args_json)?;
                 json(openlogs_service::deaths(
                     self.fight(args.fight_index)?,
                     curated,
                     args.filter,
+                    args.scope,
                 ))
             }
             "casts_report" => {
-                let args: FightArgs = parse(args_json)?;
+                let args: CastsArgs = parse(args_json)?;
                 json(openlogs_service::casts(
                     self.fight(args.fight_index)?,
                     curated,
                     args.filter,
+                    args.scope,
+                    args.group,
+                    args.hide_procs,
                 ))
             }
             "auras_report" => {
                 let args: AurasArgs = parse(args_json)?;
-                let fight = self.fight(args.fight_index)?;
-                json(openlogs_service::auras(fight, args.scope, args.filter))
+                json(openlogs_service::auras(
+                    self.fight(args.fight_index)?,
+                    args.filter,
+                    args.scope,
+                    args.kind,
+                    args.group,
+                ))
             }
             "interrupts_report" => {
-                let args: FightArgs = parse(args_json)?;
+                let args: GroupedArgs = parse(args_json)?;
                 json(openlogs_service::interrupts(
                     self.fight(args.fight_index)?,
                     args.filter,
+                    args.scope,
+                    args.group,
                 ))
             }
             "resources_report" => {
-                let args: FightArgs = parse(args_json)?;
+                let args: ScopedArgs = parse(args_json)?;
                 json(openlogs_service::resources(
                     self.fight(args.fight_index)?,
                     args.filter,
+                    args.scope,
                 ))
             }
             "compare_pulls" => {
@@ -319,11 +336,44 @@ struct OptionsArgs {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct ScopedArgs {
+    fight_index: u32,
+    filter: FilterDto,
+    #[serde(default)]
+    scope: ScopeDto,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GroupedArgs {
+    fight_index: u32,
+    filter: FilterDto,
+    #[serde(default)]
+    scope: ScopeDto,
+    group: DimensionDto,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CastsArgs {
+    fight_index: u32,
+    filter: FilterDto,
+    #[serde(default)]
+    scope: ScopeDto,
+    group: DimensionDto,
+    #[serde(default)]
+    hide_procs: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PlayerArgs {
     fight_index: u32,
     player: u32,
     metric: MetricDto,
     filter: FilterDto,
+    #[serde(default)]
+    scope: ScopeDto,
 }
 
 #[derive(Deserialize)]
@@ -335,6 +385,8 @@ struct AbilityArgs {
     pet: Option<String>,
     metric: MetricDto,
     filter: FilterDto,
+    #[serde(default)]
+    scope: ScopeDto,
 }
 
 #[derive(Deserialize)]
@@ -343,14 +395,19 @@ struct TargetArgs {
     fight_index: u32,
     name: String,
     filter: FilterDto,
+    #[serde(default)]
+    scope: ScopeDto,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AurasArgs {
     fight_index: u32,
-    scope: AuraScopeDto,
     filter: FilterDto,
+    #[serde(default)]
+    scope: ScopeDto,
+    kind: AuraKindDto,
+    group: DimensionDto,
 }
 
 #[derive(Deserialize)]

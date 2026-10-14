@@ -10,9 +10,10 @@ use crate::fight::{EventKind, Fight, SpellId};
 use crate::filter::ReportFilter;
 use crate::links::spell_key;
 use crate::player::{Metric, is_player};
-use crate::reports::damage::damage_done;
-use crate::reports::healing::healing;
+use crate::reports::damage::damage_done_in;
+use crate::reports::healing::healing_in;
 use crate::reports::{Share, damage_share, healing_share};
+use crate::scope::{Scope, unit_of};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AbilityHit {
@@ -45,7 +46,7 @@ pub struct AbilityDetail {
     pub player_total: u64,
     pub casts: Vec<i32>,
     pub hits: Vec<AbilityHit>,
-    /// Hits grouped by target name, largest first.
+    /// Hits grouped by target name, largest first; empty while a target is selected.
     pub by_target: Vec<TargetHits>,
     pub median: u64,
     /// Aura uptime on any target, for abilities that mostly tick (DoTs, HoTs).
@@ -73,6 +74,9 @@ fn caster_matches(fight: &Fight, player: ActorId, actor: ActorId, pet: Option<&s
     }
 }
 
+/// The page's subject is the player's ability; of `scope`, only the target selection applies:
+/// to the hits, the player's total and the by-target block.
+#[allow(clippy::too_many_arguments)]
 pub fn ability_detail(
     fight: &Fight,
     curated: &Curated,
@@ -81,10 +85,15 @@ pub fn ability_detail(
     pet: Option<&str>,
     metric: Metric,
     filter: &ReportFilter,
+    scope: &Scope,
 ) -> Option<AbilityDetail> {
     if !is_player(fight, player) {
         return None;
     }
+    let targets = Scope {
+        target: scope.target.clone(),
+        ..Scope::default()
+    };
     let (start_ms, end_ms) = filter.clipped(fight);
     // The player's own ability is every spell of its name (the merged row of the player page);
     // a pet's stays its one ID.
@@ -135,6 +144,7 @@ pub fn ability_detail(
             && p == player
             && same_spell(s)
             && caster_matches(fight, player, actor, pet)
+            && targets.accepts(fight, None, None, Some(&unit_of(fight, event.target)))
         {
             hits.push(AbilityHit {
                 t: event.t,
@@ -148,12 +158,12 @@ pub fn ability_detail(
 
     let total = hits.iter().map(|h| h.amount).sum();
     let player_total = match metric {
-        Metric::Damage => damage_done(fight, filter)
+        Metric::Damage => damage_done_in(fight, filter, &targets)
             .players
             .iter()
             .find(|p| p.player == player)
             .map_or(0, |p| p.total),
-        Metric::Healing => healing(fight, filter)
+        Metric::Healing => healing_in(fight, filter, &targets)
             .players
             .iter()
             .find(|p| p.player == player)
@@ -173,7 +183,11 @@ pub fn ability_detail(
         entry.crits += u32::from(hit.critical);
         entry.amount += hit.amount;
     }
-    let mut by_target: Vec<TargetHits> = groups.into_values().collect();
+    let mut by_target: Vec<TargetHits> = if targets.selects_all() {
+        groups.into_values().collect()
+    } else {
+        Vec::new()
+    };
     by_target.sort_by(|a, b| b.amount.cmp(&a.amount).then_with(|| a.name.cmp(&b.name)));
 
     let mut amounts: Vec<u64> = hits.iter().map(|h| h.amount).collect();

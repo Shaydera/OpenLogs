@@ -31,12 +31,15 @@ export function OptionsMenu() {
   const metricTab = tab === 'damage' || tab === 'healing';
   const changed = attribution !== 'reattributed';
   const title = changed ? t('options.titleAugOff') : t('options.title');
-  const table: { label: string; checked: boolean; toggle: () => void }[] = [];
+  const table: { label: string; checked: boolean; toggle: () => void; disabledBy?: string }[] = [];
   if (metricTab) {
     table.push({ label: t('options.augDelta'), checked: showAugDelta, toggle: () => setShowAugDelta(!showAugDelta) });
     table.push({ label: t('options.colorByTarget'), checked: colorByTarget, toggle: () => setColorByTarget(!colorByTarget) });
   }
-  if (tab === 'casts') table.push({ label: t('options.hideProcs'), checked: hideProcs, toggle: () => setHideProcs(!hideProcs) });
+  if (tab === 'casts') {
+    const disabledBy = perspective === 'enemy' ? t('options.procsOnlyPlayers') : undefined;
+    table.push({ label: t('options.hideProcs'), checked: hideProcs, toggle: () => void setHideProcs(!hideProcs), disabledBy });
+  }
   useDismiss(root, open, {
     onDismiss: () => setOpen(false),
     onEscape: () => {
@@ -64,8 +67,8 @@ export function OptionsMenu() {
           </label>
           {table.length > 0 && <h3 className="cap options-head options-split">{t('options.table')}</h3>}
           {table.map((o) => (
-            <label key={o.label} className="options-row">
-              <input type="checkbox" checked={o.checked} onChange={o.toggle} />
+            <label key={o.label} className="options-row" title={o.disabledBy}>
+              <input type="checkbox" checked={o.checked} disabled={o.disabledBy !== undefined} onChange={o.toggle} />
               <span>{o.label}</span>
             </label>
           ))}

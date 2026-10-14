@@ -1,11 +1,18 @@
 use std::collections::HashMap;
 
+use openlogs_gamedata::Curated;
+
 use crate::actors::{ActorKind, NOBODY};
+use crate::aura_report::book_auras;
 use crate::breakdown::Dimension;
-use crate::fight::{Event, EventKind, Fight, NO_SPELL, SpellId};
+use crate::casts::{book_casts, presses};
+use crate::deaths_report::book_deaths;
+use crate::fight::{AuraType, Event, EventKind, Fight, NO_SPELL, SpellId};
 use crate::filter::{Attribution, ReportFilter};
+use crate::interrupts::book_kicks;
 use crate::reports::taken::taken_amount;
 use crate::reports::{Share, buffed_spell, damage_share, healing_share};
+use crate::resources::book_resources;
 use crate::scope::{Scope, Side, UnitRef, unit_of};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -13,32 +20,54 @@ pub enum ScopeMetric {
     DamageDone,
     Healing,
     DamageTaken,
+    Casts,
+    /// Interrupts and dispels; the ability is the interrupted or removed spell.
+    Interrupts,
+    /// Auras by applier, aura and holder; the holder is the own side.
+    Buffs,
+    Debuffs,
+    /// Deaths by the killing blow's source and spell; who died is the own side.
+    Deaths,
+    /// Power and health holders and what they gained by spell; no other side.
+    Resources,
 }
 
 impl ScopeMetric {
     /// The dimension that holds the perspective's side.
     pub fn own(self) -> Dimension {
         match self {
-            ScopeMetric::DamageTaken => Dimension::Target,
-            ScopeMetric::DamageDone | ScopeMetric::Healing => Dimension::Source,
+            ScopeMetric::DamageTaken
+            | ScopeMetric::Buffs
+            | ScopeMetric::Debuffs
+            | ScopeMetric::Deaths => Dimension::Target,
+            ScopeMetric::DamageDone
+            | ScopeMetric::Healing
+            | ScopeMetric::Casts
+            | ScopeMetric::Interrupts
+            | ScopeMetric::Resources => Dimension::Source,
         }
     }
 
     /// The dimension that holds the side the perspective faces; `None` when the metric has none.
     pub fn other(self) -> Option<Dimension> {
-        Some(match self.own() {
-            Dimension::Target => Dimension::Source,
-            _ => Dimension::Target,
-        })
+        match (self, self.own()) {
+            (ScopeMetric::Resources, _) => None,
+            (_, Dimension::Target) => Some(Dimension::Source),
+            _ => Some(Dimension::Target),
+        }
     }
 
     /// The row groupings in fallback order: own side, ability, other side.
     pub fn groupings(self) -> &'static [Dimension] {
         match self {
             ScopeMetric::DamageTaken => &[Dimension::Target, Dimension::Ability, Dimension::Source],
-            ScopeMetric::DamageDone | ScopeMetric::Healing => {
+            ScopeMetric::DamageDone | ScopeMetric::Healing | ScopeMetric::Interrupts => {
                 &[Dimension::Source, Dimension::Ability, Dimension::Target]
             }
+            ScopeMetric::Casts => &[Dimension::Source, Dimension::Ability],
+            ScopeMetric::Buffs | ScopeMetric::Debuffs => &[Dimension::Target, Dimension::Ability],
+            ScopeMetric::Deaths => &[],
+            ScopeMetric::Resources => &[Dimension::Source],
         }
     }
 }
@@ -50,6 +79,12 @@ pub enum CellKind {
     Support,
     /// Reattributed: support taken off hits no ability could be matched to.
     Unmatched,
+    /// A curated proc or passive trigger, not a press.
+    Proc,
+    /// A death without a lethal hit in the log: no source and no ability.
+    Unattributed,
+    /// A unit's power or health sample: no ability.
+    State,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,37 +101,50 @@ pub struct Cell {
 }
 
 impl Cell {
+    pub(crate) fn source(&self) -> Option<&UnitRef> {
+        (self.kind != CellKind::Unattributed).then_some(&self.source)
+    }
+
     /// Unmatched support is booked under `NO_SPELL` like melee but belongs to no ability.
     pub(crate) fn ability(&self) -> Option<SpellId> {
-        (self.kind != CellKind::Unmatched).then_some(self.spell)
+        (!matches!(
+            self.kind,
+            CellKind::Unmatched | CellKind::Unattributed | CellKind::State
+        ))
+        .then_some(self.spell)
+    }
+
+    /// No unit is no target: a cast without one, never a hit.
+    pub(crate) fn target(&self) -> Option<&UnitRef> {
+        (self.target != UnitRef::Environment).then_some(&self.target)
     }
 
     /// Whether the log names the cell's part in `dimension`.
     pub(crate) fn names(&self, dimension: Dimension) -> bool {
-        dimension != Dimension::Ability || self.ability().is_some()
+        match dimension {
+            Dimension::Source => self.source().is_some(),
+            Dimension::Ability => self.ability().is_some(),
+            Dimension::Target => self.target().is_some(),
+        }
     }
 }
 
 pub(crate) fn in_scope(scope: &Scope, fight: &Fight, cell: &Cell) -> bool {
-    scope.accepts(
-        fight,
-        Some(&cell.source),
-        cell.ability(),
-        Some(&cell.target),
-    )
+    scope.accepts(fight, cell.source(), cell.ability(), cell.target())
 }
 
 type Key = (UnitRef, SpellId, CellKind, UnitRef);
+pub(crate) type Facts = HashMap<Key, Acc>;
 
 #[derive(Default)]
-struct Acc {
+pub(crate) struct Acc {
     amount: i64,
     absorbed: i64,
     hits: u32,
     crits: u32,
 }
 
-fn book(map: &mut HashMap<Key, Acc>, key: Key, amount: i64, absorbed: i64, hit: bool, crit: bool) {
+pub(crate) fn book(map: &mut Facts, key: Key, amount: i64, absorbed: i64, hit: bool, crit: bool) {
     let acc = map.entry(key).or_default();
     acc.amount += amount;
     acc.absorbed += absorbed;
@@ -105,8 +153,14 @@ fn book(map: &mut HashMap<Key, Acc>, key: Key, amount: i64, absorbed: i64, hit: 
 }
 
 /// Amounts of `metric` in the range, from `side`'s point of view. Selections are not applied here.
-pub fn cells(fight: &Fight, filter: &ReportFilter, side: Side, metric: ScopeMetric) -> Vec<Cell> {
-    let mut map: HashMap<Key, Acc> = HashMap::new();
+pub fn cells(
+    fight: &Fight,
+    curated: &Curated,
+    filter: &ReportFilter,
+    side: Side,
+    metric: ScopeMetric,
+) -> Vec<Cell> {
+    let mut map = Facts::new();
     match (side, metric) {
         (Side::Friendly, ScopeMetric::DamageDone) | (Side::Enemy, ScopeMetric::DamageTaken) => {
             own_side(fight, filter, &mut map, false)
@@ -115,7 +169,22 @@ pub fn cells(fight: &Fight, filter: &ReportFilter, side: Side, metric: ScopeMetr
         (Side::Friendly, ScopeMetric::DamageTaken) => taken(fight, filter, &mut map, false),
         (Side::Enemy, ScopeMetric::DamageDone) => taken(fight, filter, &mut map, true),
         (Side::Enemy, ScopeMetric::Healing) => enemy_healing(fight, filter, &mut map),
+        (_, ScopeMetric::Casts) => book_casts(
+            fight,
+            curated,
+            &presses(fight, curated, filter, side),
+            &mut map,
+        ),
+        (_, ScopeMetric::Interrupts) => book_kicks(fight, filter, side, &mut map),
+        (_, ScopeMetric::Buffs) => book_auras(fight, filter, side, AuraType::Buff, &mut map),
+        (_, ScopeMetric::Debuffs) => book_auras(fight, filter, side, AuraType::Debuff, &mut map),
+        (_, ScopeMetric::Deaths) => book_deaths(fight, filter, side, &mut map),
+        (_, ScopeMetric::Resources) => book_resources(fight, filter, side, &mut map),
     }
+    into_cells(map)
+}
+
+pub(crate) fn into_cells(map: Facts) -> Vec<Cell> {
     let mut list: Vec<Cell> = map
         .into_iter()
         .filter(|(_, acc)| acc.amount != 0 || acc.hits > 0)

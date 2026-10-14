@@ -13,16 +13,20 @@ pub struct AuraInterval {
     pub aura_type: AuraType,
     pub start_ms: i32,
     pub end_ms: i32,
+    /// The holder's hostile flag at the event that opened the interval.
+    pub target_hostile: bool,
 }
 
 type Key = (ActorId, SpellId, ActorId);
+/// An open interval: its start, aura type and the holder's hostile flag.
+type Open = (i32, AuraType, bool);
 
 /// Aura intervals clipped to the pull `[0, duration]`. An aura whose first event is a
 /// remove, refresh or dose change was active before the log slice; one still open at the
 /// end lasts until the end.
 pub fn aura_intervals(fight: &Fight) -> Vec<AuraInterval> {
     let end = fight.duration_ms.min(i32::MAX as u64) as i32;
-    let mut open: HashMap<Key, (i32, AuraType)> = HashMap::new();
+    let mut open: HashMap<Key, Open> = HashMap::new();
     let mut seen: HashSet<Key> = HashSet::new();
     let mut out = Vec::new();
     for event in &fight.events {
@@ -36,30 +40,35 @@ pub fn aura_intervals(fight: &Fight) -> Vec<AuraInterval> {
         let first = seen.insert(key);
         match action {
             AuraAction::Applied => {
-                open.entry(key).or_insert((event.t, aura_type));
+                open.entry(key)
+                    .or_insert((event.t, aura_type, event.target_hostile));
             }
             AuraAction::Refresh | AuraAction::AppliedDose | AuraAction::RemovedDose => {
                 let start = if first { i32::MIN } else { event.t };
-                open.entry(key).or_insert((start, aura_type));
+                open.entry(key)
+                    .or_insert((start, aura_type, event.target_hostile));
             }
             // A break names the breaker as source, not the caster; the REMOVED that
             // follows ends the aura.
             AuraAction::Broken | AuraAction::BrokenSpell => {}
             AuraAction::Removed => {
-                let (key, start) = match open.remove(&key) {
-                    Some((start, _)) => (key, start),
+                let (key, start, hostile) = match open.remove(&key) {
+                    Some((start, _, hostile)) => (key, start, hostile),
                     None => match sibling(fight, &open, key) {
-                        Some(other) => (other, open.remove(&other).map_or(event.t, |o| o.0)),
-                        None if first => (key, i32::MIN),
+                        Some(other) => match open.remove(&other) {
+                            Some((start, _, hostile)) => (other, start, hostile),
+                            None => (other, event.t, event.target_hostile),
+                        },
+                        None if first => (key, i32::MIN, event.target_hostile),
                         None => continue,
                     },
                 };
-                push_clipped(&mut out, key, aura_type, start, event.t, end);
+                push_clipped(&mut out, key, (aura_type, hostile), start, event.t, end);
             }
         }
     }
-    for (key, (start, aura_type)) in open {
-        push_clipped(&mut out, key, aura_type, start, end, end);
+    for (key, (start, aura_type, hostile)) in open {
+        push_clipped(&mut out, key, (aura_type, hostile), start, end, end);
     }
     out.sort_by_key(|i| (i.target, i.spell, i.source, i.start_ms));
     out
@@ -67,11 +76,7 @@ pub fn aura_intervals(fight: &Fight) -> Vec<AuraInterval> {
 
 /// An open interval of the same aura on the same target from another pet or guardian of
 /// the same player: Mirror Images apply and remove their Frostbolt under different GUIDs.
-fn sibling(
-    fight: &Fight,
-    open: &HashMap<Key, (i32, AuraType)>,
-    (target, spell, source): Key,
-) -> Option<Key> {
+fn sibling(fight: &Fight, open: &HashMap<Key, Open>, (target, spell, source): Key) -> Option<Key> {
     let owner = fight
         .actors
         .credited_player(source)
@@ -90,7 +95,7 @@ fn sibling(
 fn push_clipped(
     out: &mut Vec<AuraInterval>,
     (target, spell, source): Key,
-    aura_type: AuraType,
+    (aura_type, target_hostile): (AuraType, bool),
     start: i32,
     stop: i32,
     end: i32,
@@ -104,6 +109,7 @@ fn push_clipped(
             aura_type,
             start_ms,
             end_ms,
+            target_hostile,
         });
     }
 }

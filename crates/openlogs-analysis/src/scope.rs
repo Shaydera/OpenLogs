@@ -101,6 +101,11 @@ impl AbilityRef {
 }
 
 impl Scope {
+    /// Whether nothing is selected (the perspective aside).
+    pub fn selects_all(&self) -> bool {
+        self.source.is_empty() && self.target.is_empty() && self.ability.is_empty()
+    }
+
     pub fn wants(&self, fight: &Fight, source: &UnitRef, spell: SpellId, target: &UnitRef) -> bool {
         self.accepts(fight, Some(source), Some(spell), Some(target))
     }

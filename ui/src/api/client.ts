@@ -5,7 +5,7 @@ import { type LogSource, reopenHandle } from './logSource';
 import { type RecentRecord, recentRecords, rememberLog } from './recent';
 import type {
   Attribution,
-  AuraScope,
+  AuraKind,
   AurasReport,
   InterruptsReport,
   ResourcesReport,
@@ -196,16 +196,20 @@ export function createClient({ engine: getEngine, dungeons, db, now }: ClientDep
       report<AbilityDetail>(logId, [fightIndex], 'ability_detail', { fightIndex, player, spell, pet, metric, filter }),
     targetDetail: (logId: string, fightIndex: number, name: string, filter: ReportFilter) =>
       report<TargetDetail>(logId, [fightIndex], 'target_detail', { fightIndex, name, filter }),
-    deathsReport: pull<DeathsReport>('deaths_report'),
-    castsReport: pull<CastsReport>('casts_report'),
-    aurasReport: (logId: string, fightIndex: number, scope: AuraScope, filter: ReportFilter) =>
-      report<AurasReport>(logId, [fightIndex], 'auras_report', { fightIndex, scope, filter }),
+    deathsReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope) =>
+      report<DeathsReport>(logId, [fightIndex], 'deaths_report', { fightIndex, filter, scope }),
+    castsReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, group: Dimension, hideProcs: boolean) =>
+      report<CastsReport>(logId, [fightIndex], 'casts_report', { fightIndex, filter, scope, group, hideProcs }),
+    aurasReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, kind: AuraKind, group: Dimension) =>
+      report<AurasReport>(logId, [fightIndex], 'auras_report', { fightIndex, filter, scope, kind, group }),
     breakdownReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, metric: ScopeMetric, group: Dimension) =>
       report<Breakdown>(logId, [fightIndex], 'breakdown_report', { fightIndex, filter, scope, metric, group }),
     filterOptions: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, metric: ScopeMetric, dimension: Dimension) =>
       report<FilterOption[]>(logId, [fightIndex], 'filter_options', { fightIndex, filter, scope, metric, dimension }),
-    interruptsReport: pull<InterruptsReport>('interrupts_report'),
-    resourcesReport: pull<ResourcesReport>('resources_report'),
+    interruptsReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, group: Dimension) =>
+      report<InterruptsReport>(logId, [fightIndex], 'interrupts_report', { fightIndex, filter, scope, group }),
+    resourcesReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope) =>
+      report<ResourcesReport>(logId, [fightIndex], 'resources_report', { fightIndex, filter, scope }),
     comparePulls: (logId: string, fightA: number, fightB: number, attribution: Attribution) =>
       report<PullComparison>(logId, [fightA, fightB], 'compare_pulls', { fightA, fightB, attribution }),
   };

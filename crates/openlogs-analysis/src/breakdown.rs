@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
+use openlogs_gamedata::Curated;
+
 use crate::cells::{Cell, CellKind, ScopeMetric, cells, in_scope};
 use crate::fight::{Fight, SpellId};
 use crate::filter::ReportFilter;
@@ -159,14 +161,27 @@ fn rows_of<'a>(
 
 pub fn breakdown(
     fight: &Fight,
+    curated: &Curated,
     filter: &ReportFilter,
     scope: &Scope,
     metric: ScopeMetric,
     wanted: Dimension,
 ) -> Breakdown {
+    let all = cells(fight, curated, filter, scope.perspective, metric);
+    group_cells(fight, filter, scope, metric, &all, wanted)
+}
+
+/// `all`: the metric's cells in the range, before the selections.
+pub(crate) fn group_cells(
+    fight: &Fight,
+    filter: &ReportFilter,
+    scope: &Scope,
+    metric: ScopeMetric,
+    all: &[Cell],
+    wanted: Dimension,
+) -> Breakdown {
     let group = effective_group(scope, metric, wanted);
     let side = side_dimensions(scope, metric, group);
-    let all = cells(fight, filter, scope.perspective, metric);
     let mut total = 0;
     let mut buckets: HashMap<RowKey, Vec<&Cell>> = HashMap::new();
     for cell in all.iter().filter(|c| in_scope(scope, fight, c)) {

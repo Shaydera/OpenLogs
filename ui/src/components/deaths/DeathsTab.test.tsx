@@ -1,8 +1,9 @@
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DeathRecap, DeathsReport } from '../../api/types';
+import type { DeathRecap, DeathsReport, ReportUnit, UnitRef } from '../../api/types';
 import { initialState, useApp } from '../../store';
+import { overviewFixture } from '../../test/overviewFixture';
 import { recapFixture } from '../../test/reportFixtures';
 import { DeathsTab } from './DeathsTab';
 
@@ -34,7 +35,7 @@ const report: DeathsReport = {
 };
 
 beforeEach(() => {
-  useApp.setState(initialState());
+  useApp.setState({ ...initialState(), tab: 'deaths', filterOptions: vi.fn(async () => []) });
 });
 
 describe('DeathsTab', () => {
@@ -46,5 +47,39 @@ describe('DeathsTab', () => {
     expect(within(screen.getByRole('group', { name: 'All deaths · 3' })).getByRole('button', { pressed: true })).toHaveTextContent('6:59');
     rerender(<DeathsTab report={{ ...report, deaths: [faelan] }} />);
     expect(within(screen.getByRole('group', { name: 'All deaths · 1' })).getByRole('button', { pressed: true })).toHaveTextContent('3:59');
+  });
+
+  it('leaves the selected player and killing-blow source out of the list', () => {
+    useApp.setState({ filters: { ...initialState().filters, own: [{ kind: 'player', actorId: 4 }], other: [{ kind: 'unit', name: "Ula'tek" }] } });
+    render(<DeathsTab report={{ ...report, deaths: [faelan] }} />);
+    expect(within(screen.getByRole('group', { name: 'Deaths of Faelan' })).getByRole('button')).toHaveTextContent(/^3:59Virulent Spit$/);
+  });
+
+  it('names the selected player in the empty state from the overview roster', () => {
+    useApp.setState({ overview: overviewFixture, filters: { ...initialState().filters, own: [{ kind: 'player', actorId: 3 }] } });
+    render(<DeathsTab report={{ ...report, roster: [], deaths: [] }} />);
+    expect(screen.getByRole('heading', { name: /Deaths of Wendel/ })).toBeInTheDocument();
+  });
+
+  it('lists enemy kills with their killing blow, killer and time alive', () => {
+    useApp.setState({ filters: { ...initialState().filters, perspective: 'enemy' } });
+    const rawling: ReportUnit = { unit: { kind: 'instance', actorId: 9 }, name: 'Blightscale Rawling', number: 7 };
+    const kill = { t: 61_000, unit: rawling, killingBlow: { ...faelan.killingBlow!, sourceName: 'Faelan-Emberfall-EU' }, killer: { unit: { kind: 'player' as const, actorId: 4 }, name: 'Faelan', number: null }, aliveMs: 12_000 };
+    render(<DeathsTab report={{ ...report, deaths: [], kills: [kill] }} />);
+    const rows = within(screen.getByRole('table', { name: 'Kills · 1' })).getAllByRole('row');
+    expect(rows[1]).toHaveTextContent('1:01Blightscale Rawling #7Virulent SpitFaelan0:12');
+  });
+
+  it('keeps the unit column for a selected name group but drops it for a single unit', () => {
+    const rawling: ReportUnit = { unit: { kind: 'instance', actorId: 9 }, name: 'Blightscale Rawling', number: 7 };
+    const kill = { t: 61_000, unit: rawling, killingBlow: null, killer: null, aliveMs: null };
+    const render_ = (target: UnitRef) => {
+      useApp.setState({ filters: { ...initialState().filters, perspective: 'enemy', own: [target] } });
+      render(<DeathsTab report={{ ...report, deaths: [], kills: [kill] }} />);
+      return screen.queryAllByRole('columnheader').map((h) => h.textContent);
+    };
+    expect(render_({ kind: 'unit', name: 'Blightscale Rawling' })).toContain('Unit');
+    cleanup();
+    expect(render_({ kind: 'instance', actorId: 9 })).not.toContain('Unit');
   });
 });

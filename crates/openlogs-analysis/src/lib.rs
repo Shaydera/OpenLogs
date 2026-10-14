@@ -9,6 +9,7 @@ mod casts;
 mod cells;
 mod compare;
 mod deaths;
+mod deaths_report;
 mod fight;
 mod filter;
 mod interrupts;
@@ -29,17 +30,18 @@ mod usage;
 
 pub use ability::{AbilityDetail, AbilityHit, TargetHits, ability_detail};
 pub use actors::{Actor, ActorId, ActorKind, Actors, NOBODY};
-pub use aura_report::{AuraRow, AuraScope, AuraTarget, auras_report};
+pub use aura_report::{AuraHolder, AuraLane, AuraRow, AurasReport, auras_report};
 pub use auras::{AuraInterval, aura_intervals, union_ms};
 pub use breakdown::{
     Breakdown, BreakdownRow, Dimension, GroupedRow, RowKey, Split, breakdown, effective_group,
 };
-pub use casts::{CastsReport, PlayerCasts, SpellCasts, casts_report};
+pub use casts::{CastExtra, CastsReport, casts_report};
 pub use cells::{Cell, CellKind, ScopeMetric, cells};
 pub use compare::{ComparedPlayer, PlayerSide, PullComparison, compare_pulls};
 pub use deaths::{
     AbilityAmount, BURST_GAP_MS, DEATH_WINDOW_MS, Death, Hit, LethalBurst, Resurrection, deaths,
 };
+pub use deaths_report::{DeathsReport, Kill, deaths_report};
 pub use fight::{
     Absorbed, AuraAction, AuraType, Damage, DamageVia, Energize, Event, EventKind, Fight,
     FightKind, Heal, MissType, Missed, NO_SPELL, POWER_SAMPLE_MS, PowerSample, RunEncounter,
@@ -47,7 +49,7 @@ pub use fight::{
 };
 pub use filter::{Attribution, ReportFilter};
 pub use interrupts::{
-    DispelEntry, InterruptEntry, InterruptsReport, MissedCast, interrupts_report,
+    DispelEntry, InterruptEntry, InterruptsReport, KickRow, MissedCast, interrupts_report,
 };
 pub use links::AbilityLink;
 pub use load::{load_fight, load_fight_file, load_fight_slice};
@@ -71,7 +73,7 @@ pub use reports::{
     SupportShare, TOP_ABILITIES_PER_GROUP, TargetKey, TargetShare,
 };
 pub use resources::{
-    PlayerResources, PowerTrack, RESOURCE_STEP_MS, ResourcesReport, resources_report,
+    HEALTH, PowerTrack, RESOURCE_STEP_MS, ResourcesReport, UnitResources, resources_report,
 };
 pub use run_result::{BossProgress, RunResult, run_result};
 pub use scope::{AbilityRef, Scope, Side, UnitRef, side_of, unit_of};

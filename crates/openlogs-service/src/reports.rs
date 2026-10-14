@@ -1,7 +1,7 @@
 use openlogs_analysis::{Attribution, Fight, ReportFilter};
 use openlogs_gamedata::Curated;
 
-use crate::auras_dto::{AuraScopeDto, AurasReportDto, auras_report_dto};
+use crate::auras_dto::{AuraKindDto, AurasReportDto, auras_report_dto};
 use crate::casts_dto::{CastsReportDto, casts_report_dto};
 use crate::compare_dto::{PullComparisonDto, pull_comparison_dto};
 use crate::detail_dto::{AbilityDetailDto, TargetDetailDto, ability_detail_dto, target_detail_dto};
@@ -60,6 +60,7 @@ pub fn player_detail(
     player: u32,
     metric: MetricDto,
     filter: FilterDto,
+    scope: ScopeDto,
 ) -> Result<PlayerDetailDto, String> {
     let detail = openlogs_analysis::player_detail(
         fight,
@@ -67,6 +68,7 @@ pub fn player_detail(
         player,
         metric.to_metric(),
         &filter.to_filter(),
+        &scope.to_scope(),
     )
     .ok_or_else(|| format!("Actor {player} is not a player of this pull"))?;
     Ok(player_detail_dto(
@@ -78,6 +80,7 @@ pub fn player_detail(
     ))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn ability_detail(
     fight: &Fight,
     curated: &Curated,
@@ -86,6 +89,7 @@ pub fn ability_detail(
     pet: Option<&str>,
     metric: MetricDto,
     filter: FilterDto,
+    scope: ScopeDto,
 ) -> Result<AbilityDetailDto, String> {
     let detail = openlogs_analysis::ability_detail(
         fight,
@@ -95,6 +99,7 @@ pub fn ability_detail(
         pet,
         metric.to_metric(),
         &filter.to_filter(),
+        &scope.to_scope(),
     )
     .ok_or_else(|| format!("Actor {player} is not a player of this pull"))?;
     Ok(ability_detail_dto(fight, &detail, metric))
@@ -105,6 +110,7 @@ pub fn target_detail(
     fight: &Fight,
     name: String,
     filter: FilterDto,
+    scope: ScopeDto,
 ) -> Result<TargetDetailDto, String> {
     let filter = filter.to_filter();
     let enemies = openlogs_analysis::enemy_groups(fight, &filter);
@@ -116,43 +122,85 @@ pub fn target_detail(
     } else {
         name
     };
-    let detail = openlogs_analysis::target_detail(fight, &name, &filter)
+    let detail = openlogs_analysis::target_detail(fight, &name, &filter, &scope.to_scope())
         .ok_or_else(|| format!("No enemy named {name} in this pull"))?;
     Ok(target_detail_dto(fight, &detail, &enemies))
 }
 
-pub fn deaths(fight: &Fight, curated: &Curated, filter: FilterDto) -> DeathsReportDto {
-    let recaps = openlogs_analysis::death_recaps(fight, curated, &filter.to_filter());
-    deaths_report_dto(fight, curated, &recaps)
+pub fn deaths(
+    fight: &Fight,
+    curated: &Curated,
+    filter: FilterDto,
+    scope: ScopeDto,
+) -> DeathsReportDto {
+    let report =
+        openlogs_analysis::deaths_report(fight, curated, &filter.to_filter(), &scope.to_scope());
+    deaths_report_dto(fight, curated, &report)
 }
 
-pub fn casts(fight: &Fight, curated: &Curated, filter: FilterDto) -> CastsReportDto {
+pub fn casts(
+    fight: &Fight,
+    curated: &Curated,
+    filter: FilterDto,
+    scope: ScopeDto,
+    group: DimensionDto,
+    hide_procs: bool,
+) -> CastsReportDto {
     casts_report_dto(
         fight,
-        &openlogs_analysis::casts_report(fight, curated, &filter.to_filter()),
+        &openlogs_analysis::casts_report(
+            fight,
+            curated,
+            &filter.to_filter(),
+            &scope.to_scope(),
+            group.to_dimension(),
+            hide_procs,
+        ),
     )
 }
 
-pub fn auras(fight: &Fight, scope: AuraScopeDto, filter: FilterDto) -> AurasReportDto {
+pub fn auras(
+    fight: &Fight,
+    filter: FilterDto,
+    scope: ScopeDto,
+    kind: AuraKindDto,
+    group: DimensionDto,
+) -> AurasReportDto {
     let filter = filter.to_filter();
     auras_report_dto(
         fight,
         &filter,
-        &openlogs_analysis::auras_report(fight, &filter, scope.to_scope()),
+        &openlogs_analysis::auras_report(
+            fight,
+            &filter,
+            &scope.to_scope(),
+            kind.to_aura_type(),
+            group.to_dimension(),
+        ),
     )
 }
 
-pub fn interrupts(fight: &Fight, filter: FilterDto) -> InterruptsReportDto {
+pub fn interrupts(
+    fight: &Fight,
+    filter: FilterDto,
+    scope: ScopeDto,
+    group: DimensionDto,
+) -> InterruptsReportDto {
     interrupts_report_dto(
         fight,
-        &openlogs_analysis::interrupts_report(fight, &filter.to_filter()),
+        &openlogs_analysis::interrupts_report(
+            fight,
+            &filter.to_filter(),
+            &scope.to_scope(),
+            group.to_dimension(),
+        ),
     )
 }
 
-pub fn resources(fight: &Fight, filter: FilterDto) -> ResourcesReportDto {
+pub fn resources(fight: &Fight, filter: FilterDto, scope: ScopeDto) -> ResourcesReportDto {
     resources_report_dto(
         fight,
-        &openlogs_analysis::resources_report(fight, &filter.to_filter()),
+        &openlogs_analysis::resources_report(fight, &filter.to_filter(), &scope.to_scope()),
     )
 }
 
@@ -170,6 +218,7 @@ pub fn compare_pulls(
 
 pub fn breakdown_report(
     fight: &Fight,
+    curated: &Curated,
     filter: FilterDto,
     scope: ScopeDto,
     metric: ScopeMetricDto,
@@ -177,6 +226,7 @@ pub fn breakdown_report(
 ) -> BreakdownDto {
     let breakdown = openlogs_analysis::breakdown(
         fight,
+        curated,
         &filter.to_filter(),
         &scope.to_scope(),
         metric.to_metric(),
@@ -187,6 +237,7 @@ pub fn breakdown_report(
 
 pub fn filter_options(
     fight: &Fight,
+    curated: &Curated,
     filter: FilterDto,
     scope: ScopeDto,
     metric: ScopeMetricDto,
@@ -194,6 +245,7 @@ pub fn filter_options(
 ) -> Vec<FilterOptionDto> {
     openlogs_analysis::filter_options(
         fight,
+        curated,
         &filter.to_filter(),
         &scope.to_scope(),
         metric.to_metric(),

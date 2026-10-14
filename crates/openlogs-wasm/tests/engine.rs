@@ -227,18 +227,39 @@ fn every_report_reaches_the_ui_with_camel_case_keys() {
         ),
         ("target", top_target),
         ("deaths", call(&engine, "deaths_report", pull(json!({})))),
-        ("casts", call(&engine, "casts_report", pull(json!({})))),
+        (
+            "kills",
+            call(
+                &engine,
+                "deaths_report",
+                pull(json!({ "scope": { "perspective": "enemy" } })),
+            ),
+        ),
+        (
+            "casts",
+            call(
+                &engine,
+                "casts_report",
+                pull(json!({ "scope": scope, "group": "source", "hideProcs": true })),
+            ),
+        ),
         (
             "auras",
             call(
                 &engine,
                 "auras_report",
-                pull(json!({ "scope": "debuffs_on_enemies" })),
+                pull(
+                    json!({ "scope": { "perspective": "enemy" }, "kind": "debuffs", "group": "ability" }),
+                ),
             ),
         ),
         (
             "interrupts",
-            call(&engine, "interrupts_report", pull(json!({}))),
+            call(
+                &engine,
+                "interrupts_report",
+                pull(json!({ "scope": scope, "group": "source" })),
+            ),
         ),
         (
             "resources",
