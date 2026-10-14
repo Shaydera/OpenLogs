@@ -52,22 +52,6 @@ pub struct Breakdown {
     pub rows: Vec<GroupedRow>,
 }
 
-pub fn own_dimension(metric: ScopeMetric) -> Dimension {
-    if metric == ScopeMetric::DamageTaken {
-        Dimension::Target
-    } else {
-        Dimension::Source
-    }
-}
-
-pub fn other_dimension(metric: ScopeMetric) -> Dimension {
-    if metric == ScopeMetric::DamageTaken {
-        Dimension::Source
-    } else {
-        Dimension::Target
-    }
-}
-
 fn narrowed(scope: &Scope, dimension: Dimension) -> bool {
     match dimension {
         Dimension::Source => !scope.source.is_empty(),
@@ -76,25 +60,33 @@ fn narrowed(scope: &Scope, dimension: Dimension) -> bool {
     }
 }
 
-fn order(metric: ScopeMetric) -> [Dimension; 3] {
-    [
-        own_dimension(metric),
-        Dimension::Ability,
-        other_dimension(metric),
-    ]
-}
-
 pub fn effective_group(scope: &Scope, metric: ScopeMetric, wanted: Dimension) -> Dimension {
     if !narrowed(scope, wanted) {
         return wanted;
     }
-    order(metric)
-        .into_iter()
+    metric
+        .groupings()
+        .iter()
+        .copied()
         .find(|d| !narrowed(scope, *d))
         .unwrap_or(wanted)
 }
 
-fn key_of(fight: &Fight, cell: &Cell, dimension: Dimension) -> RowKey {
+/// The dimensions a row of `group` can still be split by.
+pub(crate) fn side_dimensions(
+    scope: &Scope,
+    metric: ScopeMetric,
+    group: Dimension,
+) -> Vec<Dimension> {
+    metric
+        .groupings()
+        .iter()
+        .copied()
+        .filter(|d| *d != group && !narrowed(scope, *d))
+        .collect()
+}
+
+pub(crate) fn key_of(fight: &Fight, cell: &Cell, dimension: Dimension) -> RowKey {
     match dimension {
         Dimension::Source => RowKey::Unit(cell.source.grouped(fight)),
         Dimension::Target => RowKey::Unit(cell.target.grouped(fight)),
@@ -173,10 +165,7 @@ pub fn breakdown(
     wanted: Dimension,
 ) -> Breakdown {
     let group = effective_group(scope, metric, wanted);
-    let side: Vec<Dimension> = order(metric)
-        .into_iter()
-        .filter(|d| *d != group && !narrowed(scope, *d))
-        .collect();
+    let side = side_dimensions(scope, metric, group);
     let all = cells(fight, filter, scope.perspective, metric);
     let mut total = 0;
     let mut buckets: HashMap<RowKey, Vec<&Cell>> = HashMap::new();

@@ -2,7 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use crate::actors::{ActorId, NOBODY};
 use crate::breakdown::Dimension;
-use crate::cells::{Cell, CellKind, ScopeMetric, cells, in_scope};
+use crate::cells::{Cell, ScopeMetric, cells, in_scope};
 use crate::fight::{EventKind, Fight, SpellId};
 use crate::filter::ReportFilter;
 use crate::links::{SpellKey, spell_key};
@@ -127,7 +127,7 @@ pub fn filter_options(
     let wanted: Vec<&Cell> = all
         .iter()
         .filter(|c| in_scope(&open, fight, c))
-        .filter(|c| dimension != Dimension::Ability || c.kind != CellKind::Unmatched)
+        .filter(|c| c.names(dimension))
         .collect();
     let mut amounts: HashMap<OptionValue, i64> = HashMap::new();
     let mut instances: HashMap<String, BTreeSet<ActorId>> = HashMap::new();

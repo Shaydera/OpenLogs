@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::actors::{ActorKind, NOBODY};
+use crate::breakdown::Dimension;
 use crate::fight::{Event, EventKind, Fight, NO_SPELL, SpellId};
 use crate::filter::{Attribution, ReportFilter};
 use crate::reports::taken::taken_amount;
@@ -12,6 +13,34 @@ pub enum ScopeMetric {
     DamageDone,
     Healing,
     DamageTaken,
+}
+
+impl ScopeMetric {
+    /// The dimension that holds the perspective's side.
+    pub fn own(self) -> Dimension {
+        match self {
+            ScopeMetric::DamageTaken => Dimension::Target,
+            ScopeMetric::DamageDone | ScopeMetric::Healing => Dimension::Source,
+        }
+    }
+
+    /// The dimension that holds the side the perspective faces; `None` when the metric has none.
+    pub fn other(self) -> Option<Dimension> {
+        Some(match self.own() {
+            Dimension::Target => Dimension::Source,
+            _ => Dimension::Target,
+        })
+    }
+
+    /// The row groupings in fallback order: own side, ability, other side.
+    pub fn groupings(self) -> &'static [Dimension] {
+        match self {
+            ScopeMetric::DamageTaken => &[Dimension::Target, Dimension::Ability, Dimension::Source],
+            ScopeMetric::DamageDone | ScopeMetric::Healing => {
+                &[Dimension::Source, Dimension::Ability, Dimension::Target]
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -36,10 +65,25 @@ pub struct Cell {
     pub crits: u32,
 }
 
-/// Unmatched support is booked under `NO_SPELL` like melee, so no ability selection holds it.
+impl Cell {
+    /// Unmatched support is booked under `NO_SPELL` like melee but belongs to no ability.
+    pub(crate) fn ability(&self) -> Option<SpellId> {
+        (self.kind != CellKind::Unmatched).then_some(self.spell)
+    }
+
+    /// Whether the log names the cell's part in `dimension`.
+    pub(crate) fn names(&self, dimension: Dimension) -> bool {
+        dimension != Dimension::Ability || self.ability().is_some()
+    }
+}
+
 pub(crate) fn in_scope(scope: &Scope, fight: &Fight, cell: &Cell) -> bool {
-    scope.wants(fight, &cell.source, cell.spell, &cell.target)
-        && (cell.kind != CellKind::Unmatched || scope.ability.is_empty())
+    scope.accepts(
+        fight,
+        Some(&cell.source),
+        cell.ability(),
+        Some(&cell.target),
+    )
 }
 
 type Key = (UnitRef, SpellId, CellKind, UnitRef);

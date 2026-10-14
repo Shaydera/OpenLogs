@@ -34,7 +34,7 @@ import type {
 } from './api/types';
 import { type GameDataManifest, gameDataManifest } from './gameData';
 import { t } from './i18n/i18n';
-import { ownDimension } from './scopeSides';
+import { type FilterTab, isFilterTab, SIDES } from './scopeSides';
 import { readStored, writeStored } from './storage';
 import { type ThemeMode, type ThemeName, readTheme, readThemeMode, storeTheme, storeThemeMode } from './theme';
 
@@ -64,12 +64,17 @@ interface Filters {
 }
 const EMPTY_FILTERS: Filters = { perspective: 'friendly', own: [], other: [], ability: [] };
 /** Tabs without filters map the roles like Damage Done. */
-const sidesOf = (tab: FightTab): MetricTab => (isMetricTab(tab) ? tab : 'damage');
+const sidesOf = (tab: FightTab) => SIDES[isFilterTab(tab) ? tab : 'damage'];
+const NONE: UnitRef[] = [];
 
 function scopeOf({ perspective, own, other, ability }: Filters, tab: FightTab): Scope {
-  const [source, target] = ownDimension(sidesOf(tab)) === 'source' ? [own, other] : [other, own];
-  return { perspective, source, target, ability };
+  const sides = sidesOf(tab);
+  const unit = (dimension: 'source' | 'target') => (sides.own === dimension ? own : sides.other === dimension ? other : NONE);
+  return { perspective, source: unit('source'), target: unit('target'), ability };
 }
+
+/** The tab's grouping: the user's choice, else the tab's default. */
+export const groupOf = (grouping: Partial<Record<FilterTab, Dimension>>, tab: FilterTab): Dimension => grouping[tab] ?? SIDES[tab].rows[0];
 
 /** The scope of `state`'s filters and tab; the current object while it still matches. */
 function derivedScope(state: State): Scope {
@@ -139,7 +144,8 @@ interface State {
   filters: Filters;
   /** The filters as the core scope of the current tab; the same object until one of them or the tab's sides change. */
   scope: Scope;
-  grouping: Record<MetricTab, Dimension>;
+  /** The groupings the user chose per tab. */
+  grouping: Partial<Record<FilterTab, Dimension>>;
   breakdown: Breakdown | null;
   recent: RecentLog[];
   log: LogView | null;
@@ -250,7 +256,7 @@ export function initialState(): State {
   return {
     filters: EMPTY_FILTERS,
     scope: scopeOf(EMPTY_FILTERS, 'overview'),
-    grouping: { damage: 'source', healing: 'source', taken: 'target' },
+    grouping: {},
     breakdown: null,
     recent: [],
     log: null,
@@ -363,7 +369,7 @@ async function loadReport(get: () => State & Actions, set: SetState) {
     const metricTab = isMetricTab(tab) && details.length === 0 ? tab : null;
     const [report, breakdown] = await Promise.all([
       fetchReport(log.id, view.fightIndex, tab, details[details.length - 1], auraScope, filter),
-      metricTab ? api.breakdownReport(log.id, view.fightIndex, filter, scope, METRIC_OF[metricTab], grouping[metricTab]) : Promise.resolve(null),
+      metricTab ? api.breakdownReport(log.id, view.fightIndex, filter, scope, METRIC_OF[metricTab], groupOf(grouping, metricTab)) : Promise.resolve(null),
     ]);
     if (request === reportRequest) {
       // Pin the enemy that the empty "Enemies" entry resolved to, so range changes keep it.
@@ -498,7 +504,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   },
   async select(dimension, value) {
     const { filters, tab } = get();
-    const role = dimension === 'ability' ? 'ability' : dimension === ownDimension(sidesOf(tab)) ? 'own' : 'other';
+    const role = dimension === 'ability' ? 'ability' : dimension === sidesOf(tab).own ? 'own' : 'other';
     set({ filters: { ...filters, [role]: value === null ? [] : [value] } as Filters, focusRequest: null });
     await loadReport(get, set);
   },
@@ -508,7 +514,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   },
   async setGrouping(dimension) {
     const { tab } = get();
-    if (!isMetricTab(tab) || get().grouping[tab] === dimension) return;
+    if (!isFilterTab(tab) || groupOf(get().grouping, tab) === dimension) return;
     set({ grouping: { ...get().grouping, [tab]: dimension } });
     await loadReport(get, set);
   },

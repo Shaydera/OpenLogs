@@ -604,7 +604,9 @@ describe('view filters', () => {
     await useApp.getState().setTab('damage');
     await useApp.getState().setGrouping('ability');
     await useApp.getState().setTab('taken');
-    expect(useApp.getState().grouping).toEqual({ damage: 'ability', healing: 'source', taken: 'target' });
+    expect(vi.mocked(api.breakdownReport).mock.calls.at(-1)![5]).toBe('target');
+    await useApp.getState().setTab('damage');
+    expect(vi.mocked(api.breakdownReport).mock.calls.at(-1)![5]).toBe('ability');
   });
 
   it('drops the breakdown when the next tab fails to load', async () => {

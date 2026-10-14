@@ -321,6 +321,7 @@ export const en = {
   'scope.perspective': 'Perspective',
   'scope.friendlies': 'Friendlies',
   'scope.enemies': 'Enemies',
+  'scope.overviewFriendlies': 'The Overview shows friendlies only',
   'scope.allFriendlies': 'All friendlies',
   'scope.allEnemies': 'All enemies',
   'scope.allSources': 'All sources',

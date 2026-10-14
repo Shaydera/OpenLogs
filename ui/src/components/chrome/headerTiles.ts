@@ -1,7 +1,7 @@
 import type { AuraScope, Breakdown, FightRow, Kpis, QuickOverview, Scope } from '../../api/types';
 import { formatAmount, formatCpm, formatDuration, formatEventTime, formatInteger, formatScaled, formatShare } from '../../i18n/format';
 import { type MessageKey, t } from '../../i18n/i18n';
-import { ownDimension } from '../../scopeSides';
+import { SIDES } from '../../scopeSides';
 import type { FightTab, MetricTab, ReportData, TimeRange } from '../../store';
 import { rowLabel } from '../filters/labels';
 import type { KpiTone } from '../Kpi';
@@ -145,7 +145,7 @@ const RATE_LABEL: Record<MetricTab, MessageKey> = { damage: 'report.dps', healin
 /** A filtered metric tab: the scope's total and rate, its top row and row count under the effective grouping. */
 function breakdownTiles(tab: MetricTab, input: HeaderInput): HeaderTile[] {
   const breakdown = input.reportLoading || input.reportFailed ? null : input.breakdown;
-  const group = breakdown?.group ?? ownDimension(tab);
+  const group = breakdown?.group ?? SIDES[tab].own;
   const labels = [t(TOTAL_LABEL[tab]), t(RATE_LABEL[tab]), t(`kpi.top.${group}`), t(`breakdown.split.${group}`)];
   if (!breakdown) return labels.map(pendingTile);
   const top = breakdown.rows[0];

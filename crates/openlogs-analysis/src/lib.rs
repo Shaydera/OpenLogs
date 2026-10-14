@@ -33,7 +33,6 @@ pub use aura_report::{AuraRow, AuraScope, AuraTarget, auras_report};
 pub use auras::{AuraInterval, aura_intervals, union_ms};
 pub use breakdown::{
     Breakdown, BreakdownRow, Dimension, GroupedRow, RowKey, Split, breakdown, effective_group,
-    other_dimension, own_dimension,
 };
 pub use casts::{CastsReport, PlayerCasts, SpellCasts, casts_report};
 pub use cells::{Cell, CellKind, ScopeMetric, cells};
@@ -75,7 +74,7 @@ pub use resources::{
     PlayerResources, PowerTrack, RESOURCE_STEP_MS, ResourcesReport, resources_report,
 };
 pub use run_result::{BossProgress, RunResult, run_result};
-pub use scope::{AbilityRef, Scope, Side, UnitRef, unit_of};
+pub use scope::{AbilityRef, Scope, Side, UnitRef, side_of, unit_of};
 pub use targets::{
     EnemyGroup, TargetDetail, UnitLife, WAVE_GAP_MS, Wave, enemy_groups, target_detail,
 };
