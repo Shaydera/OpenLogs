@@ -31,6 +31,21 @@ pub struct Fight {
     pub broken_lines: u64,
     /// The boss encounters of a run in log order; empty for a boss pull.
     pub encounters: Vec<RunEncounter>,
+    /// The texts of [`FailReason::Other`], in first-seen order.
+    pub fail_reasons: Vec<String>,
+}
+
+impl Fight {
+    /// The reason text as the log wrote it.
+    pub fn fail_reason(&self, reason: FailReason) -> &str {
+        match reason {
+            FailReason::Interrupted => FailReason::INTERRUPTED,
+            FailReason::Other(index) => self
+                .fail_reasons
+                .get(usize::from(index))
+                .map_or("", String::as_str),
+        }
+    }
 }
 
 /// What a [`Fight`] covers.
@@ -108,7 +123,10 @@ pub enum EventKind {
     Energize(Energize),
     CastStart,
     CastSuccess,
-    CastFailed,
+    /// Logged only for the logging player.
+    CastFailed {
+        reason: FailReason,
+    },
     Aura {
         action: AuraAction,
         aura_type: AuraType,
@@ -143,6 +161,19 @@ pub enum EventKind {
     },
     Destroyed,
     PartyKill,
+}
+
+/// Why a cast failed. "Interrupted" is a real interrupted cast; every other reason ("Not yet
+/// recovered", "Out of range" …) is a rejected input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailReason {
+    Interrupted,
+    /// An index into [`Fight::fail_reasons`].
+    Other(u16),
+}
+
+impl FailReason {
+    pub const INTERRUPTED: &'static str = "Interrupted";
 }
 
 /// Damage as logged. `amount` includes `overkill`; on support events (`supporter` set)

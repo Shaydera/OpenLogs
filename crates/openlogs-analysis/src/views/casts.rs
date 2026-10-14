@@ -1,0 +1,468 @@
+use std::collections::{HashMap, HashSet};
+
+use openlogs_gamedata::Curated;
+
+use crate::actors::{ActorId, ActorKind, NOBODY};
+use crate::casts::follow_up_casts;
+use crate::cells::{Cell, CellKind, in_scope};
+use crate::fight::{Event, EventKind, FailReason, Fight, SpellId};
+use crate::filter::ReportFilter;
+use crate::links::{SpellKey, spell_key};
+use crate::scope::{Scope, Side, side_of, unit_of};
+use crate::views::names::log_name;
+use crate::views::{CastOutcome, EventRow, RowType, Sink, Summary, ViewOptions};
+
+/// A `SPELL_CAST_FAILED` "Interrupted" and a `SPELL_INTERRUPT` of the same cast are logged this
+/// close together; they close one cast.
+const SAME_INTERRUPT_MS: i32 = 1_000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CastKind {
+    /// A success without a begin cast; channels too, the log has no channel event.
+    Instant,
+    CastTime,
+    Empowered,
+    Interrupted,
+    /// A begin cast nothing in the log closes.
+    NoOutcome,
+    /// A failed cast with another reason than "Interrupted".
+    Rejected,
+}
+
+/// One cast as the log tells it: its begin, success and close lines paired.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct CastItem {
+    pub kind: CastKind,
+    pub caster: ActorId,
+    pub spell: SpellId,
+    /// The success's target, else the begin's.
+    pub target: ActorId,
+    pub start: i32,
+    /// When it completed, was interrupted or released; a cast without an outcome ends at the
+    /// caster's next begin cast.
+    pub end: Option<i32>,
+    pub begin: Option<usize>,
+    pub success: Option<usize>,
+    /// The first line that closed it: an empower end, a failed cast or an interrupt.
+    pub close: Option<usize>,
+    /// Further lines of the same close (an interrupt logged both ways).
+    pub also: Vec<usize>,
+    pub stage: Option<u32>,
+    pub reason: Option<FailReason>,
+    /// Who interrupted it, with which spell.
+    pub by: Option<(ActorId, SpellId)>,
+    /// Further `SPELL_CAST_SUCCESS` IDs of the same press.
+    pub follow_ups: Vec<usize>,
+}
+
+impl CastItem {
+    fn new(kind: CastKind, event: &Event, caster: ActorId, spell: SpellId) -> Self {
+        Self {
+            kind,
+            caster,
+            spell,
+            target: event.target,
+            start: event.t,
+            end: None,
+            begin: None,
+            success: None,
+            close: None,
+            also: Vec::new(),
+            stage: None,
+            reason: None,
+            by: None,
+            follow_ups: Vec::new(),
+        }
+    }
+
+    /// The line the side and scope are read from.
+    pub fn anchor(&self) -> usize {
+        self.success.or(self.begin).or(self.close).unwrap_or(0)
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Open {
+    Begin,
+    Empower,
+}
+
+/// Every cast of the fight with its begin, success and close lines. Same-timestamp lines keep
+/// their log order, so an empower start and its success pair as one cast.
+pub(crate) fn cast_items(
+    fight: &Fight,
+    curated: &Curated,
+    follow_ups: &HashSet<usize>,
+    casters: impl Fn(ActorId) -> bool,
+) -> Vec<CastItem> {
+    let mut items: Vec<CastItem> = Vec::new();
+    let mut open: HashMap<(ActorId, SpellId), (Open, usize)> = HashMap::new();
+    let mut interrupted: HashMap<(ActorId, SpellId), usize> = HashMap::new();
+    let mut last_by_name: HashMap<(ActorId, SpellKey<'_>), usize> = HashMap::new();
+    for (index, event) in fight.events.iter().enumerate() {
+        let caster = match event.kind {
+            EventKind::Interrupt { .. } => event.target,
+            EventKind::CastStart
+            | EventKind::EmpowerStart
+            | EventKind::CastSuccess
+            | EventKind::EmpowerEnd { .. }
+            | EventKind::EmpowerInterrupt { .. }
+            | EventKind::CastFailed { .. } => event.source,
+            _ => continue,
+        };
+        if !casters(caster) {
+            continue;
+        }
+        let key = (event.source, event.spell);
+        match event.kind {
+            EventKind::CastStart | EventKind::EmpowerStart => {
+                if let Some((_, item)) = open.remove(&key) {
+                    items[item].kind = CastKind::NoOutcome;
+                }
+                let empower = matches!(event.kind, EventKind::EmpowerStart);
+                let kind = if empower {
+                    CastKind::Empowered
+                } else {
+                    CastKind::CastTime
+                };
+                let mut item = CastItem::new(kind, event, event.source, event.spell);
+                item.begin = Some(index);
+                open.insert(
+                    key,
+                    (
+                        if empower { Open::Empower } else { Open::Begin },
+                        items.len(),
+                    ),
+                );
+                items.push(item);
+            }
+            EventKind::CastSuccess => {
+                if follow_ups.contains(&index) {
+                    let name = (event.source, spell_key(fight, event.spell));
+                    if let Some(&press) = last_by_name.get(&name) {
+                        items[press].follow_ups.push(index);
+                        continue;
+                    }
+                }
+                let item = match open.get(&key).copied() {
+                    Some((Open::Empower, item)) if items[item].success.is_none() => item,
+                    Some((Open::Begin, item)) => {
+                        open.remove(&key);
+                        items[item].end = Some(event.t);
+                        item
+                    }
+                    _ => {
+                        items.push(CastItem::new(
+                            CastKind::Instant,
+                            event,
+                            event.source,
+                            event.spell,
+                        ));
+                        items.len() - 1
+                    }
+                };
+                items[item].success = Some(index);
+                if event.target != NOBODY {
+                    items[item].target = event.target;
+                }
+                if !curated.is_proc(event.spell) {
+                    last_by_name.insert((event.source, spell_key(fight, event.spell)), item);
+                }
+            }
+            EventKind::EmpowerEnd { stage } => {
+                let item = match open.remove(&key) {
+                    Some((_, item)) => item,
+                    None => {
+                        items.push(CastItem::new(
+                            CastKind::Empowered,
+                            event,
+                            event.source,
+                            event.spell,
+                        ));
+                        items.len() - 1
+                    }
+                };
+                let item = &mut items[item];
+                item.kind = CastKind::Empowered;
+                item.stage = Some(stage);
+                item.end = Some(event.t);
+                item.close = Some(index);
+            }
+            EventKind::EmpowerInterrupt { stage } => {
+                let item = close_interrupted(
+                    &mut items,
+                    &mut open,
+                    &mut interrupted,
+                    index,
+                    event,
+                    key,
+                    None,
+                );
+                items[item].stage.get_or_insert(stage);
+            }
+            EventKind::CastFailed {
+                reason: FailReason::Interrupted,
+            } => {
+                close_interrupted(
+                    &mut items,
+                    &mut open,
+                    &mut interrupted,
+                    index,
+                    event,
+                    key,
+                    None,
+                );
+            }
+            EventKind::CastFailed { reason } => {
+                let mut item = CastItem::new(CastKind::Rejected, event, event.source, event.spell);
+                item.close = Some(index);
+                item.reason = Some(reason);
+                items.push(item);
+            }
+            EventKind::Interrupt { interrupted: spell } => {
+                close_interrupted(
+                    &mut items,
+                    &mut open,
+                    &mut interrupted,
+                    index,
+                    event,
+                    (event.target, spell),
+                    Some((event.source, event.spell)),
+                );
+            }
+            _ => {}
+        }
+    }
+    for (_, item) in open.into_values() {
+        items[item].kind = CastKind::NoOutcome;
+    }
+    let mut next_begin: HashMap<ActorId, i32> = HashMap::new();
+    for item in items.iter_mut().rev() {
+        if item.kind == CastKind::NoOutcome {
+            item.end = next_begin.get(&item.caster).copied();
+        }
+        if item.begin.is_some() {
+            next_begin.insert(item.caster, item.start);
+        }
+    }
+    items
+}
+
+fn close_interrupted(
+    items: &mut Vec<CastItem>,
+    open: &mut HashMap<(ActorId, SpellId), (Open, usize)>,
+    interrupted: &mut HashMap<(ActorId, SpellId), usize>,
+    index: usize,
+    event: &Event,
+    key: (ActorId, SpellId),
+    by: Option<(ActorId, SpellId)>,
+) -> usize {
+    let item = match open.remove(&key) {
+        Some((_, item)) => item,
+        None => match interrupted.get(&key).copied() {
+            Some(item)
+                if items[item]
+                    .end
+                    .is_some_and(|end| event.t - end <= SAME_INTERRUPT_MS) =>
+            {
+                items[item].also.push(index);
+                if items[item].by.is_none() {
+                    items[item].by = by;
+                }
+                return item;
+            }
+            _ => {
+                let mut item = CastItem::new(CastKind::Interrupted, event, key.0, key.1);
+                if by.is_some() {
+                    item.target = NOBODY;
+                }
+                items.push(item);
+                items.len() - 1
+            }
+        },
+    };
+    let item_ref = &mut items[item];
+    item_ref.kind = CastKind::Interrupted;
+    item_ref.end = Some(event.t);
+    item_ref.close = Some(index);
+    item_ref.by = by;
+    interrupted.insert(key, item);
+    item
+}
+
+/// The units whose casts `side` counts: players (not their pets) for friendlies, units no player
+/// owns for enemies.
+pub(crate) fn casters(fight: &Fight, side: Side) -> impl Fn(ActorId) -> bool + '_ {
+    move |actor| match side {
+        Side::Friendly => fight.actors.get(actor).kind == ActorKind::Player,
+        Side::Enemy => fight.actors.credited_player(actor).is_none(),
+    }
+}
+
+/// Whether `side` owns the cast: players for friendlies (their pets' casts are not counted),
+/// units hostile at the cast for enemies.
+pub(crate) fn casts_of(fight: &Fight, side: Side, item: &CastItem) -> bool {
+    match side {
+        Side::Friendly => fight.actors.get(item.caster).kind == ActorKind::Player,
+        Side::Enemy => {
+            let event = &fight.events[item.anchor()];
+            let hostile = if event.source == item.caster {
+                event.source_hostile
+            } else {
+                event.target_hostile
+            };
+            side_of(fight, item.caster, hostile) == Some(Side::Enemy)
+        }
+    }
+}
+
+/// The casts of `side` in the scope, and the success times of the procs Hide procs leaves out.
+pub(crate) fn scoped_items(
+    fight: &Fight,
+    curated: &Curated,
+    scope: &Scope,
+    hide_procs: bool,
+) -> (Vec<CastItem>, Vec<i32>) {
+    let side = scope.perspective;
+    let follow_ups = follow_up_casts(fight, curated, casters(fight, side));
+    let hides = |item: &CastItem| {
+        hide_procs
+            && scope.ability.is_empty()
+            && fight.actors.get(item.caster).kind == ActorKind::Player
+            && curated.is_proc(item.spell)
+    };
+    let mut hidden = Vec::new();
+    let mut items = Vec::new();
+    for item in cast_items(fight, curated, &follow_ups, casters(fight, side)) {
+        if !(casts_of(fight, side, &item) && item_in_scope(fight, scope, &item)) {
+            continue;
+        }
+        if hides(&item) {
+            hidden.extend(item.success.map(|i| fight.events[i].t));
+        } else {
+            items.push(item);
+        }
+    }
+    (items, hidden)
+}
+
+pub(crate) fn item_in_scope(fight: &Fight, scope: &Scope, item: &CastItem) -> bool {
+    scope.selects_all()
+        || in_scope(
+            scope,
+            fight,
+            &Cell {
+                source: unit_of(fight, item.caster),
+                spell: item.spell,
+                kind: CellKind::Own,
+                target: unit_of(fight, scope_target(fight, item)),
+                amount: 1,
+                absorbed: 0,
+                hits: 1,
+                crits: 0,
+            },
+        )
+}
+
+/// The target the table books the cast under: its success line's, else its begin's.
+fn scope_target(fight: &Fight, item: &CastItem) -> ActorId {
+    item.success
+        .or(item.begin)
+        .map_or(item.target, |line| fight.events[line].target)
+}
+
+/// Casts rows: every press, its follow-up IDs, interrupted casts and, with their toggles, begin
+/// casts with their outcome and rejected inputs.
+pub(crate) fn rows(
+    fight: &Fight,
+    curated: &Curated,
+    filter: &ReportFilter,
+    scope: &Scope,
+    options: &ViewOptions,
+    sink: &mut Sink,
+) -> Summary {
+    let (items, hidden) = scoped_items(fight, curated, scope, options.hide_procs);
+    let mut rows: Vec<(usize, &CastItem, RowType)> = Vec::new();
+    for item in &items {
+        if let (Some(begin), true) = (item.begin, options.begin_casts) {
+            rows.push((begin, item, RowType::BeginCast));
+        }
+        if let Some(success) = item.success {
+            rows.push((success, item, RowType::Cast));
+        }
+        rows.extend(item.follow_ups.iter().map(|&i| (i, item, RowType::Cast)));
+        match item.kind {
+            CastKind::Interrupted => {
+                rows.extend(item.close.map(|i| (i, item, RowType::Interrupted)))
+            }
+            CastKind::Rejected if options.rejected => {
+                rows.extend(item.close.map(|i| (i, item, RowType::Rejected)))
+            }
+            _ => {}
+        }
+    }
+    rows.sort_by_key(|(index, _, _)| *index);
+    for (index, item, row_type) in rows {
+        let t = fight.events[index].t;
+        if filter.contains(t) {
+            sink.row(t, || cast_row(fight, index, item, row_type));
+        }
+    }
+    Summary {
+        amount: None,
+        unlisted_support: 0,
+        hidden_procs: hidden.iter().filter(|&&t| filter.contains(t)).count() as u32,
+    }
+}
+
+fn cast_row(fight: &Fight, index: usize, item: &CastItem, row_type: RowType) -> EventRow {
+    let event = &fight.events[index];
+    let mut row = EventRow::new(
+        index,
+        event.t,
+        row_type,
+        log_name(event),
+        (item.caster, item.spell, item.target),
+    );
+    let begun = item.begin.map(|_| item.start);
+    match row_type {
+        RowType::BeginCast => {
+            row.outcome = Some(match item.kind {
+                CastKind::CastTime => CastOutcome::Completed,
+                CastKind::Empowered => CastOutcome::Released,
+                CastKind::Interrupted => CastOutcome::Interrupted,
+                _ => CastOutcome::NoOutcome,
+            });
+            if row.outcome != Some(CastOutcome::NoOutcome) {
+                row.duration_ms = item.end.map(|end| end - item.start);
+            }
+            row.stage = item.stage;
+        }
+        RowType::Cast if Some(index) != item.success => {
+            row.press_ms = item.success.map(|i| fight.events[i].t);
+            row.spell = event.spell;
+        }
+        RowType::Cast => {
+            row.stage = item.stage;
+            row.duration_ms = if is_empower(fight, item) {
+                item.stage.and(item.end).map(|end| end - item.start)
+            } else {
+                begun.map(|start| event.t - start)
+            };
+        }
+        RowType::Interrupted => {
+            row.duration_ms = begun.map(|start| event.t - start);
+            row.stage = item.stage;
+            row.by = item.by;
+        }
+        _ => row.reason = item.reason,
+    }
+    row
+}
+
+fn is_empower(fight: &Fight, item: &CastItem) -> bool {
+    item.stage.is_some()
+        || item
+            .begin
+            .is_some_and(|begin| matches!(fight.events[begin].kind, EventKind::EmpowerStart))
+}

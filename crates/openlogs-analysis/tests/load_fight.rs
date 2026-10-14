@@ -1,5 +1,6 @@
 use openlogs_analysis::{
-    ActorKind, Damage, DamageVia, EventKind, NO_SPELL, UnitHp, load_fight, load_fight_slice,
+    ActorKind, Damage, DamageVia, EventKind, FailReason, NO_SPELL, UnitHp, load_fight,
+    load_fight_slice,
 };
 use openlogs_index::{Outcome, index_bytes};
 
@@ -130,6 +131,49 @@ fn hostility_is_recorded_per_event() {
         .unwrap();
     assert!(hit.target_hostile, "it was hostile when it was hit");
     assert!(!hit.source_hostile);
+}
+
+const CAST_FAILED_LOG: &str = concat!(
+    "10/7/2026 19:03:02.0762  ENCOUNTER_START,3492,\"Ula'tek\",15,23,3004
+",
+    "10/7/2026 19:03:05.2742  SPELL_CAST_FAILED,Player-3703-0A91F445,\"Evocadera-Frostwolf-EU\",0x511,0x80000000,0000000000000000,nil,0x80000000,0x80000000,5143,\"Arcane Missiles\",0x40,\"Not yet recovered\"
+",
+    "10/7/2026 19:03:11.0922  SPELL_CAST_FAILED,Player-3703-0A91F445,\"Evocadera-Frostwolf-EU\",0x511,0x80000000,0000000000000000,nil,0x80000000,0x80000000,30451,\"Arcane Blast\",0x40,\"Interrupted\"
+",
+    "10/7/2026 19:03:12.0000  SPELL_CAST_FAILED,Player-3703-0A91F445,\"Evocadera-Frostwolf-EU\",0x511,0x80000000,0000000000000000,nil,0x80000000,0x80000000,30451,\"Arcane Blast\",0x40,\"Out of range\"
+",
+    "10/7/2026 19:03:13.0000  SPELL_CAST_FAILED,Player-3703-0A91F445,\"Evocadera-Frostwolf-EU\",0x511,0x80000000,0000000000000000,nil,0x80000000,0x80000000,5143,\"Arcane Missiles\",0x40,\"Not yet recovered\"
+",
+    "10/7/2026 19:04:02.0762  ENCOUNTER_END,3492,\"Ula'tek\",15,23,0,60000
+",
+);
+
+#[test]
+fn a_failed_cast_keeps_its_reason() {
+    let index = index_bytes(CAST_FAILED_LOG.as_bytes());
+    let fight = load_fight(CAST_FAILED_LOG.as_bytes(), &index.fights[0]);
+    let reasons: Vec<FailReason> = fight
+        .events
+        .iter()
+        .filter_map(|e| match e.kind {
+            EventKind::CastFailed { reason } => Some(reason),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(reasons.len(), 4);
+    assert_eq!(reasons[1], FailReason::Interrupted);
+    assert_eq!(
+        reasons
+            .iter()
+            .map(|&r| fight.fail_reason(r))
+            .collect::<Vec<_>>(),
+        [
+            "Not yet recovered",
+            "Interrupted",
+            "Out of range",
+            "Not yet recovered"
+        ]
+    );
 }
 
 #[test]

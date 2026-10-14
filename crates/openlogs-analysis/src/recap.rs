@@ -5,7 +5,7 @@ use openlogs_gamedata::{ConsumableKind, Curated};
 use crate::actors::{ActorId, NOBODY};
 use crate::auras::aura_intervals;
 use crate::deaths::{Death, deaths, hp_pct};
-use crate::fight::{AuraType, DamageVia, EventKind, Fight, SpellId};
+use crate::fight::{AuraType, DamageVia, Event, EventKind, Fight, SpellId};
 use crate::filter::ReportFilter;
 use crate::reports::taken::taken_amount;
 use crate::usage::{
@@ -77,90 +77,18 @@ pub(crate) fn death_recaps_where(
     let consumables = consumable_uses(fight, curated);
     let defensives = defensive_uses(fight, curated);
     let auras = aura_intervals(fight);
-    // The player credited for a pet, guardian or totem; players and enemies have none.
-    let owner_of = |source: ActorId| {
-        fight
-            .actors
-            .credited_player(source)
-            .filter(|&player| player != source)
-            .unwrap_or(NOBODY)
-    };
     all.iter()
         .enumerate()
         .filter(|(_, death)| filter.contains(death.t) && wanted(death))
         .map(|(index, death)| {
             let player = death.player;
-            let start = (death.t - RECAP_WINDOW_MS).max(0);
-            let first = fight.events.partition_point(|e| e.t < start);
-            let end = fight.events.partition_point(|e| e.t <= death.t);
             let mut events = Vec::new();
             let mut hp = Vec::new();
-            for event in &fight.events[first..end] {
-                let hp_pct = event
-                    .unit_hp
-                    .filter(|h| h.actor == player && h.max > 0)
-                    .map(hp_pct);
-                if let Some(pct) = hp_pct {
+            for event in &fight.events[recap_window(fight, death.t)] {
+                if let Some(pct) = player_hp(event, player) {
                     hp.push((event.t, pct));
                 }
-                if event.target != player {
-                    continue;
-                }
-                let recap = match event.kind {
-                    EventKind::Heal(heal) if heal.supporter == NOBODY => Some(RecapEvent {
-                        t: event.t,
-                        spell: event.spell,
-                        source: event.source,
-                        kind: RecapKind::Heal,
-                        amount: heal.amount.saturating_sub(heal.overheal),
-                        absorbed: 0,
-                        excess: heal.overheal,
-                        hp_pct,
-                        environmental: false,
-                        periodic: heal.periodic,
-                        source_owner: owner_of(event.source),
-                    }),
-                    EventKind::Absorbed(absorbed) if absorbed.supporter == NOBODY => {
-                        Some(RecapEvent {
-                            t: event.t,
-                            spell: absorbed.absorb_spell,
-                            source: absorbed.absorber,
-                            kind: RecapKind::Absorb,
-                            amount: absorbed.amount,
-                            absorbed: 0,
-                            excess: 0,
-                            hp_pct,
-                            environmental: false,
-                            periodic: false,
-                            source_owner: owner_of(absorbed.absorber),
-                        })
-                    }
-                    _ => taken_amount(event).map(|(amount, absorbed)| RecapEvent {
-                        t: event.t,
-                        spell: event.spell,
-                        source: event.source,
-                        kind: RecapKind::Damage,
-                        amount,
-                        absorbed,
-                        excess: match event.kind {
-                            EventKind::Damage(damage) => damage.overkill,
-                            _ => 0,
-                        },
-                        hp_pct,
-                        environmental: match event.kind {
-                            EventKind::Damage(damage) => damage.via == DamageVia::Environmental,
-                            EventKind::Missed(missed) => missed.via == DamageVia::Environmental,
-                            _ => false,
-                        },
-                        periodic: match event.kind {
-                            EventKind::Damage(damage) => damage.via == DamageVia::Periodic,
-                            EventKind::Missed(missed) => missed.via == DamageVia::Periodic,
-                            _ => false,
-                        },
-                        source_owner: owner_of(event.source),
-                    }),
-                };
-                events.extend(recap);
+                events.extend(recap_event(fight, event, player));
             }
             // 12.x removes every buff with the lethal hit, a few ms before UNIT_DIED; look
             // at the buffs up just before that hit.
@@ -208,4 +136,87 @@ pub(crate) fn death_recaps_where(
             }
         })
         .collect()
+}
+
+/// The events of the recap window of a death at `t`.
+pub(crate) fn recap_window(fight: &Fight, t: i32) -> std::ops::Range<usize> {
+    let start = (t - RECAP_WINDOW_MS).max(0);
+    let first = fight.events.partition_point(|e| e.t < start);
+    let end = fight.events.partition_point(|e| e.t <= t);
+    first..end.max(first)
+}
+
+fn player_hp(event: &Event, player: ActorId) -> Option<f32> {
+    event
+        .unit_hp
+        .filter(|h| h.actor == player && h.max > 0)
+        .map(hp_pct)
+}
+
+/// The damage, heal or absorb on `player` a recap lists for `event`.
+pub(crate) fn recap_event(fight: &Fight, event: &Event, player: ActorId) -> Option<RecapEvent> {
+    if event.target != player {
+        return None;
+    }
+    // The player credited for a pet, guardian or totem; players and enemies have none.
+    let owner_of = |source: ActorId| {
+        fight
+            .actors
+            .credited_player(source)
+            .filter(|&owner| owner != source)
+            .unwrap_or(NOBODY)
+    };
+    let hp_pct = player_hp(event, player);
+    match event.kind {
+        EventKind::Heal(heal) if heal.supporter == NOBODY => Some(RecapEvent {
+            t: event.t,
+            spell: event.spell,
+            source: event.source,
+            kind: RecapKind::Heal,
+            amount: heal.amount.saturating_sub(heal.overheal),
+            absorbed: 0,
+            excess: heal.overheal,
+            hp_pct,
+            environmental: false,
+            periodic: heal.periodic,
+            source_owner: owner_of(event.source),
+        }),
+        EventKind::Absorbed(absorbed) if absorbed.supporter == NOBODY => Some(RecapEvent {
+            t: event.t,
+            spell: absorbed.absorb_spell,
+            source: absorbed.absorber,
+            kind: RecapKind::Absorb,
+            amount: absorbed.amount,
+            absorbed: 0,
+            excess: 0,
+            hp_pct,
+            environmental: false,
+            periodic: false,
+            source_owner: owner_of(absorbed.absorber),
+        }),
+        _ => taken_amount(event).map(|(amount, absorbed)| RecapEvent {
+            t: event.t,
+            spell: event.spell,
+            source: event.source,
+            kind: RecapKind::Damage,
+            amount,
+            absorbed,
+            excess: match event.kind {
+                EventKind::Damage(damage) => damage.overkill,
+                _ => 0,
+            },
+            hp_pct,
+            environmental: match event.kind {
+                EventKind::Damage(damage) => damage.via == DamageVia::Environmental,
+                EventKind::Missed(missed) => missed.via == DamageVia::Environmental,
+                _ => false,
+            },
+            periodic: match event.kind {
+                EventKind::Damage(damage) => damage.via == DamageVia::Periodic,
+                EventKind::Missed(missed) => missed.via == DamageVia::Periodic,
+                _ => false,
+            },
+            source_owner: owner_of(event.source),
+        }),
+    }
 }

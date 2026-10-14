@@ -63,26 +63,29 @@ pub struct InterruptsReport {
 }
 
 /// An interrupt or dispel by `side` in the range, as a fact: the stopped spell is its ability.
-fn kicks<'a>(
+pub(crate) fn kicks<'a>(
     fight: &'a Fight,
     filter: &'a ReportFilter,
     side: Side,
-) -> impl Iterator<Item = (&'a Event, SpellId)> + 'a {
+) -> impl Iterator<Item = (usize, &'a Event, SpellId)> + 'a {
     fight
         .events
         .iter()
-        .filter(move |e| filter.contains(e.t))
-        .filter_map(|event| match event.kind {
-            EventKind::Interrupt { interrupted } => Some((event, interrupted)),
+        .enumerate()
+        .filter(move |(_, e)| filter.contains(e.t))
+        .filter_map(|(index, event)| match event.kind {
+            EventKind::Interrupt { interrupted } => Some((index, event, interrupted)),
             EventKind::Dispel { removed, .. } | EventKind::Stolen { removed, .. } => {
-                Some((event, removed))
+                Some((index, event, removed))
             }
             _ => None,
         })
-        .filter(move |(event, _)| side_of(fight, event.source, event.source_hostile) == Some(side))
+        .filter(move |(_, event, _)| {
+            side_of(fight, event.source, event.source_hostile) == Some(side)
+        })
 }
 
-fn cell_of(fight: &Fight, event: &Event, stopped: SpellId) -> Cell {
+pub(crate) fn cell_of(fight: &Fight, event: &Event, stopped: SpellId) -> Cell {
     Cell {
         source: unit_of(fight, event.source),
         spell: stopped,
@@ -96,7 +99,7 @@ fn cell_of(fight: &Fight, event: &Event, stopped: SpellId) -> Cell {
 }
 
 pub(crate) fn book_kicks(fight: &Fight, filter: &ReportFilter, side: Side, map: &mut Facts) {
-    for (event, stopped) in kicks(fight, filter, side) {
+    for (_, event, stopped) in kicks(fight, filter, side) {
         let cell = cell_of(fight, event, stopped);
         book(
             map,
@@ -170,7 +173,7 @@ pub fn interrupts_report(
     let mut interrupts = Vec::new();
     let mut dispels = Vec::new();
     let mut rows: HashMap<RowKey, (KickRow, HashMap<SpellId, u32>)> = HashMap::new();
-    for (event, stopped) in kicks(fight, filter, scope.perspective) {
+    for (_, event, stopped) in kicks(fight, filter, scope.perspective) {
         let cell = cell_of(fight, event, stopped);
         if !in_scope(scope, fight, &cell) {
             continue;

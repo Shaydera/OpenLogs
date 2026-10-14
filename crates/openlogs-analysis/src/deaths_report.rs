@@ -46,7 +46,10 @@ pub struct DeathsReport {
 }
 
 /// The killing blow's source and spell as the scope sees them; both unknown without a lethal hit.
-fn parts(fight: &Fight, killing_blow: Option<Hit>) -> (Option<UnitRef>, Option<SpellId>) {
+pub(crate) fn parts(
+    fight: &Fight,
+    killing_blow: Option<Hit>,
+) -> (Option<UnitRef>, Option<SpellId>) {
     match killing_blow {
         Some(hit) => (Some(unit_of(fight, hit.source)), Some(hit.spell)),
         None => (None, None),
@@ -55,7 +58,7 @@ fn parts(fight: &Fight, killing_blow: Option<Hit>) -> (Option<UnitRef>, Option<S
 
 /// Enemy deaths in the range, first death per unit. A boss killed on a kill pull has no death in
 /// the slice (its UNIT_DIED is logged after ENCOUNTER_END), so it dies at the pull's end.
-fn enemy_kills(fight: &Fight, filter: &ReportFilter) -> Vec<Kill> {
+pub(crate) fn enemy_kills(fight: &Fight, filter: &ReportFilter) -> Vec<Kill> {
     let first_hit: HashMap<ActorId, i32> = hits_by_unit(fight, |t| t >= 0, &Scope::default())
         .into_iter()
         .map(|(unit, (_, first, _))| (unit, first))

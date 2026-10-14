@@ -36,6 +36,7 @@ pub fn fight(actors: Actors, mut events: Vec<Event>) -> Fight {
         spells: BTreeMap::new(),
         broken_lines: 0,
         encounters: Vec::new(),
+        fail_reasons: Vec::new(),
     }
 }
 
