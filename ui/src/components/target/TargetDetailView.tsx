@@ -5,6 +5,7 @@ import { formatAmount, formatEventTime, formatInteger, formatMillions, formatSec
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { Facts } from '../detail/Facts';
+import { PageFilter } from '../detail/PageFilter';
 import { TimeAxis } from '../detail/TimeAxis';
 import { Kpi, KpiStrip } from '../Kpi';
 import { classColor, shortName } from '../overview/players';
@@ -91,6 +92,7 @@ export function TargetDetailView({ detail }: { detail: TargetDetail }) {
             />
           </div>
         </section>
+        <PageFilter dimensions={['source', 'ability']} />
         <KpiStrip label={t('target.kpis')}>
           <Kpi
             label={t('target.damageTaken')}
@@ -215,42 +217,45 @@ export function TargetDetailView({ detail }: { detail: TargetDetail }) {
               </div>
             </div>
           </section>
-          <section className="panel tpane" aria-labelledby="target-players-title">
-            <div className="panel-head panel-head-tight">
-              <h2 id="target-players-title" className="h2">
-                {t('target.byPlayer')}
-              </h2>
-            </div>
-            <div role="table" aria-label={t('target.byPlayer')}>
-              {detail.byPlayer.map((row) => {
-                const player = roster.get(row.player);
-                const color = classColor(player?.classToken ?? null);
-                return (
-                  <div key={row.player} className="bp-row" role="row">
-                    <span role="cell">
-                      <PlayerIcon player={player} size={18} />
-                    </span>
-                    <span role="cell" className="bp-name-cell">
-                      <button type="button" className="bp-name" style={{ color }} onClick={() => void openPlayer(row.player)}>
-                        {player ? shortName(player.name) : t('report.unknownPlayer')}
-                      </button>
-                    </span>
-                    <span role="cell">
-                      <span className="bar bar-md bp-bar" aria-hidden="true">
-                        <span className="bp-fill" style={{ width: `${(row.amount / topPlayer) * 100}%`, background: color }} />
+          {/* One selected source has no by-player block: the core sends none. */}
+          {detail.byPlayer.length > 0 && (
+            <section className="panel tpane" aria-labelledby="target-players-title">
+              <div className="panel-head panel-head-tight">
+                <h2 id="target-players-title" className="h2">
+                  {t('target.byPlayer')}
+                </h2>
+              </div>
+              <div role="table" aria-label={t('target.byPlayer')}>
+                {detail.byPlayer.map((row) => {
+                  const player = roster.get(row.player);
+                  const color = classColor(player?.classToken ?? null);
+                  return (
+                    <div key={row.player} className="bp-row" role="row">
+                      <span role="cell">
+                        <PlayerIcon player={player} size={18} />
                       </span>
-                    </span>
-                    <span role="cell" className="num bp-end">
-                      {formatMillions(row.amount)}
-                    </span>
-                    <span role="cell" className="num bp-end bp-share">
-                      {detail.damageTaken > 0 ? formatShare((row.amount / detail.damageTaken) * 100) : '—'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+                      <span role="cell" className="bp-name-cell">
+                        <button type="button" className="bp-name" style={{ color }} onClick={() => void openPlayer(row.player)}>
+                          {player ? shortName(player.name) : t('report.unknownPlayer')}
+                        </button>
+                      </span>
+                      <span role="cell">
+                        <span className="bar bar-md bp-bar" aria-hidden="true">
+                          <span className="bp-fill" style={{ width: `${(row.amount / topPlayer) * 100}%`, background: color }} />
+                        </span>
+                      </span>
+                      <span role="cell" className="num bp-end">
+                        {formatMillions(row.amount)}
+                      </span>
+                      <span role="cell" className="num bp-end bp-share">
+                        {detail.damageTaken > 0 ? formatShare((row.amount / detail.damageTaken) * 100) : '—'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </div>

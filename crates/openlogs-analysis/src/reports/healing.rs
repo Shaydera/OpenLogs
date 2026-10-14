@@ -5,9 +5,10 @@ use crate::fight::Fight;
 use crate::filter::{Attribution, ReportFilter};
 use crate::reports::{
     AbilityRow, AbilityTargets, BuffShare, PetNames, RowKind, Share, SupportAcc, SupportLedger,
-    SupportShare, TargetShare, credit_support, heal_target, healing_share, per_second,
-    sorted_by_amount, support_entry,
+    SupportShare, TargetShare, credit_support, heal_target, healing_share, keeps_own,
+    keeps_support, per_second, sorted_by_amount, support_entry,
 };
+use crate::scope::Scope;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerHealing {
@@ -57,6 +58,11 @@ struct Acc {
 }
 
 pub fn healing(fight: &Fight, filter: &ReportFilter) -> HealingReport {
+    healing_in(fight, filter, &Scope::default())
+}
+
+/// The report of the shares `scope` keeps; ranks and totals are the scope's.
+pub(crate) fn healing_in(fight: &Fight, filter: &ReportFilter, scope: &Scope) -> HealingReport {
     let reattributed = filter.attribution == Attribution::Reattributed;
     let mut acc: HashMap<ActorId, Acc> = HashMap::new();
     let mut pets = PetNames::default();
@@ -68,6 +74,8 @@ pub fn healing(fight: &Fight, filter: &ReportFilter) -> HealingReport {
         .filter(|(_, e)| filter.contains(e.t))
     {
         match healing_share(fight, event) {
+            Some(Share::Own { actor, spell, .. })
+                if !keeps_own(fight, scope, actor, spell, event.target) => {}
             Some(Share::Own {
                 player,
                 actor,
@@ -104,12 +112,15 @@ pub fn healing(fight: &Fight, filter: &ReportFilter) -> HealingReport {
             }
             Some(Share::Support(support)) => {
                 let target = heal_target(fight, support.target);
+                let entry = support_entry(fight, &mut pets, index, support, target);
+                let parts = keeps_support(fight, scope, &support, entry.ability.map(|a| a.spell));
                 credit_support(
                     &mut acc,
                     |a| &mut a.support,
                     &mut ledger,
                     reattributed,
-                    support_entry(fight, &mut pets, index, support, target),
+                    entry,
+                    parts,
                 );
             }
             None => {}
@@ -123,7 +134,7 @@ pub fn healing(fight: &Fight, filter: &ReportFilter) -> HealingReport {
             let s = a.support;
             let own = a.healing + a.absorbs;
             let total = if reattributed {
-                (own + s.given).saturating_sub(s.received)
+                s.reattributed_total(own)
             } else {
                 own
             };

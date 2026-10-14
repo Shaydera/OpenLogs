@@ -3,13 +3,13 @@ import type { Breakdown, BreakdownRow, Dimension, GroupedRow } from '../../api/t
 import { formatScaled, formatShare } from '../../i18n/format';
 import { type MessageKey, t } from '../../i18n/i18n';
 import { spellIcon } from '../../icons';
-import { otherDimension } from '../../scopeSides';
 import { type MetricTab, useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
-import { FilterPicker } from '../filters/FilterPicker';
 import { rowLabel, rowValue } from '../filters/labels';
+import { NoMatch } from '../filters/NoMatch';
+import { ReportPickers } from '../filters/ReportPickers';
 import { RowsMenu } from '../filters/RowsMenu';
-import { allLabel, captionOf, holdsFriendlies } from '../filters/sides';
+import { captionOf } from '../filters/sides';
 import { classColor } from '../overview/players';
 import { PlayerIcon } from './PlayerName';
 import { RankedHead } from './ReportParts';
@@ -61,12 +61,10 @@ export function BreakdownPanel(props: Props) {
   const { tab, breakdown, title, unit, hint, sideExtras, extraColumns = [], fill, total, onPreview, describedBy, legend, panelRef, popup } = props;
   const scope = useApp((s) => s.scope);
   const select = useApp((s) => s.select);
-  const clearFilters = useApp((s) => s.clearFilters);
   const openPlayer = useApp((s) => s.openPlayer);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [splitDimension, setSplitDimension] = useState<Dimension | null>(null);
   const roster = rosterIndex(breakdown.roster);
-  const other = otherDimension(tab);
   const top = Math.max(0, ...breakdown.rows.map((r) => r.amount));
   const selected = breakdown.rows.find((r) => keyOf(r) === selectedKey) ?? breakdown.rows[0];
   const splits = selected?.splits.filter((s) => breakdown.side.includes(s.dimension)) ?? [];
@@ -74,8 +72,6 @@ export function BreakdownPanel(props: Props) {
   const selectedUnit = selected?.key.kind === 'unit' ? selected.key.unit : null;
   const selectedPlayer = selectedUnit?.kind === 'player' ? selectedUnit.actorId : null;
   const grid = GRID[extraColumns.length];
-  const filtered = scope.source.length + scope.target.length + scope.ability.length > 0;
-
   const narrowable = (row: BreakdownRow) => scope[breakdown.group].length === 0 && !(row.key.kind === 'ability' && row.key.rowKind === 'unmatched');
   const narrowTo = (row: BreakdownRow) => void select(breakdown.group, rowValue(row.key));
 
@@ -119,32 +115,13 @@ export function BreakdownPanel(props: Props) {
               {title}
             </h2>
             {hint && <span className="report-hint">{hint}</span>}
-            <FilterPicker
-              dimension={other}
-              caption={captionOf(tab, other)}
-              allLabel={allLabel(tab, other, scope.perspective)}
-              value={scope[other][0] ?? null}
-              playersByRole={holdsFriendlies(tab, other, scope.perspective)}
-            />
-            <FilterPicker
-              dimension="ability"
-              caption={captionOf(tab, 'ability')}
-              allLabel={allLabel(tab, 'ability', scope.perspective)}
-              value={scope.ability[0] ?? null}
-            />
+            <ReportPickers tab={tab} />
           </div>
           <RowsMenu tab={tab} group={breakdown.group} />
         </div>
         {legend}
         {breakdown.rows.length === 0 ? (
-          <div className="report-empty">
-            <p className="muted">{t(filtered ? 'breakdown.empty' : NOTHING_LOGGED[tab])}</p>
-            {filtered && (
-              <button type="button" className="btn" onClick={() => void clearFilters()}>
-                {t('breakdown.clear')}
-              </button>
-            )}
-          </div>
+          <NoMatch nothing={t(NOTHING_LOGGED[tab])} />
         ) : (
           <div className="scroll-x">
             <div className={extraColumns.length > 1 ? 'report-rows report-rows-wide' : 'report-rows'} role="group" aria-label={t('breakdown.rowsOf', { title })}>

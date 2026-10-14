@@ -4,6 +4,7 @@ use openlogs_analysis::{
     AbilityRef, Attribution, CellKind, Damage, DamageVia, Dimension, EventKind, ReportFilter,
     RowKey, Scope, ScopeMetric, Side, UnitRef, breakdown, effective_group,
 };
+use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS, MELEE, PET_FLAGS, damage};
 
 fn hit(amount: u64) -> EventKind {
@@ -73,6 +74,7 @@ fn rows_group_pets_with_owners_and_offer_only_free_dimensions() {
 
     let all = breakdown(
         &fight,
+        &Curated::bundled(),
         &filter,
         &Scope::default(),
         ScopeMetric::DamageDone,
@@ -95,6 +97,7 @@ fn rows_group_pets_with_owners_and_offer_only_free_dimensions() {
     };
     let imps = breakdown(
         &fight,
+        &Curated::bundled(),
         &filter,
         &only_imps,
         ScopeMetric::DamageDone,
@@ -154,6 +157,7 @@ fn one_instance_narrows_to_that_unit_only() {
     assert_eq!(
         breakdown(
             &fight,
+            &Curated::bundled(),
             &filter,
             &scope,
             ScopeMetric::DamageDone,
@@ -191,6 +195,7 @@ fn unmatched_support_stays_a_negative_ability_row() {
     };
     let rows = breakdown(
         &fight,
+        &Curated::bundled(),
         &filter,
         &scope,
         ScopeMetric::DamageDone,
@@ -253,6 +258,7 @@ fn selecting_melee_leaves_out_unmatched_support() {
     };
     let melee = breakdown(
         &fight,
+        &Curated::bundled(),
         &ReportFilter::whole(Attribution::Reattributed),
         &scope,
         ScopeMetric::DamageDone,
@@ -318,6 +324,7 @@ fn damage_taken_rows_carry_hits_and_absorbed_damage_on_both_sides() {
     };
     let taken = breakdown(
         &fight,
+        &Curated::bundled(),
         &filter,
         &scope,
         ScopeMetric::DamageTaken,
@@ -335,6 +342,7 @@ fn damage_taken_rows_carry_hits_and_absorbed_damage_on_both_sides() {
     };
     let boss_row = &breakdown(
         &fight,
+        &Curated::bundled(),
         &filter,
         &enemy,
         ScopeMetric::DamageTaken,

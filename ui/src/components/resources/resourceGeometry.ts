@@ -1,3 +1,4 @@
+import { HEALTH } from '../../api/types';
 import { classColor } from '../overview/players';
 
 /** The resource plot's box. */
@@ -52,7 +53,8 @@ export function resourcePaths(
   };
 }
 
-/** Mana in its own colour; other powers in the player's class colour. */
+/** Mana and health in their own colours; other powers in the player's class colour. */
 export function powerColour(powerType: number, classToken: string | null): string {
+  if (powerType === HEALTH) return 'var(--role-healer)';
   return powerType === 0 ? 'var(--mana)' : classColor(classToken);
 }

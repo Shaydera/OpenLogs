@@ -4,6 +4,7 @@ use openlogs_analysis::{
     AbilityRef, Attribution, DamageVia, Dimension, EventKind, OptionValue, ReportFilter, Scope,
     ScopeMetric, UnitRef, filter_options,
 };
+use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS, damage};
 
 #[test]
@@ -26,6 +27,7 @@ fn ability_options_carry_the_primary_id_and_their_variants() {
     let fight = b.build();
     let options = filter_options(
         &fight,
+        &Curated::bundled(),
         &ReportFilter::whole(Attribution::Reattributed),
         &Scope::default(),
         ScopeMetric::DamageDone,
@@ -82,6 +84,7 @@ fn unit_options_ignore_their_own_selection_and_list_instances() {
     };
     let options = filter_options(
         &fight,
+        &Curated::bundled(),
         &ReportFilter::whole(Attribution::Reattributed),
         &scope,
         ScopeMetric::DamageDone,

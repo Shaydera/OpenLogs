@@ -234,7 +234,7 @@ pub fn target_detail_dto(
 
 #[cfg(test)]
 mod tests {
-    use openlogs_analysis::{Actors, Attribution, Metric, ReportFilter, ability_detail};
+    use openlogs_analysis::{Actors, Attribution, Metric, ReportFilter, Scope, ability_detail};
 
     use super::*;
     use crate::test_fight::{PLAYER_FLAGS, fight, heal_event, unit};
@@ -261,6 +261,7 @@ mod tests {
             None,
             Metric::Healing,
             &ReportFilter::whole(Attribution::Augmented),
+            &Scope::default(),
         )
         .unwrap();
         let dto = ability_detail_dto(&fight, &detail, MetricDto::Healing);

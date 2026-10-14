@@ -1,88 +1,82 @@
 import { Fragment, useState } from 'react';
-import type { AuraScope, AurasReport, PlayerRef } from '../../api/types';
+import type { AuraHolder, AuraLane, AuraRow, AurasReport, PlayerRef } from '../../api/types';
 import { spellIcon } from '../../icons';
 import { formatDuration, formatInteger, formatShare } from '../../i18n/format';
 import { t, type MessageKey } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { TimeAxis } from '../detail/TimeAxis';
-import { GameIcon } from '../GameIcon';
+import { GameIcon, MonogramTile } from '../GameIcon';
+import { rowValue } from '../filters/labels';
+import { NoMatch } from '../filters/NoMatch';
+import { ReportHead } from '../filters/ReportHead';
 import { classColor, shortName } from '../overview/players';
 import { band } from '../player/chartGeometry';
 import { PlayerIcon } from '../reports/PlayerName';
 import { reportSpellName, rosterIndex } from '../reports/reportData';
-import { AURA_ROWS, auraColour, sortAuras, type AuraRow, type AuraSort } from './auraModel';
+import { AURA_ROWS, auraColour, sortAuras, type AuraSort } from './auraModel';
 
-const SCOPES: AuraScope[] = ['buffs_on_players', 'debuffs_on_players', 'debuffs_on_enemies'];
-const SORTS: { key: AuraSort; label: MessageKey }[] = [
+const KINDS = ['buffs', 'debuffs'] as const;
+const SORTS: { key: AuraSort; label: MessageKey; byTarget?: MessageKey }[] = [
   { key: 'uptime', label: 'casts.uptime' },
-  { key: 'targets', label: 'auras.targets' },
+  { key: 'targets', label: 'auras.targets', byTarget: 'auras.auras' },
   { key: 'applications', label: 'auras.applications' },
 ];
 
+const keyOf = (row: AuraRow) => `${JSON.stringify(row.key)}#${row.spellId}`;
+
+/** Auras by aura (a lane per holder) or by target (a lane per aura); the lens decides whose auras. */
 export function AurasTab({ report }: { report: AurasReport }) {
-  const scope = useApp((s) => s.auraScope);
-  const setAuraScope = useApp((s) => s.setAuraScope);
+  const kind = useApp((s) => s.auraKind);
+  const setAuraKind = useApp((s) => s.setAuraKind);
+  const scope = useApp((s) => s.scope);
+  const select = useApp((s) => s.select);
   const loading = useApp((s) => s.reportLoading);
-  const [query, setQuery] = useState('');
-  const [open, setOpen] = useState<number | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   const [sort, setSort] = useState<AuraSort>('uptime');
   const [all, setAll] = useState(false);
   const roster = rosterIndex(report.roster);
-  const name = (id: number) => reportSpellName(report.spells, id);
-  const needle = query.trim().toLowerCase();
-  const rows = sortAuras(
-    report.rows.filter((row) => name(row.spellId).toLowerCase().includes(needle)),
-    sort,
-    name,
-  );
+  const spellName = (id: number) => reportSpellName(report.spells, id);
+  const holderName = (holder: AuraHolder) => (holder.player !== null ? shortName(roster.get(holder.player)?.name ?? holder.name) : holder.name);
+  const rowName = (row: AuraRow) => (row.holder ? holderName(row.holder) : spellName(row.spellId));
+  const byTarget = report.group === 'target';
+  const side = scope.perspective;
+  const rows = sortAuras(report.rows, sort, rowName);
   const shown = all ? rows : rows.slice(0, AURA_ROWS);
   const count = report.rows.length;
+  const narrowable = scope[report.group].length === 0;
+  const colour = (sources: number[]) => auraColour(sources, kind, side, roster);
 
   return (
     <section className="panel panel-clip" aria-labelledby="auras-title">
-      <div className="panel-head panel-head-auras">
-        <div className="auras-title">
-          <h2 id="auras-title" className="h2">
-            {t(`auras.${scope}`)}
-          </h2>
-          {count > 0 && (
+      <ReportHead
+        tab="buffs"
+        id="auras-title"
+        title={t(`auras.${kind}_on_${side === 'friendly' ? 'players' : 'enemies'}`)}
+        group={report.group}
+        summary={
+          count > 0 && (
             <span className="auras-summary">
-              <span className="num value-text">{formatInteger(count)}</span> {t('auras.auraWord', { count })} · {t('auras.uptimeOver')}{' '}
-              <span className="num value-text">{formatDuration(report.endMs - report.startMs)}</span>
+              <span className="num value-text">{formatInteger(count)}</span> {t(byTarget ? 'kpi.targetWord' : 'auras.auraWord', { count })} ·{' '}
+              {t('auras.uptimeOver')} <span className="num value-text">{formatDuration(report.endMs - report.startMs)}</span>
             </span>
-          )}
-        </div>
-        <div className="auras-controls">
-          <div className="filters" role="group" aria-label={t('auras.scope')}>
-            {SCOPES.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className={option === scope ? 'pill on' : 'pill'}
-                aria-pressed={option === scope}
-                onClick={() => void setAuraScope(option)}
-              >
+          )
+        }
+        tools={
+          <div className="filters" role="group" aria-label={t('auras.kind')}>
+            {KINDS.map((option) => (
+              <button key={option} type="button" className={option === kind ? 'pill on' : 'pill'} aria-pressed={option === kind} onClick={() => void setAuraKind(option)}>
                 {t(`auras.${option}`)}
               </button>
             ))}
           </div>
-          <input
-            className="input input-sel"
-            aria-label={t('auras.filter')}
-            placeholder={t('auras.filter')}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </div>
-      </div>
+        }
+      />
       {/* Always mounted: screen readers announce a live region's new text, not a new region. */}
       <p className={loading ? 'muted pad' : 'sr-only'} role="status">
         {loading ? t('report.loading') : ''}
       </p>
       {count === 0 ? (
-        <p className="muted pad">{t('auras.none')}</p>
-      ) : rows.length === 0 ? (
-        <p className="muted pad">{t('auras.noMatch', { query: query.trim() })}</p>
+        <NoMatch nothing={t('auras.none')} />
       ) : (
         <>
           <div className="scroll-x">
@@ -92,44 +86,47 @@ export function AurasTab({ report }: { report: AurasReport }) {
                   <span className="sr-only">{t('recap.iconColumn')}</span>
                 </span>
                 <span role="columnheader" className="cap aura-cap">
-                  {t('auras.aura')}
+                  {t(byTarget ? 'ability.target' : 'auras.aura')}
                 </span>
-                {SORTS.map(({ key, label }) => (
-                  <span
-                    key={key}
-                    role="columnheader"
-                    aria-sort={sort === key ? 'descending' : 'none'}
-                    className={key === 'uptime' ? 'aura-sort' : 'aura-sort aura-sort-end'}
-                  >
+                {SORTS.map(({ key, label, byTarget: targetLabel }) => (
+                  <span key={key} role="columnheader" aria-sort={sort === key ? 'descending' : 'none'} className={key === 'uptime' ? 'aura-sort' : 'aura-sort aura-sort-end'}>
                     <button type="button" className={sort === key ? 'sort-btn sort-btn-on' : 'sort-btn'} onClick={() => setSort(key)}>
-                      {t(label)}
+                      {t(byTarget && targetLabel ? targetLabel : label)}
                       {sort === key ? ' ↓' : ''}
                     </button>
                   </span>
                 ))}
               </div>
               {shown.map((row) => {
-                const expanded = open === row.spellId;
-                const colour = auraColour(row, scope, roster);
+                const id = keyOf(row);
+                const expanded = open === id;
+                const name = rowName(row);
+                const player = row.holder?.player != null ? roster.get(row.holder.player) : undefined;
                 return (
-                  <Fragment key={row.spellId}>
+                  <Fragment key={id}>
                     <div role="row" className={expanded ? 'aura-row aura-row-sel' : 'aura-row'}>
                       <span role="cell">
-                        <GameIcon name={name(row.spellId)} icon={spellIcon(row.spellId)} size={22} />
+                        {row.holder ? player ? <PlayerIcon player={player} size={22} /> : <MonogramTile name={name} size={22} /> : <GameIcon name={name} icon={spellIcon(row.spellId)} size={22} />}
                       </span>
                       <span role="cell" className="aura-name-cell">
-                        <button type="button" className="aura-name" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : row.spellId)}>
-                          {name(row.spellId)}
+                        <button
+                          type="button"
+                          className="aura-name"
+                          style={player ? { color: classColor(player.classToken) } : undefined}
+                          aria-expanded={expanded}
+                          onClick={() => setOpen(expanded ? null : id)}
+                        >
+                          {name}
                         </button>
                       </span>
                       <span role="cell" className="aura-bar">
                         <span className="bar bar-lg" aria-hidden="true">
-                          <span style={{ width: `${row.uptime * 100}%`, background: colour }} />
+                          <span style={{ width: `${row.uptime * 100}%`, background: colour(row.sources) }} />
                         </span>
                         <span className="num aura-uptime">{formatShare(row.uptime * 100)}</span>
                       </span>
                       <span role="cell" className="num aura-end aura-end-muted">
-                        {formatInteger(row.targets.length)}
+                        {formatInteger(row.lanes.length)}
                       </span>
                       <span role="cell" className="num aura-end">
                         {formatInteger(row.applications)}
@@ -138,7 +135,20 @@ export function AurasTab({ report }: { report: AurasReport }) {
                     {expanded && (
                       <div role="row" className="aura-detail">
                         <div role="cell">
-                          <AuraLanes row={row} colour={colour} report={report} roster={roster} label={t('auras.targetsOf', { name: name(row.spellId) })} />
+                          {narrowable && (
+                            <button type="button" className="link-accent aura-only" onClick={() => void select(report.group, rowValue(row.key))}>
+                              {t('breakdown.showOnly', { name })}
+                            </button>
+                          )}
+                          <AuraLanes
+                            lanes={row.lanes}
+                            byTarget={byTarget}
+                            colour={colour}
+                            report={report}
+                            roster={roster}
+                            spellName={spellName}
+                            label={t(byTarget ? 'auras.aurasOf' : 'auras.targetsOf', { name })}
+                          />
                         </div>
                       </div>
                     )}
@@ -150,14 +160,14 @@ export function AurasTab({ report }: { report: AurasReport }) {
           <div className="panel-note">
             {rows.length > shown.length && (
               <>
-                {t('auras.showing', { shown: AURA_ROWS, count: rows.length })} ·{' '}
+                {t(byTarget ? 'auras.showingTargets' : 'auras.showing', { shown: AURA_ROWS, count: rows.length })} ·{' '}
                 <button type="button" className="note-link" onClick={() => setAll(true)}>
                   {t('auras.showAll')}
                 </button>
                 <br />
               </>
             )}
-            {t('auras.note')}
+            {t(byTarget ? 'auras.noteTargets' : 'auras.note')}
           </div>
         </>
       )}
@@ -165,20 +175,17 @@ export function AurasTab({ report }: { report: AurasReport }) {
   );
 }
 
-/** One uptime lane per target of the aura. */
-function AuraLanes({
-  row,
-  colour,
-  report,
-  roster,
-  label,
-}: {
-  row: AuraRow;
-  colour: string;
+/** One uptime lane per holder (by aura) or per aura (by target). */
+function AuraLanes(props: {
+  lanes: AuraLane[];
+  byTarget: boolean;
+  colour: (sources: number[]) => string;
   report: AurasReport;
   roster: Map<number, PlayerRef>;
+  spellName: (id: number) => string;
   label: string;
 }) {
+  const { lanes, byTarget, colour, report, roster, spellName, label } = props;
   return (
     <>
       <div className="atl-row atl-row-head" aria-hidden="true">
@@ -187,12 +194,18 @@ function AuraLanes({
         <span className="cap atl-cap">{t('auras.uptimeShort')}</span>
       </div>
       <ul className="atl-list" aria-label={label}>
-        {row.targets.map((target) => {
-          const player = target.player !== null ? roster.get(target.player) : undefined;
+        {lanes.map((lane) => {
+          const player = lane.holder.player !== null ? roster.get(lane.holder.player) : undefined;
+          const fill = colour(lane.sources);
           return (
-            <li key={target.name} className="atl-row">
+            <li key={`${lane.holder.name}-${lane.spellId}`} className="atl-row">
               <span className="atl-name">
-                {player ? (
+                {byTarget ? (
+                  <>
+                    <GameIcon name={spellName(lane.spellId)} icon={spellIcon(lane.spellId)} size={18} />
+                    <span className="atl-player">{spellName(lane.spellId)}</span>
+                  </>
+                ) : player ? (
                   <>
                     <PlayerIcon player={player} size={18} />
                     <span className="atl-player" style={{ color: classColor(player.classToken) }}>
@@ -200,18 +213,16 @@ function AuraLanes({
                     </span>
                   </>
                 ) : (
-                  <span className="atl-enemy">{target.name}</span>
+                  <span className="atl-enemy">{lane.holder.name}</span>
                 )}
               </span>
               <span className="track">
-                {target.intervals.map(([a, b]) => {
+                {lane.intervals.map(([a, b]) => {
                   const pos = band(a, b, report.startMs, report.endMs);
-                  return pos ? (
-                    <span key={a} className="atl-bar" style={{ left: `${pos.leftPct}%`, width: `${pos.widthPct}%`, background: colour }} />
-                  ) : null;
+                  return pos ? <span key={a} className="atl-bar" style={{ left: `${pos.leftPct}%`, width: `${pos.widthPct}%`, background: fill }} /> : null;
                 })}
               </span>
-              <span className="num atl-uptime">{formatShare(target.uptime * 100)}</span>
+              <span className="num atl-uptime">{formatShare(lane.uptime * 100)}</span>
             </li>
           );
         })}

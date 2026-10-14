@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use openlogs_analysis::{
-    ActorId, ContextItem, ContextState, Death, DeathContext, Fight, NO_SPELL, NOBODY, PhaseKind,
-    QuickOverview, SpellId,
+    ActorId, ContextItem, ContextState, Death, DeathContext, Fight, Hit, NO_SPELL, NOBODY,
+    PhaseKind, QuickOverview, SpellId,
 };
 use openlogs_gamedata::{ConsumableKind, CooldownCategory, Curated, Role};
 use serde::Serialize;
@@ -345,6 +345,23 @@ pub(crate) fn context_dtos(
         .collect()
 }
 
+pub(crate) fn hit_dto(
+    fight: &Fight,
+    spells: &mut BTreeMap<SpellId, SpellRef>,
+    hit: &Hit,
+) -> HitDto {
+    note_spell(fight, spells, hit.spell, "");
+    HitDto {
+        t: hit.t,
+        spell_id: hit.spell,
+        source_name: (hit.source != NOBODY).then(|| actor_name(fight, hit.source)),
+        amount: hit.amount,
+        overkill: hit.overkill,
+        environmental: hit.environmental,
+        periodic: hit.periodic,
+    }
+}
+
 /// One death with its context, noting every spell it references in `spells`.
 pub fn death_dto(
     fight: &Fight,
@@ -353,18 +370,7 @@ pub fn death_dto(
     context: &[DeathContext],
     spells: &mut BTreeMap<SpellId, SpellRef>,
 ) -> DeathDto {
-    let killing_blow = death.killing_blow.map(|hit| {
-        note_spell(fight, spells, hit.spell, "");
-        HitDto {
-            t: hit.t,
-            spell_id: hit.spell,
-            source_name: (hit.source != NOBODY).then(|| actor_name(fight, hit.source)),
-            amount: hit.amount,
-            overkill: hit.overkill,
-            environmental: hit.environmental,
-            periodic: hit.periodic,
-        }
-    });
+    let killing_blow = death.killing_blow.map(|hit| hit_dto(fight, spells, &hit));
     let damage_last_5s = death
         .damage_last_5s
         .iter()

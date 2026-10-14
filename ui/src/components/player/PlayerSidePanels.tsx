@@ -46,7 +46,7 @@ function SpellList({ rows, detail, label, empty }: { rows: SpellRow[]; detail: P
   );
 }
 
-export function PlayerSidePanels({ detail }: { detail: PlayerDetail }) {
+export function PlayerSidePanels({ detail, targets = true }: { detail: PlayerDetail; targets?: boolean }) {
   const roster = rosterIndex(detail.roster);
   const healing = detail.metric === 'healing';
   // "Survived the range." only while a time range is set; the whole pull reads "Survived.".
@@ -55,26 +55,28 @@ export function PlayerSidePanels({ detail }: { detail: PlayerDetail }) {
   const name = shortName(detail.player.name);
   return (
     <div className="player-panels">
-      <section className="panel pp-wide" id="p-targets" aria-labelledby="player-targets-title">
-        <div className="panel-head panel-head-tight">
-          <div>
-            <h2 id="player-targets-title" tabIndex={-1} className="h2">
-              {t(healing ? 'targets.healedPlayers' : 'targets.title')}
-            </h2>
-            <div className="panel-sub">{t(healing ? 'player.healedHint' : 'player.targetsHint')}</div>
+      {targets && (
+        <section className="panel pp-wide" id="p-targets" aria-labelledby="player-targets-title">
+          <div className="panel-head panel-head-tight">
+            <div>
+              <h2 id="player-targets-title" tabIndex={-1} className="h2">
+                {t(healing ? 'targets.healedPlayers' : 'targets.title')}
+              </h2>
+              <div className="panel-sub">{t(healing ? 'player.healedHint' : 'player.targetsHint')}</div>
+            </div>
           </div>
-        </div>
-        {detail.targets.length === 0 ? (
-          <p className="muted pad">{t('targets.none')}</p>
-        ) : (
-          <TargetBreakdown
-            caption={t(healing ? 'targets.healedOf' : 'targets.of', { name })}
-            nameLabel={t(healing ? 'targets.player' : 'targets.target')}
-            amountLabel={t(healing ? 'report.healing' : 'report.damage')}
-            rows={targetRows(detail.targets, { total: detail.total, roster, colorOf, top: PANEL_TARGETS })}
-          />
-        )}
-      </section>
+          {detail.targets.length === 0 ? (
+            <p className="muted pad">{t('targets.none')}</p>
+          ) : (
+            <TargetBreakdown
+              caption={t(healing ? 'targets.healedOf' : 'targets.of', { name })}
+              nameLabel={t(healing ? 'targets.player' : 'targets.target')}
+              amountLabel={t(healing ? 'report.healing' : 'report.damage')}
+              rows={targetRows(detail.targets, { total: detail.total, roster, colorOf, top: PANEL_TARGETS })}
+            />
+          )}
+        </section>
+      )}
       <section className="panel pp-wide" id="p-taken" aria-labelledby="player-taken-title">
         <div className="panel-head panel-head-tight">
           <div>

@@ -1,7 +1,8 @@
 mod support;
 
 use openlogs_analysis::{
-    Attribution, AuraAction, AuraScope, AuraType, EventKind, NO_SPELL, ReportFilter, auras_report,
+    AbilityRef, Attribution, AuraAction, AuraType, AurasReport, Dimension, EventKind, NO_SPELL,
+    ReportFilter, Scope, Side, UnitRef, auras_report,
 };
 use support::{FightBuilder, HOSTILE_FLAGS};
 
@@ -16,6 +17,19 @@ fn aura(action: AuraAction, aura_type: AuraType) -> EventKind {
 
 fn whole() -> ReportFilter {
     ReportFilter::whole(Attribution::Augmented)
+}
+
+fn report(
+    fight: &openlogs_analysis::Fight,
+    side: Side,
+    aura_type: AuraType,
+    scope: Scope,
+) -> AurasReport {
+    let scope = Scope {
+        perspective: side,
+        ..scope
+    };
+    auras_report(fight, &whole(), &scope, aura_type, Dimension::Ability)
 }
 
 struct Scene {
@@ -88,14 +102,20 @@ fn buffs_on_players_average_uptime_over_targets() {
         9,
         aura(AuraAction::Applied, AuraType::Debuff),
     );
-    let rows = auras_report(&s.b.build(), &whole(), AuraScope::BuffsOnPlayers);
+    let rows = report(
+        &s.b.build(),
+        Side::Friendly,
+        AuraType::Buff,
+        Scope::default(),
+    )
+    .rows;
     assert_eq!(rows.len(), 1);
     let row = &rows[0];
     assert_eq!((row.spell, row.applications, row.uptime), (10060, 2, 0.375));
     let targets: Vec<_> = row
-        .targets
+        .lanes
         .iter()
-        .map(|t| (t.player, t.uptime, t.intervals.clone()))
+        .map(|t| (t.holder.player, t.uptime, t.intervals.clone()))
         .collect();
     assert_eq!(
         targets,
@@ -140,12 +160,22 @@ fn enemy_debuffs_group_targets_by_name() {
         99,
         aura(AuraAction::Applied, AuraType::Debuff),
     );
-    let rows = auras_report(&s.b.build(), &whole(), AuraScope::DebuffsOnEnemies);
-    assert_eq!(rows.len(), 1, "the boss's own debuff is not a player's");
-    let targets: Vec<_> = rows[0]
-        .targets
+    let rows = report(
+        &s.b.build(),
+        Side::Enemy,
+        AuraType::Debuff,
+        Scope::default(),
+    )
+    .rows;
+    assert_eq!(
+        rows.iter().map(|r| r.spell).collect::<Vec<_>>(),
+        [99, 172],
+        "the boss's own debuff is an enemy's debuff too"
+    );
+    let targets: Vec<_> = rows[1]
+        .lanes
         .iter()
-        .map(|t| (t.name.as_str(), t.uptime, t.intervals.clone()))
+        .map(|t| (t.holder.name.as_str(), t.uptime, t.intervals.clone()))
         .collect();
     assert_eq!(
         targets,
@@ -158,7 +188,7 @@ fn enemy_debuffs_group_targets_by_name() {
             )
         ]
     );
-    assert_eq!(rows[0].applications, 4);
+    assert_eq!(rows[1].applications, 4);
 }
 
 #[test]
@@ -172,7 +202,13 @@ fn auras_of_one_name_from_unrelated_specs_stay_apart() {
     s.b.push(10_000, s.mage, s.mage, 263725, buff(AuraAction::Removed));
     s.b.push(0, druid, druid, 16870, buff(AuraAction::Applied));
     s.b.push(2_000, druid, druid, 16870, buff(AuraAction::Removed));
-    let rows = auras_report(&s.b.build(), &whole(), AuraScope::BuffsOnPlayers);
+    let rows = report(
+        &s.b.build(),
+        Side::Friendly,
+        AuraType::Buff,
+        Scope::default(),
+    )
+    .rows;
     let mut rows: Vec<(Vec<u32>, Vec<u32>, f64)> = rows
         .iter()
         .map(|r| (r.spells.clone(), r.sources.clone(), r.uptime))
@@ -186,4 +222,82 @@ fn auras_of_one_name_from_unrelated_specs_stay_apart() {
         ],
         "a mage's and a druid's Clearcasting are two auras"
     );
+}
+
+#[test]
+fn one_aura_lists_its_holders_and_one_holder_lists_its_auras() {
+    let mut s = scene();
+    let buff = |action| aura(action, AuraType::Buff);
+    s.b.spell(10060, "Power Infusion");
+    s.b.spell(1459, "Arcane Intellect");
+    s.b.push(0, s.priest, s.mage, 10060, buff(AuraAction::Applied));
+    s.b.push(10_000, s.priest, s.mage, 10060, buff(AuraAction::Removed));
+    s.b.push(0, s.priest, s.warrior, 10060, buff(AuraAction::Applied));
+    s.b.push(5_000, s.priest, s.warrior, 10060, buff(AuraAction::Removed));
+    s.b.push(0, s.mage, s.mage, 1459, buff(AuraAction::Applied));
+    let fight = s.b.build();
+    let infusion = Scope {
+        ability: vec![AbilityRef::Name("Power Infusion".into())],
+        ..Scope::default()
+    };
+    let by_target = report(&fight, Side::Friendly, AuraType::Buff, infusion);
+    assert_eq!(by_target.group, Dimension::Target);
+    let rows: Vec<_> = by_target
+        .rows
+        .iter()
+        .map(|r| (r.holder.as_ref().unwrap().player, r.uptime, r.lanes.len()))
+        .collect();
+    assert_eq!(rows, [(Some(s.mage), 0.5, 1), (Some(s.warrior), 0.25, 1)]);
+
+    let one_mage = Scope {
+        target: vec![UnitRef::Player(s.mage)],
+        ..Scope::default()
+    };
+    let by_aura = report(&fight, Side::Friendly, AuraType::Buff, one_mage);
+    assert_eq!(by_aura.group, Dimension::Ability);
+    let auras: Vec<_> = by_aura.rows.iter().map(|r| (r.spell, r.uptime)).collect();
+    assert_eq!(auras, [(1459, 1.0), (10060, 0.5)]);
+    assert_eq!(by_aura.players, 1);
+
+    let from_mage = Scope {
+        source: vec![UnitRef::Player(s.mage)],
+        ..Scope::default()
+    };
+    let applied = report(&fight, Side::Friendly, AuraType::Buff, from_mage);
+    assert_eq!(
+        applied.rows.iter().map(|r| r.spell).collect::<Vec<_>>(),
+        [1459]
+    );
+}
+
+#[test]
+fn enemies_have_buffs_of_their_own() {
+    let mut s = scene();
+    s.b.push(
+        2_000,
+        s.boss,
+        s.boss,
+        77,
+        aura(AuraAction::Applied, AuraType::Buff),
+    );
+    s.b.push(
+        6_000,
+        s.boss,
+        s.boss,
+        77,
+        aura(AuraAction::Removed, AuraType::Buff),
+    );
+    s.b.push(
+        0,
+        s.priest,
+        s.mage,
+        10060,
+        aura(AuraAction::Applied, AuraType::Buff),
+    );
+    let rows = report(&s.b.build(), Side::Enemy, AuraType::Buff, Scope::default()).rows;
+    let shields: Vec<_> = rows
+        .iter()
+        .map(|r| (r.spell, r.lanes[0].holder.name.as_str(), r.uptime))
+        .collect();
+    assert_eq!(shields, [(77, "Ula'tek", 0.2)]);
 }

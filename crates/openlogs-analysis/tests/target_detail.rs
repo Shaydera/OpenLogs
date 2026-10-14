@@ -1,9 +1,10 @@
 mod support;
 
 use openlogs_analysis::{
-    Attribution, EventKind, NOBODY, ReportFilter, UnitLife, Wave, enemy_groups, target_detail,
+    AbilityRef, Attribution, Damage, DamageVia, EventKind, NOBODY, ReportFilter, Scope, UnitLife,
+    UnitRef, Wave, enemy_groups, target_detail,
 };
-use support::{FightBuilder, HOSTILE_FLAGS};
+use support::{FightBuilder, HOSTILE_FLAGS, damage};
 
 const AUG: Attribution = Attribution::Augmented;
 
@@ -79,7 +80,13 @@ fn target_detail_lifetimes_waves_and_players() {
     let mut s = scene();
     let fight = s.b.build();
     let [r1, r2, r3] = s.rawlings;
-    let detail = target_detail(&fight, "Blightscale Rawling", &whole(AUG)).unwrap();
+    let detail = target_detail(
+        &fight,
+        "Blightscale Rawling",
+        &whole(AUG),
+        &Scope::default(),
+    )
+    .unwrap();
     assert_eq!(
         (detail.damage_taken, detail.raid_damage, detail.max_hp),
         (550, 1_650, Some(50_000))
@@ -133,7 +140,7 @@ fn target_detail_lifetimes_waves_and_players() {
         end_ms: 60_000,
         attribution: AUG,
     };
-    let detail = target_detail(&fight, "Blightscale Rawling", &late).unwrap();
+    let detail = target_detail(&fight, "Blightscale Rawling", &late, &Scope::default()).unwrap();
     assert_eq!(
         detail.units.iter().map(|u| u.actor).collect::<Vec<_>>(),
         [r3]
@@ -147,11 +154,68 @@ fn bosses_count_as_killed_on_a_kill() {
     s.b.fight.outcome = openlogs_index::Outcome::Kill;
     let fight = s.b.build();
     // The boss's UNIT_DIED is logged just after ENCOUNTER_END, outside the fight slice.
-    let boss = target_detail(&fight, "Ula'tek", &whole(AUG)).unwrap();
+    let boss = target_detail(&fight, "Ula'tek", &whole(AUG), &Scope::default()).unwrap();
     assert_eq!(boss.units[0].death, Some(60_000));
-    let rattle = target_detail(&fight, "Gore Rattle", &whole(AUG)).unwrap();
+    let rattle = target_detail(&fight, "Gore Rattle", &whole(AUG), &Scope::default()).unwrap();
     assert_eq!(
         rattle.units[0].death, None,
         "only boss units die with the encounter"
+    );
+}
+
+#[test]
+fn source_and_ability_selections_narrow_the_damage_on_the_enemy() {
+    let mut s = scene();
+    s.b.spell(2, "Execute");
+    let [r1, ..] = s.rawlings;
+    s.b.hit(7_500, s.warrior, r1, 2, 25, (0, 50_000));
+    let fight = s.b.build();
+    let warrior = Scope {
+        source: vec![UnitRef::Player(s.warrior)],
+        ..Scope::default()
+    };
+    let detail = target_detail(&fight, "Blightscale Rawling", &whole(AUG), &warrior).unwrap();
+    assert_eq!((detail.damage_taken, detail.raid_damage), (275, 275));
+    assert!(
+        detail.by_player.is_empty(),
+        "one source needs no by-player block"
+    );
+    assert_eq!(detail.units.len(), 3, "the lifetimes stay whole");
+
+    let execute = Scope {
+        ability: vec![AbilityRef::Name("Execute".into())],
+        ..Scope::default()
+    };
+    let detail = target_detail(&fight, "Blightscale Rawling", &whole(AUG), &execute).unwrap();
+    assert_eq!(detail.by_player, [(s.warrior, 25)]);
+}
+
+#[test]
+fn reattributed_support_moves_from_the_buffed_player_to_the_evoker() {
+    let mut s = scene();
+    let evoker = s.b.player("Player-3", "Speronis-Stonevale-EU", 1473);
+    s.b.spell(395152, "Ebon Might");
+    let [r1, ..] = s.rawlings;
+    let aug = EventKind::Damage(Damage {
+        supporter: evoker,
+        ..damage(DamageVia::Spell, 100, 0)
+    });
+    s.b.hit(7_500, s.warrior, r1, 1, 1_000, (0, 50_000));
+    s.b.push(7_500, s.warrior, r1, 395152, aug);
+    let fight = s.b.build();
+    let by_player = |attribution| {
+        target_detail(
+            &fight,
+            "Blightscale Rawling",
+            &whole(attribution),
+            &Scope::default(),
+        )
+        .unwrap()
+        .by_player
+    };
+    assert_eq!(by_player(AUG), [(s.warrior, 1_250), (s.mage, 300)]);
+    assert_eq!(
+        by_player(Attribution::Reattributed),
+        [(s.warrior, 1_150), (s.mage, 300), (evoker, 100)]
     );
 }

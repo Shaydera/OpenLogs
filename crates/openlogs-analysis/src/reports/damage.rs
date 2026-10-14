@@ -6,8 +6,10 @@ use crate::filter::{Attribution, ReportFilter};
 use crate::reports::{
     AbilityRow, AbilityTargets, BuffShare, GroupAbilities, PetNames, RowKind, Share, SupportAcc,
     SupportLedger, SupportShare, TargetShare, UnitCounts, color_groups, credit_support,
-    damage_share, damage_target, group_abilities, per_second, sorted_by_amount, support_entry,
+    damage_share, damage_target, group_abilities, keeps_own, keeps_support, per_second,
+    sorted_by_amount, support_entry,
 };
+use crate::scope::Scope;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerDamage {
@@ -61,6 +63,11 @@ struct Acc {
 }
 
 pub fn damage_done(fight: &Fight, filter: &ReportFilter) -> DamageReport {
+    damage_done_in(fight, filter, &Scope::default())
+}
+
+/// The report of the shares `scope` keeps; ranks and totals are the scope's.
+pub(crate) fn damage_done_in(fight: &Fight, filter: &ReportFilter, scope: &Scope) -> DamageReport {
     let reattributed = filter.attribution == Attribution::Reattributed;
     let mut acc: HashMap<ActorId, Acc> = HashMap::new();
     let mut pets = PetNames::default();
@@ -73,6 +80,8 @@ pub fn damage_done(fight: &Fight, filter: &ReportFilter) -> DamageReport {
         .filter(|(_, e)| filter.contains(e.t))
     {
         match damage_share(fight, event) {
+            Some(Share::Own { actor, spell, .. })
+                if !keeps_own(fight, scope, actor, spell, event.target) => {}
             Some(Share::Own {
                 player,
                 actor,
@@ -103,12 +112,15 @@ pub fn damage_done(fight: &Fight, filter: &ReportFilter) -> DamageReport {
             }
             Some(Share::Support(support)) => {
                 let target = damage_target(support.target);
+                let entry = support_entry(fight, &mut pets, index, support, target);
+                let parts = keeps_support(fight, scope, &support, entry.ability.map(|a| a.spell));
                 credit_support(
                     &mut acc,
                     |a| &mut a.support,
                     &mut ledger,
                     reattributed,
-                    support_entry(fight, &mut pets, index, support, target),
+                    entry,
+                    parts,
                 );
             }
             None => {}
@@ -121,9 +133,8 @@ pub fn damage_done(fight: &Fight, filter: &ReportFilter) -> DamageReport {
         .into_iter()
         .map(|(player, a)| {
             let s = a.support;
-            // Saturating: a support share whose main hit fell outside the range must not underflow.
             let total = if reattributed {
-                (a.own + s.given).saturating_sub(s.received)
+                s.reattributed_total(a.own)
             } else {
                 a.own
             };

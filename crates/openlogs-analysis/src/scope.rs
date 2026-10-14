@@ -101,12 +101,40 @@ impl AbilityRef {
 }
 
 impl Scope {
+    /// Whether nothing is selected (the perspective aside).
+    pub fn selects_all(&self) -> bool {
+        self.source.is_empty() && self.target.is_empty() && self.ability.is_empty()
+    }
+
     pub fn wants(&self, fight: &Fight, source: &UnitRef, spell: SpellId, target: &UnitRef) -> bool {
-        let units = |list: &[UnitRef], unit: &UnitRef| {
-            list.is_empty() || list.iter().any(|s| unit.is_in(fight, s))
+        self.accepts(fight, Some(source), Some(spell), Some(target))
+    }
+
+    /// `None` is a part the log does not name (a death without a lethal hit, support no hit
+    /// matches): it passes only while its dimension selects everything.
+    pub fn accepts(
+        &self,
+        fight: &Fight,
+        source: Option<&UnitRef>,
+        spell: Option<SpellId>,
+        target: Option<&UnitRef>,
+    ) -> bool {
+        let units = |list: &[UnitRef], unit: Option<&UnitRef>| {
+            list.is_empty() || unit.is_some_and(|unit| list.iter().any(|s| unit.is_in(fight, s)))
         };
         units(&self.source, source)
             && units(&self.target, target)
-            && (self.ability.is_empty() || self.ability.iter().any(|a| a.matches(fight, spell)))
+            && (self.ability.is_empty()
+                || spell.is_some_and(|spell| self.ability.iter().any(|a| a.matches(fight, spell))))
     }
+}
+
+/// The side of `actor` at an event that saw it `hostile`: players and what they own are always
+/// friendly; `None` for no unit (the environment).
+pub fn side_of(fight: &Fight, actor: ActorId, hostile: bool) -> Option<Side> {
+    if actor == NOBODY {
+        return None;
+    }
+    let enemy = hostile && fight.actors.credited_player(actor).is_none();
+    Some(if enemy { Side::Enemy } else { Side::Friendly })
 }

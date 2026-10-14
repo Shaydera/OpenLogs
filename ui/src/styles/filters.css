@@ -51,3 +51,10 @@
 .side-empty { padding: 16px; margin: 0; }
 .side-tabs { margin: 0 16px 10px; }
 .side-row-other { color: var(--muted); }
+.report-head { align-items: center; }
+.report-head-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.report-head-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.aura-only { margin: 6px 0 10px; }
+.page-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; padding: 8px 12px; border: 1px solid var(--accent-tint-line); border-radius: 8px; background: var(--accent-tint); font-size: 13px; }
+.page-filter-link { padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--accent); text-decoration: underline; cursor: pointer; }
+.page-filter-link:hover, .page-filter-link:focus-visible { color: var(--accent-hover); }

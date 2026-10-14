@@ -1,92 +1,171 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import type { PowerTrack, ResourcesReport } from '../../api/types';
 import { spellIcon } from '../../icons';
-import { formatAmount, formatDuration, formatPercent, formatSeconds, formatShare } from '../../i18n/format';
+import { formatPercent, formatScaled, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { TimeAxis } from '../detail/TimeAxis';
-import { GameIcon } from '../GameIcon';
+import { GameIcon, MonogramTile } from '../GameIcon';
 import { Kpi } from '../Kpi';
+import { valueLabel } from '../filters/labels';
+import { NoMatch } from '../filters/NoMatch';
+import { ReportPickers } from '../filters/ReportPickers';
 import { classColor, ROLE_ORDER, shortName } from '../overview/players';
 import { band } from '../player/chartGeometry';
 import { PlayerIcon } from '../reports/PlayerName';
 import { reportSpellName, rosterIndex } from '../reports/reportData';
-import { powerName } from './powerNames';
+import { formatCapTime, powerName } from './powerNames';
 import { powerColour, resourcePaths } from './resourceGeometry';
 
+type UnitResources = ResourcesReport['units'][number];
+
+/** Players' (friendlies) or enemy units' power and health; one selected unit is the page. */
 export function ResourcesTab({ report }: { report: ResourcesReport }) {
   const openPlayer = useApp((s) => s.openPlayer);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const scope = useApp((s) => s.scope);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(new Set());
   const roster = rosterIndex(report.roster);
-  if (report.players.length === 0) {
+  if (report.units.length === 0) {
     return (
       <section className="panel" aria-labelledby="res-empty-title">
         <div className="panel-head panel-head-tight">
           <h2 id="res-empty-title" className="h2">
             {t('tabs.resources')}
           </h2>
+          <div className="report-head-tools">
+            <ReportPickers tab="resources" />
+          </div>
         </div>
-        <p className="muted pad">{t('resources.none')}</p>
+        <NoMatch nothing={t('resources.none')} />
       </section>
     );
   }
-  const nameOf = (id: number) => shortName(roster.get(id)?.name ?? '');
-  const players = [...report.players].sort(
+  const keyOf = (u: UnitResources) => JSON.stringify(u.unit.unit);
+  const playerOf = (u: UnitResources) => (u.unit.unit.kind === 'player' ? roster.get(u.unit.unit.actorId) : undefined);
+  const nameOf = (u: UnitResources) => {
+    const player = playerOf(u);
+    return player ? shortName(player.name) : valueLabel(u.unit.unit, u.unit.name, u.unit.number);
+  };
+  const units = [...report.units].sort(
     (a, b) =>
-      ROLE_ORDER.indexOf(roster.get(a.player)?.role ?? null) - ROLE_ORDER.indexOf(roster.get(b.player)?.role ?? null) ||
-      nameOf(a.player).localeCompare(nameOf(b.player)),
+      Number(b.boss) - Number(a.boss) ||
+      ROLE_ORDER.indexOf(playerOf(a)?.role ?? null) - ROLE_ORDER.indexOf(playerOf(b)?.role ?? null) ||
+      nameOf(a).localeCompare(nameOf(b), undefined, { numeric: true }),
   );
-  const selected = players.find((p) => p.player === selectedId) ?? players[0];
-  const selectedRef = roster.get(selected.player);
-  const label = t('resources.playersCount', { count: players.length });
+  const byName = new Map<string, UnitResources[]>();
+  for (const u of units) {
+    if (u.boss || u.unit.unit.kind === 'player') continue;
+    const members = byName.get(u.unit.name);
+    if (members) members.push(u);
+    else byName.set(u.unit.name, [u]);
+  }
+  const groups = new Map<UnitResources, UnitResources[]>();
+  for (const members of byName.values()) if (members.length > 1) for (const u of members) groups.set(u, members);
+  const picked = units.find((u) => keyOf(u) === selectedKey);
+  const selected = picked ?? units[0];
+  if (!picked) {
+    setSelectedKey(keyOf(selected));
+    if (groups.has(selected)) setOpenGroups((open) => new Set(open).add(selected.unit.name));
+  }
+  const selectedRef = playerOf(selected);
+  const listed = !(scope.source.length === 1 && units.length === 1);
+  const label = t(scope.perspective === 'friendly' ? 'resources.playersCount' : 'resources.enemiesCount', { count: units.length });
   const spellName = (id: number) => reportSpellName(report.spells, id);
+  const icon = (u: UnitResources, size: number) => {
+    const player = playerOf(u);
+    return player ? <PlayerIcon player={player} size={size} /> : <MonogramTile name={valueLabel(u.unit.unit, u.unit.name)} size={size} />;
+  };
+  const toggleGroup = (name: string) =>
+    setOpenGroups((open) => {
+      const next = new Set(open);
+      if (!next.delete(name)) next.add(name);
+      return next;
+    });
+  const unitButton = (u: UnitResources, name: string, className = 'plink') => {
+    const ref = playerOf(u);
+    const primary = u.tracks[0];
+    const on = u === selected;
+    return (
+      <button key={keyOf(u)} type="button" className={on ? `${className} plink-on` : className} aria-pressed={on} onClick={() => setSelectedKey(keyOf(u))}>
+        {icon(u, 22)}
+        <span className="plink-text">
+          <span className="plink-name" style={ref ? { color: classColor(ref.classToken) } : undefined}>
+            {name}
+          </span>
+          <span className="plink-sub">{[ref?.specName, u.tracks.map((tr) => powerName(tr.powerType)).join(', ')].filter(Boolean).join(' · ')}</span>
+        </span>
+        <span className="num plink-value">{primary?.avgPct != null ? formatShare(primary.avgPct) : '—'}</span>
+      </button>
+    );
+  };
 
   return (
     <div className="res-page">
-      <aside className="panel panel-clip res-list" aria-labelledby="res-list-title">
-        <div className="panel-head panel-head-tight">
-          <div>
-            <h2 id="res-list-title" className="h2">
-              {label}
-            </h2>
-            <div className="panel-sub">{t('resources.listHint')}</div>
+      {listed && (
+        <aside className="panel panel-clip res-list" aria-labelledby="res-list-title">
+          <div className="panel-head panel-head-tight">
+            <div>
+              <h2 id="res-list-title" className="h2">
+                {label}
+              </h2>
+              <div className="panel-sub">{t('resources.listHint')}</div>
+            </div>
           </div>
-        </div>
-        <div role="group" aria-label={label}>
-          {players.map((p) => {
-            const ref = roster.get(p.player);
-            const primary = p.tracks[0];
-            const on = p.player === selected.player;
-            return (
-              <button key={p.player} type="button" className={on ? 'plink plink-on' : 'plink'} aria-pressed={on} onClick={() => setSelectedId(p.player)}>
-                <PlayerIcon player={ref} size={22} />
-                <span className="plink-text">
-                  <span className="plink-name" style={{ color: classColor(ref?.classToken ?? null) }}>
-                    {nameOf(p.player)}
-                  </span>
-                  <span className="plink-sub">{[ref?.specName, p.tracks.map((tr) => powerName(tr.powerType)).join(', ')].filter(Boolean).join(' · ')}</span>
-                </span>
-                <span className="num plink-value">{primary?.avgPct != null ? formatShare(primary.avgPct) : '—'}</span>
-              </button>
-            );
-          })}
-        </div>
-      </aside>
+          <div role="group" aria-label={label}>
+            {units.map((u) => {
+              const members = groups.get(u);
+              if (!members) return unitButton(u, nameOf(u));
+              if (members[0] !== u) return null;
+              const name = u.unit.name;
+              const open = openGroups.has(name);
+              const marked = !open && members.includes(selected);
+              const groupName = valueLabel(u.unit.unit, name);
+              return (
+                <Fragment key={`group-${name}`}>
+                  <button
+                    type="button"
+                    className={marked ? 'plink plink-group plink-on' : 'plink plink-group'}
+                    aria-expanded={open}
+                    aria-current={marked ? 'true' : undefined}
+                    onClick={() => toggleGroup(name)}
+                  >
+                    <span className="plink-arrow" aria-hidden="true">
+                      {open ? '▾' : '▸'}
+                    </span>
+                    <span className="plink-name">{t('resources.group', { name: groupName, count: members.length })}</span>
+                  </button>
+                  {open && (
+                    <div role="group" aria-label={groupName}>
+                      {members.map((u) => unitButton(u, u.unit.number === null ? nameOf(u) : t('scope.instanceNumber', { number: u.unit.number }), 'plink plink-instance'))}
+                    </div>
+                  )}
+                </Fragment>
+              );
+            })}
+          </div>
+        </aside>
+      )}
       <section className="panel panel-clip res-main" aria-labelledby="res-title">
         <div className="panel-head panel-head-side">
-          <PlayerIcon player={selectedRef} size={36} />
+          {icon(selected, 36)}
           <div className="side-title">
             <h2 id="res-title" className="h2">
-              <span style={{ color: classColor(selectedRef?.classToken ?? null) }}>{nameOf(selected.player)}</span>{' '}
+              <span style={selectedRef ? { color: classColor(selectedRef.classToken) } : undefined}>{nameOf(selected)}</span>{' '}
               <span className="res-title-suffix">{t('resources.titleSuffix')}</span>
             </h2>
             <span className="side-sub">
               {[selectedRef?.specName, t('resources.trackCount', { count: selected.tracks.length })].filter(Boolean).join(' · ')}
             </span>
           </div>
-          <button type="button" className="link-accent" onClick={() => void openPlayer(selected.player)}>
-            {t('report.playerDetails')}
-          </button>
+          <div className="report-head-tools">
+            <ReportPickers tab="resources" />
+          </div>
+          {selectedRef && (
+            <button type="button" className="link-accent" onClick={() => void openPlayer(selectedRef.actorId)}>
+              {t('report.playerDetails')}
+            </button>
+          )}
         </div>
         {selected.tracks.map((track) => (
           <ResourceTrack
@@ -124,8 +203,6 @@ function ResourceTrack({
     return pos ? [pos] : [];
   });
   const pct = (value: number | null) => (value !== null ? formatShare(value) : '—');
-  // A minute and more as m:ss like every other duration.
-  const capTime = (ms: number) => (ms <= 0 ? '—' : ms < 60_000 ? formatSeconds(ms) : formatDuration(ms));
   const largest = Math.max(1, ...track.gains.map((g) => g.gained));
   return (
     <section className="res-track" aria-labelledby={id}>
@@ -149,11 +226,11 @@ function ResourceTrack({
       <div className="res-stats" role="group" aria-label={t('resources.kpis', { power: name })}>
         <Kpi label={t('resources.average')} value={pct(track.avgPct)} sub="" />
         <Kpi label={t('resources.minimum')} value={pct(track.minPct)} sub="" />
-        <Kpi label={t('resources.atCap')} value={capTime(track.cappedMs)} sub="" />
-        <Kpi label={t('resources.gained')} value={track.gained > 0 ? formatAmount(track.gained) : '—'} sub="" />
+        <Kpi label={t('resources.atCap')} value={formatCapTime(track.cappedMs)} sub="" />
+        <Kpi label={t('resources.gained')} value={track.gained > 0 ? formatScaled(track.gained) : '—'} sub="" />
         <Kpi
           label={t('resources.wastedCol')}
-          value={track.wasted > 0 ? formatAmount(track.wasted) : '—'}
+          value={track.wasted > 0 ? formatScaled(track.wasted) : '—'}
           tone={track.wasted > 0 ? 'warn' : undefined}
           sub=""
         />
@@ -208,10 +285,10 @@ function ResourceTrack({
                   <span className="bar bar-lg" aria-hidden="true">
                     <span style={{ width: `${(g.gained / largest) * 100}%`, background: colour }} />
                   </span>
-                  <span className="num res-gain-amount">{formatAmount(g.gained)}</span>
+                  <span className="num res-gain-amount">{formatScaled(g.gained)}</span>
                 </span>
                 <span role="cell" className={g.wasted > 0 ? 'num res-gain-wasted res-gain-wasted-warn' : 'num res-gain-wasted dash'}>
-                  {g.wasted > 0 ? formatAmount(g.wasted) : '—'}
+                  {g.wasted > 0 ? formatScaled(g.wasted) : '—'}
                 </span>
               </div>
             ))}

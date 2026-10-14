@@ -63,6 +63,16 @@ pub struct DeathRecap {
 }
 
 pub fn death_recaps(fight: &Fight, curated: &Curated, filter: &ReportFilter) -> Vec<DeathRecap> {
+    death_recaps_where(fight, curated, filter, |_| true)
+}
+
+/// The recaps of the deaths in the range that `wanted` keeps; `number` counts every death.
+pub(crate) fn death_recaps_where(
+    fight: &Fight,
+    curated: &Curated,
+    filter: &ReportFilter,
+    wanted: impl Fn(&Death) -> bool,
+) -> Vec<DeathRecap> {
     let all = deaths(fight);
     let consumables = consumable_uses(fight, curated);
     let defensives = defensive_uses(fight, curated);
@@ -77,7 +87,7 @@ pub fn death_recaps(fight: &Fight, curated: &Curated, filter: &ReportFilter) -> 
     };
     all.iter()
         .enumerate()
-        .filter(|(_, death)| filter.contains(death.t))
+        .filter(|(_, death)| filter.contains(death.t) && wanted(death))
         .map(|(index, death)| {
             let player = death.player;
             let start = (death.t - RECAP_WINDOW_MS).max(0);

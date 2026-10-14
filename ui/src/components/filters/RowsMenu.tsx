@@ -1,19 +1,16 @@
 import { useId, useRef, useState } from 'react';
 import type { Dimension } from '../../api/types';
 import { useDismiss } from '../../hooks/useDismiss';
-import { t } from '../../i18n/i18n';
-import { type MetricTab, useApp } from '../../store';
+import { type MessageKey, t } from '../../i18n/i18n';
+import { type FilterTab, SIDES } from '../../scopeSides';
+import { useApp } from '../../store';
 
-const ORDER: Record<MetricTab, Dimension[]> = {
-  damage: ['source', 'ability', 'target'],
-  healing: ['source', 'ability', 'target'],
-  taken: ['target', 'ability', 'source'],
-};
-const VERB = { damage: 'done', healing: 'healing', taken: 'taken' } as const satisfies Record<MetricTab, string>;
+const VERB = { damage: 'done', healing: 'healing', taken: 'taken', casts: 'casts', interrupts: 'kicks', buffs: 'auras' } as const satisfies Partial<Record<FilterTab, string>>;
 
-const rowsLabel = (tab: MetricTab, dimension: Dimension) => t(`rows.${VERB[tab]}.${dimension}`);
+const rowsLabel = (tab: FilterTab, dimension: Dimension) => t(`rows.${VERB[tab as keyof typeof VERB]}.${dimension}` as MessageKey);
 
-export function RowsMenu({ tab, group }: { tab: MetricTab; group: Dimension }) {
+/** The tab's row groupings; a tab with one grouping or none has no menu. */
+export function RowsMenu({ tab, group }: { tab: FilterTab; group: Dimension }) {
   const scope = useApp((s) => s.scope);
   const setGrouping = useApp((s) => s.setGrouping);
   const [open, setOpen] = useState(false);
@@ -29,6 +26,7 @@ export function RowsMenu({ tab, group }: { tab: MetricTab; group: Dimension }) {
     },
   });
 
+  if (SIDES[tab].rows.length < 2) return null;
   return (
     <div ref={root} className="options">
       <button ref={button} type="button" className="dd" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>
@@ -37,7 +35,7 @@ export function RowsMenu({ tab, group }: { tab: MetricTab; group: Dimension }) {
       </button>
       {open && (
         <div id={id} className="options-pop rows-pop" role="dialog" aria-label={t('rows.caption')}>
-          {ORDER[tab].map((d) => {
+          {SIDES[tab].rows.map((d) => {
             const narrowed = scope[d].length > 0;
             return (
               <button

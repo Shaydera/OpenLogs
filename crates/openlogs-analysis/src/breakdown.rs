@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
+use openlogs_gamedata::Curated;
+
 use crate::cells::{Cell, CellKind, ScopeMetric, cells, in_scope};
 use crate::fight::{Fight, SpellId};
 use crate::filter::ReportFilter;
@@ -52,22 +54,6 @@ pub struct Breakdown {
     pub rows: Vec<GroupedRow>,
 }
 
-pub fn own_dimension(metric: ScopeMetric) -> Dimension {
-    if metric == ScopeMetric::DamageTaken {
-        Dimension::Target
-    } else {
-        Dimension::Source
-    }
-}
-
-pub fn other_dimension(metric: ScopeMetric) -> Dimension {
-    if metric == ScopeMetric::DamageTaken {
-        Dimension::Source
-    } else {
-        Dimension::Target
-    }
-}
-
 fn narrowed(scope: &Scope, dimension: Dimension) -> bool {
     match dimension {
         Dimension::Source => !scope.source.is_empty(),
@@ -76,25 +62,33 @@ fn narrowed(scope: &Scope, dimension: Dimension) -> bool {
     }
 }
 
-fn order(metric: ScopeMetric) -> [Dimension; 3] {
-    [
-        own_dimension(metric),
-        Dimension::Ability,
-        other_dimension(metric),
-    ]
-}
-
 pub fn effective_group(scope: &Scope, metric: ScopeMetric, wanted: Dimension) -> Dimension {
     if !narrowed(scope, wanted) {
         return wanted;
     }
-    order(metric)
-        .into_iter()
+    metric
+        .groupings()
+        .iter()
+        .copied()
         .find(|d| !narrowed(scope, *d))
         .unwrap_or(wanted)
 }
 
-fn key_of(fight: &Fight, cell: &Cell, dimension: Dimension) -> RowKey {
+/// The dimensions a row of `group` can still be split by.
+pub(crate) fn side_dimensions(
+    scope: &Scope,
+    metric: ScopeMetric,
+    group: Dimension,
+) -> Vec<Dimension> {
+    metric
+        .groupings()
+        .iter()
+        .copied()
+        .filter(|d| *d != group && !narrowed(scope, *d))
+        .collect()
+}
+
+pub(crate) fn key_of(fight: &Fight, cell: &Cell, dimension: Dimension) -> RowKey {
     match dimension {
         Dimension::Source => RowKey::Unit(cell.source.grouped(fight)),
         Dimension::Target => RowKey::Unit(cell.target.grouped(fight)),
@@ -167,17 +161,27 @@ fn rows_of<'a>(
 
 pub fn breakdown(
     fight: &Fight,
+    curated: &Curated,
     filter: &ReportFilter,
     scope: &Scope,
     metric: ScopeMetric,
     wanted: Dimension,
 ) -> Breakdown {
+    let all = cells(fight, curated, filter, scope.perspective, metric);
+    group_cells(fight, filter, scope, metric, &all, wanted)
+}
+
+/// `all`: the metric's cells in the range, before the selections.
+pub(crate) fn group_cells(
+    fight: &Fight,
+    filter: &ReportFilter,
+    scope: &Scope,
+    metric: ScopeMetric,
+    all: &[Cell],
+    wanted: Dimension,
+) -> Breakdown {
     let group = effective_group(scope, metric, wanted);
-    let side: Vec<Dimension> = order(metric)
-        .into_iter()
-        .filter(|d| *d != group && !narrowed(scope, *d))
-        .collect();
-    let all = cells(fight, filter, scope.perspective, metric);
+    let side = side_dimensions(scope, metric, group);
     let mut total = 0;
     let mut buckets: HashMap<RowKey, Vec<&Cell>> = HashMap::new();
     for cell in all.iter().filter(|c| in_scope(scope, fight, c)) {

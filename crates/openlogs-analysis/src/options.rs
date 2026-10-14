@@ -1,8 +1,10 @@
 use std::collections::{BTreeSet, HashMap};
 
+use openlogs_gamedata::Curated;
+
 use crate::actors::{ActorId, NOBODY};
 use crate::breakdown::Dimension;
-use crate::cells::{Cell, CellKind, ScopeMetric, cells, in_scope};
+use crate::cells::{Cell, ScopeMetric, cells, in_scope};
 use crate::fight::{EventKind, Fight, SpellId};
 use crate::filter::ReportFilter;
 use crate::links::{SpellKey, spell_key};
@@ -112,6 +114,7 @@ fn primary(variants: &[SpellVariant]) -> Option<SpellId> {
 
 pub fn filter_options(
     fight: &Fight,
+    curated: &Curated,
     filter: &ReportFilter,
     scope: &Scope,
     metric: ScopeMetric,
@@ -123,11 +126,11 @@ pub fn filter_options(
         Dimension::Target => open.target.clear(),
         Dimension::Ability => open.ability.clear(),
     }
-    let all = cells(fight, filter, scope.perspective, metric);
+    let all = cells(fight, curated, filter, scope.perspective, metric);
     let wanted: Vec<&Cell> = all
         .iter()
         .filter(|c| in_scope(&open, fight, c))
-        .filter(|c| dimension != Dimension::Ability || c.kind != CellKind::Unmatched)
+        .filter(|c| c.names(dimension))
         .collect();
     let mut amounts: HashMap<OptionValue, i64> = HashMap::new();
     let mut instances: HashMap<String, BTreeSet<ActorId>> = HashMap::new();

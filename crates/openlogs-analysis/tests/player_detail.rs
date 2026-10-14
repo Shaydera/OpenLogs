@@ -1,8 +1,9 @@
 mod support;
 
 use openlogs_analysis::{
-    Attribution, AuraAction, AuraType, BuffKind, BuffShare, CastKind, Damage, DamageVia, EventKind,
-    Metric, NO_SPELL, NOBODY, ReportFilter, RowKind, player_detail,
+    AbilityRef, Attribution, AuraAction, AuraType, BuffKind, BuffShare, CastKind, Damage,
+    DamageVia, Dimension, EventKind, Metric, NO_SPELL, NOBODY, ReportFilter, RowKind, Scope,
+    ScopeMetric, UnitRef, breakdown, player_detail,
 };
 use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS, damage, heal};
@@ -97,7 +98,15 @@ fn summary_totals_rank_and_support() {
     let fight = r.b.build();
     let curated = Curated::bundled();
 
-    let aug = player_detail(&fight, &curated, r.mage, Metric::Damage, &whole(AUG)).unwrap();
+    let aug = player_detail(
+        &fight,
+        &curated,
+        r.mage,
+        Metric::Damage,
+        &whole(AUG),
+        &Scope::default(),
+    )
+    .unwrap();
     assert_eq!(
         (
             aug.total,
@@ -115,7 +124,15 @@ fn summary_totals_rank_and_support() {
     let barrage = aug.abilities.iter().find(|a| a.row.spell == 44425).unwrap();
     assert_eq!((barrage.casts, barrage.aug), (Some(1), false));
 
-    let re = player_detail(&fight, &curated, r.mage, Metric::Damage, &whole(RE)).unwrap();
+    let re = player_detail(
+        &fight,
+        &curated,
+        r.mage,
+        Metric::Damage,
+        &whole(RE),
+        &Scope::default(),
+    )
+    .unwrap();
     assert_eq!(
         (re.total, re.other_mode_total, re.ranked_players),
         (900, 1_000, 3)
@@ -164,6 +181,7 @@ fn cast_rows_order_major_cooldowns_rotation_then_defensives() {
         r.mage,
         Metric::Damage,
         &whole(AUG),
+        &Scope::default(),
     )
     .unwrap();
     let rows: Vec<_> = detail
@@ -212,6 +230,7 @@ fn buff_rows_keep_only_curated_buffs_by_kind() {
         r.mage,
         Metric::Damage,
         &whole(AUG),
+        &Scope::default(),
     )
     .unwrap();
     let rows: Vec<_> = detail.buff_rows.iter().map(|b| (b.spell, b.kind)).collect();
@@ -245,13 +264,29 @@ fn a_player_dead_for_the_whole_range_is_shown_dead() {
         end_ms: 9_000,
         attribution: AUG,
     };
-    let detail = player_detail(&fight, &curated, r.mage, Metric::Damage, &window).unwrap();
+    let detail = player_detail(
+        &fight,
+        &curated,
+        r.mage,
+        Metric::Damage,
+        &window,
+        &Scope::default(),
+    )
+    .unwrap();
     assert!(detail.deaths.is_empty());
     assert_eq!(
         (detail.dead.clone(), detail.dead_since),
         (vec![(5_000, 9_000)], Some(2_000))
     );
-    let detail = player_detail(&fight, &curated, r.mage, Metric::Damage, &whole(AUG)).unwrap();
+    let detail = player_detail(
+        &fight,
+        &curated,
+        r.mage,
+        Metric::Damage,
+        &whole(AUG),
+        &Scope::default(),
+    )
+    .unwrap();
     assert_eq!(
         (detail.dead, detail.dead_since),
         (vec![(2_000, 20_000)], None)
@@ -287,6 +322,7 @@ fn pets_merge_into_one_row_named_after_the_largest() {
         r.mage,
         Metric::Damage,
         &whole(AUG),
+        &Scope::default(),
     )
     .unwrap();
     let rows: Vec<_> = detail
@@ -349,6 +385,7 @@ fn specs_without_catalogue_entries_show_their_most_cast_spells_as_rotation() {
         r.warrior,
         Metric::Damage,
         &whole(AUG),
+        &Scope::default(),
     )
     .unwrap();
     let rows: Vec<_> = detail.cast_rows.iter().map(|c| (c.spell, c.kind)).collect();
@@ -366,4 +403,161 @@ fn specs_without_catalogue_entries_show_their_most_cast_spells_as_rotation() {
         ],
         "six most-cast spells with three casts or more, first cast first; no consumables"
     );
+}
+
+#[test]
+fn the_page_filter_narrows_the_metric_parts_and_matches_the_breakdown() {
+    let mut r = raid();
+    let add = r.b.unit(
+        "Creature-0-1-1-1-261874-01",
+        "Blightscale Rawling",
+        HOSTILE_FLAGS,
+    );
+    r.b.push(1_100, r.mage, r.boss, 44425, hit(1_000));
+    r.b.push(1_100, r.mage, r.boss, 395152, supported(100, r.evoker));
+    r.b.push(1_500, r.mage, add, 44425, hit(400));
+    r.b.push(2_000, r.warrior, r.boss, 12294, hit(5_000));
+    r.b.push(2_500, r.warrior, add, 12294, hit(300));
+    r.b.push(3_000, r.boss, r.mage, 1, hit(700));
+    r.b.push(3_500, r.priest, r.mage, 2061, EventKind::Heal(heal(500, 0)));
+    r.b.push(
+        4_000,
+        r.priest,
+        r.warrior,
+        2061,
+        EventKind::Heal(heal(400, 0)),
+    );
+    let fight = r.b.build();
+    let curated = Curated::bundled();
+    let on_add = Scope {
+        target: vec![UnitRef::Unit("Blightscale Rawling".into())],
+        ..Scope::default()
+    };
+    let page = player_detail(
+        &fight,
+        &curated,
+        r.mage,
+        Metric::Damage,
+        &whole(RE),
+        &on_add,
+    )
+    .unwrap();
+    assert_eq!((page.total, page.rank, page.ranked_players), (400, 1, 2));
+    assert_eq!(page.series.iter().sum::<f64>() * 5.0, 400.0);
+    assert_eq!(
+        page.taken_by_spell,
+        vec![(1, false, 700)],
+        "context stays whole"
+    );
+
+    let barrage = Scope {
+        ability: vec![AbilityRef::Name("Arcane Barrage".into())],
+        ..Scope::default()
+    };
+    let page = player_detail(
+        &fight,
+        &curated,
+        r.mage,
+        Metric::Damage,
+        &whole(RE),
+        &barrage,
+    )
+    .unwrap();
+    let cells = breakdown(
+        &fight,
+        &curated,
+        &whole(RE),
+        &Scope {
+            source: vec![UnitRef::Player(r.mage)],
+            ..barrage
+        },
+        ScopeMetric::DamageDone,
+        Dimension::Source,
+    );
+    assert_eq!(
+        page.total as i64, cells.total,
+        "the Evoker's share leaves the hit's ability as it does in the breakdown"
+    );
+    assert_eq!(page.total, 1_300);
+    assert_eq!(page.series.iter().sum::<f64>() * 5.0, 1_300.0);
+    assert_eq!(page.support_received, 100);
+
+    let ebon_might = Scope {
+        ability: vec![AbilityRef::Name("Ebon Might".into())],
+        ..Scope::default()
+    };
+    let page = player_detail(
+        &fight,
+        &curated,
+        r.mage,
+        Metric::Damage,
+        &whole(RE),
+        &ebon_might,
+    )
+    .unwrap();
+    assert_eq!(
+        (page.total, page.support_received),
+        (0, 0),
+        "only the Evoker's credit names Ebon Might"
+    );
+
+    let on_warrior = Scope {
+        target: vec![UnitRef::Player(r.warrior)],
+        ..Scope::default()
+    };
+    let page = player_detail(
+        &fight,
+        &curated,
+        r.priest,
+        Metric::Healing,
+        &whole(RE),
+        &on_warrior,
+    )
+    .unwrap();
+    assert_eq!(page.total, 400);
+    assert_eq!(page.series.iter().sum::<f64>() * 5.0, 400.0);
+}
+
+#[test]
+fn an_evokers_own_buff_share_follows_the_ability_selection() {
+    let mut r = raid();
+    r.b.spell(395160, "Eruption");
+    r.b.push(1_100, r.mage, r.boss, 44425, hit(1_000));
+    r.b.push(1_100, r.mage, r.boss, 395152, supported(100, r.evoker));
+    r.b.push(1_200, r.evoker, r.boss, 395160, hit(2_000));
+    r.b.push(1_200, r.evoker, r.boss, 395152, supported(200, r.evoker));
+    let fight = r.b.build();
+    let curated = Curated::bundled();
+    for (ability, expected) in [("Ebon Might", 300), ("Eruption", 1_800)] {
+        let scope = Scope {
+            ability: vec![AbilityRef::Name(ability.into())],
+            ..Scope::default()
+        };
+        let page = player_detail(
+            &fight,
+            &curated,
+            r.evoker,
+            Metric::Damage,
+            &whole(RE),
+            &scope,
+        )
+        .unwrap();
+        let cells = breakdown(
+            &fight,
+            &curated,
+            &whole(RE),
+            &Scope {
+                source: vec![UnitRef::Player(r.evoker)],
+                ..scope
+            },
+            ScopeMetric::DamageDone,
+            Dimension::Source,
+        );
+        assert_eq!(
+            (page.total, cells.total),
+            (expected, expected as i64),
+            "{ability}"
+        );
+        assert_eq!(page.series.iter().sum::<f64>() * 5.0, expected as f64);
+    }
 }

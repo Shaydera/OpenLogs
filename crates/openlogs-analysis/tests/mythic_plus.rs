@@ -143,6 +143,7 @@ fn a_released_player_is_not_dead_to_the_end_of_the_run() {
         faelan,
         openlogs_analysis::Metric::Damage,
         &whole,
+        &openlogs_analysis::Scope::default(),
     )
     .unwrap();
     assert_eq!(detail.dead, vec![(260_000, 270_000)]);
@@ -157,6 +158,7 @@ fn a_released_player_is_not_dead_to_the_end_of_the_run() {
         faelan,
         openlogs_analysis::Metric::Damage,
         &after,
+        &openlogs_analysis::Scope::default(),
     )
     .unwrap();
     assert!(

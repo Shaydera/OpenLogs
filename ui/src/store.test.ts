@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { api } from './api/client';
 import type { ChosenLog, LogSource } from './api/logSource';
-import type { DamageReport, LogView, PullComparison, QuickOverview, RecentLog } from './api/types';
+import type { DamageReport, LogView, PullComparison, QuickOverview, RecentLog, Scope } from './api/types';
 import { comparisonFixture } from './test/compareFixture';
 import { overviewFixture } from './test/overviewFixture';
 import {
@@ -18,7 +18,7 @@ import {
   takenReportFixture,
   targetDetailFixture,
 } from './test/reportFixtures';
-import { initialState, useApp } from './store';
+import { type FightTab, initialState, useApp } from './store';
 
 vi.mock('./api/client', () => ({
   api: {
@@ -60,6 +60,7 @@ const LOG: LogView = {
 };
 
 const WHOLE_PULL = { startMs: null, endMs: null, attribution: 'reattributed' };
+const OPEN = { perspective: 'friendly', source: [], target: [], ability: [] };
 
 function sourceOf(log: LogView): LogSource {
   return { id: log.id, name: log.fileName, size: log.sizeBytes, lastModified: 0, read: vi.fn() };
@@ -69,6 +70,7 @@ function chosen(log: LogView): ChosenLog {
   return { name: log.fileName, open: async () => sourceOf(log) };
 }
 const ENEMY = 'Blightscale Rawling';
+const PYRRIN_ROW = JSON.stringify({ kind: 'unit', unit: { kind: 'player', actorId: 2 } });
 
 beforeEach(() => {
   Object.values(api).forEach((fn) => (fn as Mock).mockReset());
@@ -173,7 +175,7 @@ describe('logs and pulls', () => {
   it('resets the tab, range, details and Casts selection when a pull opens', async () => {
     await openPull();
     await useApp.getState().setTab('casts');
-    useApp.getState().selectCastsPlayer(2);
+    useApp.getState().selectCastsRow(PYRRIN_ROW);
     useApp.getState().setCastsSort({ key: 'cpm', desc: false });
     await useApp.getState().setRange({ startMs: 0, endMs: 1_000 });
     await useApp.getState().openPlayer(4);
@@ -184,7 +186,7 @@ describe('logs and pulls', () => {
       range: null,
       report: null,
       details: [],
-      castsPlayer: null,
+      castsRow: null,
       castsSort: { key: 'amount', desc: true },
     });
   });
@@ -228,16 +230,11 @@ describe('reports', () => {
     ['damage', api.damageDoneReport, damageReportFixture, []],
     ['healing', api.healingReport, healingReportFixture, []],
     ['taken', api.damageTakenReport, takenReportFixture, []],
-    ['deaths', api.deathsReport, deathsReportFixture, []],
-    ['casts', api.castsReport, castsReportFixture, []],
-    ['buffs', api.aurasReport, aurasReportFixture, ['debuffs_on_enemies']],
-    ['interrupts', api.interruptsReport, interruptsReportFixture, []],
-    ['resources', api.resourcesReport, resourcesReportFixture, []],
   ] as const)('loads the %s tab through its own API call', async (tab, load, data, scope) => {
     (load as Mock).mockResolvedValue(data);
     await openPull();
     // The whole-pull overview arrives with the pull; only a range makes Overview request a report.
-    useApp.setState({ range: { startMs: 40_000, endMs: 60_000 }, auraScope: 'debuffs_on_enemies' });
+    useApp.setState({ range: { startMs: 40_000, endMs: 60_000 } });
     await useApp.getState().setTab(tab);
     expect(load).toHaveBeenLastCalledWith(LOG.id, 1, ...scope, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed' });
     expect(useApp.getState().report).toEqual({ tab, data });
@@ -250,11 +247,11 @@ describe('detail stack', () => {
     await useApp.getState().setTab('healing');
     await useApp.getState().setRange({ startMs: 0, endMs: 60_000 });
     await useApp.getState().openPlayer(2);
-    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'reattributed' });
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'reattributed' }, OPEN);
     expect(useApp.getState().report).toEqual({ tab: 'player', data: playerDetailFixture });
 
     await useApp.getState().setAttribution('augmented');
-    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'augmented' });
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'augmented' }, OPEN);
 
     await useApp.getState().closeDetail();
     expect(useApp.getState().details).toEqual([]);
@@ -266,7 +263,7 @@ describe('detail stack', () => {
     await useApp.getState().setTab('taken');
     await useApp.getState().openPlayer(4);
     expect(useApp.getState().tab).toBe('damage');
-    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 4, 'damage', WHOLE_PULL);
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 4, 'damage', WHOLE_PULL, OPEN);
 
     await useApp.getState().setTab('healing');
     await useApp.getState().closeDetail();
@@ -283,7 +280,7 @@ describe('detail stack', () => {
     await useApp.getState().openAbility(44425, null);
     const ability = { kind: 'ability', player: 4, spellId: 44425, pet: null, spellName: 'Arcane Barrage' };
     expect(useApp.getState().details).toEqual([{ kind: 'player', player: 4 }, ability]);
-    expect(api.abilityDetail).toHaveBeenLastCalledWith(LOG.id, 1, 4, 44425, null, 'damage', WHOLE_PULL);
+    expect(api.abilityDetail).toHaveBeenLastCalledWith(LOG.id, 1, 4, 44425, null, 'damage', WHOLE_PULL, OPEN);
     expect(useApp.getState().report).toEqual({ tab: 'ability', data: abilityDetailFixture });
 
     await useApp.getState().openTarget(ENEMY);
@@ -301,7 +298,7 @@ describe('detail stack', () => {
     await useApp.getState().openAbility(44425, null);
     await useApp.getState().setTab('healing');
     expect(useApp.getState().details).toEqual([{ kind: 'player', player: 4 }]);
-    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 4, 'healing', WHOLE_PULL);
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 4, 'healing', WHOLE_PULL, OPEN);
     expect(api.abilityDetail).toHaveBeenCalledTimes(1);
   });
 
@@ -310,10 +307,10 @@ describe('detail stack', () => {
     await openPull();
     await useApp.getState().openTarget('');
     expect(useApp.getState().tab).toBe('damage');
-    expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.id, 1, '', WHOLE_PULL);
+    expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.id, 1, '', WHOLE_PULL, OPEN);
     expect(useApp.getState().details).toEqual([{ kind: 'target', name: "Ula'tek" }]);
     await useApp.getState().setRange({ startMs: 120_000, endMs: 140_000 });
-    expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.id, 1, "Ula'tek", { startMs: 120_000, endMs: 140_000, attribution: 'reattributed' });
+    expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.id, 1, "Ula'tek", { startMs: 120_000, endMs: 140_000, attribution: 'reattributed' }, OPEN);
 
     await useApp.getState().openTarget(ENEMY);
     expect(useApp.getState().details).toEqual([{ kind: 'target', name: ENEMY }]);
@@ -382,7 +379,7 @@ describe('detail origin', () => {
   it("walks back through a player's ability to the Casts tab and keeps its selection", async () => {
     await openPull();
     await useApp.getState().setTab('casts');
-    useApp.getState().selectCastsPlayer(2);
+    useApp.getState().selectCastsRow(PYRRIN_ROW);
     useApp.getState().setCastsSort({ key: 'cpm', desc: false });
     await useApp.getState().openAbilityOf(2, 774, 'healing');
     expect(useApp.getState().tab).toBe('healing');
@@ -390,7 +387,7 @@ describe('detail origin', () => {
       { kind: 'player', player: 2 },
       { kind: 'ability', player: 2, spellId: 774, pet: null },
     ]);
-    expect(api.abilityDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 774, null, 'healing', WHOLE_PULL);
+    expect(api.abilityDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 774, null, 'healing', WHOLE_PULL, OPEN);
 
     await useApp.getState().back();
     expect(useApp.getState().details).toEqual([{ kind: 'player', player: 2 }]);
@@ -398,7 +395,7 @@ describe('detail origin', () => {
     expect(useApp.getState()).toMatchObject({
       tab: 'casts',
       report: { tab: 'casts', data: castsReportFixture },
-      castsPlayer: 2,
+      castsRow: PYRRIN_ROW,
       castsSort: { key: 'cpm', desc: false },
     });
   });
@@ -604,7 +601,139 @@ describe('view filters', () => {
     await useApp.getState().setTab('damage');
     await useApp.getState().setGrouping('ability');
     await useApp.getState().setTab('taken');
-    expect(useApp.getState().grouping).toEqual({ damage: 'ability', healing: 'source', taken: 'target' });
+    expect(vi.mocked(api.breakdownReport).mock.calls.at(-1)![5]).toBe('target');
+    await useApp.getState().setTab('damage');
+    expect(vi.mocked(api.breakdownReport).mock.calls.at(-1)![5]).toBe('ability');
+  });
+
+  it('sends the scope, grouping and Hide procs with the casts report and reloads it for Hide procs', async () => {
+    await openPull();
+    await useApp.getState().setTab('casts');
+    await useApp.getState().select('source', { kind: 'player', actorId: 2 });
+    await useApp.getState().setGrouping('ability');
+    const scope = { perspective: 'friendly', source: [{ kind: 'player', actorId: 2 }], target: [], ability: [] };
+    expect(api.castsReport).toHaveBeenLastCalledWith(LOG.id, 1, WHOLE_PULL, scope, 'ability', true);
+    await useApp.getState().setHideProcs(false);
+    expect(api.castsReport).toHaveBeenLastCalledWith(LOG.id, 1, WHOLE_PULL, scope, 'ability', false);
+  });
+
+  it('sends the scope and grouping with the interrupts report', async () => {
+    vi.mocked(api.interruptsReport).mockResolvedValue(interruptsReportFixture);
+    await openPull();
+    await useApp.getState().setTab('interrupts');
+    await useApp.getState().select('ability', { kind: 'id', spellId: 5 });
+    const scope = { perspective: 'friendly', source: [], target: [], ability: [{ kind: 'id', spellId: 5 }] };
+    expect(api.interruptsReport).toHaveBeenLastCalledWith(LOG.id, 1, WHOLE_PULL, scope, 'source');
+    expect(useApp.getState().report).toEqual({ tab: 'interrupts', data: interruptsReportFixture });
+  });
+
+  it('asks the auras report for the chosen kind and asks the pickers for its family', async () => {
+    vi.mocked(api.aurasReport).mockResolvedValue(aurasReportFixture);
+    vi.mocked(api.filterOptions).mockResolvedValue([]);
+    await openPull();
+    await useApp.getState().setTab('buffs');
+    await useApp.getState().setAuraKind('debuffs');
+    const scope = { perspective: 'friendly', source: [], target: [], ability: [] };
+    expect(api.aurasReport).toHaveBeenLastCalledWith(LOG.id, 1, WHOLE_PULL, scope, 'debuffs', 'ability');
+    await useApp.getState().filterOptions('target');
+    expect(api.filterOptions).toHaveBeenLastCalledWith(LOG.id, 1, WHOLE_PULL, scope, 'debuffs', 'target');
+  });
+
+  it('sends the scope with the deaths report and narrows to the player a death recap link names', async () => {
+    vi.mocked(api.deathsReport).mockResolvedValue(deathsReportFixture);
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().select('target', { kind: 'unit', name: ENEMY });
+    await useApp.getState().setPerspective('enemy');
+    await useApp.getState().select('source', { kind: 'unit', name: ENEMY });
+    await useApp.getState().select('ability', { kind: 'name', name: 'Virulent Spit' });
+    await useApp.getState().openDeathRecap(4, 239_100);
+    const scope = { perspective: 'friendly', source: [], target: [{ kind: 'player', actorId: 4 }], ability: [] };
+    expect(api.deathsReport).toHaveBeenLastCalledWith(LOG.id, 1, WHOLE_PULL, scope);
+    expect(useApp.getState().report).toEqual({ tab: 'deaths', data: deathsReportFixture });
+  });
+
+  it('sends the range and the own side as the resources holder, never a target', async () => {
+    vi.mocked(api.resourcesReport).mockResolvedValue(resourcesReportFixture);
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().select('source', { kind: 'player', actorId: 3 });
+    await useApp.getState().select('target', { kind: 'unit', name: ENEMY });
+    useApp.setState({ range: { startMs: 40_000, endMs: 60_000 } });
+    await useApp.getState().setTab('resources');
+    const scope = { perspective: 'friendly', source: [{ kind: 'player', actorId: 3 }], target: [], ability: [] };
+    expect(api.resourcesReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed' }, scope);
+  });
+
+  it('hands the page filter to a detail page by side, also from an Enemies view', async () => {
+    const enemy = { kind: 'unit', name: ENEMY } as const;
+    const execute = { kind: 'name', name: 'Execute' } as const;
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().select('target', enemy);
+    await useApp.getState().select('ability', execute);
+    await useApp.getState().openPlayer(4);
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 4, 'damage', WHOLE_PULL, { ...OPEN, target: [enemy], ability: [execute] });
+    await useApp.getState().closeDetail();
+    await useApp.getState().setPerspective('enemy');
+    await useApp.getState().openPlayer(4);
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 4, 'damage', WHOLE_PULL, { ...OPEN, target: [enemy] });
+  });
+
+  it('hands an Enemies view to the ability and target pages with the friendly side as source', async () => {
+    const enemy = { kind: 'unit', name: ENEMY } as const;
+    const healer = { kind: 'player', actorId: 2 } as const;
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().setPerspective('enemy');
+    await useApp.getState().select('source', enemy);
+    await useApp.getState().select('target', healer);
+    const page = { ...OPEN, source: [healer], target: [enemy] };
+    await useApp.getState().openPlayer(4);
+    await useApp.getState().openAbility(44425, null);
+    expect(api.abilityDetail).toHaveBeenLastCalledWith(LOG.id, 1, 4, 44425, null, 'damage', WHOLE_PULL, page);
+    await useApp.getState().openTarget(ENEMY);
+    expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.id, 1, ENEMY, WHOLE_PULL, page);
+  });
+
+  it('clears only the selections behind the page dimensions, by side', async () => {
+    const enemy = { kind: 'unit', name: ENEMY } as const;
+    const healer = { kind: 'player', actorId: 2 } as const;
+    const execute = { kind: 'name', name: 'Execute' } as const;
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().setPerspective('enemy');
+    await useApp.getState().select('source', enemy);
+    await useApp.getState().select('target', healer);
+    await useApp.getState().select('ability', execute);
+    await useApp.getState().openPlayer(4);
+    await useApp.getState().clearPageFilter(['target']);
+    expect(useApp.getState().filters).toEqual({ perspective: 'enemy', own: [], other: [healer], ability: [execute] });
+    await useApp.getState().clearPageFilter(['ability']);
+    expect(useApp.getState().filters).toEqual({ perspective: 'enemy', own: [], other: [healer], ability: [] });
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 4, 'damage', WHOLE_PULL, { ...OPEN, source: [healer] });
+  });
+
+  it('maps the own and other selection onto every tab by its sides and resets them for another pull', async () => {
+    const player = { kind: 'player', actorId: 3 } as const;
+    const enemy = { kind: 'unit', name: ENEMY } as const;
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().select('source', player);
+    await useApp.getState().select('target', enemy);
+    const roles: [FightTab, Partial<Scope>][] = [
+      ['casts', { source: [player], target: [enemy] }],
+      ['interrupts', { source: [player], target: [enemy] }],
+      ['buffs', { source: [enemy], target: [player] }],
+      ['deaths', { source: [enemy], target: [player] }],
+      ['resources', { source: [player], target: [] }],
+    ];
+    for (const [tab, sides] of roles) {
+      await useApp.getState().setTab(tab);
+      expect(useApp.getState().scope).toEqual({ perspective: 'friendly', source: [], target: [], ability: [], ...sides });
+    }
+    await useApp.getState().openFight(2);
+    expect(useApp.getState().filters).toEqual(initialState().filters);
   });
 
   it('drops the breakdown when the next tab fails to load', async () => {

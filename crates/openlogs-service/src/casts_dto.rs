@@ -1,19 +1,19 @@
-use std::collections::BTreeMap;
-
-use openlogs_analysis::{ActorId, CastsReport, Fight, SpellId};
+use openlogs_analysis::{ActorId, CastsReport, CellKind, Fight, SpellId};
 use serde::Serialize;
 
-use crate::overview_dto::{PlayerRef, SpellRef, player_ref};
 use crate::player_dto::AbilityLinkDto;
+use crate::scope_dto::{AbilityRefDto, BreakdownDto, breakdown_dto};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SpellCastsDto {
+pub struct CastExtraDto {
+    pub player: ActorId,
+    pub ability: AbilityRefDto,
+    pub proc_trigger: bool,
     pub spell_id: SpellId,
     pub casts: u32,
     /// The first cast in the range (ms from the pull); equal counts are ordered by it.
     pub first_cast_ms: i32,
-    pub proc_trigger: bool,
     pub uptime: Option<f64>,
     /// The ability page with this spell's hits; `None` when it has none.
     pub link: Option<AbilityLinkDto>,
@@ -21,56 +21,27 @@ pub struct SpellCastsDto {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PlayerCastsDto {
-    pub player: ActorId,
-    pub spells: Vec<SpellCastsDto>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct CastsReportDto {
-    pub duration_ms: u64,
-    pub players: Vec<PlayerCastsDto>,
-    pub roster: Vec<PlayerRef>,
-    pub spells: BTreeMap<SpellId, SpellRef>,
+    pub breakdown: BreakdownDto,
+    pub extras: Vec<CastExtraDto>,
 }
 
 pub fn casts_report_dto(fight: &Fight, report: &CastsReport) -> CastsReportDto {
-    let mut spells = BTreeMap::new();
-    let players = report
-        .players
-        .iter()
-        .map(|p| PlayerCastsDto {
-            player: p.player,
-            spells: p
-                .spells
-                .iter()
-                .map(|s| {
-                    if let Some(info) = fight.spells.get(&s.spell) {
-                        spells.entry(s.spell).or_insert(SpellRef {
-                            name: info.name.clone(),
-                        });
-                    }
-                    SpellCastsDto {
-                        spell_id: s.spell,
-                        casts: s.casts,
-                        first_cast_ms: s.first_cast_ms,
-                        proc_trigger: s.proc_trigger,
-                        uptime: s.uptime,
-                        link: s.link.map(Into::into),
-                    }
-                })
-                .collect(),
-        })
-        .collect();
     CastsReportDto {
-        duration_ms: report.duration_ms,
-        players,
-        roster: report
-            .players
+        breakdown: breakdown_dto(fight, &report.breakdown),
+        extras: report
+            .extras
             .iter()
-            .map(|p| player_ref(fight, p.player))
+            .map(|e| CastExtraDto {
+                player: e.player,
+                ability: AbilityRefDto::of(&e.ability),
+                proc_trigger: e.kind == CellKind::Proc,
+                spell_id: e.spell,
+                casts: e.casts,
+                first_cast_ms: e.first_cast_ms,
+                uptime: e.uptime,
+                link: e.link.map(Into::into),
+            })
             .collect(),
-        spells,
     }
 }

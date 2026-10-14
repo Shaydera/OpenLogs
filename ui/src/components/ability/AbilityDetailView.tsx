@@ -6,6 +6,7 @@ import { formatAmount, formatAmountTenths, formatCount, formatEventTime, formatE
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { Facts } from '../detail/Facts';
+import { PageFilter } from '../detail/PageFilter';
 import { TimeAxis } from '../detail/TimeAxis';
 import { GameIcon } from '../GameIcon';
 import { Kpi, KpiStrip } from '../Kpi';
@@ -69,51 +70,55 @@ export function AbilityDetailView({ detail }: { detail: AbilityDetail }) {
           />
         </div>
       </section>
+      <PageFilter dimensions={['target']} />
       <AbilityKpis detail={detail} name={name} targetName={targetName} />
       <HitsOverTime detail={detail} targetName={targetName} />
       <div className="ability-columns">
-        <section className="panel dpane panel-clip" aria-labelledby="ability-targets-title">
-          <div className="panel-head panel-head-tight panel-head-baseline">
-            <h2 id="ability-targets-title" className="h2">
-              {t('ability.byTarget')}
-            </h2>
-            <span className="panel-hint">{t('ability.byTargetHint')}</span>
-          </div>
-          <div className="tg-row tg-row-head" aria-hidden="true">
-            <span className="cap tg-cap">{t('ability.target')}</span>
-            <span className="cap tg-cap tg-end">{t('report.hits')}</span>
-            <span className="cap tg-cap tg-end">{t('ability.critsCol')}</span>
-            <span className="cap tg-cap">{t(healing ? 'tabs.healing' : 'player.damage')}</span>
-          </div>
-          <div role="group" aria-label={t('ability.byTarget')}>
-            {detail.byTarget.map((row) => (
-              <button
-                key={row.name}
-                type="button"
-                className={row.name === target ? 'tg-row tg-row-on' : 'tg-row'}
-                aria-pressed={row.name === target}
-                onClick={() => setTarget(row.name === target ? null : row.name)}
-              >
-                <span className="tg-name">{display(row.name)}</span>
-                <span className="num tg-end">{formatCount(row.hits)}</span>
-                <span className="num tg-end tg-crits">{formatCount(row.crits)}</span>
-                <span className="tg-amount">
-                  <span className="bar bar-md" aria-hidden="true">
-                    <span style={{ width: `${(row.amount / topTarget) * 100}%`, background: color }} />
-                  </span>
-                  <span className="num tg-value">{formatAmountTenths(row.amount)}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-          {!healing && footTarget !== null && (
-            <div className="tg-foot">
-              <button type="button" className="accent-link" onClick={() => void openTarget(footTarget)}>
-                {t('ability.openTarget', { name: footTarget })}
-              </button>
+        {/* One selected target has no by-target block: the core sends none. */}
+        {detail.byTarget.length > 0 && (
+          <section className="panel dpane panel-clip" aria-labelledby="ability-targets-title">
+            <div className="panel-head panel-head-tight panel-head-baseline">
+              <h2 id="ability-targets-title" className="h2">
+                {t('ability.byTarget')}
+              </h2>
+              <span className="panel-hint">{t('ability.byTargetHint')}</span>
             </div>
-          )}
-        </section>
+            <div className="tg-row tg-row-head" aria-hidden="true">
+              <span className="cap tg-cap">{t('ability.target')}</span>
+              <span className="cap tg-cap tg-end">{t('report.hits')}</span>
+              <span className="cap tg-cap tg-end">{t('ability.critsCol')}</span>
+              <span className="cap tg-cap">{t(healing ? 'tabs.healing' : 'player.damage')}</span>
+            </div>
+            <div role="group" aria-label={t('ability.byTarget')}>
+              {detail.byTarget.map((row) => (
+                <button
+                  key={row.name}
+                  type="button"
+                  className={row.name === target ? 'tg-row tg-row-on' : 'tg-row'}
+                  aria-pressed={row.name === target}
+                  onClick={() => setTarget(row.name === target ? null : row.name)}
+                >
+                  <span className="tg-name">{display(row.name)}</span>
+                  <span className="num tg-end">{formatCount(row.hits)}</span>
+                  <span className="num tg-end tg-crits">{formatCount(row.crits)}</span>
+                  <span className="tg-amount">
+                    <span className="bar bar-md" aria-hidden="true">
+                      <span style={{ width: `${(row.amount / topTarget) * 100}%`, background: color }} />
+                    </span>
+                    <span className="num tg-value">{formatAmountTenths(row.amount)}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            {!healing && footTarget !== null && (
+              <div className="tg-foot">
+                <button type="button" className="accent-link" onClick={() => void openTarget(footTarget)}>
+                  {t('ability.openTarget', { name: footTarget })}
+                </button>
+              </div>
+            )}
+          </section>
+        )}
         <Histogram detail={detail} color={color} />
       </div>
       <section className="panel panel-clip" aria-labelledby="ability-log-title">

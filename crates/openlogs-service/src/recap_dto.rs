@@ -1,12 +1,16 @@
 use std::collections::BTreeMap;
 
-use openlogs_analysis::{ActorId, ActorKind, DeathRecap, Fight, NOBODY, RecapKind, SpellId};
+use openlogs_analysis::{
+    ActorId, ActorKind, DeathRecap, DeathsReport, Fight, NOBODY, RecapKind, SpellId, UnitRef,
+    unit_of,
+};
 use openlogs_gamedata::Curated;
 use serde::Serialize;
 
-use crate::overview_dto::{DeathDto, PlayerRef, SpellRef, death_dto, player_ref};
+use crate::overview_dto::{DeathDto, HitDto, PlayerRef, SpellRef, death_dto, hit_dto, player_ref};
 use crate::player_dto::{LethalBurstDto, ResurrectionDto, spec_name};
 use crate::refs::name_of;
+use crate::scope_dto::{UnitDto, unit_dto};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -66,12 +70,58 @@ pub struct DeathRecapDto {
     pub buffs: Vec<BuffRefDto>,
 }
 
+/// An enemy's death.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KillDto {
+    pub t: i32,
+    /// The unit with its number among the units of its name.
+    pub unit: UnitDto,
+    pub killing_blow: Option<HitDto>,
+    /// Who landed the killing blow; a pet's is its owner's.
+    pub killer: Option<UnitDto>,
+    pub alive_ms: Option<i32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LethalDto {
+    pub spell_id: SpellId,
+    pub environmental: bool,
+    pub count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KillerDto {
+    pub unit: UnitDto,
+    pub count: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeathsReportDto {
+    /// Friendlies: player deaths with their recap.
     pub deaths: Vec<DeathRecapDto>,
+    /// Enemies: kills.
+    pub kills: Vec<KillDto>,
+    pub most_lethal: Option<LethalDto>,
+    pub rezzed: u32,
+    pub dead_units: u32,
+    pub dead_ms: u64,
+    pub top_killer: Option<KillerDto>,
+    pub avg_alive_ms: Option<i32>,
     pub roster: Vec<PlayerRef>,
     pub spells: BTreeMap<SpellId, SpellRef>,
+}
+
+fn killer_dto(fight: &Fight, roster: &mut Vec<ActorId>, unit: &UnitRef) -> UnitDto {
+    if let UnitRef::Player(id) = unit
+        && !roster.contains(id)
+    {
+        roster.push(*id);
+    }
+    unit_dto(fight, unit)
 }
 
 fn note(fight: &Fight, spells: &mut BTreeMap<SpellId, SpellRef>, id: SpellId) -> SpellId {
@@ -86,11 +136,63 @@ fn note(fight: &Fight, spells: &mut BTreeMap<SpellId, SpellRef>, id: SpellId) ->
 pub fn deaths_report_dto(
     fight: &Fight,
     curated: &Curated,
-    recaps: &[DeathRecap],
+    report: &DeathsReport,
 ) -> DeathsReportDto {
     let mut spells = BTreeMap::new();
     let mut roster: Vec<ActorId> = Vec::new();
-    let deaths = recaps
+    let deaths = recap_dtos(fight, curated, &report.recaps, &mut spells, &mut roster);
+    let kills = report
+        .kills
+        .iter()
+        .map(|kill| KillDto {
+            t: kill.t,
+            unit: unit_dto(fight, &unit_of(fight, kill.unit)),
+            killing_blow: kill
+                .killing_blow
+                .map(|hit| hit_dto(fight, &mut spells, &hit)),
+            killer: kill.killing_blow.map(|hit| {
+                killer_dto(
+                    fight,
+                    &mut roster,
+                    &unit_of(fight, hit.source).grouped(fight),
+                )
+            }),
+            alive_ms: kill.alive_ms,
+        })
+        .collect();
+    let most_lethal = report
+        .most_lethal
+        .map(|(spell, environmental, count)| LethalDto {
+            spell_id: note(fight, &mut spells, spell),
+            environmental,
+            count,
+        });
+    let top_killer = report.top_killer.as_ref().map(|(unit, count)| KillerDto {
+        unit: killer_dto(fight, &mut roster, unit),
+        count: *count,
+    });
+    DeathsReportDto {
+        deaths,
+        kills,
+        most_lethal,
+        rezzed: report.rezzed,
+        dead_units: report.dead_units,
+        dead_ms: report.dead_ms,
+        top_killer,
+        avg_alive_ms: report.avg_alive_ms,
+        roster: roster.into_iter().map(|id| player_ref(fight, id)).collect(),
+        spells,
+    }
+}
+
+fn recap_dtos(
+    fight: &Fight,
+    curated: &Curated,
+    recaps: &[DeathRecap],
+    spells: &mut BTreeMap<SpellId, SpellRef>,
+    roster: &mut Vec<ActorId>,
+) -> Vec<DeathRecapDto> {
+    recaps
         .iter()
         .map(|recap| {
             if !roster.contains(&recap.death.player) {
@@ -103,17 +205,17 @@ pub fn deaths_report_dto(
                     roster.push(rez.source);
                 }
                 ResurrectionDto {
-                    spell_id: note(fight, &mut spells, rez.spell),
+                    spell_id: note(fight, spells, rez.spell),
                     source: caster.then_some(rez.source),
                 }
             });
             let lethal_burst = recap.death.lethal_burst.map(|burst| LethalBurstDto {
-                spell_id: note(fight, &mut spells, burst.spell),
+                spell_id: note(fight, spells, burst.spell),
                 count: burst.count,
                 window_ms: burst.window_ms,
             });
             DeathRecapDto {
-                death: death_dto(fight, curated, &recap.death, &recap.context, &mut spells),
+                death: death_dto(fight, curated, &recap.death, &recap.context, spells),
                 number: recap.number,
                 spec_name: spec_name(fight, recap.death.player),
                 resurrected_by,
@@ -124,7 +226,7 @@ pub fn deaths_report_dto(
                     .iter()
                     .map(|e| RecapEventDto {
                         t: e.t,
-                        spell_id: note(fight, &mut spells, e.spell),
+                        spell_id: note(fight, spells, e.spell),
                         source_name: name_of(fight, e.source),
                         kind: match e.kind {
                             RecapKind::Damage => RecapKindDto::Damage,
@@ -149,24 +251,20 @@ pub fn deaths_report_dto(
                     .buffs
                     .iter()
                     .map(|&(spell, source)| BuffRefDto {
-                        spell_id: note(fight, &mut spells, spell),
+                        spell_id: note(fight, spells, spell),
                         source_name: name_of(fight, source),
                     })
                     .collect(),
             }
         })
-        .collect();
-    DeathsReportDto {
-        deaths,
-        roster: roster.into_iter().map(|id| player_ref(fight, id)).collect(),
-        spells,
-    }
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use openlogs_analysis::{
-        Actors, Death, DeathRecap, Hit, LethalBurst, RecapEvent, RecapKind, Resurrection, SpellInfo,
+        Actors, Death, DeathRecap, DeathsReport, Hit, LethalBurst, RecapEvent, RecapKind,
+        Resurrection, SpellInfo,
     };
     use openlogs_gamedata::Curated;
 
@@ -282,7 +380,17 @@ mod tests {
             hp: Vec::new(),
             buffs: Vec::new(),
         };
-        let dto = deaths_report_dto(&fight, &Curated::bundled(), &[recap]);
+        let report = DeathsReport {
+            recaps: vec![recap],
+            kills: Vec::new(),
+            most_lethal: None,
+            rezzed: 1,
+            dead_units: 1,
+            dead_ms: 20_441,
+            top_killer: None,
+            avg_alive_ms: None,
+        };
+        let dto = deaths_report_dto(&fight, &Curated::bundled(), &report);
         let json = serde_json::to_value(&dto).unwrap();
         let death = &json["deaths"][0];
         assert_eq!(death["killingBlow"]["periodic"], false);

@@ -1,26 +1,17 @@
 import type { Dimension, Side } from '../../api/types';
 import { t } from '../../i18n/i18n';
-import { ownDimension } from '../../scopeSides';
-import type { MetricTab } from '../../store';
+import { type FilterTab, SIDES } from '../../scopeSides';
 
-/** Whether a unit picker lists the friendly side (Healing's other side is the healer's own side). */
-export function holdsFriendlies(tab: MetricTab, dimension: Dimension, side: Side): boolean {
-  const friendly = side === 'friendly';
-  return dimension === ownDimension(tab) || tab === 'healing' ? friendly : !friendly;
+/** Whether a unit picker sorts players into role sections; otherwise they are "Other sources". */
+export function holdsFriendlies(tab: FilterTab, dimension: Dimension, side: Side): boolean {
+  if (dimension === SIDES[tab].own) return side === 'friendly';
+  return SIDES[tab].otherByRole[side];
 }
 
-export function allLabel(tab: MetricTab, dimension: Dimension, side: Side): string {
+export function allLabel(tab: FilterTab, dimension: Dimension, side: Side): string {
   if (dimension === 'ability') return t('scope.allAbilities');
-  const own = dimension === ownDimension(tab);
-  const friendly = side === 'friendly';
-  if (own) return t(friendly ? 'scope.allFriendlies' : 'scope.allEnemies');
-  if (tab === 'healing') return t(friendly ? 'scope.allFriendlies' : 'scope.allEnemies');
-  if (tab === 'taken') return t(friendly ? 'scope.allSources' : 'scope.allFriendlies');
-  return t(friendly ? 'scope.allEnemies' : 'scope.allFriendlies');
+  if (dimension === SIDES[tab].own) return t(side === 'friendly' ? 'scope.allFriendlies' : 'scope.allEnemies');
+  return t(SIDES[tab].otherAll[side]);
 }
 
-export function captionOf(tab: MetricTab, dimension: Dimension): string {
-  if (dimension === 'ability') return t('scope.ability');
-  if (tab === 'taken') return t(dimension === 'target' ? 'scope.takenBy' : 'scope.source');
-  return t(dimension === 'source' ? 'scope.source' : 'scope.target');
-}
+export const captionOf = (tab: FilterTab, dimension: Dimension): string => t(SIDES[tab].captions[dimension]);

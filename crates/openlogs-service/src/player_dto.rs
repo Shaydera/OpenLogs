@@ -501,6 +501,7 @@ mod tests {
             evoker,
             Metric::Damage,
             &ReportFilter::whole(Attribution::Reattributed),
+            &openlogs_analysis::Scope::default(),
         )
         .unwrap();
         let dto = player_detail_dto(

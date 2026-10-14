@@ -9,14 +9,16 @@ use crate::deaths::{Death, deaths};
 use crate::fight::{AuraType, DamageVia, EventKind, Fight, SpellId};
 use crate::filter::{Attribution, ReportFilter};
 use crate::links::{AbilityIndex, AbilityLink, SpellKey, spell_key};
-use crate::reports::damage::damage_done;
-use crate::reports::healing::healing;
+use crate::reports::damage::damage_done_in;
+use crate::reports::healing::healing_in;
 use crate::reports::taken::taken_amount;
 use crate::reports::{
     AbilityRow, AbilityTargets, BuffShare, BuffedAbility, RowKind, Share, Support, SupportShare,
-    TargetKey, TargetShare, buff_totals, damage_share, healing_share, sorted_by_amount,
+    TargetKey, TargetShare, buff_totals, buffed_spell, damage_share, healing_share, keeps_own,
+    keeps_support, sorted_by_amount,
 };
 use crate::resources::power_series;
+use crate::scope::Scope;
 use crate::usage::{ConsumableUse, DeathContext, consumable_uses, death_context, defensive_uses};
 
 /// Step of the player's damage or healing over time.
@@ -126,7 +128,7 @@ pub struct PlayerDetail {
     /// The same metric in the other Aug mode.
     pub other_mode_total: u64,
     pub per_second: f64,
-    /// 1-based rank among the report's players; 0 when the player has no total.
+    /// 1-based rank among the report's players in the same scope; 0 when the player has no total.
     pub rank: usize,
     pub ranked_players: usize,
     pub support_received: u64,
@@ -176,13 +178,21 @@ struct Standing {
     ranked: usize,
     abilities: Vec<AbilityRow>,
     support: Vec<SupportShare>,
+    /// Support received by Evoker as the scope keeps it; `None` when the player has no row.
+    received_from: Option<Vec<(ActorId, u64)>>,
     targets: Vec<TargetShare>,
     ability_targets: Vec<AbilityTargets>,
     units: Vec<(String, u32)>,
     color_groups: Vec<String>,
 }
 
-fn standing(fight: &Fight, player: ActorId, metric: Metric, filter: &ReportFilter) -> Standing {
+fn standing(
+    fight: &Fight,
+    player: ActorId,
+    metric: Metric,
+    filter: &ReportFilter,
+    scope: &Scope,
+) -> Standing {
     let empty = |ranked: usize, support: Vec<SupportShare>, units, color_groups| Standing {
         total: 0,
         per_second: 0.0,
@@ -190,6 +200,7 @@ fn standing(fight: &Fight, player: ActorId, metric: Metric, filter: &ReportFilte
         ranked,
         abilities: Vec::new(),
         support,
+        received_from: None,
         targets: Vec::new(),
         ability_targets: Vec::new(),
         units,
@@ -197,7 +208,7 @@ fn standing(fight: &Fight, player: ActorId, metric: Metric, filter: &ReportFilte
     };
     match metric {
         Metric::Damage => {
-            let report = damage_done(fight, filter);
+            let report = damage_done_in(fight, filter, scope);
             let ranked = report.players.len();
             match report.players.iter().position(|p| p.player == player) {
                 Some(index) => {
@@ -209,6 +220,7 @@ fn standing(fight: &Fight, player: ActorId, metric: Metric, filter: &ReportFilte
                         ranked,
                         abilities: row.abilities,
                         support: report.support,
+                        received_from: Some(row.support_received_from),
                         targets: row.targets,
                         ability_targets: row.ability_targets,
                         units: report.units,
@@ -219,7 +231,7 @@ fn standing(fight: &Fight, player: ActorId, metric: Metric, filter: &ReportFilte
             }
         }
         Metric::Healing => {
-            let report = healing(fight, filter);
+            let report = healing_in(fight, filter, scope);
             let ranked = report.players.len();
             match report.players.iter().position(|p| p.player == player) {
                 Some(index) => {
@@ -231,6 +243,7 @@ fn standing(fight: &Fight, player: ActorId, metric: Metric, filter: &ReportFilte
                         ranked,
                         abilities: row.abilities,
                         support: report.support,
+                        received_from: Some(row.support_received_from),
                         targets: row.targets,
                         ability_targets: row.ability_targets,
                         units: Vec::new(),
@@ -243,34 +256,68 @@ fn standing(fight: &Fight, player: ActorId, metric: Metric, filter: &ReportFilte
     }
 }
 
+struct SeriesSpan {
+    reattributed: bool,
+    start: i32,
+    end: i32,
+}
+
 fn series(
     fight: &Fight,
     player: ActorId,
     metric: Metric,
-    reattributed: bool,
-    start: i32,
-    end: i32,
+    span: SeriesSpan,
+    scope: &Scope,
 ) -> Vec<f64> {
+    let SeriesSpan {
+        reattributed,
+        start,
+        end,
+    } = span;
     let len = (end - start).max(0) as u32;
     if len == 0 {
         return Vec::new();
     }
     let mut sums = vec![0i64; len.div_ceil(SERIES_STEP_MS) as usize];
-    for event in fight.events.iter().filter(|e| e.t >= start && e.t < end) {
+    for (index, event) in fight
+        .events
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.t >= start && e.t < end)
+    {
         let share = match metric {
             Metric::Damage => damage_share(fight, event),
             Metric::Healing => healing_share(fight, event),
         };
         let delta = match share {
             Some(Share::Own {
-                player: p, amount, ..
-            }) if p == player => amount as i64,
+                player: p,
+                actor,
+                spell,
+                amount,
+                ..
+            }) if p == player && keeps_own(fight, scope, actor, spell, event.target) => {
+                amount as i64
+            }
             Some(Share::Support(s)) if reattributed => {
-                match (s.evoker == player, s.player == player) {
-                    (true, false) => s.amount as i64,
-                    (false, true) => -(s.amount as i64),
-                    _ => 0,
-                }
+                // The hit's ability decides only under a selection; finding it scans back.
+                let buffed = if scope.selects_all() {
+                    None
+                } else {
+                    buffed_spell(fight, index)
+                };
+                let parts = keeps_support(fight, scope, &s, buffed);
+                let credit = if s.evoker == player && parts.credit {
+                    s.amount as i64
+                } else {
+                    0
+                };
+                let deduction = if s.player == player && parts.buffed {
+                    s.amount as i64
+                } else {
+                    0
+                };
+                credit - deduction
             }
             _ => 0,
         };
@@ -793,16 +840,24 @@ fn cast_timeline(
     rows
 }
 
+/// The player is the page's subject; of `scope`, the target and ability selections apply to the
+/// metric parts: totals, rank, abilities, targets and the series. The context (casts, buffs,
+/// damage taken, deaths, consumables, Augmentation) stays whole.
 pub fn player_detail(
     fight: &Fight,
     curated: &Curated,
     player: ActorId,
     metric: Metric,
     filter: &ReportFilter,
+    scope: &Scope,
 ) -> Option<PlayerDetail> {
     if !is_player(fight, player) {
         return None;
     }
+    let page = Scope {
+        source: Vec::new(),
+        ..scope.clone()
+    };
     let (start_ms, end_ms) = filter.clipped(fight);
     let links = AbilityIndex::new(fight, filter, Some(player));
 
@@ -810,7 +865,7 @@ pub fn player_detail(
         Attribution::Augmented => Attribution::Reattributed,
         Attribution::Reattributed => Attribution::Augmented,
     };
-    let current = standing(fight, player, metric, filter);
+    let current = standing(fight, player, metric, filter, &page);
     let other = standing(
         fight,
         player,
@@ -819,6 +874,7 @@ pub fn player_detail(
             attribution: other_mode,
             ..*filter
         },
+        &page,
     );
     let received: Vec<&SupportShare> = current
         .support
@@ -826,11 +882,20 @@ pub fn player_detail(
         // The Evoker's own buff share is not support received.
         .filter(|s| s.player == player && s.evoker != player)
         .collect();
-    let support_received = received.iter().map(|s| s.amount).sum();
-    let mut by_evoker: HashMap<ActorId, u64> = HashMap::new();
-    for share in &received {
-        *by_evoker.entry(share.evoker).or_default() += share.amount;
-    }
+    let support_received_from = match current.received_from.clone() {
+        Some(from) => from,
+        None if page.selects_all() => {
+            let mut by_evoker: HashMap<ActorId, u64> = HashMap::new();
+            for share in &received {
+                *by_evoker.entry(share.evoker).or_default() += share.amount;
+            }
+            sorted_by_amount(by_evoker)
+        }
+        // The ledger books a share when either side is kept, so under a selection it cannot
+        // tell whether the buffed side was.
+        None => Vec::new(),
+    };
+    let support_received = support_received_from.iter().map(|(_, amount)| amount).sum();
     let buffs: HashSet<SpellId> = received.iter().map(|s| s.buff).collect();
 
     // Presses by spell name: procs and follow-up casts of multi-ID spells do not count.
@@ -973,7 +1038,7 @@ pub fn player_detail(
         rank: current.rank,
         ranked_players: current.ranked,
         support_received,
-        support_received_from: sorted_by_amount(by_evoker),
+        support_received_from,
         healing_received,
         deaths,
         consumables,
@@ -985,9 +1050,12 @@ pub fn player_detail(
             fight,
             player,
             metric,
-            filter.attribution == Attribution::Reattributed,
-            start_ms,
-            end_ms,
+            SeriesSpan {
+                reattributed: filter.attribution == Attribution::Reattributed,
+                start: start_ms,
+                end: end_ms,
+            },
+            &page,
         ),
         cast_rows: cast_rows(fight, curated, player, start_ms, end_ms, &links),
         cast_timeline: cast_timeline(fight, curated, player, filter, &links),

@@ -413,26 +413,9 @@
 }
 
 /* Buffs & Debuffs tab: aura rows with per-target uptime lanes. */
-.panel-head.panel-head-auras {
-  padding: 16px 18px 12px;
-  gap: 10px;
-}
-.auras-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 14px;
-  min-width: 0;
-}
 .auras-summary {
   font-size: 13px;
   color: var(--muted);
-}
-.auras-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
 }
 .aura-rows {
   min-width: 640px;
@@ -659,9 +642,6 @@
 .kick-ev.kick-ev-head {
   min-height: 28px;
 }
-.kick-ev.kick-ev-three {
-  grid-template-columns: 64px minmax(150px, 1fr) minmax(150px, 1.3fr);
-}
 .kick-ev.kick-ev-warn {
   background: var(--wipe-tint-soft);
 }
@@ -753,6 +733,17 @@
 }
 .plink-value {
   font-size: 13px;
+}
+.plink.plink-group {
+  grid-template-columns: 22px minmax(0, 1fr);
+  min-height: 44px;
+}
+.plink-arrow {
+  color: var(--muted);
+  text-align: center;
+}
+.plink.plink-instance {
+  padding-left: 30px;
 }
 .res-title-suffix {
   color: var(--muted);

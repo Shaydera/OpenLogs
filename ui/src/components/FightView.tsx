@@ -40,9 +40,7 @@ export function FightView() {
   const report = useApp((s) => s.report);
   const reportLoading = useApp((s) => s.reportLoading);
   const reportFailed = useApp((s) => s.reportError) !== null;
-  const auraScope = useApp((s) => s.auraScope);
   const rangeKpis = useApp((s) => s.rangeKpis);
-  const hideProcs = useApp((s) => s.hideProcs);
   const details = useApp((s) => s.details);
   const closeDetail = useApp((s) => s.closeDetail);
   const comparing = useApp((s) => s.comparison !== null);
@@ -65,7 +63,7 @@ export function FightView() {
 
   const onOverview = tab === 'overview';
   const tiles =
-    details.length > 0 ? null : headerTiles({ tab, row, overview, range, report, reportLoading, reportFailed, rangeKpis, hideProcs, auraScope, breakdown, scope });
+    details.length > 0 ? null : headerTiles({ tab, row, overview, range, report, reportLoading, reportFailed, rangeKpis, breakdown, scope });
 
   return (
     <div className="fight-view">

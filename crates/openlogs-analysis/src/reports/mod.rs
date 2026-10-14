@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::actors::{ActorId, NOBODY};
 use crate::fight::{DamageVia, Event, EventKind, Fight, NO_SPELL, SpellId};
+use crate::scope::{Scope, UnitRef, unit_of};
 use crate::timeline::{counts_as_damage_done, damage_done_amount, hits_hostile_npc};
 
 pub mod damage;
@@ -443,6 +444,9 @@ pub(crate) struct SupportAcc {
     pub given: u64,
     /// From the player's own buff.
     pub self_support: u64,
+    /// The player's own buff share credited to him as the Evoker; equals `self_support` unless
+    /// a scope keeps only one side of the share.
+    pub self_credit: u64,
     pub recipients: HashMap<ActorId, u64>,
     pub givers: HashMap<ActorId, u64>,
     pub by_buff: HashMap<(SpellId, ActorId), u64>,
@@ -461,6 +465,11 @@ impl SupportAcc {
                     amount,
                 }),
         )
+    }
+
+    pub fn reattributed_total(&self, own: u64) -> u64 {
+        // Saturating: a support share whose main hit fell outside the range must not underflow.
+        (own + self.given + self.self_credit).saturating_sub(self.received + self.self_support)
     }
 
     pub fn received_by_buff(&self) -> Vec<BuffShare> {
@@ -533,14 +542,70 @@ pub(crate) struct SupportEntry {
     pub amount: u64,
 }
 
+/// Whether a scope keeps an own share: `actor`'s `spell` on `target`.
+pub(crate) fn keeps_own(
+    fight: &Fight,
+    scope: &Scope,
+    actor: ActorId,
+    spell: SpellId,
+    target: ActorId,
+) -> bool {
+    scope.selects_all()
+        || scope.wants(
+            fight,
+            &unit_of(fight, actor),
+            spell,
+            &unit_of(fight, target),
+        )
+}
+
+/// The parts of a support share a scope keeps, as the cells split it: the buffed player's
+/// deduction belongs to the hit's ability (`None`: unmatched), the Evoker's credit to the buff.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SupportParts {
+    pub buffed: bool,
+    pub credit: bool,
+}
+
+pub(crate) fn keeps_support(
+    fight: &Fight,
+    scope: &Scope,
+    support: &Support,
+    ability: Option<SpellId>,
+) -> SupportParts {
+    if scope.selects_all() {
+        return SupportParts {
+            buffed: true,
+            credit: true,
+        };
+    }
+    let target = unit_of(fight, support.target);
+    SupportParts {
+        buffed: scope.accepts(
+            fight,
+            Some(&unit_of(fight, support.doer)),
+            ability,
+            Some(&target),
+        ),
+        credit: scope.accepts(
+            fight,
+            Some(&UnitRef::Player(support.evoker)),
+            Some(support.buff),
+            Some(&target),
+        ),
+    }
+}
+
 /// Books a support share in the ledger and both players' sums; in Reattributed mode it also
-/// moves from the buffed ability's row to the Evoker's support row.
+/// moves from the buffed ability's row to the Evoker's support row. `parts` says which sides
+/// the scope keeps.
 pub(crate) fn credit_support<A: Default>(
     acc: &mut HashMap<ActorId, A>,
     part: impl Fn(&mut A) -> &mut SupportAcc,
     ledger: &mut SupportLedger,
     reattributed: bool,
     entry: SupportEntry,
+    parts: SupportParts,
 ) {
     let SupportEntry {
         buff,
@@ -550,22 +615,32 @@ pub(crate) fn credit_support<A: Default>(
         target,
         amount,
     } = entry;
+    if !(parts.buffed || parts.credit) {
+        return;
+    }
     *ledger.0.entry((buff, evoker, player, ability)).or_default() += amount;
     let own_buff = evoker == player;
-    let buffed = part(acc.entry(player).or_default());
-    if own_buff {
-        buffed.self_support += amount;
-    } else {
-        buffed.received += amount;
-        *buffed.givers.entry(evoker).or_default() += amount;
-        *buffed.by_buff.entry((buff, evoker)).or_default() += amount;
+    if parts.buffed {
+        let buffed = part(acc.entry(player).or_default());
+        if own_buff {
+            buffed.self_support += amount;
+        } else {
+            buffed.received += amount;
+            *buffed.givers.entry(evoker).or_default() += amount;
+            *buffed.by_buff.entry((buff, evoker)).or_default() += amount;
+        }
+        if reattributed {
+            buffed.rows.deduct(ability, player, target, amount);
+        }
     }
-    if reattributed {
-        buffed.rows.deduct(ability, player, target, amount);
+    if !parts.credit {
+        return;
     }
     let giver = part(acc.entry(evoker).or_default());
     *giver.credited_by_buff.entry(buff).or_default() += amount;
-    if !own_buff {
+    if own_buff {
+        giver.self_credit += amount;
+    } else {
         giver.given += amount;
         *giver.recipients.entry(player).or_default() += amount;
     }
