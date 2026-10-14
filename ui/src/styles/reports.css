@@ -134,14 +134,6 @@
   gap: 2px;
   min-width: 0;
 }
-.side-name {
-  display: block;
-  font-size: 22px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .side-sub {
   font-size: 13px;
   color: var(--muted);
@@ -197,9 +189,6 @@
 }
 .side-label.side-label-other {
   color: var(--muted);
-}
-.side-label.side-label-negative {
-  color: var(--wipe-text);
 }
 .side-note {
   margin-left: 6px;
@@ -317,38 +306,14 @@
 .aug-tip-mode {
   color: var(--accent-hover);
 }
-/* Healing: Absorbs and Overheal between HPS and Share. */
-.report-rows.report-rows-heal {
+.report-rows.report-rows-wide {
   min-width: 860px;
 }
-.rrow.rrow-heal {
+.rrow.rrow-extra3 {
   grid-template-columns: 34px minmax(150px, 190px) minmax(160px, 1fr) 92px 84px 84px 84px 58px;
 }
-.rrow.rrow-heal-nodelta {
+.rrow.rrow-extra2 {
   grid-template-columns: 34px minmax(150px, 190px) minmax(160px, 1fr) 92px 84px 84px 58px;
-}
-/* Damage Taken: the raid-wide ability list, laid out like the side panel rows. */
-.taken-rows {
-  min-width: 640px;
-}
-.taken-row {
-  display: grid;
-  grid-template-columns: 24px minmax(200px, 1fr) 92px 84px 64px 84px;
-  gap: 12px;
-  align-items: center;
-  min-height: 36px;
-  padding: 0 16px;
-  border-top: 1px solid var(--line-soft);
-  font-size: 13px;
-}
-.taken-row:hover {
-  background: var(--hover);
-}
-.taken-row.taken-row-head {
-  min-height: 30px;
-}
-.taken-row.taken-row-head:hover {
-  background: transparent;
 }
 .casts-layout {
   display: flex;

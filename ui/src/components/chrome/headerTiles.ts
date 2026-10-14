@@ -1,7 +1,9 @@
-import type { AuraScope, FightRow, Kpis, QuickOverview } from '../../api/types';
-import { formatAmount, formatCpm, formatDuration, formatEventTime, formatInteger, formatShare } from '../../i18n/format';
-import { t } from '../../i18n/i18n';
-import type { FightTab, ReportData, TimeRange } from '../../store';
+import type { AuraScope, Breakdown, FightRow, Kpis, QuickOverview, Scope } from '../../api/types';
+import { formatAmount, formatCpm, formatDuration, formatEventTime, formatInteger, formatScaled, formatShare } from '../../i18n/format';
+import { type MessageKey, t } from '../../i18n/i18n';
+import { ownDimension } from '../../scopeSides';
+import type { FightTab, MetricTab, ReportData, TimeRange } from '../../store';
+import { rowLabel } from '../filters/labels';
 import type { KpiTone } from '../Kpi';
 import { mostInterrupted } from '../interrupts/kickModel';
 import { shortName } from '../overview/players';
@@ -30,6 +32,9 @@ export interface HeaderInput {
   rangeKpis: Kpis | null;
   hideProcs: boolean;
   auraScope: AuraScope;
+  /** The metric tabs' breakdown; it shares the report's loading state. */
+  breakdown: Breakdown | null;
+  scope: Scope;
 }
 
 const EBON_MIGHT = 395152;
@@ -55,11 +60,11 @@ export function headerTiles(input: HeaderInput): HeaderTile[] {
     case 'resources':
       return overviewTiles(input.range === null ? (input.overview?.kpis ?? null) : input.reportLoading ? null : input.rangeKpis, input.range !== null);
     case 'damage':
-      return damageTiles(ready('damage'));
+      return filtered(input.scope) ? breakdownTiles('damage', input) : damageTiles(ready('damage'));
     case 'healing':
-      return healingTiles(ready('healing'));
+      return filtered(input.scope) ? breakdownTiles('healing', input) : healingTiles(ready('healing'));
     case 'taken':
-      return takenTiles(ready('taken'), input);
+      return filtered(input.scope) ? breakdownTiles('taken', input) : takenTiles(ready('taken'), input);
     case 'deaths':
       return deathsTiles(ready('deaths'), input.row);
     case 'buffs':
@@ -110,9 +115,9 @@ function damageTiles(report: ReportOf['damage'] | null): HeaderTile[] {
   const top = report.players[0];
   const support = report.players.reduce((sum, p) => sum + p.supportGiven, 0);
   return [
-    { label: labels[0], value: formatAmount(perSecond(report.total, report.durationMs)), sub: t('kpi.raidDamage', { damage: formatAmount(report.total) }) },
-    { label: labels[1], value: top ? formatAmount(top.perSecond) : '—', sub: top ? playerName(report.roster, top.player) : '' },
-    { label: labels[2], value: formatAmount(support), tone: support > 0 ? 'support' : undefined, sub: t('kpi.ofRaidDamage', { share: share(support, report.total) }) },
+    { label: labels[0], value: formatScaled(perSecond(report.total, report.durationMs)), sub: t('kpi.raidDamage', { damage: formatScaled(report.total) }) },
+    { label: labels[1], value: top ? formatScaled(top.perSecond) : '—', sub: top ? playerName(report.roster, top.player) : '' },
+    { label: labels[2], value: formatScaled(support), tone: support > 0 ? 'support' : undefined, sub: t('kpi.ofRaidDamage', { share: share(support, report.total) }) },
     { label: labels[3], value: formatInteger(report.players.length), sub: t('kpi.withDamage') },
   ];
 }
@@ -124,10 +129,31 @@ function healingTiles(report: ReportOf['healing'] | null): HeaderTile[] {
   const absorbs = report.players.reduce((sum, p) => sum + p.absorbs, 0);
   const top = report.players[0];
   return [
-    { label: labels[0], value: formatAmount(perSecond(report.total, report.durationMs)), sub: t('kpi.raidHealing', { healing: formatAmount(report.total) }) },
-    { label: labels[1], value: share(report.overheal, healed + report.overheal), sub: t('kpi.overhealed', { amount: formatAmount(report.overheal) }) },
-    { label: labels[2], value: formatAmount(absorbs), sub: t('kpi.ofHealing', { share: share(absorbs, report.total) }) },
-    { label: labels[3], value: top ? formatAmount(top.perSecond) : '—', sub: top ? playerName(report.roster, top.player) : '' },
+    { label: labels[0], value: formatScaled(perSecond(report.total, report.durationMs)), sub: t('kpi.raidHealing', { healing: formatScaled(report.total) }) },
+    { label: labels[1], value: share(report.overheal, healed + report.overheal), sub: t('kpi.overhealed', { amount: formatScaled(report.overheal) }) },
+    { label: labels[2], value: formatScaled(absorbs), sub: t('kpi.ofHealing', { share: share(absorbs, report.total) }) },
+    { label: labels[3], value: top ? formatScaled(top.perSecond) : '—', sub: top ? playerName(report.roster, top.player) : '' },
+  ];
+}
+
+const filtered = (scope: Scope) =>
+  scope.perspective !== 'friendly' || scope.source.length + scope.target.length + scope.ability.length > 0;
+
+const TOTAL_LABEL: Record<MetricTab, MessageKey> = { damage: 'tabs.damageDone', healing: 'tabs.healing', taken: 'tabs.damageTaken' };
+const RATE_LABEL: Record<MetricTab, MessageKey> = { damage: 'report.dps', healing: 'report.hps', taken: 'report.dtps' };
+
+/** A filtered metric tab: the scope's total and rate, its top row and row count under the effective grouping. */
+function breakdownTiles(tab: MetricTab, input: HeaderInput): HeaderTile[] {
+  const breakdown = input.reportLoading || input.reportFailed ? null : input.breakdown;
+  const group = breakdown?.group ?? ownDimension(tab);
+  const labels = [t(TOTAL_LABEL[tab]), t(RATE_LABEL[tab]), t(`kpi.top.${group}`), t(`breakdown.split.${group}`)];
+  if (!breakdown) return labels.map(pendingTile);
+  const top = breakdown.rows[0];
+  return [
+    { label: labels[0], value: formatScaled(breakdown.total), sub: '' },
+    { label: labels[1], value: formatScaled(breakdown.perSecond), sub: '' },
+    { label: labels[2], value: top ? rowLabel(top) : '—', sub: top ? formatScaled(top.amount) : '' },
+    { label: labels[3], value: formatInteger(breakdown.rows.length), sub: '' },
   ];
 }
 
@@ -149,9 +175,9 @@ function takenTiles(report: ReportOf['taken'] | null, input: HeaderInput): Heade
   const ability = report.byAbility[0];
   const player = report.byPlayer[0];
   return [
-    { label: labels[0], value: formatAmount(report.total), sub: t('kpi.dtps', { amount: formatAmount(perSecond(report.total, report.durationMs)) }) },
-    { label: labels[1], value: ability ? formatAmount(ability.amount) : '—', sub: ability ? hitName(ability, (id) => reportSpellName(report.spells, id)) : '' },
-    { label: labels[2], value: player ? formatAmount(player.amount) : '—', sub: player ? playerName(report.roster, player.player) : '' },
+    { label: labels[0], value: formatScaled(report.total), sub: t('kpi.dtps', { amount: formatScaled(perSecond(report.total, report.durationMs)) }) },
+    { label: labels[1], value: ability ? formatScaled(ability.amount) : '—', sub: ability ? hitName(ability, (id) => reportSpellName(report.spells, id)) : '' },
+    { label: labels[2], value: player ? formatScaled(player.amount) : '—', sub: player ? playerName(report.roster, player.player) : '' },
     input.overview ? deathsTile(input.overview.timeline.markers.deaths.map((d) => d.t).filter((at) => inRange(input.range, at))) : pendingTile(labels[3]),
   ];
 }

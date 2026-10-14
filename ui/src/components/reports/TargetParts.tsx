@@ -1,7 +1,7 @@
 import { type ReactNode, useRef, useState } from 'react';
 import type { PlayerRef, TargetShare } from '../../api/types';
 import { spellIcon } from '../../icons';
-import { formatCount, formatMillions, formatShare } from '../../i18n/format';
+import { formatCount, formatMillions, formatScaled, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
@@ -47,46 +47,6 @@ export function usePanelPopup<T>(owner: object) {
   };
   const popup = state && state.owner === owner && state.attribution === attribution ? state : null;
   return { panel, popup, open, close: () => setState(null) };
-}
-
-/** "Color by Player | Target" (healing: "Role"), remembered across sessions. */
-export function ColorBySwitch({ metric }: { metric: TargetMetric }) {
-  const colorByTarget = useApp((s) => s.colorByTarget);
-  const setColorByTarget = useApp((s) => s.setColorByTarget);
-  const label = t('targets.colorBy');
-  return (
-    <div className="seg-wrap">
-      <span className="cap" aria-hidden="true">
-        {label}
-      </span>
-      <div className="seg seg-sm" role="group" aria-label={label}>
-        <button type="button" className={colorByTarget ? undefined : 'on'} aria-pressed={!colorByTarget} onClick={() => setColorByTarget(false)}>
-          {t('targets.byPlayer')}
-        </button>
-        <button type="button" className={colorByTarget ? 'on' : undefined} aria-pressed={colorByTarget} onClick={() => setColorByTarget(true)}>
-          {t(metric === 'healing' ? 'targets.byRole' : 'targets.byTarget')}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-export type SideView = 'abilities' | 'targets';
-
-/** The side panel's "Abilities | Targets" (healing: "Healed players"). */
-export function SideViewSwitch({ view, metric, onChange }: { view: SideView; metric: TargetMetric; onChange: (view: SideView) => void }) {
-  return (
-    <div className="side-switch">
-      <div className="seg seg-sm" role="group" aria-label={t('targets.sideView')}>
-        <button type="button" className={view === 'abilities' ? 'on' : undefined} aria-pressed={view === 'abilities'} onClick={() => onChange('abilities')}>
-          {t('player.abilities')}
-        </button>
-        <button type="button" className={view === 'targets' ? 'on' : undefined} aria-pressed={view === 'targets'} onClick={() => onChange('targets')}>
-          {t(metric === 'healing' ? 'targets.healedPlayers' : 'targets.title')}
-        </button>
-      </div>
-    </div>
-  );
 }
 
 /** The colour legend; a chip highlights its group on every bar. */
@@ -252,7 +212,7 @@ function PopupRow({ icon, name, nameColor, barPct, barColor, amount, share }: { 
           <span style={{ width: barWidth(barPct), background: barColor }} />
         </span>
       </span>
-      <span className="num rpop-amount">{formatMillions(amount)}</span>
+      <span className="num rpop-amount">{formatScaled(amount)}</span>
       <span className="num rpop-share">{share}</span>
     </div>
   );
@@ -264,7 +224,7 @@ export function PlayerCard({ id, at, player, total, abilities, targets, targetsL
     <Popup id={id} at={at} width={CARD_WIDTH}>
       <div className="rpop-head">
         <PlayerName player={player} size={18} />
-        <span className="num rpop-total">{formatMillions(total)}</span>
+        <span className="num rpop-total">{formatScaled(total)}</span>
       </div>
       <div className="rpop-cols">
         <div>
@@ -361,7 +321,7 @@ export function SegmentPopup({
       <div className="rpop-head">
         <span className="tswatch" style={{ background: part.group.color }} aria-hidden="true" />
         <span className="rpop-title">{part.group.label}</span>
-        <span className="num rpop-total">{formatMillions(part.amount)}</span>
+        <span className="num rpop-total">{formatScaled(part.amount)}</span>
       </div>
       <div className="rpop-sub">{sub}</div>
       {rows.length > 0 && <div className="cap rrow-cap">{t(list === 'abilities' ? 'targets.topAbilities' : metric === 'healing' ? 'targets.healedPlayers' : 'targets.title')}</div>}

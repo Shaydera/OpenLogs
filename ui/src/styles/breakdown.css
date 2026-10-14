@@ -57,8 +57,9 @@
   display: flex;
   min-width: 0;
 }
-.side-switch {
-  padding: 0 16px 12px;
+.rrow-name-narrow:hover .name-label {
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
 }
 .rpop {
   position: absolute;

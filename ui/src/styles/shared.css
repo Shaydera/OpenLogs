@@ -31,17 +31,6 @@
 .range-chip-x:hover {
   background: var(--accent-tint-line);
 }
-/* The fight pages' smaller toggle; the start page keeps the larger .toggle. */
-.toggle.toggle-sm {
-  display: inline-flex;
-  gap: 8px;
-  font-size: 13px;
-  white-space: nowrap;
-}
-.toggle.toggle-sm input {
-  width: 16px;
-  height: 16px;
-}
 .seg-wrap {
   display: flex;
   align-items: center;

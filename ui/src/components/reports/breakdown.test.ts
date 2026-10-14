@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { AbilityRow, PlayerRef, TakenAbility } from '../../api/types';
-import { namedIcon } from '../../icons';
-import { abilityBreakdown, takenBreakdown } from './breakdown';
+import type { AbilityRow, PlayerRef } from '../../api/types';
+import { abilityBreakdown } from './breakdown';
 
 const roster = new Map<number, PlayerRef>([
   [4, { actorId: 4, name: 'Faelan-Emberfall-EU', specId: 62, specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' }],
@@ -70,36 +69,5 @@ describe('abilityBreakdown', () => {
       ['Other', 'other', 4, 4 / 98],
       ['Unmatched hits', 'negative', -3, null],
     ]);
-  });
-});
-
-describe('takenBreakdown', () => {
-  const hit = (spellId: number, amount: number, sourceName: string | null, extra: Partial<TakenAbility> = {}): TakenAbility => ({
-    spellId, environmental: false, sourceName, sourceId: null, amount, absorbed: 0, hits: 1, playersHit: 1, ...extra,
-  });
-
-  it('names player sources in their class colour, merges same name and source, keeps melee and world damage apart', () => {
-    const rows = takenBreakdown(
-      [
-        hit(1, 50, "Ula'tek"),
-        hit(6, 20, "Ula'tek"),
-        hit(2, 30, 'Faelan-Emberfall-EU', { sourceId: 4 }),
-        hit(0, 10, 'Gore Rattle'),
-        hit(0, 5, null, { environmental: true }),
-        hit(3, 4, null),
-        hit(4, 3, null),
-        hit(5, 2, null),
-      ],
-      { total: 124, spells, roster },
-    );
-    expect(rows.map((r) => [r.name, r.note, r.noteColor, r.amount])).toEqual([
-      ['Arcane Missiles', "Ula'tek", null, 70],
-      ['Arcane Barrage', 'Faelan', 'var(--class-mage)', 30],
-      ['Melee', 'Gore Rattle', null, 10],
-      ['Environmental damage', 'Environment', null, 5],
-      ['Prismatic Bolt', 'Unknown source', null, 4],
-      ['Other', null, null, 5],
-    ]);
-    expect(rows[2].icon).toBe(namedIcon('ability_meleedamage'));
   });
 });

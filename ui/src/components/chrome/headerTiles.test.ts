@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FightRow } from '../../api/types';
 import { overviewFixture } from '../../test/overviewFixture';
-import { aurasReportFixture, damageReportFixture } from '../../test/reportFixtures';
+import { aurasReportFixture, breakdownFixture, damageReportFixture } from '../../test/reportFixtures';
 import { type HeaderInput, headerTiles } from './headerTiles';
 
 const ROW: FightRow = {
@@ -31,6 +31,8 @@ const input = (partial: Partial<HeaderInput>): HeaderInput => ({
   rangeKpis: null,
   hideProcs: true,
   auraScope: 'buffs_on_players',
+  breakdown: null,
+  scope: { perspective: 'friendly', source: [], target: [], ability: [] },
   ...partial,
 });
 
@@ -62,5 +64,17 @@ describe('headerTiles', () => {
     expect(text({ tab: 'damage', report: damage, reportLoading: true })[0]).toBe('Raid DPS|…|');
     // A failed reload keeps the previous range's report in the store.
     expect(text({ tab: 'damage', report: damage, reportFailed: true })[0]).toBe('Raid DPS|…|');
+  });
+
+  it('keeps the pull figures without filters and follows the breakdown once filters are set', () => {
+    const damage = { tab: 'damage' as const, data: damageReportFixture };
+    expect(text({ tab: 'damage', report: damage, breakdown: breakdownFixture })[0]).toBe('Raid DPS|775.07k|370.96M damage');
+    const scope = { perspective: 'friendly' as const, source: [], target: [{ kind: 'unit' as const, name: "Ula'tek" }], ability: [] };
+    expect(text({ tab: 'damage', report: damage, breakdown: breakdownFixture, scope })).toEqual([
+      'Damage Done|3.00M|',
+      'DPS|300.00k|',
+      'Top source|Wendel|2.00M',
+      'Sources|2|',
+    ]);
   });
 });
