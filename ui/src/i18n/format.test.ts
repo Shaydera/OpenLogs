@@ -16,11 +16,13 @@ import {
   formatOffsetSeconds,
   formatPercent,
   formatSeconds,
+  formatScaled,
   formatShare,
   formatSignedAmount,
   formatSignedDuration,
   formatSignedInteger,
   formatSignedMillions,
+  formatSignedScaled,
 } from './format';
 
 describe('formatters (en-US)', () => {
@@ -57,5 +59,23 @@ describe('formatters (en-US)', () => {
     ],
   ])('writes the %s', (_, actual, expected) => {
     expect(actual()).toEqual(expected);
+  });
+});
+
+describe('formatScaled', () => {
+  it.each([
+    [845, '845'],
+    [300_240, '300.24k'],
+    [999_996, '1.00M'],
+    [142_440_000, '142.44M'],
+    [1_895_300_000, '1.90B'],
+    [-14_130, '−14.13k'],
+    [0, '0'],
+  ])('%d → %s', (value, text) => {
+    expect(formatScaled(value)).toBe(text);
+  });
+
+  it('signs a difference', () => {
+    expect([87_290_000, -8_280_000, 0].map(formatSignedScaled)).toEqual(['+87.29M', '−8.28M', '±0']);
   });
 });

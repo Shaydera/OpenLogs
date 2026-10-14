@@ -14,6 +14,7 @@ import { PANEL_ID, TabBar, tabId } from './chrome/TabBar';
 import { PullComparisonView } from './compare/PullComparisonView';
 import { DeathsTab } from './deaths/DeathsTab';
 import { ErrorBoundary } from './ErrorBoundary';
+import { ViewLens } from './filters/ViewLens';
 import { InterruptsTab } from './interrupts/InterruptsTab';
 import { ConsumablesPanel } from './overview/ConsumablesPanel';
 import { CooldownsPanel } from './overview/CooldownsPanel';
@@ -45,6 +46,8 @@ export function FightView() {
   const details = useApp((s) => s.details);
   const closeDetail = useApp((s) => s.closeDetail);
   const comparing = useApp((s) => s.comparison !== null);
+  const breakdown = useApp((s) => s.breakdown);
+  const scope = useApp((s) => s.scope);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const crumbRef = useRef<HTMLSpanElement>(null);
   // The pull title; on detail pages (compact header) the current breadcrumb.
@@ -62,13 +65,14 @@ export function FightView() {
 
   const onOverview = tab === 'overview';
   const tiles =
-    details.length > 0 ? null : headerTiles({ tab, row, overview, range, report, reportLoading, reportFailed, rangeKpis, hideProcs, auraScope });
+    details.length > 0 ? null : headerTiles({ tab, row, overview, range, report, reportLoading, reportFailed, rangeKpis, hideProcs, auraScope, breakdown, scope });
 
   return (
     <div className="fight-view">
       <FightTopBar row={row} currentRef={crumbRef} />
       <main className={onOverview ? 'fight-page fight-page-overview' : 'fight-page'}>
         <FightHeader row={row} tiles={tiles} titleRef={titleRef} />
+        <ViewLens />
         <TabBar />
         <div role="tabpanel" id={PANEL_ID} aria-labelledby={tabId(tab)} className="tabpanel">
           {failed ? (
@@ -102,6 +106,7 @@ function ReportView() {
   const error = useApp((s) => s.reportError);
   const details = useApp((s) => s.details);
   const back = useApp((s) => s.back);
+  const breakdown = useApp((s) => s.breakdown);
   if (error)
     return (
       <div className="report-error">
@@ -116,11 +121,11 @@ function ReportView() {
   if (!report) return <p className="muted">{loading ? t('report.loading') : ''}</p>;
   switch (report.tab) {
     case 'damage':
-      return <DamageDoneTab report={report.data} />;
+      return breakdown ? <DamageDoneTab report={report.data} breakdown={breakdown} /> : <p className="muted">{t('report.loading')}</p>;
     case 'healing':
-      return <HealingTab report={report.data} />;
+      return breakdown ? <HealingTab report={report.data} breakdown={breakdown} /> : <p className="muted">{t('report.loading')}</p>;
     case 'taken':
-      return <DamageTakenTab report={report.data} />;
+      return breakdown ? <DamageTakenTab breakdown={breakdown} /> : <p className="muted">{t('report.loading')}</p>;
     case 'buffs':
       return <AurasTab report={report.data} />;
     case 'interrupts':

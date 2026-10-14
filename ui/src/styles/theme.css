@@ -1,4 +1,4 @@
-/* Colour mode: System · Light · Dark (top bars, Settings). */
+/* Colour mode: System · Light · Dark (top bars). */
 .theme-switch {
   display: inline-flex;
   gap: 2px;
@@ -10,7 +10,6 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
   min-width: 38px;
   min-height: 38px;
   padding: 0 8px;
@@ -18,7 +17,6 @@
   border-radius: 7px;
   background: transparent;
   color: var(--muted);
-  font: 500 13px var(--font-text);
   cursor: pointer;
 }
 .theme-switch button:hover {
@@ -36,9 +34,6 @@
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-.theme-switch.theme-switch-labelled button {
-  padding: 0 12px;
 }
 .theme-choices {
   display: flex;
@@ -74,12 +69,4 @@
 .theme-choice-hint {
   font-size: 13px;
   color: var(--muted);
-}
-.settings-mode {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 8px;
 }

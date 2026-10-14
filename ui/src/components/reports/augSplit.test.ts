@@ -59,7 +59,7 @@ describe('augTipLines', () => {
       ['Support credited from buffed players', '+87.47M', 'gain'],
       ['Ebon Might', '+50.18M', 'gain'],
       ['Prescience', '+37.29M', 'gain'],
-      ['Own buff share', '−0.18M', 'loss'],
+      ['Own buff share', '−177.40k', 'loss'],
       ['Reattributed', '125.29M', 'plain'],
     ]);
     expect(augDelta(spark)).toBe(87_293_624);
@@ -78,9 +78,9 @@ describe('augTipLines', () => {
       ['Own healing (Augmented)', '1.00M'],
       ['From Faelan’s buffs', '−3.00M'],
       ['Prescience', '−3.00M'],
-      ['Support credited from buffed players', '+0.50M'],
-      ['Ebon Might', '+0.50M'],
-      ['Reattributed', '0.00M'],
+      ['Support credited from buffed players', '+500.00k'],
+      ['Ebon Might', '+500.00k'],
+      ['Reattributed', '0'],
     ]);
     expect(reattributedTotal(both)).toBe(0);
     expect(augDelta(both)).toBe(-1_000_000);

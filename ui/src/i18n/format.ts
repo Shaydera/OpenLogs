@@ -150,6 +150,21 @@ export function formatShare(value: number): string {
   return oneDecimalPercent.format(value / 100);
 }
 
+/** Two decimals at every unit: `845`, `300.24k`, `142.44M`, `1.90B`; rounding into the next unit moves there. */
+export function formatScaled(value: number): string {
+  if (value < 0) return `−${formatScaled(-value)}`;
+  if (roundTo(value / 1e6, 2) >= 1000) return t('unit.billions', { value: twoDecimals.format(value / 1e9) });
+  if (roundTo(value / 1e3, 2) >= 1000) return t('unit.millions', { value: twoDecimals.format(value / 1e6) });
+  if (roundTo(value, 0) >= 1000) return t('unit.thousands', { value: twoDecimals.format(value / 1e3) });
+  return whole.format(value);
+}
+
+/** `formatScaled` with an explicit sign: `+87.29M`, `−8.28M`, `±0`. */
+export function formatSignedScaled(value: number): string {
+  if (value === 0) return t('unit.noChange');
+  return value > 0 ? `+${formatScaled(value)}` : formatScaled(value);
+}
+
 /** Casts per minute with one decimal and no grouping: `59.0`, `1006.8`. */
 export function formatCpm(value: number): string {
   return oneDecimalUngrouped.format(value);

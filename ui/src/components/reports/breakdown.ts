@@ -1,8 +1,7 @@
-import type { AbilityRow, PlayerRef, TakenAbility } from '../../api/types';
+import type { AbilityRow, PlayerRef } from '../../api/types';
 import { spellIcon } from '../../icons';
 import { t } from '../../i18n/i18n';
-import { classColor, shortName } from '../overview/players';
-import { hitIcon, hitName, reportSpellName, sourceLabel, type SpellNames } from './reportData';
+import { reportSpellName, type SpellNames } from './reportData';
 
 /** How many abilities the side panel lists before "Other", which always comes after them. */
 const TOP_ABILITIES = 5;
@@ -88,24 +87,4 @@ export function abilityBreakdown(rows: AbilityRow[], ctx: BreakdownContext): Bre
     }
   }
   return finish([...topWithOther(merged(abilities), ctx.top ?? TOP_ABILITIES), ...unmatched], ctx.total);
-}
-
-/** The source of damage taken: a player by short name in the class colour, else the log's name. */
-export function takenSource(
-  hit: Pick<TakenAbility, 'sourceId' | 'sourceName' | 'environmental'>,
-  roster: Map<number, PlayerRef>,
-): { label: string; color: string | null } {
-  const player = hit.sourceId === null ? undefined : roster.get(hit.sourceId);
-  if (player) return { label: shortName(player.name), color: classColor(player.classToken) };
-  return { label: sourceLabel(hit), color: null };
-}
-
-/** Damage Taken side panel: the player's damage by ability and source, top rows and "Other". */
-export function takenBreakdown(abilities: TakenAbility[], ctx: BreakdownContext): BreakdownRow[] {
-  const entries = abilities.map((hit): Entry => {
-    const name = hitName(hit, (id) => reportSpellName(ctx.spells, id));
-    const source = takenSource(hit, ctx.roster);
-    return { key: `${hit.environmental}:${name}:${source.label}`, tone: 'normal', icon: hitIcon(hit), name, note: source.label, noteColor: source.color, amount: hit.amount };
-  });
-  return finish(topWithOther(merged(entries), ctx.top ?? TOP_ABILITIES), ctx.total);
 }

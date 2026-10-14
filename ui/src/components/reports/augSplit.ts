@@ -1,5 +1,5 @@
 import type { BuffShare, PlayerAmount, PlayerRef } from '../../api/types';
-import { formatMillions, formatSignedMillions } from '../../i18n/format';
+import { formatScaled, formatSignedScaled } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { shortName } from '../overview/players';
 import { reportSpellName, type SpellNames } from './reportData';
@@ -63,21 +63,21 @@ export function augTipLines(split: AugSplit, roster: Map<number, PlayerRef>, met
   const first = credited > 0 ? (healing ? 'aug.tipOwnHealing' : 'aug.tipOwn') : healing ? 'aug.tipLoggedHealing' : 'aug.tipLogged';
   const byBuff = (shares: BuffShare[], tone: 'gain' | 'loss'): TipLine[] =>
     shares.map((share) => ({
-      ...line(reportSpellName(spells, share.buffId), formatSignedMillions(tone === 'loss' ? -share.amount : share.amount), tone),
+      ...line(reportSpellName(spells, share.buffId), formatSignedScaled(tone === 'loss' ? -share.amount : share.amount), tone),
       buff: share.buffId,
     }));
-  const lines = [line(t(first), formatMillions(split.own))];
+  const lines = [line(t(first), formatScaled(split.own))];
   for (const from of split.supportReceivedFrom) {
-    lines.push(line(t('aug.tipFrom', { name: shortName(roster.get(from.player)?.name ?? '?') }), formatSignedMillions(-from.amount), 'loss'));
+    lines.push(line(t('aug.tipFrom', { name: shortName(roster.get(from.player)?.name ?? '?') }), formatSignedScaled(-from.amount), 'loss'));
     lines.push(...byBuff(split.supportReceivedByBuff.filter((share) => share.evoker === from.player), 'loss'));
   }
   const named = split.supportReceivedFrom.reduce((sum, from) => sum + from.amount, 0);
-  if (split.supportReceived > named) lines.push(line(t('aug.tipFromEvokers'), formatSignedMillions(named - split.supportReceived), 'loss'));
+  if (split.supportReceived > named) lines.push(line(t('aug.tipFromEvokers'), formatSignedScaled(named - split.supportReceived), 'loss'));
   if (credited > 0) {
-    lines.push(line(t('aug.tipCredited'), formatSignedMillions(credited), 'gain'));
+    lines.push(line(t('aug.tipCredited'), formatSignedScaled(credited), 'gain'));
     lines.push(...byBuff(split.supportCreditedByBuff, 'gain'));
   }
-  if (split.supportSelf > 0) lines.push(line(t('aug.tipOwnShare'), formatSignedMillions(-split.supportSelf), 'loss'));
-  lines.push(line(t('aug.reattributed'), formatMillions(reattributedTotal(split)), 'plain', true));
+  if (split.supportSelf > 0) lines.push(line(t('aug.tipOwnShare'), formatSignedScaled(-split.supportSelf), 'loss'));
+  lines.push(line(t('aug.reattributed'), formatScaled(reattributedTotal(split)), 'plain', true));
   return lines;
 }

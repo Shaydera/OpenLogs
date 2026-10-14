@@ -1,134 +1,21 @@
-import { useId, useState } from 'react';
-import type { DamageReport } from '../../api/types';
-import { formatMillions, formatShare, formatSignedMillions } from '../../i18n/format';
+import type { Breakdown, DamageReport, PlayerDamage } from '../../api/types';
 import { t } from '../../i18n/i18n';
-import { useApp } from '../../store';
-import { shortName } from '../overview/players';
-import { augDelta, augTipLines, deltaClass } from './augSplit';
-import { abilityBreakdown } from './breakdown';
-import { RankedPopupView, useRankedTargets } from './rankedTargets';
-import { AugSupportList, GivenCallout, RankedHead, RankedRow, RecipientList, ReportHead, SideBreakdown, SideHead } from './ReportParts';
-import { ColorBySwitch, type SideView, SideViewSwitch, TOP_TARGETS, TargetBreakdown, TargetLegend, targetRows } from './TargetParts';
+import { useAugExtras } from './augExtras';
+import { BreakdownPanel } from './BreakdownPanel';
 
-/** Damage Done: players ranked by damage, optionally split by target, the selected player's breakdown aside. */
-export function DamageDoneTab({ report }: { report: DamageReport }) {
-  const attribution = useApp((s) => s.attribution);
-  const showAugDelta = useApp((s) => s.showAugDelta);
-  const setShowAugDelta = useApp((s) => s.setShowAugDelta);
-  const openPlayer = useApp((s) => s.openPlayer);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [sideView, setSideView] = useState<SideView>('abilities');
-  const popupId = useId();
-  const targets = useRankedTargets(report, 'damage', report.colorGroups);
-  const { roster, popup } = targets;
+const damageSplit = (p: PlayerDamage) => p;
 
-  if (report.players.length === 0) {
-    return (
-      <section className="panel panel-pad">
-        <h2 className="h2">{t('tabs.damageDone')}</h2>
-        <p className="muted">{t('report.noDamage')}</p>
-      </section>
-    );
-  }
-  const selected = report.players.find((p) => p.player === selectedId) ?? report.players[0];
-  const top = Math.max(0, ...report.players.map((p) => p.total));
-  const grid = showAugDelta ? undefined : 'rrow-nodelta';
-  const reattributed = attribution === 'reattributed';
-  const columns = [
-    { label: t('report.rank') },
-    { label: t('report.player') },
-    { label: t('report.damage') },
-    { label: t('report.dps'), end: true },
-    ...(showAugDelta ? [{ label: t('aug.delta'), end: true }] : []),
-    { label: t('report.share'), end: true },
-  ];
-  const selectedName = shortName(roster.get(selected.player)?.name ?? '?');
-
+/** Damage Done through the breakdown panel; the Aug extras of today's report show in the unfiltered source view. */
+export function DamageDoneTab({ report, breakdown }: { report: DamageReport; breakdown: Breakdown }) {
+  const aug = useAugExtras(report, breakdown, 'damage', damageSplit);
   return (
-    <div className="report-layout">
-      <section className="panel report-main" aria-labelledby="dd-title" ref={targets.panel}>
-        <ReportHead id="dd-title" title={t('tabs.damageDone')} hint={t(reattributed ? 'aug.hintReattributed' : 'aug.hintAugmented')}>
-          <ColorBySwitch metric="damage" />
-          <label className="toggle toggle-sm">
-            <input type="checkbox" checked={showAugDelta} onChange={(event) => setShowAugDelta(event.target.checked)} />
-            {t('aug.showDelta')}
-          </label>
-        </ReportHead>
-        {targets.colorByTarget && <TargetLegend groups={targets.groups} highlight={targets.highlight} onToggle={targets.toggleHighlight} />}
-        <div className="scroll-x">
-          <div className="report-rows" role="group" aria-label={t('report.damageByPlayer')}>
-            <RankedHead grid={grid} columns={columns} />
-            {report.players.map((p, index) => {
-              const delta = augDelta(p);
-              const barPct = top > 0 ? (p.total / top) * 100 : 0;
-              return (
-                <RankedRow
-                  key={p.player}
-                  grid={grid}
-                  rank={index + 1}
-                  player={roster.get(p.player)}
-                  barPct={barPct}
-                  fill={targets.fill(p, barPct)}
-                  total={targets.total(p, formatMillions(p.total), delta !== 0)}
-                  selected={p.player === selected.player}
-                  onSelect={() => setSelectedId(p.player)}
-                  onPreview={targets.preview(p)}
-                  describedBy={popup?.data.player === p.player ? popupId : undefined}
-                >
-                  <span className="num rrow-end">{formatMillions(p.perSecond)}</span>
-                  {showAugDelta && <span className={`num rrow-end ${deltaClass(delta)}`}>{formatSignedMillions(delta)}</span>}
-                  <span className="num rrow-share">{formatShare(p.share * 100)}</span>
-                </RankedRow>
-              );
-            })}
-          </div>
-        </div>
-        <RankedPopupView
-          id={popupId}
-          popup={popup}
-          report={report}
-          metric="damage"
-          roster={roster}
-          colorOf={targets.colorOf}
-          augLines={(p) => augTipLines(p, roster, 'damage', report.spells)}
-        />
-      </section>
-      <aside className="panel report-side" aria-labelledby="dd-side-title">
-        <SideHead
-          id="dd-side-title"
-          player={roster.get(selected.player)}
-          total={selected.total}
-          perSecond={selected.perSecond}
-          unit={t('report.dps')}
-          onDetails={() => void openPlayer(selected.player)}
-        />
-        <SideViewSwitch view={sideView} metric="damage" onChange={setSideView} />
-        {sideView === 'targets' ? (
-          <TargetBreakdown
-            caption={t('targets.of', { name: selectedName })}
-            nameLabel={t('targets.target')}
-            amountLabel={t('report.damage')}
-            rows={targetRows(selected.targets, { total: selected.total, roster, colorOf: targets.colorOf, top: TOP_TARGETS })}
-          />
-        ) : (
-          <>
-            <SideBreakdown
-              caption={t('report.abilitiesOf', { name: selectedName })}
-              amountLabel={t('report.damage')}
-              rows={abilityBreakdown(selected.abilities, { total: selected.total, spells: report.spells, roster })}
-            />
-            {reattributed && selected.supportByRecipient.length > 0 && (
-              <RecipientList entries={selected.supportByRecipient} base={selected.supportGiven + selected.supportSelf} roster={roster} />
-            )}
-            {reattributed && selected.supportReceivedByBuff.length > 0 && (
-              <AugSupportList shares={selected.supportReceivedByBuff} spells={report.spells} roster={roster} />
-            )}
-            {!reattributed && selected.supportReceived > 0 && (
-              <GivenCallout amount={selected.supportReceived} from={selected.supportReceivedFrom} roster={roster} metric="damage" />
-            )}
-          </>
-        )}
-      </aside>
-    </div>
+    <BreakdownPanel
+      tab="damage"
+      breakdown={breakdown}
+      title={t('tabs.damageDone')}
+      unit={t('report.dps')}
+      extraColumns={aug.deltaColumns}
+      {...aug.panel}
+    />
   );
 }

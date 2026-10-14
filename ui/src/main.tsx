@@ -20,6 +20,7 @@ import './styles/reports.css';
 import './styles/details.css';
 import './styles/tabs.css';
 import './styles/breakdown.css';
+import './styles/filters.css';
 import './styles/brand.css';
 import './styles/theme.css';
 

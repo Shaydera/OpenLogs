@@ -12,6 +12,11 @@ import type {
   CastsReport,
   DeathsReport,
   AbilityDetail,
+  Breakdown,
+  Dimension,
+  FilterOption,
+  Scope,
+  ScopeMetric,
   DamageReport,
   DamageTakenReport,
   HealingReport,
@@ -195,6 +200,10 @@ export function createClient({ engine: getEngine, dungeons, db, now }: ClientDep
     castsReport: pull<CastsReport>('casts_report'),
     aurasReport: (logId: string, fightIndex: number, scope: AuraScope, filter: ReportFilter) =>
       report<AurasReport>(logId, [fightIndex], 'auras_report', { fightIndex, scope, filter }),
+    breakdownReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, metric: ScopeMetric, group: Dimension) =>
+      report<Breakdown>(logId, [fightIndex], 'breakdown_report', { fightIndex, filter, scope, metric, group }),
+    filterOptions: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, metric: ScopeMetric, dimension: Dimension) =>
+      report<FilterOption[]>(logId, [fightIndex], 'filter_options', { fightIndex, filter, scope, metric, dimension }),
     interruptsReport: pull<InterruptsReport>('interrupts_report'),
     resourcesReport: pull<ResourcesReport>('resources_report'),
     comparePulls: (logId: string, fightA: number, fightB: number, attribution: Attribution) =>

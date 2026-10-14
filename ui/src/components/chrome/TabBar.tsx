@@ -2,9 +2,8 @@ import { type KeyboardEvent, useRef } from 'react';
 import { useFocusRequest } from '../../hooks/useFocusRequest';
 import { type MessageKey, t } from '../../i18n/i18n';
 import { type FightTab, useApp } from '../../store';
-import { HideProcsToggle } from '../casts/HideProcsToggle';
-import { AttributionToggle } from '../reports/AttributionToggle';
-import { tabBarControl } from './tabBarControl';
+import { OptionsMenu } from './OptionsMenu';
+import { ViewSwitch } from './ViewSwitch';
 
 const TABS: { key: MessageKey; tab: FightTab }[] = [
   { key: 'tabs.overview', tab: 'overview' },
@@ -30,14 +29,12 @@ function nextTab(current: FightTab, key: string): FightTab | null {
   return target === null ? null : TABS[(target + TABS.length) % TABS.length].tab;
 }
 
-/** The fight's tab row with its control at the right end (`tabBarControl`). */
+/** The fight's tab row with the options menu and view switch at the right end. */
 export function TabBar() {
   const tab = useApp((s) => s.tab);
-  const details = useApp((s) => s.details);
   const setTab = useApp((s) => s.setTab);
   const tabRefs = useRef<Map<FightTab, HTMLButtonElement>>(new Map());
   useFocusRequest('tab', () => tabRefs.current.get(tab));
-  const control = tabBarControl(tab, details);
 
   function onTabKey(event: KeyboardEvent<HTMLDivElement>) {
     const target = nextTab(tab, event.key);
@@ -74,8 +71,10 @@ export function TabBar() {
           );
         })}
       </div>
-      {control === 'aug' && <AttributionToggle />}
-      {control === 'procs' && <HideProcsToggle />}
+      <div className="tab-tools">
+        <OptionsMenu />
+        <ViewSwitch />
+      </div>
     </div>
   );
 }

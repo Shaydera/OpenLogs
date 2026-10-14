@@ -182,7 +182,26 @@ fn every_report_reaches_the_ui_with_camel_case_keys() {
         "an empty name opens the most damaged enemy"
     );
 
+    let scope = json!({ "perspective": "friendly", "source": [], "target": [], "ability": [] });
+    let breakdown = call(
+        &engine,
+        "breakdown_report",
+        pull(json!({ "scope": scope, "metric": "damageDone", "group": "source" })),
+    );
+    assert_eq!(breakdown["group"], "source");
+    assert!(!breakdown["rows"].as_array().unwrap().is_empty());
+    let options = call(
+        &engine,
+        "filter_options",
+        pull(json!({ "scope": scope, "metric": "damageDone", "dimension": "ability" })),
+    );
+    let abilities = options.as_array().unwrap();
+    assert!(!abilities.is_empty());
+    assert!(abilities.iter().all(|o| o["value"]["kind"] == "ability"));
+
     let reports = [
+        ("breakdown", breakdown),
+        ("options", options),
         (
             "overview",
             call(

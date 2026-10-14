@@ -4,7 +4,9 @@ mod ability;
 mod actors;
 mod aura_report;
 mod auras;
+mod breakdown;
 mod casts;
+mod cells;
 mod compare;
 mod deaths;
 mod fight;
@@ -12,6 +14,7 @@ mod filter;
 mod interrupts;
 mod links;
 mod load;
+mod options;
 mod overview;
 mod phases;
 mod player;
@@ -19,6 +22,7 @@ mod recap;
 mod reports;
 mod resources;
 mod run_result;
+mod scope;
 mod targets;
 mod timeline;
 mod usage;
@@ -27,7 +31,12 @@ pub use ability::{AbilityDetail, AbilityHit, TargetHits, ability_detail};
 pub use actors::{Actor, ActorId, ActorKind, Actors, NOBODY};
 pub use aura_report::{AuraRow, AuraScope, AuraTarget, auras_report};
 pub use auras::{AuraInterval, aura_intervals, union_ms};
+pub use breakdown::{
+    Breakdown, BreakdownRow, Dimension, GroupedRow, RowKey, Split, breakdown, effective_group,
+    other_dimension, own_dimension,
+};
 pub use casts::{CastsReport, PlayerCasts, SpellCasts, casts_report};
+pub use cells::{Cell, CellKind, ScopeMetric, cells};
 pub use compare::{ComparedPlayer, PlayerSide, PullComparison, compare_pulls};
 pub use deaths::{
     AbilityAmount, BURST_GAP_MS, DEATH_WINDOW_MS, Death, Hit, LethalBurst, Resurrection, deaths,
@@ -43,6 +52,7 @@ pub use interrupts::{
 };
 pub use links::AbilityLink;
 pub use load::{load_fight, load_fight_file, load_fight_slice};
+pub use options::{FilterOption, OptionValue, SpellVariant, filter_options};
 pub use overview::{
     BOSS_HP_STEP_MS, DPS_STEP_MS, DeathReport, Kpis, OverviewMarkers, OverviewTimeline,
     QuickOverview, quick_overview, quick_overview_in,
@@ -65,6 +75,7 @@ pub use resources::{
     PlayerResources, PowerTrack, RESOURCE_STEP_MS, ResourcesReport, resources_report,
 };
 pub use run_result::{BossProgress, RunResult, run_result};
+pub use scope::{AbilityRef, Scope, Side, UnitRef, unit_of};
 pub use targets::{
     EnemyGroup, TargetDetail, UnitLife, WAVE_GAP_MS, Wave, enemy_groups, target_detail,
 };

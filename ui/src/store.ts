@@ -1,7 +1,8 @@
-import { create } from 'zustand';
+import { type StateCreator, create } from 'zustand';
 import { api } from './api/client';
 import type { ChosenLog } from './api/logSource';
 import type {
+  AbilityRef,
   AuraScope,
   AurasReport,
   InterruptsReport,
@@ -10,9 +11,12 @@ import type {
   DeathsReport,
   AbilityDetail,
   Attribution,
+  Breakdown,
   DamageReport,
   DamageTakenReport,
   Detail,
+  Dimension,
+  FilterOption,
   HealingReport,
   Kpis,
   LogView,
@@ -22,10 +26,15 @@ import type {
   QuickOverview,
   RecentLog,
   ReportFilter,
+  Scope,
+  ScopeMetric,
+  Side,
   TargetDetail,
+  UnitRef,
 } from './api/types';
 import { type GameDataManifest, gameDataManifest } from './gameData';
 import { t } from './i18n/i18n';
+import { ownDimension } from './scopeSides';
 import { readStored, writeStored } from './storage';
 import { type ThemeMode, type ThemeName, readTheme, readThemeMode, storeTheme, storeThemeMode } from './theme';
 
@@ -43,6 +52,37 @@ export type FightTab =
   | 'buffs'
   | 'interrupts'
   | 'resources';
+export type MetricTab = 'damage' | 'healing' | 'taken';
+export const METRIC_OF: Record<MetricTab, ScopeMetric> = { damage: 'damageDone', healing: 'healing', taken: 'damageTaken' };
+export const isMetricTab = (tab: FightTab): tab is MetricTab => tab === 'damage' || tab === 'healing' || tab === 'taken';
+/** The view filters by role: `own` is the perspective's side (Damage Taken: the target), `other` the side it faces. */
+interface Filters {
+  perspective: Side;
+  own: UnitRef[];
+  other: UnitRef[];
+  ability: AbilityRef[];
+}
+const EMPTY_FILTERS: Filters = { perspective: 'friendly', own: [], other: [], ability: [] };
+/** Tabs without filters map the roles like Damage Done. */
+const sidesOf = (tab: FightTab): MetricTab => (isMetricTab(tab) ? tab : 'damage');
+
+function scopeOf({ perspective, own, other, ability }: Filters, tab: FightTab): Scope {
+  const [source, target] = ownDimension(sidesOf(tab)) === 'source' ? [own, other] : [other, own];
+  return { perspective, source, target, ability };
+}
+
+/** The scope of `state`'s filters and tab; the current object while it still matches. */
+function derivedScope(state: State): Scope {
+  const next = scopeOf(state.filters, state.tab);
+  const { scope } = state;
+  const same = next.perspective === scope.perspective && next.source === scope.source && next.target === scope.target && next.ability === scope.ability;
+  return same ? scope : next;
+}
+const reportFilter = (s: Pick<State, 'range' | 'attribution'>): ReportFilter => ({
+  startMs: s.range?.startMs ?? null,
+  endMs: s.range?.endMs ?? null,
+  attribution: s.attribution,
+});
 export interface TimeRange {
   startMs: number;
   endMs: number;
@@ -92,7 +132,15 @@ export interface Opening {
   totalBytes: number | null;
 }
 
+type Store = State & Actions;
+type SetState = (partial: Partial<Omit<State, 'scope'>>) => void;
+
 interface State {
+  filters: Filters;
+  /** The filters as the core scope of the current tab; the same object until one of them or the tab's sides change. */
+  scope: Scope;
+  grouping: Record<MetricTab, Dimension>;
+  breakdown: Breakdown | null;
   recent: RecentLog[];
   log: LogView | null;
   /** The log being opened, for the drop zone status. */
@@ -145,6 +193,11 @@ interface State {
 }
 
 interface Actions {
+  setPerspective(side: Side): Promise<void>;
+  select(dimension: Dimension, value: UnitRef | AbilityRef | null): Promise<void>;
+  clearFilters(): Promise<void>;
+  setGrouping(dimension: Dimension): Promise<void>;
+  filterOptions(dimension: Dimension): Promise<FilterOption[]>;
   refreshRecent(): Promise<void>;
   openLog(chosen: ChosenLog): Promise<void>;
   openRecent(entry: RecentLog): Promise<void>;
@@ -195,6 +248,10 @@ function writeFlag(key: string, value: boolean) {
 
 export function initialState(): State {
   return {
+    filters: EMPTY_FILTERS,
+    scope: scopeOf(EMPTY_FILTERS, 'overview'),
+    grouping: { damage: 'source', healing: 'source', taken: 'target' },
+    breakdown: null,
     recent: [],
     log: null,
     opening: null,
@@ -288,47 +345,51 @@ async function fetchReport(
 }
 
 /** Loads the report of the current tab; only the newest request may write the result. */
-async function loadReport(get: () => State & Actions, set: (partial: Partial<State>) => void) {
-  const { log, view, tab, attribution, range, details, auraScope } = get();
+async function loadReport(get: () => State & Actions, set: SetState) {
+  const { log, view, tab, range, details, auraScope, scope, grouping } = get();
   if (!log || view.kind !== 'fight') return;
   const request = ++reportRequest;
   if (tab === 'overview' && range === null) {
     // The whole-pull overview is already in `state.overview`.
-    set({ report: null, reportError: null, reportLoading: false });
+    set({ report: null, breakdown: null, reportError: null, reportLoading: false });
     return;
   }
-  const filter = { startMs: range?.startMs ?? null, endMs: range?.endMs ?? null, attribution };
+  const filter = reportFilter(get());
   set({ reportLoading: true, reportError: null, rangeKpis: null });
   try {
     // Resources' header shows the Overview's figures; a failure only leaves it at "…".
     const rangeKpis =
       tab === 'resources' && range !== null ? api.quickOverview(log.id, view.fightIndex, filter).then((o) => o.kpis, () => null) : null;
-    const report = await fetchReport(log.id, view.fightIndex, tab, details[details.length - 1], auraScope, filter);
+    const metricTab = isMetricTab(tab) && details.length === 0 ? tab : null;
+    const [report, breakdown] = await Promise.all([
+      fetchReport(log.id, view.fightIndex, tab, details[details.length - 1], auraScope, filter),
+      metricTab ? api.breakdownReport(log.id, view.fightIndex, filter, scope, METRIC_OF[metricTab], grouping[metricTab]) : Promise.resolve(null),
+    ]);
     if (request === reportRequest) {
       // Pin the enemy that the empty "Enemies" entry resolved to, so range changes keep it.
       const shown = get().details;
       const last = shown[shown.length - 1];
       if (report.tab === 'target' && last?.kind === 'target' && last.name === '') {
-        set({ report, details: [...shown.slice(0, -1), { kind: 'target', name: report.data.name }] });
+        set({ report, breakdown, details: [...shown.slice(0, -1), { kind: 'target', name: report.data.name }] });
       } else if (report.tab === 'ability' && last?.kind === 'ability' && last.spellId === report.data.spellId && last.spellName !== report.data.spellName) {
         // Pin the ability's name: the pull overview knows only its own spells.
-        set({ report, details: [...shown.slice(0, -1), { ...last, spellName: report.data.spellName }] });
+        set({ report, breakdown, details: [...shown.slice(0, -1), { ...last, spellName: report.data.spellName }] });
       } else {
-        set({ report });
+        set({ report, breakdown });
       }
     }
     const kpis = await rangeKpis;
     if (kpis && request === reportRequest) set({ rangeKpis: kpis });
   } catch (err) {
     // A page that failed has no heading to focus; a later load must not inherit the request.
-    if (request === reportRequest) set({ reportError: String(err), focusRequest: null });
+    if (request === reportRequest) set({ reportError: String(err), breakdown: null, focusRequest: null });
   } finally {
     if (request === reportRequest) set({ reportLoading: false });
   }
 }
 
 /** Loads the open comparison in the current Aug mode; only the newest request may write. */
-async function loadComparison(get: () => State & Actions, set: (partial: Partial<State>) => void) {
+async function loadComparison(get: () => State & Actions, set: SetState) {
   const { log, comparison, attribution } = get();
   if (!log || !comparison) return;
   const request = ++comparisonRequest;
@@ -358,7 +419,20 @@ function originFor(state: State): FightTab | null {
   return state.tab === 'damage' || state.tab === 'healing' ? null : state.tab;
 }
 
-export const useApp = create<State & Actions>()((set, get) => ({
+// Many actions move the tab; deriving the scope on every write, the store's setState included, keeps it from going stale.
+function derivingScope(actions: (set: SetState, get: () => Store) => Store): StateCreator<Store> {
+  return (_set, get, store) => {
+    const setState = store.setState;
+    store.setState = ((partial: Partial<Store> | ((state: Store) => Partial<Store>), replace?: boolean) =>
+      setState((state) => {
+        const next = { ...(replace ? {} : state), ...(typeof partial === 'function' ? partial(state) : partial) } as Store;
+        return { ...next, scope: derivedScope(next) };
+      }, true)) as typeof store.setState;
+    return actions((partial) => store.setState(partial), get);
+  };
+}
+
+export const useApp = create<Store>()(derivingScope((set, get) => ({
   ...initialState(),
 
   async refreshRecent() {
@@ -416,6 +490,34 @@ export const useApp = create<State & Actions>()((set, get) => ({
     set({ hideAborted: hide });
   },
 
+  async setPerspective(perspective) {
+    const { filters } = get();
+    if (filters.perspective === perspective) return;
+    set({ filters: { perspective, own: filters.other, other: filters.own, ability: [] }, focusRequest: null });
+    await loadReport(get, set);
+  },
+  async select(dimension, value) {
+    const { filters, tab } = get();
+    const role = dimension === 'ability' ? 'ability' : dimension === ownDimension(sidesOf(tab)) ? 'own' : 'other';
+    set({ filters: { ...filters, [role]: value === null ? [] : [value] } as Filters, focusRequest: null });
+    await loadReport(get, set);
+  },
+  async clearFilters() {
+    set({ filters: { ...EMPTY_FILTERS, perspective: get().filters.perspective }, focusRequest: null });
+    await loadReport(get, set);
+  },
+  async setGrouping(dimension) {
+    const { tab } = get();
+    if (!isMetricTab(tab) || get().grouping[tab] === dimension) return;
+    set({ grouping: { ...get().grouping, [tab]: dimension } });
+    await loadReport(get, set);
+  },
+  async filterOptions(dimension) {
+    const { log, view, tab, scope } = get();
+    if (!log || view.kind !== 'fight' || !isMetricTab(tab)) return [];
+    return api.filterOptions(log.id, view.fightIndex, reportFilter(get()), scope, METRIC_OF[tab], dimension);
+  },
+
   async openFight(fightIndex) {
     const log = get().log;
     if (!log) return;
@@ -430,6 +532,8 @@ export const useApp = create<State & Actions>()((set, get) => ({
       error: null,
       tab: 'overview',
       range: null,
+      filters: EMPTY_FILTERS,
+      breakdown: null,
       report: null,
       reportError: null,
       reportLoading: false,
@@ -463,7 +567,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
       fightError: null,
       tab: 'overview',
       range: null,
-      report: null,
+      report: null, breakdown: null,
       rangeKpis: null,
       reportError: null,
       reportLoading: false,
@@ -491,7 +595,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
     const top = details[details.length - 1];
     // An ability page belongs to one metric; switching the metric shows its player instead.
     const kept = !keep ? [] : top?.kind === 'ability' && tab !== current ? details.slice(0, -1) : details;
-    set({ tab, report: null, reportError: null, details: kept, focusDeath: null, detailOrigin: null, focusRequest: focus });
+    set({ tab, report: null, breakdown: null, reportError: null, details: kept, focusDeath: null, detailOrigin: null, focusRequest: focus });
     await loadReport(get, set);
   },
 
@@ -503,7 +607,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
       tab: reportTab(state.tab),
       details: [...below, { kind: 'player', player }],
       detailOrigin: originFor(state),
-      report: null,
+      report: null, breakdown: null,
       reportError: null,
       focusRequest: 'page',
     });
@@ -514,7 +618,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
     const details = get().details;
     const top = details[details.length - 1];
     if (top?.kind !== 'player') return;
-    set({ details: [...details, { kind: 'ability', player: top.player, spellId, pet }], report: null, reportError: null, focusRequest: 'page' });
+    set({ details: [...details, { kind: 'ability', player: top.player, spellId, pet }], report: null, breakdown: null, reportError: null, focusRequest: 'page' });
     await loadReport(get, set);
   },
 
@@ -526,7 +630,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
       tab: reportTab(state.tab),
       details: [...below, { kind: 'target', name }],
       detailOrigin: originFor(state),
-      report: null,
+      report: null, breakdown: null,
       reportError: null,
       focusRequest: 'page',
     });
@@ -534,7 +638,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
   },
 
   async openDeathRecap(player, t) {
-    set({ tab: 'deaths', details: [], detailOrigin: null, focusDeath: { player, t }, report: null, reportError: null, focusRequest: 'page' });
+    set({ tab: 'deaths', details: [], detailOrigin: null, focusDeath: { player, t }, report: null, breakdown: null, reportError: null, focusRequest: 'page' });
     await loadReport(get, set);
   },
 
@@ -548,13 +652,13 @@ export const useApp = create<State & Actions>()((set, get) => ({
     const ability = { kind: 'ability' as const, player, spellId, pet: null };
     if (top?.kind === 'player' && top.player === player) {
       // From the player's own page: push, so Back walks through what is below it.
-      set({ tab, details: [...details, ability], report: null, reportError: null, focusRequest: 'page' });
+      set({ tab, details: [...details, ability], report: null, breakdown: null, reportError: null, focusRequest: 'page' });
     } else {
       set({
         tab,
         details: [{ kind: 'player', player }, ability],
         detailOrigin: originFor(get()),
-        report: null,
+        report: null, breakdown: null,
         reportError: null,
         focusRequest: 'page',
       });
@@ -571,7 +675,7 @@ export const useApp = create<State & Actions>()((set, get) => ({
       details: rest,
       tab: home ?? tab,
       detailOrigin: home === null ? detailOrigin : null,
-      report: null,
+      report: null, breakdown: null,
       reportError: null,
       focusRequest: rest.length > 0 ? 'page' : 'tab',
     });
@@ -582,13 +686,13 @@ export const useApp = create<State & Actions>()((set, get) => ({
     const { details } = get();
     // Only a lower page: the top one is already shown.
     if (depth < 0 || depth >= details.length - 1) return;
-    set({ details: details.slice(0, depth + 1), report: null, reportError: null, focusRequest: 'page' });
+    set({ details: details.slice(0, depth + 1), report: null, breakdown: null, reportError: null, focusRequest: 'page' });
     await loadReport(get, set);
   },
 
   async closeDetail() {
     const { detailOrigin, tab } = get();
-    set({ details: [], tab: detailOrigin ?? tab, detailOrigin: null, report: null, reportError: null, focusRequest: 'tab' });
+    set({ details: [], tab: detailOrigin ?? tab, detailOrigin: null, report: null, breakdown: null, reportError: null, focusRequest: 'tab' });
     await loadReport(get, set);
   },
 
@@ -677,4 +781,4 @@ export const useApp = create<State & Actions>()((set, get) => ({
     set({ gameDataLoading: true });
     set({ gameData: await gameDataManifest(), gameDataLoading: false });
   },
-}));
+})));

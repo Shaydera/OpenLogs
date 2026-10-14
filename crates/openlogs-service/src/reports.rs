@@ -14,6 +14,10 @@ use crate::report_dto::{
     damage_report_dto, healing_report_dto, taken_report_dto,
 };
 use crate::resources_dto::{ResourcesReportDto, resources_report_dto};
+use crate::scope_dto::{
+    BreakdownDto, DimensionDto, FilterOptionDto, ScopeDto, ScopeMetricDto, breakdown_dto,
+    option_dto,
+};
 
 /// The overview of a pull; without a filter, of the whole pull.
 pub fn quick_overview(
@@ -162,4 +166,40 @@ pub fn compare_pulls(
     let comparison =
         openlogs_analysis::compare_pulls(a.1, b.1, curated, attribution.to_attribution());
     pull_comparison_dto(curated, a, b, &comparison)
+}
+
+pub fn breakdown_report(
+    fight: &Fight,
+    filter: FilterDto,
+    scope: ScopeDto,
+    metric: ScopeMetricDto,
+    group: DimensionDto,
+) -> BreakdownDto {
+    let breakdown = openlogs_analysis::breakdown(
+        fight,
+        &filter.to_filter(),
+        &scope.to_scope(),
+        metric.to_metric(),
+        group.to_dimension(),
+    );
+    breakdown_dto(fight, &breakdown)
+}
+
+pub fn filter_options(
+    fight: &Fight,
+    filter: FilterDto,
+    scope: ScopeDto,
+    metric: ScopeMetricDto,
+    dimension: DimensionDto,
+) -> Vec<FilterOptionDto> {
+    openlogs_analysis::filter_options(
+        fight,
+        &filter.to_filter(),
+        &scope.to_scope(),
+        metric.to_metric(),
+        dimension.to_dimension(),
+    )
+    .iter()
+    .map(|option| option_dto(fight, option))
+    .collect()
 }
