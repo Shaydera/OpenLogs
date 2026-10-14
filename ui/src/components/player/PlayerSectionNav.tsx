@@ -13,7 +13,7 @@ const SECTIONS: { id: string; label: MessageKey }[] = [
 const HEALING_LABELS: Record<string, MessageKey> = { 'p-dps': 'player.healingOverTime', 'p-targets': 'targets.healedPlayers' };
 
 /** Each pill scrolls to its section and moves the focus to its heading; the last one used stays marked. */
-export function PlayerSectionNav({ healing }: { healing: boolean }) {
+export function PlayerSectionNav({ healing, hidden = [] }: { healing: boolean; hidden?: string[] }) {
   const [active, setActive] = useState(SECTIONS[0].id);
   const go = (id: string) => {
     setActive(id);
@@ -23,7 +23,7 @@ export function PlayerSectionNav({ healing }: { healing: boolean }) {
   };
   return (
     <nav className="subnav" aria-label={t('player.sections')}>
-      {SECTIONS.map((section) => (
+      {SECTIONS.filter((section) => !hidden.includes(section.id)).map((section) => (
         <button
           key={section.id}
           type="button"

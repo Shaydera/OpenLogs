@@ -525,6 +525,7 @@ export const en = {
   'player.death.healthstone': 'healthstone',
   'player.death.healthPotion': 'health potion',
   'detail.back': '← Back',
+  'detail.filtered': 'Filtered',
   'error.view': 'This view failed to render: {reason}',
   'school.physical': 'Physical',
   'school.holy': 'Holy',

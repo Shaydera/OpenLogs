@@ -190,12 +190,12 @@ export function createClient({ engine: getEngine, dungeons, db, now }: ClientDep
     damageDoneReport: pull<DamageReport>('damage_done_report'),
     healingReport: pull<HealingReport>('healing_report'),
     damageTakenReport: pull<DamageTakenReport>('damage_taken_report'),
-    playerDetail: (logId: string, fightIndex: number, player: number, metric: Metric, filter: ReportFilter) =>
-      report<PlayerDetail>(logId, [fightIndex], 'player_detail', { fightIndex, player, metric, filter }),
-    abilityDetail: (logId: string, fightIndex: number, player: number, spell: number, pet: string | null, metric: Metric, filter: ReportFilter) =>
-      report<AbilityDetail>(logId, [fightIndex], 'ability_detail', { fightIndex, player, spell, pet, metric, filter }),
-    targetDetail: (logId: string, fightIndex: number, name: string, filter: ReportFilter) =>
-      report<TargetDetail>(logId, [fightIndex], 'target_detail', { fightIndex, name, filter }),
+    playerDetail: (logId: string, fightIndex: number, player: number, metric: Metric, filter: ReportFilter, scope: Scope) =>
+      report<PlayerDetail>(logId, [fightIndex], 'player_detail', { fightIndex, player, metric, filter, scope }),
+    abilityDetail: (logId: string, fightIndex: number, player: number, spell: number, pet: string | null, metric: Metric, filter: ReportFilter, scope: Scope) =>
+      report<AbilityDetail>(logId, [fightIndex], 'ability_detail', { fightIndex, player, spell, pet, metric, filter, scope }),
+    targetDetail: (logId: string, fightIndex: number, name: string, filter: ReportFilter, scope: Scope) =>
+      report<TargetDetail>(logId, [fightIndex], 'target_detail', { fightIndex, name, filter, scope }),
     deathsReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope) =>
       report<DeathsReport>(logId, [fightIndex], 'deaths_report', { fightIndex, filter, scope }),
     castsReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, group: Dimension, hideProcs: boolean) =>

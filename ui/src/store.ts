@@ -54,7 +54,7 @@ export type FightTab =
 export type MetricTab = 'damage' | 'healing' | 'taken';
 export const isMetricTab = (tab: FightTab): tab is MetricTab => tab === 'damage' || tab === 'healing' || tab === 'taken';
 /** The view filters by role: `own` is the perspective's side (Damage Taken: the target), `other` the side it faces. */
-interface Filters {
+export interface Filters {
   perspective: Side;
   own: UnitRef[];
   other: UnitRef[];
@@ -70,6 +70,23 @@ function scopeOf({ perspective, own, other, ability }: Filters, tab: FightTab): 
   const unit = (dimension: 'source' | 'target') => (sides.own === dimension ? own : sides.other === dimension ? other : NONE);
   return { perspective, source: unit('source'), target: unit('target'), ability };
 }
+
+/**
+ * The page filter as a detail page of `tab` (Damage Done or Healing, friendly players and enemies)
+ * reads it: an Enemies view hands its selections over by side. The core keeps what the page applies.
+ */
+export function pageScope(filters: Filters, tab: 'damage' | 'healing'): Scope {
+  const friendly = filters.perspective === 'friendly' ? filters : { ...filters, own: filters.other, other: filters.own };
+  return scopeOf({ ...friendly, perspective: 'friendly' }, tab);
+}
+
+/** The view's dimension behind a detail page's `dimension`, the inverse of `pageScope`. */
+export function viewDimension(dimension: Dimension, perspective: Side): Dimension {
+  if (perspective === 'friendly' || dimension === 'ability') return dimension;
+  return dimension === 'source' ? 'target' : 'source';
+}
+
+const roleOf = (dimension: Dimension, tab: FightTab) => (dimension === 'ability' ? 'ability' : dimension === sidesOf(tab).own ? 'own' : 'other');
 
 /** The tab's grouping: the user's choice, else the tab's default. */
 export const groupOf = (grouping: Partial<Record<FilterTab, Dimension>>, tab: FilterTab): Dimension => grouping[tab] ?? SIDES[tab].rows[0];
@@ -200,6 +217,8 @@ interface Actions {
   setPerspective(side: Side): Promise<void>;
   select(dimension: Dimension, value: UnitRef | AbilityRef | null): Promise<void>;
   clearFilters(): Promise<void>;
+  /** Clears the selections behind a detail page's dimensions and keeps the rest. */
+  clearPageFilter(dimensions: Dimension[]): Promise<void>;
   setGrouping(dimension: Dimension): Promise<void>;
   filterOptions(dimension: Dimension): Promise<FilterOption[]>;
   refreshRecent(): Promise<void>;
@@ -311,20 +330,21 @@ function dropPendingComparison() {
   comparisonRequest += 1;
 }
 
-type ReportInput = Pick<State, 'tab' | 'details' | 'auraKind' | 'scope' | 'grouping' | 'hideProcs'>;
+type ReportInput = Pick<State, 'tab' | 'details' | 'auraKind' | 'filters' | 'scope' | 'grouping' | 'hideProcs'>;
 
 /** The core's fact family of a tab: Buffs & Debuffs follows its toggle. */
 const metricOf = (tab: FilterTab, auraKind: AuraKind) => (tab === 'buffs' ? auraKind : SIDES[tab].metric);
 
 /** The tab's report, or the detail page on top of the stack for Damage Done and Healing. */
 async function fetchReport(logId: string, fight: number, input: ReportInput, filter: ReportFilter): Promise<ReportData> {
-  const { tab, details, auraKind, scope, grouping, hideProcs } = input;
+  const { tab, details, auraKind, filters, scope, grouping, hideProcs } = input;
   const top: Detail | undefined = details[details.length - 1];
   const metric: Metric = tab === 'healing' ? 'healing' : 'damage';
   if (tab === 'damage' || tab === 'healing') {
-    if (top?.kind === 'player') return { tab: 'player', data: await api.playerDetail(logId, fight, top.player, metric, filter) };
-    if (top?.kind === 'ability') return { tab: 'ability', data: await api.abilityDetail(logId, fight, top.player, top.spellId, top.pet, metric, filter) };
-    if (top?.kind === 'target') return { tab: 'target', data: await api.targetDetail(logId, fight, top.name, filter) };
+    const page = pageScope(filters, tab);
+    if (top?.kind === 'player') return { tab: 'player', data: await api.playerDetail(logId, fight, top.player, metric, filter, page) };
+    if (top?.kind === 'ability') return { tab: 'ability', data: await api.abilityDetail(logId, fight, top.player, top.spellId, top.pet, metric, filter, page) };
+    if (top?.kind === 'target') return { tab: 'target', data: await api.targetDetail(logId, fight, top.name, filter, page) };
   }
   switch (tab) {
     case 'overview':
@@ -502,12 +522,17 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   },
   async select(dimension, value) {
     const { filters, tab } = get();
-    const role = dimension === 'ability' ? 'ability' : dimension === sidesOf(tab).own ? 'own' : 'other';
-    set({ filters: { ...filters, [role]: value === null ? [] : [value] } as Filters, focusRequest: null });
+    set({ filters: { ...filters, [roleOf(dimension, tab)]: value === null ? [] : [value] } as Filters, focusRequest: null });
     await loadReport(get, set);
   },
   async clearFilters() {
     set({ filters: { ...EMPTY_FILTERS, perspective: get().filters.perspective }, focusRequest: null });
+    await loadReport(get, set);
+  },
+  async clearPageFilter(dimensions) {
+    const { filters, tab } = get();
+    const cleared = Object.fromEntries(dimensions.map((d) => [roleOf(viewDimension(d, filters.perspective), tab), []]));
+    set({ filters: { ...filters, ...cleared }, focusRequest: null });
     await loadReport(get, set);
   },
   async setGrouping(dimension) {
