@@ -138,9 +138,14 @@ pub(crate) fn death_recaps_where(
         .collect()
 }
 
+/// When the recap window of a death at `t` begins.
+pub(crate) fn recap_start(t: i32) -> i32 {
+    (t - RECAP_WINDOW_MS).max(0)
+}
+
 /// The events of the recap window of a death at `t`.
 pub(crate) fn recap_window(fight: &Fight, t: i32) -> std::ops::Range<usize> {
-    let start = (t - RECAP_WINDOW_MS).max(0);
+    let start = recap_start(t);
     let first = fight.events.partition_point(|e| e.t < start);
     let end = fight.events.partition_point(|e| e.t <= t);
     first..end.max(first)

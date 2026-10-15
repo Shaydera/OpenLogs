@@ -7,16 +7,20 @@ mod deaths;
 mod kicks;
 mod names;
 pub(crate) mod parts;
+mod power;
+mod taken;
+mod timeline;
 
 use openlogs_gamedata::Curated;
 
-use crate::actors::ActorId;
-use crate::breakdown::Dimension;
+use crate::actors::{ActorId, NOBODY};
+use crate::breakdown::{Dimension, RowKey};
 use crate::cells::ScopeMetric;
 use crate::fight::{AuraType, FailReason, Fight, SpellId};
 use crate::filter::{Attribution, ReportFilter};
-use crate::scope::Scope;
+use crate::scope::{Scope, Side};
 use crate::views::parts::AmountFacts;
+use crate::views::timeline::{Lanes, clip, lane_axis};
 
 /// The views' toggles, and the Casts option they share with the table.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -334,4 +338,221 @@ pub(crate) fn narrowed(scope: &Scope) -> Vec<Dimension> {
     .filter(|(_, open)| !open)
     .map(|(dimension, _)| dimension)
     .collect()
+}
+
+/// The part of the range a timeline shows, in ms since the pull started.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Window {
+    pub start_ms: i32,
+    pub end_ms: i32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemKind {
+    /// A cast without a begin cast; a channel too, the log has no channel event.
+    Instant,
+    CastTime,
+    Empowered,
+    Interrupted,
+    /// A begin cast nothing in the log closes.
+    NoOutcome,
+    /// A failed cast with another reason than "Interrupted", logged for the logging player only.
+    Rejected,
+    Aura,
+    Hit,
+    Death,
+    Interrupt,
+    Dispel,
+    Steal,
+}
+
+/// What an item's amount covers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AmountRule {
+    /// Hits of the caster (pets included) with the spell's name from the cast until the next
+    /// cast of that name, at most 15 s.
+    UntilNextCast,
+    /// Hits of the aura's name on its holder while it was up.
+    WhileUp,
+    /// Damage to players with the spell's name from the cast start to 10 s after.
+    BossCast,
+    /// One hit as logged.
+    Hit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ItemAmount {
+    pub rule: AmountRule,
+    /// The hits as logged; on an Evoker's buff, the support credited to him.
+    pub amount: i64,
+    pub hits: u32,
+    pub targets: u32,
+    /// The Aug support inside `amount`: the shares in the hits, or the Evoker's credit.
+    pub support: i64,
+    pub healing: bool,
+}
+
+/// A logged line behind an item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LogLine {
+    pub t: i32,
+    pub event: &'static str,
+    pub spell: SpellId,
+    pub stage: Option<u32>,
+    pub reason: Option<FailReason>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TimelineItem {
+    pub kind: ItemKind,
+    pub start_ms: i32,
+    /// `None` for a point in time.
+    pub end_ms: Option<i32>,
+    pub source: ActorId,
+    pub spell: SpellId,
+    pub target: ActorId,
+    pub stage: Option<u32>,
+    pub stacks: Option<u32>,
+    /// Interrupts and dispels: the spell used; `spell` is the one it stopped.
+    pub used: Option<SpellId>,
+    /// Who interrupted a cast, or landed a killing blow.
+    pub by: Option<(ActorId, SpellId)>,
+    pub reason: Option<FailReason>,
+    /// Deaths: the killing blow's overkill.
+    pub overkill: Option<u64>,
+    /// Deaths: when a resurrect ended it.
+    pub rezzed_ms: Option<i32>,
+    /// Kills: from the unit's first hit to its death.
+    pub alive_ms: Option<i32>,
+    /// Interrupts: when the stopped cast began, when the log says.
+    pub cast_start_ms: Option<i32>,
+    pub amount: Option<ItemAmount>,
+    pub log: Vec<LogLine>,
+    /// Log lines beyond those listed.
+    pub log_more: u32,
+    /// The sub-track of a lane that packs overlapping bars.
+    pub track: u32,
+}
+
+impl TimelineItem {
+    pub(crate) fn new(kind: ItemKind, start_ms: i32, end_ms: Option<i32>) -> Self {
+        Self {
+            kind,
+            start_ms,
+            end_ms,
+            source: NOBODY,
+            spell: 0,
+            target: NOBODY,
+            stage: None,
+            stacks: None,
+            used: None,
+            by: None,
+            reason: None,
+            overkill: None,
+            rezzed_ms: None,
+            alive_ms: None,
+            cast_start_ms: None,
+            amount: None,
+            log: Vec::new(),
+            log_more: 0,
+            track: 0,
+        }
+    }
+}
+
+/// A unit's power or health as logged, one line per power type.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PowerLine {
+    pub power_type: i32,
+    /// `(t, current, max)`.
+    pub samples: Vec<(i32, i64, i64)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Lane {
+    /// `None`: the one lane of a view whose every dimension is narrowed to one value.
+    pub key: Option<RowKey>,
+    /// The lane's figure in the range: the table's amount or count; for auras, their time up.
+    pub total: i64,
+    /// Sub-tracks the lane's bars are packed into.
+    pub tracks: u32,
+    pub items: Vec<TimelineItem>,
+    pub power: Vec<PowerLine>,
+    /// When the lane's unit was dead, clipped to the window.
+    pub dead: Vec<(i32, i32)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Timeline {
+    /// The window clipped to the range.
+    pub window: Window,
+    pub axis: Option<Dimension>,
+    pub lanes: Vec<Lane>,
+    /// Casts of the encounter's units above the lanes.
+    pub context: Vec<TimelineItem>,
+    /// Damage Taken: the debuff spells drawn, in order of appearance.
+    pub legend: Vec<SpellId>,
+}
+
+/// The tab's marks in `window`, in lanes by `wanted` (or its fallback). Lanes with something in
+/// the range are listed even when the window is empty there.
+#[allow(clippy::too_many_arguments)]
+pub fn timeline(
+    fight: &Fight,
+    curated: &Curated,
+    filter: &ReportFilter,
+    scope: &Scope,
+    metric: ScopeMetric,
+    wanted: Dimension,
+    options: &ViewOptions,
+    window: Window,
+) -> Timeline {
+    let window = clip(fight, filter, window);
+    // A window that reaches the pull's end holds the events of its last millisecond.
+    let pull_end = fight.duration_ms.min(i32::MAX as u64) as i32;
+    let marked = if window.end_ms >= pull_end && filter.clipped(fight).1 == pull_end {
+        Window {
+            end_ms: window.end_ms.saturating_add(1),
+            ..window
+        }
+    } else {
+        window
+    };
+    let axis = lane_axis(scope, metric, wanted);
+    let mut lanes = Lanes::new(axis);
+    let mut legend = Vec::new();
+    match metric {
+        ScopeMetric::Casts => {
+            casts::marks(fight, curated, filter, scope, options, marked, &mut lanes)
+        }
+        ScopeMetric::DamageDone | ScopeMetric::Healing => {
+            if let Some(facts) = AmountFacts::of(scope.perspective, metric) {
+                amounts::marks(fight, curated, filter, scope, facts, marked, &mut lanes);
+            }
+        }
+        ScopeMetric::DamageTaken => {
+            legend = taken::marks(fight, filter, scope, options, marked, &mut lanes);
+        }
+        ScopeMetric::Buffs => {
+            auras::marks(fight, filter, scope, AuraType::Buff, marked, &mut lanes)
+        }
+        ScopeMetric::Debuffs => {
+            auras::marks(fight, filter, scope, AuraType::Debuff, marked, &mut lanes)
+        }
+        ScopeMetric::Deaths => deaths::marks(fight, filter, scope, marked, &mut lanes),
+        ScopeMetric::Interrupts => kicks::marks(fight, filter, scope, marked, &mut lanes),
+        ScopeMetric::Resources => power::lanes(fight, filter, scope, window, &mut lanes),
+    }
+    let context = if metric == ScopeMetric::Casts && scope.perspective == Side::Enemy {
+        Vec::new()
+    } else {
+        casts::boss_casts(fight, curated, filter, marked)
+    };
+    Timeline {
+        window,
+        axis,
+        lanes: lanes.into_lanes(),
+        context,
+        legend,
+    }
 }

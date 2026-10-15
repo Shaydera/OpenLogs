@@ -199,6 +199,29 @@ fn every_report_reaches_the_ui_with_camel_case_keys() {
     assert!(!abilities.is_empty());
     assert!(abilities.iter().all(|o| o["value"]["kind"] == "ability"));
 
+    let events = call(
+        &engine,
+        "events",
+        pull(json!({
+            "scope": scope,
+            "metric": "damageDone",
+            "options": { "beginCasts": true },
+            "page": { "kind": "from", "offset": 0, "limit": 60 }
+        })),
+    );
+    assert_eq!(events["total"], 2, "Faelan's two Arcane Barrages");
+    assert_eq!(events["rows"][0]["event"], "SPELL_DAMAGE");
+    let timeline = call(
+        &engine,
+        "timeline",
+        pull(json!({
+            "scope": scope,
+            "metric": "casts",
+            "lanes": "source",
+            "window": { "startMs": 0, "endMs": 20000 }
+        })),
+    );
+    assert_eq!(timeline["axis"], "source");
     let reports = [
         ("breakdown", breakdown),
         ("options", options),
@@ -273,6 +296,8 @@ fn every_report_reaches_the_ui_with_camel_case_keys() {
                 json!({ "fightA": 1, "fightB": 3, "attribution": "augmented" }),
             ),
         ),
+        ("events", events),
+        ("timeline", timeline),
     ];
     for (name, json) in reports {
         assert_camel_case_keys(&json, name);

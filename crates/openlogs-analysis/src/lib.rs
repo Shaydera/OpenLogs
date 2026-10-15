@@ -90,4 +90,7 @@ pub use usage::{
     ConsumableUse, ContextItem, ContextState, CooldownUse, DeathContext, DefensiveUse,
     RECENT_USE_MS, REPEAT_WINDOW_MS, consumable_uses, cooldown_uses, death_context, defensive_uses,
 };
-pub use views::{CastOutcome, EventRow, EventsPage, Page, RowType, SharePart, ViewOptions, events};
+pub use views::{
+    AmountRule, CastOutcome, EventRow, EventsPage, ItemAmount, ItemKind, Lane, LogLine, Page,
+    PowerLine, RowType, SharePart, Timeline, TimelineItem, ViewOptions, Window, events, timeline,
+};

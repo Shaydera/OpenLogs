@@ -9,8 +9,15 @@ use crate::fight::{Event, EventKind, FailReason, Fight, SpellId};
 use crate::filter::ReportFilter;
 use crate::links::{SpellKey, spell_key};
 use crate::scope::{Scope, Side, side_of, unit_of};
+use crate::timeline::boss_units;
+use crate::views::amounts::{cast_amounts, until_next_cast};
 use crate::views::names::log_name;
-use crate::views::{CastOutcome, EventRow, RowType, Sink, Summary, ViewOptions};
+use crate::views::parts::AmountFacts;
+use crate::views::timeline::{Lanes, log_lines, overlaps};
+use crate::views::{
+    AmountRule, CastOutcome, EventRow, ItemKind, RowType, Sink, Summary, TimelineItem, ViewOptions,
+    Window,
+};
 
 /// A `SPELL_CAST_FAILED` "Interrupted" and a `SPELL_INTERRUPT` of the same cast are logged this
 /// close together; they close one cast.
@@ -78,6 +85,24 @@ impl CastItem {
     /// The line the side and scope are read from.
     pub fn anchor(&self) -> usize {
         self.success.or(self.begin).or(self.close).unwrap_or(0)
+    }
+
+    /// Every logged line of the cast, in log order.
+    pub fn lines(&self) -> Vec<usize> {
+        let mut lines: Vec<usize> = [self.begin, self.success, self.close]
+            .into_iter()
+            .flatten()
+            .chain(self.also.iter().copied())
+            .chain(self.follow_ups.iter().copied())
+            .collect();
+        lines.sort_unstable();
+        lines.dedup();
+        lines
+    }
+
+    /// When a bar ends; `None` for a cast drawn at one point in time.
+    pub fn bar_end(&self) -> Option<i32> {
+        self.begin.and(self.end)
     }
 }
 
@@ -458,6 +483,154 @@ fn cast_row(fight: &Fight, index: usize, item: &CastItem, row_type: RowType) -> 
         _ => row.reason = item.reason,
     }
     row
+}
+
+fn item_kind(kind: CastKind) -> ItemKind {
+    match kind {
+        CastKind::Instant => ItemKind::Instant,
+        CastKind::CastTime => ItemKind::CastTime,
+        CastKind::Empowered => ItemKind::Empowered,
+        CastKind::Interrupted => ItemKind::Interrupted,
+        CastKind::NoOutcome => ItemKind::NoOutcome,
+        CastKind::Rejected => ItemKind::Rejected,
+    }
+}
+
+/// A cast as a timeline item with its log lines.
+pub(crate) fn timeline_item(fight: &Fight, item: &CastItem) -> TimelineItem {
+    let mut out = TimelineItem::new(item_kind(item.kind), item.start, item.bar_end());
+    out.source = item.caster;
+    out.spell = item.spell;
+    out.target = item.target;
+    out.stage = item.stage;
+    out.by = item.by;
+    out.reason = item.reason;
+    (out.log, out.log_more) = log_lines(fight, &item.lines());
+    out
+}
+
+/// The lane cell of a cast: curated procs of players are rows of their own, as in the table.
+fn cast_cell(fight: &Fight, curated: &Curated, item: &CastItem) -> Cell {
+    let proc =
+        fight.actors.get(item.caster).kind == ActorKind::Player && curated.is_proc(item.spell);
+    Cell {
+        source: unit_of(fight, item.caster),
+        spell: item.spell,
+        kind: if proc { CellKind::Proc } else { CellKind::Own },
+        target: unit_of(fight, item.target),
+        amount: 1,
+        absorbed: 0,
+        hits: 1,
+        crits: 0,
+    }
+}
+
+/// The time a cast counts at: its success, else its begin or close.
+pub(crate) fn cast_time(fight: &Fight, item: &CastItem) -> i32 {
+    fight.events[item.anchor()].t
+}
+
+/// Casts marks: every cast in the window, lanes ordered by presses in the range.
+pub(crate) fn marks(
+    fight: &Fight,
+    curated: &Curated,
+    filter: &ReportFilter,
+    scope: &Scope,
+    options: &ViewOptions,
+    window: Window,
+    lanes: &mut Lanes,
+) {
+    let (items, _) = scoped_items(fight, curated, scope, options.hide_procs);
+    let items: Vec<CastItem> = items
+        .into_iter()
+        .filter(|item| options.rejected || item.kind != CastKind::Rejected)
+        .collect();
+    let shown: Vec<usize> = (0..items.len())
+        .filter(|&i| overlaps(window, items[i].start, items[i].bar_end()))
+        .collect();
+    let all = side_casts(fight, curated, scope.perspective);
+    let in_all: HashMap<usize, usize> = all
+        .iter()
+        .enumerate()
+        .filter_map(|(i, cast)| cast.success.map(|success| (success, i)))
+        .collect();
+    let counted = |item: &CastItem| {
+        item.success
+            .and_then(|success| in_all.get(&success).copied())
+    };
+    let anchors: Vec<usize> = shown.iter().filter_map(|&i| counted(&items[i])).collect();
+    let amounts = cast_amounts(fight, filter, scope.perspective, &all, &anchors);
+    for (i, item) in items.iter().enumerate() {
+        let cell = cast_cell(fight, curated, item);
+        if filter.contains(cast_time(fight, item)) {
+            lanes.count(fight, &cell, i64::from(item.success.is_some()));
+        }
+        if shown.binary_search(&i).is_ok() {
+            let mut mark = timeline_item(fight, item);
+            mark.amount = counted(item).and_then(|a| amounts.get(&a).copied());
+            lanes.item(fight, &cell, mark);
+        }
+    }
+}
+
+/// Every cast of `side` with a success, unscoped: the casts hits are matched to.
+pub(crate) fn side_casts(fight: &Fight, curated: &Curated, side: Side) -> Vec<CastItem> {
+    let follow_ups = follow_up_casts(fight, curated, casters(fight, side));
+    cast_items(fight, curated, &follow_ups, casters(fight, side))
+        .into_iter()
+        .filter(|item| item.success.is_some() && casts_of(fight, side, item))
+        .collect()
+}
+
+/// Casts of the encounter's bosses overlapping the window; a run (no bosses) shows the cast-time
+/// casts of enemies. Their amount is the damage to players with the spell's name in the 10 s
+/// after, up to the next cast of that name anywhere in the pull.
+pub(crate) fn boss_casts(
+    fight: &Fight,
+    curated: &Curated,
+    filter: &ReportFilter,
+    window: Window,
+) -> Vec<TimelineItem> {
+    let bosses = boss_units(fight);
+    let enemies = casters(fight, Side::Enemy);
+    let wanted = |actor: ActorId| {
+        if bosses.is_empty() {
+            enemies(actor)
+        } else {
+            bosses.contains(&actor)
+        }
+    };
+    let items: Vec<CastItem> = cast_items(fight, curated, &HashSet::new(), wanted)
+        .into_iter()
+        .filter(|item| {
+            item.kind != CastKind::Rejected
+                && (!bosses.is_empty()
+                    || (item.begin.is_some() && casts_of(fight, Side::Enemy, item)))
+        })
+        .collect();
+    let shown: Vec<usize> = (0..items.len())
+        .filter(|&i| overlaps(window, items[i].start, items[i].bar_end()))
+        .collect();
+    let facts = AmountFacts::Taken {
+        hostile_sources_only: true,
+    };
+    let amounts = until_next_cast(
+        fight,
+        filter,
+        facts,
+        None,
+        &items,
+        &shown,
+        AmountRule::BossCast,
+    );
+    shown
+        .into_iter()
+        .map(|i| {
+            let mut mark = timeline_item(fight, &items[i]);
+            mark.amount = amounts.get(&i).copied();
+            mark
+        })
+        .collect()
 }
 
 fn is_empower(fight: &Fight, item: &CastItem) -> bool {

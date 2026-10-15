@@ -138,7 +138,7 @@ fn holder_of(fight: &Fight, target: ActorId) -> AuraHolder {
 }
 
 /// Auras of `aura_type` on `side`'s holders in the range, before the selections.
-fn side_intervals(
+pub(crate) fn side_intervals(
     fight: &Fight,
     filter: &ReportFilter,
     side: Side,

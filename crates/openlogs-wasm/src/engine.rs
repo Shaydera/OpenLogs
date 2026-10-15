@@ -6,6 +6,7 @@ use openlogs_service::log_dto::log_view;
 use openlogs_service::player_dto::MetricDto;
 use openlogs_service::report_dto::{AttributionDto, FilterDto};
 use openlogs_service::scope_dto::{DimensionDto, ScopeDto, ScopeMetricDto};
+use openlogs_service::views_dto::{PageDto, ViewOptionsDto, WindowDto};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
@@ -256,6 +257,31 @@ impl Engine {
                     args.attribution,
                 ))
             }
+            "events" => {
+                let args: EventsArgs = parse(args_json)?;
+                json(openlogs_service::events(
+                    self.fight(args.fight_index)?,
+                    curated,
+                    args.filter,
+                    args.scope,
+                    args.metric,
+                    args.options,
+                    args.page,
+                ))
+            }
+            "timeline" => {
+                let args: TimelineArgs = parse(args_json)?;
+                json(openlogs_service::timeline(
+                    self.fight(args.fight_index)?,
+                    curated,
+                    args.filter,
+                    args.scope,
+                    args.metric,
+                    args.lanes,
+                    args.options,
+                    args.window,
+                ))
+            }
             _ => Err(format!("Unknown command {command}")),
         }
     }
@@ -416,4 +442,31 @@ struct CompareArgs {
     fight_a: u32,
     fight_b: u32,
     attribution: AttributionDto,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EventsArgs {
+    fight_index: u32,
+    filter: FilterDto,
+    #[serde(default)]
+    scope: ScopeDto,
+    metric: ScopeMetricDto,
+    #[serde(default)]
+    options: ViewOptionsDto,
+    page: PageDto,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TimelineArgs {
+    fight_index: u32,
+    filter: FilterDto,
+    #[serde(default)]
+    scope: ScopeDto,
+    metric: ScopeMetricDto,
+    lanes: DimensionDto,
+    #[serde(default)]
+    options: ViewOptionsDto,
+    window: WindowDto,
 }
