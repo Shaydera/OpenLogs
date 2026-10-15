@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use openlogs_analysis::{
-    AbilityRef, ActorId, AmountRule, CastOutcome, EventRow, EventsPage, Fight, ItemAmount,
-    ItemKind, Lane, LogLine, NOBODY, Page, RowKey, RowType, SpellId, Timeline, TimelineItem,
-    UnitRef, ViewOptions, Window, unit_of,
+    AbilityRef, ActorId, AmountRule, AuraType, CastOutcome, Channel, EventRow, EventsPage, Fight,
+    ItemAmount, ItemKind, Lane, LogLine, NOBODY, Page, RowKey, RowType, SpellId, Timeline,
+    TimelineItem, UnitRef, ViewOptions, Window, unit_of,
 };
 use serde::{Deserialize, Serialize};
 
@@ -106,7 +106,8 @@ pub enum RowTypeDto {
     Apply,
     Remove,
     Refresh,
-    Stack,
+    StackGained,
+    StackLost,
     Died,
     Recap,
     Interrupt,
@@ -121,6 +122,13 @@ pub enum CastOutcomeDto {
     Interrupted,
     Released,
     NoOutcome,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AuraTypeDto {
+    Buff,
+    Debuff,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -144,6 +152,7 @@ pub struct EventRowDto {
     /// `[current, max]`.
     pub target_hp: Option<[u64; 2]>,
     pub shares: Vec<SharePartDto>,
+    pub aura_kind: Option<AuraTypeDto>,
     pub stacks: Option<u32>,
     pub used: Option<SpellId>,
     pub duration_ms: Option<i32>,
@@ -178,6 +187,7 @@ pub struct EventsPageDto {
 #[serde(rename_all = "camelCase")]
 pub enum ItemKindDto {
     Instant,
+    Channel,
     CastTime,
     Empowered,
     Interrupted,
@@ -209,6 +219,18 @@ pub struct ItemAmountDto {
     pub targets: u32,
     pub support: i64,
     pub healing: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelDto {
+    /// Absent when the log has no end: the channel is drawn to its last tick.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_ms: Option<i32>,
+    /// Absent for a press of a channel spell whose own channel logged no hit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_tick_ms: Option<i32>,
+    pub ticks: Vec<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -253,6 +275,10 @@ pub struct ItemDto {
     pub cast_start_ms: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub amount: Option<ItemAmountDto>,
+    /// Where the drawing ends: the bar's end, or a channel's; the start for a point.
+    pub span_end_ms: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel: Option<ChannelDto>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub log: Vec<LogLineDto>,
     /// Log lines not listed: beyond the first twelve, or every line in a wide window.
@@ -288,6 +314,8 @@ pub struct LaneDto {
     pub items: Vec<ItemDto>,
     pub power: Vec<PowerLineDto>,
     pub dead: Vec<[i32; 2]>,
+    /// Resources: the lane's unit is one of the encounter's boss units; `false` on other tabs.
+    pub boss: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -302,8 +330,10 @@ pub struct TimelineDto {
     pub units: Vec<UnitInfoDto>,
     pub roster: Vec<PlayerRef>,
     pub spells: BTreeMap<SpellId, SpellRef>,
-    /// Whether the marks list their log lines; see [`LISTED_WINDOW_MS`].
+    /// Whether the marks list their log lines.
     pub lines_listed: bool,
+    /// [`LISTED_WINDOW_MS`]: the widest window whose marks list their log lines.
+    pub listed_window_ms: i32,
 }
 
 /// The units, players and spells a payload names.
@@ -346,6 +376,9 @@ impl<'a> Names<'a> {
                 player,
             },
         );
+        if let Some(owner) = owner {
+            self.unit(owner);
+        }
         id
     }
 
@@ -389,7 +422,8 @@ fn row_type(row_type: RowType) -> RowTypeDto {
         RowType::Apply => RowTypeDto::Apply,
         RowType::Remove => RowTypeDto::Remove,
         RowType::Refresh => RowTypeDto::Refresh,
-        RowType::Stack => RowTypeDto::Stack,
+        RowType::StackGained => RowTypeDto::StackGained,
+        RowType::StackLost => RowTypeDto::StackLost,
         RowType::Died => RowTypeDto::Died,
         RowType::Recap => RowTypeDto::Recap,
         RowType::Interrupt => RowTypeDto::Interrupt,
@@ -435,6 +469,10 @@ fn row_dto(names: &mut Names<'_>, row: &EventRow) -> EventRowDto {
                 selected: share.selected,
             })
             .collect(),
+        aura_kind: row.aura_kind.map(|kind| match kind {
+            AuraType::Buff => AuraTypeDto::Buff,
+            AuraType::Debuff => AuraTypeDto::Debuff,
+        }),
         stacks: row.stacks,
         used: row.used.map(|spell| names.spell(spell)),
         duration_ms: row.duration_ms,
@@ -482,6 +520,7 @@ pub fn events_page_dto(fight: &Fight, page: &EventsPage) -> EventsPageDto {
 fn item_kind(kind: ItemKind) -> ItemKindDto {
     match kind {
         ItemKind::Instant => ItemKindDto::Instant,
+        ItemKind::Channel => ItemKindDto::Channel,
         ItemKind::CastTime => ItemKindDto::CastTime,
         ItemKind::Empowered => ItemKindDto::Empowered,
         ItemKind::Interrupted => ItemKindDto::Interrupted,
@@ -509,6 +548,14 @@ fn amount_dto(amount: ItemAmount) -> ItemAmountDto {
         targets: amount.targets,
         support: amount.support,
         healing: amount.healing,
+    }
+}
+
+fn channel_dto(channel: &Channel) -> ChannelDto {
+    ChannelDto {
+        end_ms: channel.end_ms,
+        last_tick_ms: channel.last_tick_ms,
+        ticks: channel.ticks.clone(),
     }
 }
 
@@ -549,6 +596,8 @@ fn item_dto(names: &mut Names<'_>, item: &TimelineItem, listed: bool) -> ItemDto
         alive_ms: item.alive_ms,
         cast_start_ms: item.cast_start_ms,
         amount: item.amount.map(amount_dto),
+        span_end_ms: item.span_end_ms,
+        channel: item.channel.as_ref().map(channel_dto),
         log: shown.iter().map(|line| line_dto(names, line)).collect(),
         log_more: item.log_more + (item.log.len() - shown.len()) as u32,
         track: item.track,
@@ -584,7 +633,7 @@ fn lane_spell(fight: &Fight, lane: &Lane) -> SpellId {
     }
 }
 
-fn lane_dto(names: &mut Names<'_>, lane: &Lane, listed: bool) -> LaneDto {
+fn lane_dto(names: &mut Names<'_>, lane: &Lane, listed: bool, bosses: &[ActorId]) -> LaneDto {
     let fight = names.fight;
     let (key, name, number) = match &lane.key {
         Some(key) => {
@@ -621,16 +670,18 @@ fn lane_dto(names: &mut Names<'_>, lane: &Lane, listed: bool) -> LaneDto {
             })
             .collect(),
         dead: lane.dead.iter().map(|&(a, b)| [a, b]).collect(),
+        boss: matches!(&lane.key, Some(RowKey::Unit(UnitRef::Instance(id))) if bosses.contains(id)),
     }
 }
 
-pub fn timeline_dto(fight: &Fight, timeline: &Timeline) -> TimelineDto {
+/// `bosses`: the units whose lanes are marked as a boss's.
+pub fn timeline_dto(fight: &Fight, timeline: &Timeline, bosses: &[ActorId]) -> TimelineDto {
     let mut names = Names::new(fight);
     let listed = timeline.window.end_ms - timeline.window.start_ms <= LISTED_WINDOW_MS;
     let lanes = timeline
         .lanes
         .iter()
-        .map(|lane| lane_dto(&mut names, lane, listed))
+        .map(|lane| lane_dto(&mut names, lane, listed, bosses))
         .collect();
     let context = timeline
         .context
@@ -645,6 +696,7 @@ pub fn timeline_dto(fight: &Fight, timeline: &Timeline) -> TimelineDto {
     let (units, roster, spells) = names.finish();
     TimelineDto {
         lines_listed: listed,
+        listed_window_ms: LISTED_WINDOW_MS,
         start_ms: timeline.window.start_ms,
         end_ms: timeline.window.end_ms,
         axis: timeline.axis.map(DimensionDto::of),
@@ -671,9 +723,9 @@ mod tests {
     use super::*;
     use crate::report_dto::{AttributionDto, FilterDto};
     use crate::reports::{events, timeline};
-    use crate::scope_dto::{ScopeDto, ScopeMetricDto};
+    use crate::scope_dto::{ScopeDto, ScopeMetricDto, SideDto};
     use crate::test_fight::{HOSTILE_FLAGS, PET_FLAGS, PLAYER_FLAGS, damage_event, fight, unit};
-    use openlogs_analysis::{Actors, EventKind, SpellInfo};
+    use openlogs_analysis::{Actors, Event, EventKind, SpellInfo, UnitHp};
 
     fn imp_fight() -> (Fight, ActorId, ActorId) {
         let mut actors = Actors::new();
@@ -722,10 +774,10 @@ mod tests {
     }
 
     #[test]
-    fn an_events_page_names_the_logged_unit_and_its_owner() {
+    fn an_events_page_names_the_logged_unit_and_its_owner_without_a_row_of_his_own() {
         let (f, warlock, imp) = imp_fight();
         let page: PageDto =
-            serde_json::from_str(r#"{"kind":"from","offset":0,"limit":60}"#).unwrap();
+            serde_json::from_str(r#"{"kind":"from","offset":0,"limit":1}"#).unwrap();
         let dto = events(
             &f,
             &openlogs_gamedata::Curated::bundled(),
@@ -744,6 +796,8 @@ mod tests {
         let imp_unit = units.iter().find(|u| u["actorId"] == imp).unwrap();
         assert_eq!(imp_unit["name"], "Wild Imp");
         assert_eq!(imp_unit["owner"], warlock);
+        let owner = units.iter().find(|u| u["actorId"] == warlock).unwrap();
+        assert_eq!(owner["name"], "Areus");
         assert_eq!(json["roster"][0]["actorId"], warlock);
     }
 
@@ -755,6 +809,7 @@ mod tests {
             let dto = timeline(
                 &f,
                 &openlogs_gamedata::Curated::bundled(),
+                &openlogs_gamedata::ChannelSpells::default(),
                 whole(),
                 ScopeDto::default(),
                 ScopeMetricDto::DamageDone,
@@ -778,5 +833,71 @@ mod tests {
         let mark = &wide["lanes"][0]["items"][0];
         assert_eq!(mark.get("log"), None, "a wide window only counts the lines");
         assert_eq!(mark["logMore"], 1);
+    }
+
+    #[test]
+    fn resources_lanes_say_whether_their_unit_is_a_boss() {
+        let mut actors = Actors::new();
+        let mage = unit(&mut actors, "Player-1", "Faelan-Emberfall-EU", PLAYER_FLAGS);
+        let boss = unit(
+            &mut actors,
+            "Vehicle-0-1-1-1-257758-01",
+            "Ula'tek",
+            HOSTILE_FLAGS,
+        );
+        let add = unit(
+            &mut actors,
+            "Creature-0-1-1-1-261874-0001",
+            "Blightscale Rawling",
+            HOSTILE_FLAGS,
+        );
+        let hit = |t, target, amount, max| Event {
+            unit_hp: Some(UnitHp {
+                actor: target,
+                current: max - amount,
+                max,
+            }),
+            ..damage_event(t, mage, target, 1, amount, NOBODY)
+        };
+        let mut f = fight(
+            actors,
+            vec![
+                hit(1_000, boss, 1_000_000, 10_000_000),
+                hit(2_000, add, 1_000, 100_000),
+            ],
+        );
+        f.duration_ms = 20_000;
+        let dto = timeline(
+            &f,
+            &openlogs_gamedata::Curated::bundled(),
+            &openlogs_gamedata::ChannelSpells::default(),
+            whole(),
+            ScopeDto {
+                perspective: SideDto::Enemy,
+                ..ScopeDto::default()
+            },
+            ScopeMetricDto::Resources,
+            DimensionDto::Source,
+            ViewOptionsDto::default(),
+            serde_json::from_str(r#"{"startMs":0,"endMs":20000}"#).unwrap(),
+        );
+        let json = serde_json::to_value(&dto).unwrap();
+        let mut flags: Vec<_> = json["lanes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|lane| (lane["name"].clone(), lane["boss"].clone()))
+            .collect();
+        flags.sort_by_key(|(name, _)| name.to_string());
+        assert_eq!(
+            flags,
+            [
+                (
+                    serde_json::json!("Blightscale Rawling"),
+                    serde_json::json!(false)
+                ),
+                (serde_json::json!("Ula'tek"), serde_json::json!(true)),
+            ]
+        );
     }
 }

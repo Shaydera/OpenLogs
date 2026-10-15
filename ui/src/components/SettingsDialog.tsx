@@ -7,6 +7,7 @@ import { THEMES, type ThemeName } from '../theme';
 
 const TABLES: { key: keyof Omit<GameDataManifest, 'fetchedUnixMs'>; name: MessageKey; entries: MessageKey }[] = [
   { key: 'spellIcons', name: 'settings.spellIcons', entries: 'settings.entries.spellIcons' },
+  { key: 'channelSpells', name: 'settings.channelSpells', entries: 'settings.entries.spellIcons' },
   { key: 'dungeons', name: 'settings.dungeons', entries: 'settings.entries.dungeons' },
   { key: 'bossPortraits', name: 'settings.bossPortraits', entries: 'settings.entries.bossPortraits' },
 ];
@@ -83,12 +84,17 @@ export function SettingsDialog() {
           ) : (
             <>
               <ul className="settings-tables">
-                {TABLES.map((table) => (
-                  <li key={table.key}>
-                    <span>{t(table.name)}</span>
-                    <span className="settings-status">{t(table.entries, { count: gameData[table.key] })}</span>
-                  </li>
-                ))}
+                {TABLES.map((table) => {
+                  const count = gameData[table.key];
+                  return (
+                    count !== undefined && (
+                      <li key={table.key}>
+                        <span>{t(table.name)}</span>
+                        <span className="settings-status">{t(table.entries, { count })}</span>
+                      </li>
+                    )
+                  );
+                })}
               </ul>
               <p className="settings-note settings-source">{t('settings.source', { date: formatLocalDate(gameData.fetchedUnixMs) })}</p>
             </>

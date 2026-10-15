@@ -35,7 +35,7 @@ import type {
   TargetDetail,
   UnitRef,
 } from './api/types';
-import { LISTED_WINDOW_MS, rangeWindow, requestWindow, shownWindow, covers, windowSpan } from './components/views/zoomGeometry';
+import { rangeWindow, requestWindow, sameWindow, shownWindow, covers, windowSpan } from './components/views/zoomGeometry';
 import { type GameDataManifest, gameDataManifest } from './gameData';
 import { t } from './i18n/i18n';
 import { effectiveView, lanesOf } from './reportViews';
@@ -291,6 +291,8 @@ interface Actions {
   showEventsPage(offset: number): Promise<void>;
   /** The Events view at the page that holds `t`. */
   showEventsAt(t: number): Promise<void>;
+  /** Asks again for the view the last view request asked for. */
+  retryView(): Promise<void>;
   openPlayer(player: number): Promise<void>;
   openAbility(spellId: number, pet: string | null): Promise<void>;
   openTarget(name: string): Promise<void>;
@@ -371,6 +373,10 @@ export function initialState(): State {
 
 let reportRequest = 0;
 let viewRequest = 0;
+/** Changes with every view request that asks for more than another window: a superseded timeline of the same value answers the same query. */
+let viewQuery = 0;
+/** The view request whose timeline is shown. */
+let shownTimelineRequest = 0;
 let logRequest = 0;
 let fightRequest = 0;
 let comparisonRequest = 0;
@@ -384,6 +390,7 @@ function dropPendingFight() {
 function dropPendingReports(set: SetState) {
   reportRequest += 1;
   viewRequest += 1;
+  viewQuery += 1;
   set({ viewLoading: false, viewError: null });
 }
 
@@ -432,8 +439,15 @@ async function fetchReport(logId: string, fight: number, input: ReportInput, fil
 
 type ViewData = Pick<State, 'events' | 'timeline'>;
 
+/** A failed request leaves no view data: the last payload belongs to another filter or window. */
+const NO_VIEW_DATA: ViewData = { events: null, timeline: null };
+
 /** The window the newest view request asks the timeline for; `null` when it asks for none. */
 let pendingTimeline: TimeRange | null = null;
+/** The core's widest window that lists log lines, as the last timeline carried it; `null` before any. */
+let listedWindowMs: number | null = null;
+/** The Events page the last view request named; `undefined` when it read the tab's offset. */
+let lastPage: EventsPageRequest | undefined;
 
 /** The shown tab's timeline window or Events page; neither for a table. */
 async function fetchView(logId: string, fight: number, state: State, filter: ReportFilter, page?: EventsPageRequest): Promise<ViewData> {
@@ -450,22 +464,49 @@ async function fetchView(logId: string, fight: number, state: State, filter: Rep
   const whole = rangeWindow(range, overview.timeline.durationMs);
   const window = requestWindow(shownWindow(zoom, whole), whole);
   pendingTimeline = window;
-  return { events: null, timeline: await api.timeline(logId, fight, filter, scope, metric, lanesOf(lanes, tab), options, window) };
+  const timeline = await api.timeline(logId, fight, filter, scope, metric, lanesOf(lanes, tab), options, window);
+  listedWindowMs = timeline.listedWindowMs;
+  return { events: null, timeline };
 }
 
-/** Loads only the view payload; only the newest request may write it. A page at a time sets the tab's offset. */
-async function loadView(get: () => State & Actions, set: SetState, page?: EventsPageRequest) {
+/** How much of the timeline's shown window `timeline` holds, in ms. */
+function shownMs(timeline: Timeline | null, state: State): number {
+  if (!timeline || !state.overview) return 0;
+  const shown = shownWindow(state.zoom, rangeWindow(state.range, state.overview.timeline.durationMs));
+  return Math.max(0, Math.min(timeline.endMs, shown.endMs) - Math.max(timeline.startMs, shown.startMs));
+}
+
+/**
+ * Loads only the view payload; only the newest request may write it, except that a superseded timeline of the same query
+ * (`windowOnly`: only the window moved) is shown while it holds more of the shown window than the timeline on screen and is newer.
+ * A page at a time sets the tab's offset.
+ */
+async function loadView(get: () => State & Actions, set: SetState, page?: EventsPageRequest, windowOnly = false) {
   const { log, view } = get();
   if (!log || view.kind !== 'fight') return;
   const request = ++viewRequest;
+  if (!windowOnly) viewQuery += 1;
+  const query = viewQuery;
+  lastPage = page;
   set({ viewLoading: true, viewError: null });
   try {
     const next = await fetchView(log.id, view.fightIndex, get(), reportFilter(get()), page);
-    if (request !== viewRequest) return;
+    if (request !== viewRequest) {
+      const better = next.timeline && query === viewQuery && request > shownTimelineRequest && shownMs(next.timeline, get()) > shownMs(get().timeline, get());
+      if (better) {
+        shownTimelineRequest = request;
+        set({ timeline: next.timeline });
+      }
+      return;
+    }
+    shownTimelineRequest = request;
     const { tab, eventsOffset } = get();
     set({ ...next, viewLoading: false, ...(next.events && isFilterTab(tab) ? { eventsOffset: { ...eventsOffset, [tab]: next.events.offset } } : {}) });
   } catch (err) {
-    if (request === viewRequest) set({ viewError: String(err), viewLoading: false });
+    if (request === viewRequest) {
+      shownTimelineRequest = request;
+      set({ ...NO_VIEW_DATA, viewError: String(err), viewLoading: false });
+    }
   }
 }
 
@@ -475,6 +516,8 @@ async function loadReport(get: () => State & Actions, set: SetState) {
   if (!log || view.kind !== 'fight') return;
   const request = ++reportRequest;
   const viewToken = ++viewRequest;
+  viewQuery += 1;
+  lastPage = undefined;
   if (tab === 'overview' && range === null) {
     // The whole-pull overview is already in `state.overview`.
     set({ report: null, breakdown: null, reportError: null, reportLoading: false, viewError: null, viewLoading: false });
@@ -501,7 +544,8 @@ async function loadReport(get: () => State & Actions, set: SetState) {
       ),
     ]);
     if (request === reportRequest && viewToken === viewRequest) {
-      set('data' in viewData ? { ...viewData.data, viewLoading: false } : { viewError: viewData.error, viewLoading: false });
+      shownTimelineRequest = viewToken;
+      set('data' in viewData ? { ...viewData.data, viewLoading: false } : { ...NO_VIEW_DATA, viewError: viewData.error, viewLoading: false });
     }
     if ('err' in tableResult) throw tableResult.err;
     const [report, breakdown] = tableResult.data;
@@ -908,6 +952,8 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   },
 
   setZoom(zoom) {
+    const current = get().zoom;
+    if (zoom && current && sameWindow(zoom, current)) return;
     set({ zoom });
   },
 
@@ -917,15 +963,16 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     const whole = rangeWindow(range, overview.timeline.durationMs);
     const shown = shownWindow(zoom, whole);
     // A wide window lists no log lines; zooming in asks again once the request is narrow enough to list them.
-    const serves = (loaded: TimeRange, linesListed: boolean) =>
-      covers(loaded, shown) && (linesListed || windowSpan(requestWindow(shown, whole)) > LISTED_WINDOW_MS);
+    const limit = timeline?.listedWindowMs ?? listedWindowMs;
+    const lists = (span: number) => limit === null || span <= limit;
+    const serves = (loaded: TimeRange, linesListed: boolean) => covers(loaded, shown) && (linesListed || !lists(windowSpan(requestWindow(shown, whole))));
     // While a request is out, only its window counts: the loaded timeline is about to be replaced.
     if (viewLoading) {
-      if (pendingTimeline && serves(pendingTimeline, windowSpan(pendingTimeline) <= LISTED_WINDOW_MS)) return;
+      if (pendingTimeline && serves(pendingTimeline, lists(windowSpan(pendingTimeline)))) return;
     } else if (timeline && serves({ startMs: timeline.startMs, endMs: timeline.endMs }, timeline.linesListed)) {
       return;
     }
-    await loadView(get, set);
+    await loadView(get, set, undefined, true);
   },
 
   async setLanes(dimension) {
@@ -954,6 +1001,10 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   async showEventsAt(t) {
     set({ reportView: 'events', focusRequest: null });
     await loadView(get, set, { kind: 'at', t, limit: EVENTS_PAGE_ROWS });
+  },
+
+  async retryView() {
+    await loadView(get, set, lastPage);
   },
 
   setTheme(theme) {

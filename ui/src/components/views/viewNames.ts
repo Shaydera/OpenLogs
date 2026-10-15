@@ -14,6 +14,12 @@ export interface ViewNames {
   spell(spellId: number): string;
 }
 
+/** The unit's name with its owner beside it: "Wild Imp (Wendel)". */
+export const unitLabel = (names: ViewNames, actorId: number, fallback: string): string => {
+  const owner = names.owner(actorId);
+  return `${names.unit(actorId) || fallback}${owner ? ` (${owner})` : ''}`;
+};
+
 export function viewNames(payload: { units: UnitInfo[]; roster: PlayerRef[]; spells: SpellNames }): ViewNames {
   const units = new Map(payload.units.map((unit) => [unit.actorId, unit]));
   const roster = rosterIndex(payload.roster);

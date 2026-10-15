@@ -8,10 +8,11 @@ mod kicks;
 mod names;
 pub(crate) mod parts;
 mod power;
+mod spans;
 mod taken;
 mod timeline;
 
-use openlogs_gamedata::Curated;
+use openlogs_gamedata::{ChannelSpells, Curated};
 
 use crate::actors::{ActorId, NOBODY};
 use crate::breakdown::{Dimension, RowKey};
@@ -19,7 +20,9 @@ use crate::cells::ScopeMetric;
 use crate::fight::{AuraType, FailReason, Fight, SpellId};
 use crate::filter::{Attribution, ReportFilter};
 use crate::scope::{Scope, Side, UnitRef};
+use crate::timeline::boss_units;
 use crate::views::parts::AmountFacts;
+use crate::views::spans::SpanIndex;
 use crate::views::timeline::{Lanes, clip, lane_axis};
 
 /// The views' toggles, and the Casts option they share with the table.
@@ -67,7 +70,8 @@ pub enum RowType {
     Apply,
     Remove,
     Refresh,
-    Stack,
+    StackGained,
+    StackLost,
     Died,
     /// A recap event before a death, shown in its context.
     Recap,
@@ -121,6 +125,8 @@ pub struct EventRow {
     /// The target's HP after the event, when the logged unit HP is the target's.
     pub target_hp: Option<(u64, u64)>,
     pub shares: Vec<SharePart>,
+    /// Aura rows: BUFF or DEBUFF, as the line logs it.
+    pub aura_kind: Option<AuraType>,
     pub stacks: Option<u32>,
     /// Interrupts and dispels: the spell used; the row's spell is the one it stopped.
     pub used: Option<SpellId>,
@@ -168,6 +174,7 @@ impl EventRow {
             critical: false,
             target_hp: None,
             shares: Vec::new(),
+            aura_kind: None,
             stacks: None,
             used: None,
             duration_ms: None,
@@ -359,8 +366,11 @@ pub struct Window {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemKind {
-    /// A cast without a begin cast; a channel too, the log has no channel event.
+    /// A cast without a begin cast and without a channel the log closes.
     Instant,
+    /// A cast without a begin cast whose own aura on the caster, logged with the success, holds
+    /// its hits.
+    Channel,
     CastTime,
     Empowered,
     Interrupted,
@@ -402,6 +412,19 @@ pub struct ItemAmount {
     pub healing: bool,
 }
 
+/// A channel as logged: the caster's aura of the cast's spell, applied or refreshed with the
+/// success.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Channel {
+    /// The aura's removal, or its refresh by a recast that restarts the channel; `None` when the
+    /// log has neither: it is drawn to its last tick.
+    pub end_ms: Option<i32>,
+    /// `None` for a press of a channel spell whose own channel logged no hit.
+    pub last_tick_ms: Option<i32>,
+    /// When its hits landed, each time once.
+    pub ticks: Vec<i32>,
+}
+
 /// A logged line behind an item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LogLine {
@@ -437,10 +460,14 @@ pub struct TimelineItem {
     /// Interrupts: when the stopped cast began, when the log says.
     pub cast_start_ms: Option<i32>,
     pub amount: Option<ItemAmount>,
+    /// Where the drawing ends: the bar's end, or a channel's (an unclosed channel ends at its last
+    /// tick); the start for a point.
+    pub span_end_ms: i32,
+    pub channel: Option<Channel>,
     pub log: Vec<LogLine>,
     /// Log lines beyond those listed.
     pub log_more: u32,
-    /// The sub-track of a lane that packs overlapping bars.
+    /// The sub-track of an aura lane that packs overlapping bars.
     pub track: u32,
 }
 
@@ -463,6 +490,8 @@ impl TimelineItem {
             alive_ms: None,
             cast_start_ms: None,
             amount: None,
+            span_end_ms: end_ms.unwrap_or(start_ms),
+            channel: None,
             log: Vec::new(),
             log_more: 0,
             track: 0,
@@ -500,16 +529,20 @@ pub struct Timeline {
     pub lanes: Vec<Lane>,
     /// Casts of the encounter's units above the lanes.
     pub context: Vec<TimelineItem>,
+    /// The encounter's boss units.
+    pub bosses: Vec<ActorId>,
     /// Damage Taken: the range's debuff spells in order of appearance, whatever the window.
     pub legend: Vec<SpellId>,
 }
 
 /// The tab's marks in `window`, in lanes by `wanted` (or its fallback). Lanes with something in
-/// the range are listed even when the window is empty there.
+/// the range are listed even when the window is empty there. `channels`: the spells the game
+/// channels, empty without game data.
 #[allow(clippy::too_many_arguments)]
 pub fn timeline(
     fight: &Fight,
     curated: &Curated,
+    channels: &ChannelSpells,
     filter: &ReportFilter,
     scope: &Scope,
     metric: ScopeMetric,
@@ -531,9 +564,18 @@ pub fn timeline(
     let axis = lane_axis(scope, metric, wanted);
     let mut lanes = Lanes::new(axis);
     let mut legend = Vec::new();
+    let bosses = boss_units(fight);
+    let shows_context = !(metric == ScopeMetric::Casts && scope.perspective == Side::Enemy);
+    let mut context_items = None;
     match metric {
         ScopeMetric::Casts => {
-            casts::marks(fight, curated, filter, scope, options, marked, &mut lanes)
+            let context = shows_context.then_some(bosses.as_slice());
+            let items = casts::side_items(fight, curated, scope.perspective, context);
+            let spans = SpanIndex::new(fight, curated, channels, &items);
+            casts::marks(
+                fight, curated, filter, scope, options, marked, &items, &spans, &mut lanes,
+            );
+            context_items = context.map(|_| (items, spans));
         }
         ScopeMetric::DamageDone | ScopeMetric::Healing => {
             if let Some(facts) = AmountFacts::of(scope.perspective, metric) {
@@ -553,10 +595,15 @@ pub fn timeline(
         ScopeMetric::Interrupts => kicks::marks(fight, filter, scope, marked, &mut lanes),
         ScopeMetric::Resources => power::lanes(fight, filter, scope, window, &mut lanes),
     }
-    let context = if metric == ScopeMetric::Casts && scope.perspective == Side::Enemy {
-        Vec::new()
+    let context = if shows_context {
+        let (items, spans) = context_items.unwrap_or_else(|| {
+            let items = casts::context_items(fight, curated, &bosses);
+            let spans = SpanIndex::new(fight, curated, channels, &items);
+            (items, spans)
+        });
+        casts::boss_casts(fight, filter, marked, &bosses, items, &spans)
     } else {
-        casts::boss_casts(fight, curated, filter, marked)
+        Vec::new()
     };
     Timeline {
         window,
@@ -564,5 +611,6 @@ pub fn timeline(
         lanes: lanes.into_lanes(),
         context,
         legend,
+        bosses,
     }
 }

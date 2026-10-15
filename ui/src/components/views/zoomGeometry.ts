@@ -2,12 +2,12 @@ import type { TimeRange } from '../../store';
 
 /** The narrowest window the timeline zooms to. */
 export const MIN_WINDOW_MS = 2_500;
-/** A window of this span or less lists the log lines of its marks; the core lists none beyond it. */
-export const LISTED_WINDOW_MS = 120_000;
 /** A new view shows this much of the range. */
 const DEFAULT_WINDOW_MS = 20_000;
 
 export const windowSpan = (window: TimeRange) => window.endMs - window.startMs;
+
+export const sameWindow = (a: TimeRange, b: TimeRange) => a.startMs === b.startMs && a.endMs === b.endMs;
 
 /** The range as a window; `null` is the whole pull. */
 export const rangeWindow = (range: TimeRange | null, durationMs: number): TimeRange => range ?? { startMs: 0, endMs: durationMs };
@@ -71,9 +71,12 @@ export function timeAtX(x: number, width: number, window: TimeRange): number {
   return Math.round(window.startMs + share * windowSpan(window));
 }
 
+/** A press moves this many px before it counts as a drag rather than a click. */
+const DRAG_PX = 4;
+
 /** A drag across the ruler from `x0` to `x1`: the window it spans (a span below the narrowest window widens around its centre), `null` for a click. */
 export function dragWindow(x0: number, x1: number, width: number, window: TimeRange, range: TimeRange): TimeRange | null {
-  if (Math.abs(x1 - x0) < 4) return null;
+  if (Math.abs(x1 - x0) < DRAG_PX) return null;
   const a = timeAtX(Math.min(x0, x1), width, window);
   const b = timeAtX(Math.max(x0, x1), width, window);
   const length = Math.max(MIN_WINDOW_MS, b - a);
@@ -81,18 +84,64 @@ export function dragWindow(x0: number, x1: number, width: number, window: TimeRa
   return clampWindow({ startMs, endMs: startMs + length }, range);
 }
 
+/** What a press on a track that moved by `dx`, `dy` px is so far; a touch going mostly up or down leaves the page to scroll. */
+export function pressGesture(dx: number, dy: number, touch: boolean): 'click' | 'drag' | 'scroll' {
+  if (Math.hypot(dx, dy) < DRAG_PX) return 'click';
+  return touch && Math.abs(dy) > Math.abs(dx) ? 'scroll' : 'drag';
+}
+
+/** `origin` after a track `widthPx` wide was dragged by `dxPx`: the content follows the pointer, stopped at the range. */
+export function grabWindow(origin: TimeRange, dxPx: number, widthPx: number, range: TimeRange): TimeRange {
+  return widthPx > 0 ? panBy(origin, -dxPx / widthPx, range) : origin;
+}
+
+/** Fingers closer than this count as this far apart, so a pinch that starts with them nearly stacked does not leap. */
+const PINCH_MIN_PX = 24;
+
+/** `origin` after two fingers on a track `widthPx` wide moved from `from` to `to` (px): the span scales with their distance, the time between them follows their midpoint. */
+export function pinchWindow(origin: TimeRange, from: readonly [number, number], to: readonly [number, number], widthPx: number, range: TimeRange): TimeRange {
+  const apart = (xs: readonly [number, number]) => Math.max(PINCH_MIN_PX, Math.abs(xs[1] - xs[0]));
+  const middle = (xs: readonly [number, number]) => (xs[0] + xs[1]) / 2;
+  const length = Math.max(MIN_WINDOW_MS, Math.round(windowSpan(origin) * (apart(from) / apart(to))));
+  const anchorMs = timeAtX(middle(from), widthPx, origin);
+  const startMs = Math.round(anchorMs - (widthPx > 0 ? middle(to) / widthPx : 0) * length);
+  return clampWindow({ startMs, endMs: startMs + length }, range);
+}
+
 /** A mouse wheel notch turns about 100 px; a trackpad sends a few px at a time. */
 const WHEEL_ZOOM_PX = 450;
 const WHEEL_PAN_PX = 1_000;
+const LINE_PX = 16;
+const PAGE_PX = 800;
 
-/** The zoom factor of a Ctrl + wheel turn of `px` (down zooms out), by how far it turned. */
+/** The zoom factor of a wheel turn of `px` (down zooms out), by how far it turned. */
 export function wheelZoomFactor(px: number): number {
   return Math.min(2, Math.max(0.5, Math.exp(px / WHEEL_ZOOM_PX)));
 }
 
-/** The share of a window a Shift + wheel turn of `px` pans, at most half of it. */
+/** The share of a window a sideways wheel turn of `px` pans, at most half of it. */
 export function wheelPanFraction(px: number): number {
   return Math.min(0.5, Math.max(-0.5, px / WHEEL_PAN_PX));
+}
+
+export type WheelTurn = Pick<WheelEvent, 'deltaX' | 'deltaY' | 'deltaMode' | 'ctrlKey' | 'shiftKey'>;
+
+/** Whether a wheel turn pans (a sideways swipe or Shift + wheel) rather than zooms; Ctrl (a trackpad pinch) always zooms. */
+export const wheelPans = (turn: WheelTurn) => !turn.ctrlKey && (turn.shiftKey || Math.abs(turn.deltaX) > Math.abs(turn.deltaY));
+
+/**
+ * `window` after a wheel turn at `x` of a track `widthPx` wide, `null` for no turn: a pan (see `wheelPans`) or a zoom around the
+ * pointer. Browsers count a turn in lines or pages too, and some send a Shift + wheel as a sideways turn.
+ */
+export function wheelWindow(turn: WheelTurn, x: number, widthPx: number, window: TimeRange, range: TimeRange): TimeRange | null {
+  const unit = turn.deltaMode === 1 ? LINE_PX : turn.deltaMode === 2 ? PAGE_PX : 1;
+  const dx = turn.deltaX * unit;
+  const dy = turn.deltaY * unit;
+  if (wheelPans(turn)) {
+    const px = turn.shiftKey && dy !== 0 ? dy : dx;
+    return px === 0 ? null : panBy(window, wheelPanFraction(px), range);
+  }
+  return dy === 0 ? null : zoomBy(window, wheelZoomFactor(dy), timeAtX(x, widthPx, window), range);
 }
 
 /** Where `ms` lies in `window`, in percent (outside it below 0 or above 100). */

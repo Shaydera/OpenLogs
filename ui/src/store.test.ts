@@ -828,6 +828,115 @@ describe('timeline and events views', () => {
     await relaning;
   });
 
+  it('shows a superseded timeline that holds more of the moved window, but never one older than the shown timeline', async () => {
+    await openPull();
+    await useApp.getState().setTab('casts');
+    useApp.getState().setZoom({ startMs: 120_000, endMs: 130_000 });
+    await useApp.getState().setReportView('timeline');
+    const answers: ((timeline: Timeline) => void)[] = [];
+    vi.mocked(api.timeline).mockImplementation(() => new Promise((resolve) => answers.push(resolve)));
+    const loaded = (startMs: number, endMs: number) => ({ ...timelineFixture, startMs, endMs });
+    useApp.getState().setZoom({ startMs: 150_000, endMs: 160_000 });
+    const first = useApp.getState().refreshTimeline();
+    useApp.getState().setZoom({ startMs: 158_000, endMs: 168_000 });
+    const second = useApp.getState().refreshTimeline();
+    answers[0](loaded(145_000, 165_000));
+    await first;
+    expect(useApp.getState()).toMatchObject({ timeline: { startMs: 145_000 }, viewLoading: true });
+    answers[1](loaded(153_000, 173_000));
+    await second;
+    expect(useApp.getState()).toMatchObject({ timeline: { startMs: 153_000 }, viewLoading: false });
+
+    useApp.getState().setZoom({ startMs: 170_000, endMs: 180_000 });
+    const third = useApp.getState().refreshTimeline();
+    useApp.getState().setZoom({ startMs: 190_000, endMs: 200_000 });
+    const fourth = useApp.getState().refreshTimeline();
+    answers[3](loaded(185_000, 205_000));
+    await fourth;
+    useApp.getState().setZoom({ startMs: 170_000, endMs: 180_000 });
+    answers[2](loaded(165_000, 185_000));
+    await third;
+    expect(useApp.getState().timeline).toMatchObject({ startMs: 185_000 });
+  });
+
+  it('never shows a superseded window refresh once the filter changed or a newer request failed', async () => {
+    await openPull();
+    await useApp.getState().setTab('casts');
+    useApp.getState().setZoom({ startMs: 120_000, endMs: 130_000 });
+    await useApp.getState().setReportView('timeline');
+    const answers: { resolve: (timeline: Timeline) => void; reject: (err: Error) => void }[] = [];
+    vi.mocked(api.timeline).mockImplementation(() => new Promise((resolve, reject) => answers.push({ resolve, reject })));
+    const loaded = (startMs: number, endMs: number) => ({ ...timelineFixture, startMs, endMs });
+
+    useApp.getState().setZoom({ startMs: 150_000, endMs: 160_000 });
+    const refresh = useApp.getState().refreshTimeline();
+    const selecting = useApp.getState().select('target', { kind: 'unit', name: ENEMY });
+    answers[0].resolve(loaded(145_000, 165_000));
+    await refresh;
+    expect(useApp.getState().timeline).toMatchObject({ startMs: 110_000 });
+    answers[1].resolve(loaded(145_000, 165_000));
+    await selecting;
+
+    useApp.getState().setZoom({ startMs: 170_000, endMs: 180_000 });
+    const older = useApp.getState().refreshTimeline();
+    useApp.getState().setZoom({ startMs: 190_000, endMs: 200_000 });
+    const newer = useApp.getState().refreshTimeline();
+    answers[3].reject(new Error('timeline failed'));
+    await newer;
+    useApp.getState().setZoom({ startMs: 170_000, endMs: 180_000 });
+    answers[2].resolve(loaded(165_000, 185_000));
+    await older;
+    expect(useApp.getState()).toMatchObject({ timeline: null, viewError: expect.stringContaining('timeline failed') });
+  });
+
+  it('keeps the zoom window as it is when it is set to the same window', () => {
+    useApp.getState().setZoom({ startMs: 120_000, endMs: 130_000 });
+    const window = useApp.getState().zoom;
+    useApp.getState().setZoom({ startMs: 120_000, endMs: 130_000 });
+    expect(useApp.getState().zoom).toBe(window);
+  });
+
+  it('asks again on zooming in once the request is within the limit the timeline carries', async () => {
+    await openPull();
+    await useApp.getState().setTab('casts');
+    useApp.getState().setZoom({ startMs: 100_000, endMs: 200_000 });
+    vi.mocked(api.timeline).mockResolvedValueOnce({ ...timelineFixture, startMs: 50_000, endMs: 250_000, linesListed: false, listedWindowMs: 60_000 });
+    await useApp.getState().setReportView('timeline');
+    vi.mocked(api.timeline).mockClear();
+    useApp.getState().setZoom({ startMs: 120_000, endMs: 170_000 });
+    await useApp.getState().refreshTimeline();
+    expect(api.timeline).not.toHaveBeenCalled();
+    useApp.getState().setZoom({ startMs: 120_000, endMs: 140_000 });
+    await useApp.getState().refreshTimeline();
+    expect(vi.mocked(api.timeline).mock.lastCall?.[7]).toEqual({ startMs: 110_000, endMs: 150_000 });
+  });
+
+  it("shows a failed reload's error instead of the last filter's timeline and asks again on the next pan", async () => {
+    await openPull();
+    await useApp.getState().setTab('casts');
+    useApp.getState().setZoom({ startMs: 120_000, endMs: 130_000 });
+    await useApp.getState().setReportView('timeline');
+    vi.mocked(api.timeline).mockRejectedValueOnce(new Error('timeline failed'));
+    await useApp.getState().select('target', { kind: 'unit', name: ENEMY });
+    expect(useApp.getState()).toMatchObject({ timeline: null, viewError: expect.stringContaining('timeline failed') });
+    vi.mocked(api.timeline).mockClear();
+    useApp.getState().setZoom({ startMs: 121_000, endMs: 131_000 });
+    await useApp.getState().refreshTimeline();
+    expect(api.timeline).toHaveBeenCalledTimes(1);
+    expect(useApp.getState()).toMatchObject({ timeline: timelineFixture, viewError: null });
+  });
+
+  it('asks again for the same Events page when a failed load is retried and shows it once it arrives', async () => {
+    await openPull();
+    await useApp.getState().setTab('damage');
+    vi.mocked(api.events).mockRejectedValueOnce(new Error('events failed'));
+    await useApp.getState().showEventsAt(130_007);
+    expect(useApp.getState()).toMatchObject({ events: null, viewError: expect.stringContaining('events failed') });
+    await useApp.getState().retryView();
+    expect(api.events).toHaveBeenLastCalledWith(LOG.id, 1, WHOLE_PULL, OPEN, 'damageDone', expect.anything(), { kind: 'at', t: 130_007, limit: 60 });
+    expect(useApp.getState()).toMatchObject({ events: eventsPageFixture, viewError: null });
+  });
+
   it('keeps the table when its view fails to load and clears the failure on the next load', async () => {
     await openPull();
     await useApp.getState().setTab('damage');

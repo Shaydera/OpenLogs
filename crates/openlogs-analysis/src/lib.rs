@@ -91,6 +91,7 @@ pub use usage::{
     RECENT_USE_MS, REPEAT_WINDOW_MS, consumable_uses, cooldown_uses, death_context, defensive_uses,
 };
 pub use views::{
-    AmountRule, CastOutcome, EventRow, EventsPage, ItemAmount, ItemKind, Lane, LogLine, Page,
-    PowerLine, RowType, SharePart, Timeline, TimelineItem, ViewOptions, Window, events, timeline,
+    AmountRule, CastOutcome, Channel, EventRow, EventsPage, ItemAmount, ItemKind, Lane, LogLine,
+    Page, PowerLine, RowType, SharePart, Timeline, TimelineItem, ViewOptions, Window, events,
+    timeline,
 };

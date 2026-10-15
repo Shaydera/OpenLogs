@@ -227,6 +227,42 @@ impl<'a> PartLanes<'a> {
     }
 }
 
+/// Sub-tracks filled first fit: a group of bars goes into the first track where none of its bars
+/// overlaps another's. Each track keeps its bars sorted and disjoint, so a check is a binary search.
+#[derive(Default)]
+struct Tracks {
+    tracks: Vec<Vec<(i32, i32)>>,
+}
+
+impl Tracks {
+    /// Places `bars`, sorted and merged, and returns their track.
+    fn place(&mut self, bars: &[(i32, i32)]) -> u32 {
+        let fits = |track: &Vec<(i32, i32)>| {
+            bars.iter().all(|&(from, to)| {
+                let next = track.partition_point(|&(_, end)| end <= from);
+                track.get(next).is_none_or(|&(start, _)| start >= to)
+            })
+        };
+        let at = match self.tracks.iter().position(fits) {
+            Some(at) => at,
+            None => {
+                self.tracks.push(Vec::new());
+                self.tracks.len() - 1
+            }
+        };
+        let track = &mut self.tracks[at];
+        for &bar in bars {
+            let at = track.partition_point(|&(start, _)| start < bar.0);
+            track.insert(at, bar);
+        }
+        at as u32
+    }
+
+    fn count(&self) -> u32 {
+        self.tracks.len().max(1) as u32
+    }
+}
+
 /// Sub-tracks for groups of bars in one lane: the group with the most covered time first, each
 /// into the first track where none of its bars overlaps another's. Returns each group's track
 /// and the number of tracks.
@@ -238,37 +274,15 @@ pub(crate) fn pack<K: Eq + Hash + Ord + Clone>(
         .map(|(key, bars)| (key, bars.iter().map(|&(a, b)| i64::from(b - a)).sum()))
         .collect();
     order.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
-    let mut tracks: Vec<Vec<(i32, i32)>> = Vec::new();
-    let mut placed = HashMap::new();
-    for (key, _) in order {
-        let bars = merged(&groups[key], i32::MIN, i32::MAX);
-        let track = match tracks.iter().position(|track| disjoint(track, &bars)) {
-            Some(track) => track,
-            None => {
-                tracks.push(Vec::new());
-                tracks.len() - 1
-            }
-        };
-        tracks[track].extend(bars);
-        tracks[track] = merged(&tracks[track], i32::MIN, i32::MAX);
-        placed.insert(key.clone(), track as u32);
-    }
-    (placed, tracks.len().max(1) as u32)
-}
-
-/// Whether two sorted lists of merged intervals share no time.
-fn disjoint(a: &[(i32, i32)], b: &[(i32, i32)]) -> bool {
-    let (mut i, mut j) = (0, 0);
-    while i < a.len() && j < b.len() {
-        if a[i].1 <= b[j].0 {
-            i += 1;
-        } else if b[j].1 <= a[i].0 {
-            j += 1;
-        } else {
-            return false;
-        }
-    }
-    true
+    let mut tracks = Tracks::default();
+    let placed = order
+        .into_iter()
+        .map(|(key, _)| {
+            let bars = merged(&groups[key], i32::MIN, i32::MAX);
+            (key.clone(), tracks.place(&bars))
+        })
+        .collect();
+    (placed, tracks.count())
 }
 
 /// Each spell's name as a number; the IDs of one name share it.
@@ -282,6 +296,62 @@ pub(crate) fn name_ids(fight: &Fight) -> HashMap<SpellId, u32> {
             (spell, *ids.entry(spell_key(fight, spell)).or_insert(next))
         })
         .collect()
+}
+
+/// Slots for units' spell names, found from a logged unit and spell ID. Indexes look one up for
+/// every hit of a request: a short sorted list per unit is faster than hashing.
+pub(crate) struct NameSlots {
+    by_unit: Vec<Vec<(SpellId, usize)>>,
+    len: usize,
+}
+
+impl NameSlots {
+    /// A slot for each unit and spell name among `wanted`, numbered in order of first appearance;
+    /// `names` is the fight's [`name_ids`].
+    pub(crate) fn new(
+        fight: &Fight,
+        names: &HashMap<SpellId, u32>,
+        wanted: impl IntoIterator<Item = (ActorId, SpellId)>,
+    ) -> Self {
+        let mut ids_of_name: HashMap<u32, Vec<SpellId>> = HashMap::new();
+        for (&spell, &name) in names {
+            ids_of_name.entry(name).or_default().push(spell);
+        }
+        let mut slots: HashMap<(ActorId, u32), usize> = HashMap::new();
+        for (unit, spell) in wanted {
+            if let Some(&name) = names.get(&spell) {
+                let next = slots.len();
+                slots.entry((unit, name)).or_insert(next);
+            }
+        }
+        let mut by_unit: Vec<Vec<(SpellId, usize)>> = vec![Vec::new(); fight.actors.len() + 1];
+        for (&(unit, name), &slot) in &slots {
+            for &spell in &ids_of_name[&name] {
+                by_unit[unit as usize].push((spell, slot));
+            }
+        }
+        for spells in &mut by_unit {
+            spells.sort_unstable();
+        }
+        Self {
+            by_unit,
+            len: slots.len(),
+        }
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.len
+    }
+
+    pub(crate) fn has_unit(&self, unit: ActorId) -> bool {
+        !self.by_unit[unit as usize].is_empty()
+    }
+
+    pub(crate) fn find(&self, unit: ActorId, spell: SpellId) -> Option<usize> {
+        let spells = &self.by_unit[unit as usize];
+        let at = spells.binary_search_by_key(&spell, |&(id, _)| id).ok()?;
+        Some(spells[at].1)
+    }
 }
 
 /// Spells in order of first appearance, each once.

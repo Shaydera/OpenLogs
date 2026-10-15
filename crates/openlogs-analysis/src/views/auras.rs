@@ -24,16 +24,7 @@ pub(crate) fn aura_in_scope(
         || in_scope(
             scope,
             fight,
-            &Cell {
-                source: unit_of(fight, applier),
-                spell,
-                kind: CellKind::Own,
-                target: unit_of(fight, holder),
-                amount: 1,
-                absorbed: 0,
-                hits: 1,
-                crits: 0,
-            },
+            &Cell::scope_probe(fight, applier, spell, CellKind::Own, holder),
         )
 }
 
@@ -73,7 +64,8 @@ pub(crate) fn rows(
             AuraAction::Applied => RowType::Apply,
             AuraAction::Removed => RowType::Remove,
             AuraAction::Refresh => RowType::Refresh,
-            AuraAction::AppliedDose | AuraAction::RemovedDose => RowType::Stack,
+            AuraAction::AppliedDose => RowType::StackGained,
+            AuraAction::RemovedDose => RowType::StackLost,
         };
         let by = match action {
             AuraAction::Removed => broken
@@ -93,6 +85,7 @@ pub(crate) fn rows(
                 log_name(event),
                 (event.source, event.spell, event.target),
             );
+            row.aura_kind = Some(kind);
             row.stacks = stacks;
             row.by = by;
             row
@@ -103,16 +96,13 @@ pub(crate) fn rows(
 
 /// The lane cell of an aura: applier, aura and holder.
 pub(crate) fn aura_cell(fight: &Fight, interval: &AuraInterval) -> Cell {
-    Cell {
-        source: unit_of(fight, interval.source),
-        spell: interval.spell,
-        kind: CellKind::Own,
-        target: unit_of(fight, interval.target),
-        amount: 0,
-        absorbed: 0,
-        hits: 0,
-        crits: 0,
-    }
+    Cell::scope_probe(
+        fight,
+        interval.source,
+        interval.spell,
+        CellKind::Own,
+        interval.target,
+    )
 }
 
 /// The aura lines of the window's bars, by holder, aura and applier.

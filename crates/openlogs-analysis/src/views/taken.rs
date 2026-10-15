@@ -39,7 +39,7 @@ fn applied_by_other_side(fight: &Fight, side: Side, applier: ActorId) -> bool {
 
 /// Damage Taken marks: debuff bars of the selected sources on the lane's unit, with that
 /// ability's damage on it while the debuff was up; with the toggle, every hit; deaths as lines.
-/// Returns the debuff spells drawn, in order of appearance.
+/// Returns every debuff spell of the range in scope, in order of appearance, whatever the window.
 pub(crate) fn marks(
     fight: &Fight,
     filter: &ReportFilter,

@@ -65,6 +65,12 @@ fn recap_row(fight: &Fight, index: usize, player: ActorId, death: usize) -> Opti
     Some(row)
 }
 
+/// Whether the scope keeps the death of `dead`: source and ability match the killing blow.
+fn accepts(fight: &Fight, scope: &Scope, blow: Option<Hit>, dead: ActorId) -> bool {
+    let (source, spell) = parts(fight, blow);
+    scope.accepts(fight, source.as_ref(), spell, Some(&unit_of(fight, dead)))
+}
+
 /// Deaths: friendlies with the recap events before each death as context rows, enemies as kills
 /// with their time alive. Source and ability match the killing blow.
 pub(crate) fn rows(
@@ -73,15 +79,11 @@ pub(crate) fn rows(
     scope: &Scope,
     sink: &mut Sink,
 ) -> Summary {
-    let accepts = |blow: Option<Hit>, dead: ActorId| {
-        let (source, spell) = parts(fight, blow);
-        scope.accepts(fight, source.as_ref(), spell, Some(&unit_of(fight, dead)))
-    };
     match scope.perspective {
         Side::Friendly => {
             for death in deaths(fight)
                 .into_iter()
-                .filter(|d| filter.contains(d.t) && accepts(d.killing_blow, d.player))
+                .filter(|d| filter.contains(d.t) && accepts(fight, scope, d.killing_blow, d.player))
             {
                 let Some(index) = died_index(fight, death.player, death.t) else {
                     continue;
@@ -105,7 +107,7 @@ pub(crate) fn rows(
             let mut unlogged = fight.events.len();
             for kill in enemy_kills(fight, filter)
                 .into_iter()
-                .filter(|k| accepts(k.killing_blow, k.unit))
+                .filter(|k| accepts(fight, scope, k.killing_blow, k.unit))
             {
                 let (index, event) = match died_index(fight, kill.unit, kill.t) {
                     Some(index) => (index, "UNIT_DIED"),
@@ -134,14 +136,10 @@ pub(crate) fn marks(
     window: Window,
     lanes: &mut Lanes,
 ) {
-    let accepts = |blow: Option<Hit>, dead: ActorId| {
-        let (source, spell) = parts(fight, blow);
-        scope.accepts(fight, source.as_ref(), spell, Some(&unit_of(fight, dead)))
-    };
     let marks: Vec<TimelineItem> = match scope.perspective {
         Side::Friendly => deaths(fight)
             .into_iter()
-            .filter(|d| filter.contains(d.t) && accepts(d.killing_blow, d.player))
+            .filter(|d| filter.contains(d.t) && accepts(fight, scope, d.killing_blow, d.player))
             .map(|death| {
                 let mut item = death_item(
                     death.player,
@@ -155,7 +153,7 @@ pub(crate) fn marks(
             .collect(),
         Side::Enemy => enemy_kills(fight, filter)
             .into_iter()
-            .filter(|k| accepts(k.killing_blow, k.unit))
+            .filter(|k| accepts(fight, scope, k.killing_blow, k.unit))
             .map(|kill| {
                 let mut item = death_item(kill.unit, kill.t, None, kill.killing_blow);
                 item.alive_ms = kill.alive_ms;
@@ -182,16 +180,8 @@ pub(crate) fn marks(
 
 /// The lane cell of a death: the killing blow's source and spell, the dead unit.
 pub(crate) fn death_cell(fight: &Fight, item: &TimelineItem) -> Cell {
-    Cell {
-        source: unit_of(fight, item.by.map_or(NOBODY, |(source, _)| source)),
-        spell: item.by.map_or(NO_SPELL, |(_, spell)| spell),
-        kind: CellKind::Own,
-        target: unit_of(fight, item.target),
-        amount: 0,
-        absorbed: 0,
-        hits: 0,
-        crits: 0,
-    }
+    let (source, spell) = item.by.unwrap_or((NOBODY, NO_SPELL));
+    Cell::scope_probe(fight, source, spell, CellKind::Own, item.target)
 }
 
 /// A death at `t`; with `band_from`, the recap window from then to the death.

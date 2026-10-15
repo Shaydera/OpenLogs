@@ -536,6 +536,13 @@ fn aura_rows_list_the_sides_holders_and_name_what_broke_an_aura() {
         aura(AuraAction::AppliedDose, AuraType::Debuff, Some(2)),
     );
     b.push(
+        2_700,
+        boss,
+        mage,
+        vapors,
+        aura(AuraAction::RemovedDose, AuraType::Debuff, Some(1)),
+    );
+    b.push(
         3_000,
         boss,
         boss,
@@ -564,12 +571,21 @@ fn aura_rows_list_the_sides_holders_and_name_what_broke_an_aura() {
     let fight = b.build();
     let f = filter(Attribution::Augmented);
     let buffs = page_of(&fight, &f, &Scope::default(), ScopeMetric::Buffs);
-    let rows: Vec<_> = buffs.rows.iter().map(|r| (r.t, r.row_type, r.by)).collect();
+    let rows: Vec<_> = buffs
+        .rows
+        .iter()
+        .map(|r| (r.t, r.row_type, r.aura_kind, r.by))
+        .collect();
     assert_eq!(
         rows,
         [
-            (1_000, RowType::Apply, None),
-            (4_000, RowType::Remove, Some((boss, vapors))),
+            (1_000, RowType::Apply, Some(AuraType::Buff), None),
+            (
+                4_000,
+                RowType::Remove,
+                Some(AuraType::Buff),
+                Some((boss, vapors))
+            ),
         ],
         "the break is no row of its own; the boss's buff is no friendly's"
     );
@@ -578,9 +594,13 @@ fn aura_rows_list_the_sides_holders_and_name_what_broke_an_aura() {
         debuffs
             .rows
             .iter()
-            .map(|r| (r.row_type, r.stacks))
+            .map(|r| (r.row_type, r.aura_kind, r.stacks))
             .collect::<Vec<_>>(),
-        [(RowType::Apply, None), (RowType::Stack, Some(2))]
+        [
+            (RowType::Apply, Some(AuraType::Debuff), None),
+            (RowType::StackGained, Some(AuraType::Debuff), Some(2)),
+            (RowType::StackLost, Some(AuraType::Debuff), Some(1))
+        ]
     );
     let enemies = Scope {
         perspective: Side::Enemy,

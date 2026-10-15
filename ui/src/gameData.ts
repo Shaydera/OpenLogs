@@ -3,6 +3,8 @@ export interface GameDataManifest {
   /** When the tables were downloaded from wago.tools (a real instant, Unix ms). */
   fetchedUnixMs: number;
   spellIcons: number;
+  /** Absent in an export made before channel spells were exported. */
+  channelSpells?: number;
   dungeons: number;
   bossPortraits: number;
 }
@@ -49,6 +51,9 @@ async function tableText(file: string): Promise<string | null> {
 
 /** The Mythic+ dungeon table for the engine. */
 export const dungeonsJson = (): Promise<string | null> => tableText('dungeons.json').catch(() => null);
+
+/** The spells the game channels, for the engine. */
+export const channelSpellsJson = (): Promise<string | null> => tableText('channel-spells.json').catch(() => null);
 
 /** Decodes the export's spell IDs, stored as differences to the previous ID. */
 export function decodeSpellIcons(table: { ids: number[]; icons: number[]; names: string[] }): SpellIcons {

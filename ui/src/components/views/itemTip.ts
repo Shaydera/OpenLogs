@@ -1,7 +1,7 @@
 import type { ItemAmount, TimelineItem } from '../../api/types';
 import { formatDuration, formatEventTimeMs, formatScaled, formatSecondsExact } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import type { ViewNames } from './viewNames';
+import { type ViewNames, unitLabel } from './viewNames';
 
 /** What a mark's card says: what, who → whom, when, how long, how much, and the log lines behind it. */
 export interface ItemTip {
@@ -12,6 +12,8 @@ export interface ItemTip {
   target: string;
   when: string;
   howLong: string;
+  /** A channel's ticks and how long it was held after the last. */
+  spans: string[];
   howMuch: string | null;
   amountNote: string | null;
   log: { time: string; event: string; extra: string }[];
@@ -36,7 +38,7 @@ function howMuch(amount: ItemAmount, source: string): { text: string; note: stri
 }
 
 function what(item: TimelineItem, names: ViewNames, boss: boolean): string {
-  if (boss) return t(item.endMs !== undefined ? 'tl.what.bossCastTime' : 'tl.what.bossCast');
+  if (boss) return t(item.kind === 'channel' ? 'tl.what.bossChannel' : item.endMs !== undefined ? 'tl.what.bossCastTime' : 'tl.what.bossCast');
   switch (item.kind) {
     case 'empowered':
       return t('tl.what.empowered', { stage: item.stage ?? 0 });
@@ -56,6 +58,11 @@ function howLong(item: TimelineItem, names: ViewNames): string {
   switch (item.kind) {
     case 'instant':
       return t('tl.long.instant');
+    case 'channel': {
+      const from = formatEventTimeMs(item.startMs);
+      const end = item.channel?.endMs;
+      return end === undefined ? t('tl.long.channelOpen', { from }) : t('tl.long.channel', { from, to: formatEventTimeMs(end), duration: formatSecondsExact(end - item.startMs) });
+    }
     case 'castTime':
       return held ? t('tl.long.castTime', { duration: held }) : '—';
     case 'empowered':
@@ -81,10 +88,22 @@ function howLong(item: TimelineItem, names: ViewNames): string {
   }
 }
 
+function spans(item: TimelineItem): string[] {
+  const { channel } = item;
+  if (!channel) return [];
+  const { endMs, lastTickMs } = channel;
+  const lines: string[] = [];
+  if (lastTickMs !== undefined) lines.push(t('tl.span.ticks', { count: channel.ticks.length, time: formatEventTimeMs(lastTickMs) }));
+  if (endMs === undefined) lines.push(t('tl.span.channelOpen'));
+  else if (lastTickMs !== undefined && endMs > lastTickMs) lines.push(t('tl.span.held', { duration: formatSecondsExact(endMs - lastTickMs) }));
+  return lines;
+}
+
 /** `boss`: a cast of the context lane above the lanes. */
 export function itemTip(item: TimelineItem, names: ViewNames, linesListed: boolean, boss = false): ItemTip {
   const death = item.kind === 'death';
-  const source = death ? (item.by ? names.unit(item.by.actorId) : '') : names.unit(item.source);
+  const sourceId = death ? item.by?.actorId : item.source;
+  const source = sourceId === undefined ? '—' : unitLabel(names, sourceId, death ? '—' : t('scope.environment'));
   const spellId = death ? (item.by?.spellId ?? 0) : item.kind === 'interrupt' || item.kind === 'dispel' || item.kind === 'steal' ? (item.used ?? item.spellId) : item.spellId;
   const at = death && item.endMs !== undefined ? item.endMs : item.startMs;
   const span = !death && item.endMs !== undefined && item.endMs !== item.startMs;
@@ -96,10 +115,11 @@ export function itemTip(item: TimelineItem, names: ViewNames, linesListed: boole
     spell: death && !item.by ? t('events.noBlow') : names.spell(spellId),
     spellId,
     what: what(item, names, boss),
-    source: source || (death ? '—' : t('scope.environment')),
-    target: names.unit(item.target) || t('events.noTarget'),
+    source,
+    target: unitLabel(names, item.target, t('events.noTarget')),
     when: span ? `${formatEventTimeMs(item.startMs)} → ${formatEventTimeMs(item.endMs ?? item.startMs)}` : formatEventTimeMs(at),
     howLong: howLong(item, names),
+    spans: spans(item),
     howMuch: much?.text ?? overkill,
     amountNote: much?.note ?? null,
     log: lines.map((line) => ({

@@ -1,3 +1,4 @@
+import { Fragment, useId } from 'react';
 import type { ReportView } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { effectiveView, unavailableReason } from '../../reportViews';
@@ -11,30 +12,39 @@ const ICONS = {
 
 const ORDER: ReportView[] = ['table', 'timeline', 'events'];
 
-/** Table, Timeline and Events of the shown tab; a view the tab has not is disabled with the reason. */
+/** Table, Timeline and Events of the shown tab; a view the tab has not stays focusable, disabled with the reason. */
 export function ViewSwitch() {
   const tab = useApp((s) => s.tab);
   const inDetail = useApp((s) => s.details.length > 0);
   const chosen = useApp((s) => s.reportView);
   const setReportView = useApp((s) => s.setReportView);
   const shown = effectiveView(tab, inDetail, chosen);
+  const id = useId();
   return (
     <div className="seg view-switch" role="group" aria-label={t('view.label')}>
       {ORDER.map((view) => {
         const reason = unavailableReason(tab, inDetail, view);
+        const reasonId = `${id}-${view}`;
         return (
-          <button
-            key={view}
-            type="button"
-            className={view === shown ? 'on' : undefined}
-            aria-pressed={view === shown}
-            disabled={reason !== undefined}
-            title={reason}
-            onClick={() => view !== shown && void setReportView(view)}
-          >
-            {ICONS[view]}
-            <span>{t(`view.${view}`)}</span>
-          </button>
+          <Fragment key={view}>
+            <button
+              type="button"
+              className={view === shown ? 'on' : undefined}
+              aria-pressed={view === shown}
+              aria-disabled={reason !== undefined || undefined}
+              aria-describedby={reason !== undefined ? reasonId : undefined}
+              title={reason}
+              onClick={() => reason === undefined && view !== shown && void setReportView(view)}
+            >
+              {ICONS[view]}
+              <span>{t(`view.${view}`)}</span>
+            </button>
+            {reason !== undefined && (
+              <span id={reasonId} className="sr-only">
+                {reason}
+              </span>
+            )}
+          </Fragment>
         );
       })}
     </div>

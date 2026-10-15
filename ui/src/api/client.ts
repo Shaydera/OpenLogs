@@ -1,5 +1,5 @@
 import { type Engine, workerEngine } from '../engine/engine';
-import { dungeonsJson } from '../gameData';
+import { channelSpellsJson, dungeonsJson } from '../gameData';
 import { browserDatabase, type Database } from './db';
 import { type LogSource, reopenHandle } from './logSource';
 import { type RecentRecord, recentRecords, rememberLog } from './recent';
@@ -52,6 +52,7 @@ interface IndexUse {
 export interface ClientDeps {
   engine: () => Engine;
   dungeons: () => Promise<string | null>;
+  channelSpells: () => Promise<string | null>;
   db: Database;
   now: () => number;
 }
@@ -65,9 +66,9 @@ async function quietly<T>(task: () => Promise<T>): Promise<T | undefined> {
   }
 }
 
-export function createClient({ engine: getEngine, dungeons, db, now }: ClientDeps) {
+export function createClient({ engine: getEngine, dungeons, channelSpells, db, now }: ClientDeps) {
   let current: { source: LogSource; engineRestarts: number } | null = null;
-  let dungeonsLoaded = false;
+  const gameDataLoaded = { dungeons: false, channelSpells: false };
   let latestOpen = 0;
   let queue: Promise<unknown> = Promise.resolve();
 
@@ -92,13 +93,21 @@ export function createClient({ engine: getEngine, dungeons, db, now }: ClientDep
     await useIndex(key);
   }
 
-  async function loadDungeons(engine: Engine) {
-    if (dungeonsLoaded) return;
-    // Without the dungeon table, runs still open; their results come from the log alone.
-    const json = await dungeons().catch(() => null);
+  async function loadTable(table: keyof typeof gameDataLoaded, load: () => Promise<string | null>, give: (json: string) => Promise<void>) {
+    if (gameDataLoaded[table]) return;
+    const json = await load().catch(() => null);
     if (json === null) return;
-    await engine.setDungeons(json);
-    dungeonsLoaded = true;
+    // A table the engine rejects is asked for again with the next log; this one opens without it.
+    gameDataLoaded[table] = await give(json).then(
+      () => true,
+      () => false,
+    );
+  }
+
+  /** Without game data, logs still open: run results and channels then come from the log alone. */
+  async function loadGameData(engine: Engine) {
+    await loadTable('dungeons', dungeons, (json) => engine.setDungeons(json));
+    await loadTable('channelSpells', channelSpells, (json) => engine.setChannelSpells(json));
   }
 
   async function index(
@@ -107,7 +116,7 @@ export function createClient({ engine: getEngine, dungeons, db, now }: ClientDep
     superseded: () => boolean,
   ): Promise<LogView> {
     const engine = getEngine();
-    await loadDungeons(engine);
+    await loadGameData(engine);
     const key = `${source.id}|${source.size}|${source.lastModified}|${await engine.indexFormatVersion()}`;
     const stored = await quietly(() => db.get<StoredIndex>('indexes', key));
     if (stored) {
@@ -228,6 +237,7 @@ let sharedEngine: Engine | null = null;
 export const api = createClient({
   engine: () => (sharedEngine ??= workerEngine()),
   dungeons: dungeonsJson,
+  channelSpells: channelSpellsJson,
   db: browserDatabase,
   now: Date.now,
 });

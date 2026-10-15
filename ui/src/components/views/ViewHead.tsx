@@ -52,3 +52,18 @@ export function ViewHead(props: { tab: FilterTab; id: string; title: string; sum
     />
   );
 }
+
+/** Why a view failed, and a way to ask for the same page or window again. */
+export function ViewFailure({ reason, retry }: { reason: string; retry?: boolean }) {
+  const retryView = useApp((s) => s.retryView);
+  return (
+    <p className="muted pad" role="alert">
+      {t('report.failed', { reason })}{' '}
+      {retry && (
+        <button type="button" className="lnk" onClick={() => void retryView()}>
+          {t('view.retry')}
+        </button>
+      )}
+    </p>
+  );
+}

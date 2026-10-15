@@ -1,5 +1,5 @@
 use openlogs_analysis::{Fight, load_fight_slice};
-use openlogs_gamedata::{Curated, DungeonTable};
+use openlogs_gamedata::{ChannelSpells, Curated, DungeonTable};
 use openlogs_index::{FightSummary, Indexer, LogIndex};
 use openlogs_service::auras_dto::AuraKindDto;
 use openlogs_service::log_dto::log_view;
@@ -21,6 +21,7 @@ pub struct Engine {
     fights: Vec<(u32, Fight)>,
     curated: Curated,
     dungeons: Option<DungeonTable>,
+    channels: ChannelSpells,
 }
 
 impl Default for Engine {
@@ -31,6 +32,7 @@ impl Default for Engine {
             fights: Vec::new(),
             curated: Curated::bundled(),
             dungeons: None,
+            channels: ChannelSpells::default(),
         }
     }
 }
@@ -38,6 +40,11 @@ impl Default for Engine {
 impl Engine {
     pub fn set_dungeons(&mut self, json: &str) -> Result<(), String> {
         self.dungeons = Some(DungeonTable::from_json(json).map_err(|err| err.to_string())?);
+        Ok(())
+    }
+
+    pub fn set_channel_spells(&mut self, json: &str) -> Result<(), String> {
+        self.channels = ChannelSpells::from_json(json).map_err(|err| err.to_string())?;
         Ok(())
     }
 
@@ -274,6 +281,7 @@ impl Engine {
                 json(openlogs_service::timeline(
                     self.fight(args.fight_index)?,
                     curated,
+                    &self.channels,
                     args.filter,
                     args.scope,
                     args.metric,

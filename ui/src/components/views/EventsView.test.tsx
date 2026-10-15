@@ -43,11 +43,14 @@ describe('EventsView', () => {
     expect(showEventsPage).toHaveBeenLastCalledWith(71_520);
   });
 
-  it('shows Aug shares inside their hit, next to the amount as logged', () => {
+  it('shows Aug shares and the logged extras inside their hit, next to the amount as logged', () => {
+    const [hit, ...rest] = eventsPageFixture.rows;
+    show({ ...eventsPageFixture, rows: [{ ...hit, absorbed: 12_000 }, ...rest] });
     render(<EventsView tab="damage" />);
     const share = within(rows()[0]).getByTitle('Ebon Might · Speronis (Aug support, included in this hit)');
     expect(share).toHaveTextContent('62.00k');
     expect(within(rows()[0]).getByText('1.06M')).toBeInTheDocument();
+    expect(within(rows()[0]).getByText('critical · absorbed 12.00k')).toBeInTheDocument();
     expect(rows()).toHaveLength(3);
   });
 
@@ -65,11 +68,28 @@ describe('EventsView', () => {
   it('drops the column of a dimension the page marks as narrowed', () => {
     show({ ...eventsPageFixture, narrowed: ['ability'] });
     const { unmount } = render(<EventsView tab="damage" />);
-    expect(columns()).toEqual(['Time', 'Type', 'Source → Target', 'Amount']);
+    expect(columns()).toEqual(['Time', 'Event', 'Amount', 'Source → Target']);
     unmount();
     show({ ...eventsPageFixture, narrowed: ['source', 'target'] });
     render(<EventsView tab="damage" />);
-    expect(columns()).toEqual(['Time', 'Type', 'Ability', 'Amount']);
+    expect(columns()).toEqual(['Time', 'Event', 'Ability', 'Amount']);
+  });
+
+  it('puts the units column last, after the value', () => {
+    const { unmount } = render(<EventsView tab="damage" />);
+    expect(columns()).toEqual(['Time', 'Event', 'Ability', 'Amount', 'Source → Target']);
+    unmount();
+    render(<EventsView tab="interrupts" />);
+    expect(columns().at(-1)).toMatch(/→/);
+    expect(columns()).toContain('Spell used');
+  });
+
+  it("shows a cast's cast time right after its name, with no column of its own", () => {
+    const plain = { ...eventsPageFixture.rows[0], shares: [], critical: false, amount: null, targetHp: null };
+    show({ ...eventsPageFixture, total: 1, rows: [{ ...plain, index: 1, t: 1_000, type: 'cast', event: 'SPELL_CAST_SUCCESS', source: 4, target: 9, spellId: 30451, durationMs: 1_070 }] });
+    render(<EventsView tab="casts" />);
+    expect(columns()).not.toContain('Cast time');
+    expect(within(rows()[0]).getByText('Arcane Blast').parentElement).toHaveTextContent(/Arcane Blast\s*1\.07 s/);
   });
 
   it('opens a row to its logged fields', async () => {
@@ -102,7 +122,7 @@ describe('EventsView', () => {
     });
     render(<EventsView tab="casts" />);
     expect(within(rows()[0]).getByText('completed after 1.20 s')).toBeInTheDocument();
-    expect(within(rows()[1]).getByText('Rejected input')).toBeInTheDocument();
+    expect(within(rows()[1]).getByText('Cast rejected')).toBeInTheDocument();
     expect(within(rows()[1]).getByText('Not yet recovered · logging player only')).toBeInTheDocument();
   });
 
@@ -137,8 +157,58 @@ describe('EventsView', () => {
       rows: [{ ...base, type: 'died', event: 'UNIT_DIED', source: 9, target: 4, spellId: 30451, amount: 120_000, shares: [], critical: false, targetHp: null }],
     });
     render(<EventsView tab="deaths" />);
-    expect(columns().at(-1)).toBe('Amount');
+    expect(columns().at(-2)).toBe('Amount');
     expect(within(rows()[0]).getByText('overkill 120.00k')).toBeInTheDocument();
+  });
+
+  it('names an aura row a buff or a debuff by the type the log gives', () => {
+    const plain = { ...eventsPageFixture.rows[0], shares: [], critical: false, amount: null, targetHp: null };
+    show({
+      ...eventsPageFixture,
+      total: 3,
+      rows: [
+        { ...plain, index: 1, t: 1_000, type: 'apply', event: 'SPELL_AURA_APPLIED', source: 5, target: 4, spellId: 395152, auraKind: 'buff' },
+        { ...plain, index: 2, t: 2_000, type: 'refresh', event: 'SPELL_AURA_REFRESH', source: 9, target: 4, spellId: 1287012, auraKind: 'debuff' },
+        { ...plain, index: 3, t: 3_000, type: 'remove', event: 'SPELL_AURA_REMOVED', source: 9, target: 4, spellId: 1287012, auraKind: 'debuff' },
+      ],
+    });
+    render(<EventsView tab="buffs" />);
+    expect(rows().map((row) => within(row).getAllByRole('cell')[1].textContent)).toEqual(['Buff applied', 'Debuff refreshed', 'Debuff removed']);
+  });
+
+  it('nests a stack row under its aura with the count the log gives', () => {
+    const plain = { ...eventsPageFixture.rows[0], shares: [], critical: false, amount: null, targetHp: null, auraKind: 'buff' as const };
+    show({
+      ...eventsPageFixture,
+      total: 2,
+      rows: [
+        { ...plain, index: 1, t: 1_000, type: 'apply', event: 'SPELL_AURA_APPLIED', source: 5, target: 4, spellId: 395152 },
+        { ...plain, index: 2, t: 1_200, type: 'stackGained', event: 'SPELL_AURA_APPLIED_DOSE', source: 5, target: 4, spellId: 395152, stacks: 11 },
+      ],
+    });
+    render(<EventsView tab="buffs" />);
+    const stack = within(rows()[1]).getByText('11 stacks').closest('[role="cell"]');
+    expect(stack).toHaveTextContent('Ebon Might');
+    expect(within(rows()[0]).queryByText(/stack/)).not.toBeInTheDocument();
+  });
+
+  it('shows the time once for rows logged in the same millisecond and keeps it for screen readers', () => {
+    const plain = { ...eventsPageFixture.rows[0], shares: [], critical: false, amount: null, targetHp: null, auraKind: 'buff' as const };
+    show({
+      ...eventsPageFixture,
+      total: 3,
+      rows: [
+        { ...plain, index: 1, t: 1_000, type: 'apply', event: 'SPELL_AURA_APPLIED', source: 4, target: 4, spellId: 30451 },
+        { ...plain, index: 2, t: 1_000, type: 'remove', event: 'SPELL_AURA_REMOVED', source: 4, target: 4, spellId: 44425 },
+        { ...plain, index: 3, t: 1_001, type: 'apply', event: 'SPELL_AURA_APPLIED', source: 5, target: 4, spellId: 395152 },
+      ],
+    });
+    render(<EventsView tab="buffs" />);
+    const [first, same, next] = rows().map((row) => within(row).getByRole('button'));
+    expect(first).toHaveTextContent('0:01.000');
+    expect(same).toHaveTextContent(/^$/);
+    expect(same).toHaveAccessibleName('Logged fields of Buff removed at 0:01.000');
+    expect(next).toHaveTextContent('0:01.001');
   });
 
   it('reads each event as a sentence in the text layout', async () => {
@@ -156,7 +226,7 @@ describe('EventsView', () => {
       total: 2,
       rows: [
         { ...plain, index: 1, t: 1_000, type: 'cast', event: 'SPELL_CAST_SUCCESS', source: 4, target: 0, spellId: 30451, durationMs: 1_200 },
-        { ...plain, index: 2, t: 2_000, type: 'stack', event: 'SPELL_AURA_APPLIED_DOSE', source: 4, target: 3, spellId: 395152, stacks: 3 },
+        { ...plain, index: 2, t: 2_000, type: 'stackGained', event: 'SPELL_AURA_APPLIED_DOSE', source: 4, target: 3, spellId: 395152, stacks: 3 },
       ],
     });
     render(<EventsView tab="casts" />);
@@ -166,5 +236,18 @@ describe('EventsView', () => {
     render(<EventsView tab="buffs" />);
     await userEvent.click(screen.getByRole('button', { name: 'Text view' }));
     expect(screen.getByText("Wendel's Ebon Might from Faelan gains a stack").parentElement).toHaveTextContent(/stack\s*3/);
+  });
+
+  it('says a logged stack loss is a loss, with the count the log left', async () => {
+    const plain = { ...eventsPageFixture.rows[0], shares: [], critical: false, amount: null, targetHp: null };
+    show({
+      ...eventsPageFixture,
+      total: 1,
+      rows: [{ ...plain, index: 2, t: 2_000, type: 'stackLost', event: 'SPELL_AURA_REMOVED_DOSE', source: 4, target: 3, spellId: 395152, stacks: 1 }],
+    });
+    render(<EventsView tab="buffs" />);
+    expect(within(rows()[0]).getByText('Stack lost')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Text view' }));
+    expect(screen.getByText("Wendel's Ebon Might from Faelan loses a stack").parentElement).toHaveTextContent(/stack\s*1/);
   });
 });

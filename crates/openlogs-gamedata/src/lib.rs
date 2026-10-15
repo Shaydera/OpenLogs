@@ -1,7 +1,8 @@
-//! Static and downloaded game data: classes and specs, spell icons, Mythic+ dungeons and boss
-//! portraits.
+//! Static and downloaded game data: classes and specs, spell icons, channel spells, Mythic+
+//! dungeons and boss portraits.
 
 mod boss_portraits;
+mod channel_spells;
 mod curated;
 mod download;
 mod dungeons;
@@ -13,6 +14,7 @@ mod specs;
 mod spell_icons;
 
 pub use boss_portraits::{BossPortraitError, BossPortraitTable};
+pub use channel_spells::{ChannelSpellError, ChannelSpells};
 pub use curated::{
     CONSUMABLES_FILE, Consumable, ConsumableKind, ConsumableList, CooldownCategory, CooldownList,
     CooldownSpell, Curated, DEFENSIVES_FILE, DefensiveList, MAJOR_CDS_FILE, NamePattern,
@@ -21,9 +23,9 @@ pub use curated::{
     PlayerCooldownKind, PlayerCooldownList, ProcList, ProcSpell,
 };
 pub use download::{
-    DownloadError, WAGO_DUNGEON_ENCOUNTER_URL, WAGO_JOURNAL_ENCOUNTER_CREATURE_URL,
+    DownloadError, SpellTables, WAGO_DUNGEON_ENCOUNTER_URL, WAGO_JOURNAL_ENCOUNTER_CREATURE_URL,
     WAGO_JOURNAL_ENCOUNTER_URL, WAGO_MANIFEST_URL, WAGO_MAP_CHALLENGE_MODE_URL,
-    WAGO_SPELL_MISC_URL, download_boss_portraits, download_dungeons, download_spell_icons,
+    WAGO_SPELL_MISC_URL, download_boss_portraits, download_dungeons, download_spell_tables,
 };
 pub use dungeons::{Dungeon, DungeonBoss, DungeonTable, DungeonTableError, KeyTimer};
 pub use fetch::{Fetch, FetchError};

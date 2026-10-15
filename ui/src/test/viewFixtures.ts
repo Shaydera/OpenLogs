@@ -32,6 +32,7 @@ const row: Omit<EventRow, 'index' | 't' | 'type' | 'event' | 'source' | 'spellId
   critical: false,
   targetHp: null,
   shares: [],
+  auraKind: null,
   stacks: null,
   used: null,
   durationMs: null,
@@ -116,6 +117,7 @@ export const timelineFixture: Timeline = {
           kind: 'castTime',
           startMs: 128_000,
           endMs: 129_200,
+          spanEndMs: 129_200,
           source: 4,
           spellId: 30451,
           target: 9,
@@ -125,10 +127,11 @@ export const timelineFixture: Timeline = {
             { t: 129_200, event: 'SPELL_CAST_SUCCESS', spellId: 30451 },
           ],
         },
-        { kind: 'instant', startMs: 130_000, source: 4, spellId: 44425, target: 9, log: [{ t: 130_000, event: 'SPELL_CAST_SUCCESS', spellId: 44425 }] },
+        { kind: 'instant', startMs: 130_000, spanEndMs: 130_000, source: 4, spellId: 44425, target: 9, log: [{ t: 130_000, event: 'SPELL_CAST_SUCCESS', spellId: 44425 }] },
       ],
       power: [],
       dead: [],
+      boss: false,
     },
     {
       key: { kind: 'unit', unit: { kind: 'player', actorId: 3 } },
@@ -142,6 +145,7 @@ export const timelineFixture: Timeline = {
           kind: 'interrupted',
           startMs: 133_000,
           endMs: 133_950,
+          spanEndMs: 133_950,
           source: 3,
           spellId: 30451,
           target: 9,
@@ -154,6 +158,7 @@ export const timelineFixture: Timeline = {
       ],
       power: [],
       dead: [],
+      boss: false,
     },
   ],
   context: [
@@ -161,6 +166,7 @@ export const timelineFixture: Timeline = {
       kind: 'castTime',
       startMs: 125_000,
       endMs: 127_000,
+      spanEndMs: 127_000,
       source: 9,
       spellId: 1287012,
       target: 0,
@@ -173,12 +179,14 @@ export const timelineFixture: Timeline = {
   roster,
   spells,
   linesListed: true,
+  listedWindowMs: 120_000,
 };
 
 const aura = (spellId: number, track: number) => ({
   kind: 'aura' as const,
   startMs: 120_000 + track * 1_000,
   endMs: 130_000 + track * 1_000,
+  spanEndMs: 130_000 + track * 1_000,
   source: 5,
   spellId,
   target: 4,
@@ -202,6 +210,7 @@ export const buffsTimelineFixture: Timeline = {
       items: Array.from({ length: 10 }, (_, track) => aura(395152, track)),
       power: [],
       dead: [],
+      boss: false,
     },
   ],
 };
@@ -222,10 +231,34 @@ export const takenTimelineFixture: Timeline = {
       items: [
         { ...aura(1287012, 0), source: 9, target: 3, amount: { rule: 'whileUp', amount: 900_000, hits: 3, targets: 1, support: 0, healing: false } },
         { ...aura(395152, 1), source: 9, target: 3 },
-        { kind: 'death', startMs: 135_000, source: 0, spellId: 0, target: 3, by: { actorId: 9, spellId: 1287012 }, overkill: 12_000 },
+        { kind: 'death', startMs: 135_000, spanEndMs: 135_000, source: 0, spellId: 0, target: 3, by: { actorId: 9, spellId: 1287012 }, overkill: 12_000 },
       ],
       power: [],
       dead: [],
+      boss: false,
+    },
+  ],
+};
+
+/** Resources of Faelan: mana and health samples as logged, dead from 2:12 to 2:14. */
+export const resourcesTimelineFixture: Timeline = {
+  ...timelineFixture,
+  context: [],
+  lanes: [
+    {
+      key: { kind: 'unit', unit: { kind: 'player', actorId: 4 } },
+      name: 'Faelan',
+      number: null,
+      spellId: 0,
+      total: 0,
+      tracks: 1,
+      items: [],
+      power: [
+        { powerType: 0, samples: [[118_000, 250_000, 250_000], [125_000, 100_000, 250_000]] },
+        { powerType: -2, samples: [[119_000, 1_000_000, 1_000_000], [131_000, 400_000, 1_000_000], [132_000, 0, 1_000_000]] },
+      ],
+      dead: [[132_000, 134_000]],
+      boss: false,
     },
   ],
 };

@@ -9,8 +9,8 @@ import { GameIcon } from '../GameIcon';
 import { NoMatch } from '../filters/NoMatch';
 import { captionOf } from '../filters/sides';
 import { hitIcon } from '../reports/reportData';
-import { VALUE_CAPTION, fieldsOf, noteOf, sentenceOf, textNoteOf, textValueOf, typeLabel, valueOf } from './eventColumns';
-import { TAB_TITLE, ViewHead } from './ViewHead';
+import { VALUE_CAPTION, fieldsOf, hitNoteOf, isStackRow, noteOf, sentenceOf, textNoteOf, textValueOf, typeLabel, valueOf } from './eventColumns';
+import { TAB_TITLE, ViewFailure, ViewHead } from './ViewHead';
 import { type ViewNames, viewNames } from './viewNames';
 
 const TOGGLES: Partial<Record<FilterTab, (keyof ViewToggles)[]>> = { casts: ['beginCasts', 'rejected'] };
@@ -49,6 +49,34 @@ function Shares({ shares, names }: { shares: SharePart[]; names: ViewNames }) {
   });
 }
 
+/** The logged count as a badge and one pip per stack; the log names no maximum, so none is drawn. */
+function StackCount({ count }: { count: number }) {
+  return (
+    <span className="ev-stack">
+      <span aria-hidden="true">{formatInteger(count)}</span>
+      <span className="sr-only">{t('events.stacks', { count })}</span>
+    </span>
+  );
+}
+
+/** Beyond this many stacks the pips stop and a "+" follows; the badge keeps the logged count. */
+const MAX_PIPS = 10;
+
+function StackPips({ count }: { count: number }) {
+  return (
+    <span className="ev-pips" aria-hidden="true">
+      {Array.from({ length: Math.min(count, MAX_PIPS) }, (_, i) => (
+        <i key={i} />
+      ))}
+      {count > MAX_PIPS && <b>+</b>}
+    </span>
+  );
+}
+
+function Note({ text }: { text: string }) {
+  return text ? <span className="erow-note faint">{text}</span> : null;
+}
+
 const sourceFallback = (row: EventRow) => (row.environmental ? t('scope.environment') : row.unknownBlow ? t('events.noSource') : t('deaths.unknownSource'));
 const spellText = (row: EventRow, names: ViewNames) => (row.unknownBlow ? t('events.noBlow') : names.spell(row.spellId));
 
@@ -73,11 +101,7 @@ export function EventsView({ tab }: { tab: FilterTab }) {
       {viewLoading ? t('report.loading') : ''}
     </p>
   );
-  const failed = failure !== null && (
-    <p className="muted pad" role="alert">
-      {t('report.failed', { reason: failure })}
-    </p>
-  );
+  const failed = failure !== null && <ViewFailure reason={failure} retry={viewError !== null} />;
   if (!page) {
     return (
       <section className="panel" aria-labelledby="events-title">
@@ -176,61 +200,79 @@ function EventsGrid(props: { tab: FilterTab; page: EventsPage; names: ViewNames;
   const showSource = !narrowed.has('source');
   const showTarget = !narrowed.has('target');
   const showUnits = showSource || showTarget;
-  const columns = ['98px', '118px', showAbility && 'minmax(200px, 1.2fr)', showUnits && 'minmax(220px, 1.3fr)', 'minmax(220px, 1fr)'].filter(Boolean).join(' ');
+  const stacksInAbility = tab === 'buffs' && showAbility;
+  const castTimeInAbility = tab === 'casts' && showAbility;
+  const showValue = !stacksInAbility && !castTimeInAbility;
+  const columns = ['98px', '150px', showAbility && 'minmax(220px, 1.3fr)', showValue && 'minmax(200px, 1fr)', showUnits && 'minmax(200px, 1.2fr)'].filter(Boolean).join(' ');
   const captions = { source: captionOf(tab, 'source'), target: captionOf(tab, 'target'), ability: captionOf(tab, 'ability') };
   return (
     <div className="events-scroll">
       <div className="events-grid" role="table" aria-busy={busy} aria-label={t('events.title', { tab: t(TAB_TITLE[tab]) })}>
         <div className="erow head" role="row" style={{ gridTemplateColumns: columns }}>
           <span className="cap" role="columnheader">{t('events.column.time')}</span>
-          <span className="cap" role="columnheader">{t('events.column.type')}</span>
+          <span className="cap end" role="columnheader">{t('events.column.type')}</span>
           {showAbility && <span className="cap" role="columnheader">{captions.ability}</span>}
+          {showValue && <span className="cap end" role="columnheader">{t(VALUE_CAPTION[tab])}</span>}
           {showUnits && (
             <span className="cap" role="columnheader">
               {[showSource && captions.source, showTarget && captions.target].filter(Boolean).join(' → ')}
             </span>
           )}
-          <span className="cap end" role="columnheader">{t(VALUE_CAPTION[tab])}</span>
         </div>
-        {page.rows.map((row) => {
+        {page.rows.map((row, i) => {
           const key = rowKey(row);
           const expanded = open === key;
           const fieldsId = `events-fields-${key}`;
+          const above = page.rows[i - 1];
+          const sameTime = above !== undefined && above.t === row.t && open !== rowKey(above);
+          const time = formatEventTimeMs(row.t);
+          const label = typeLabel(row);
+          const note = noteOf(row, names);
+          const stacks = stacksInAbility && isStackRow(row) ? row.stacks : null;
           return (
             <Fragment key={key}>
               <div role="row" className={row.contextOf === null ? 'erow' : 'erow context'} style={{ gridTemplateColumns: columns }}>
-                <span role="cell" className="num muted">
+                <span role="cell" className="erow-time num muted">
                   <button
                     type="button"
-                    className="erow-open"
+                    className={sameTime ? 'erow-open same-time' : 'erow-open'}
                     aria-expanded={expanded}
                     aria-controls={expanded ? fieldsId : undefined}
-                    aria-label={t('events.toggle', { type: typeLabel(row), time: formatEventTimeMs(row.t) })}
+                    aria-label={t('events.toggle', { type: label, time })}
                     onClick={() => onOpen(expanded ? null : key)}
                   >
-                    {formatEventTimeMs(row.t)}
+                    {sameTime ? null : time}
                   </button>
                 </span>
-                <span role="cell">{typeLabel(row)}</span>
+                <span role="cell" className="erow-type">
+                  {label}
+                  <i className="ev-dot" data-kind={row.type} aria-hidden="true" />
+                </span>
                 {showAbility && (
-                  <span role="cell" className="erow-spell">
+                  <span role="cell" className={stacks === null ? 'erow-spell' : 'erow-spell nested'}>
+                    {stacks !== null && <StackCount count={stacks} />}
                     {!row.unknownBlow && <GameIcon icon={hitIcon({ spellId: row.spellId, environmental: row.environmental })} size={18} name={names.spell(row.spellId)} />}
                     <span className="nm">{spellText(row, names)}</span>
+                    {stacks !== null && <StackPips count={stacks} />}
+                    <Note text={note} />
+                  </span>
+                )}
+                {showValue && (
+                  <span role="cell" className="erow-value">
+                    {!showAbility && <Note text={note} />}
+                    <Note text={hitNoteOf(row)} />
+                    <Shares shares={row.shares} names={names} />
+                    <TargetHp tab={tab} row={row} />
+                    <span className={row.critical ? 'num crit' : 'num'}>{valueOf(tab, row, names)}</span>
                   </span>
                 )}
                 {showUnits && (
                   <span role="cell" className="nm">
                     {showSource && <UnitName actorId={row.source} names={names} fallback={sourceFallback(row)} />}
-                    {showSource && showTarget && <span className="faint"> → </span>}
+                    {showSource && showTarget && <span className="erow-arrow"> → </span>}
                     {showTarget && <UnitName actorId={row.target} names={names} fallback={t('events.noTarget')} />}
                   </span>
                 )}
-                <span role="cell" className="erow-value">
-                  <span className={row.critical ? 'num crit' : 'num'}>{valueOf(tab, row, names)}</span>
-                  <Shares shares={row.shares} names={names} />
-                  <TargetHp tab={tab} row={row} />
-                  <span className="nm faint">{noteOf(row, names)}</span>
-                </span>
               </div>
               {expanded && (
                 <div role="row">

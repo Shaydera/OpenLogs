@@ -1,22 +1,23 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use openlogs_gamedata::Curated;
 
 use crate::actors::{ActorId, NOBODY};
+use crate::auras::merged;
 use crate::breakdown::Dimension;
 use crate::cells::{Cell, CellKind, in_range, in_scope};
-use crate::fight::{DamageVia, Event, EventKind, Fight, MissType, SpellId};
+use crate::fight::{DamageVia, Event, EventKind, Fight, MissType};
 use crate::filter::{Attribution, ReportFilter};
 use crate::reports::{Share, buffed_hit, damage_share, healing_share};
-use crate::scope::{Scope, Side, unit_of};
-use crate::views::casts::{CastItem, side_casts, timeline_item};
+use crate::scope::{Scope, Side};
+use crate::views::casts::{CastItem, side_casts, side_items, timeline_item};
 use crate::views::names::log_name;
 use crate::views::parts::{AmountFacts, Part, listed_row};
-use crate::views::timeline::{Lanes, PartLanes, name_ids, overlaps};
+use crate::views::timeline::{Lanes, NameSlots, PartLanes, name_ids, overlaps};
 use crate::views::{AmountRule, EventRow, ItemAmount, RowType, SharePart, Sink, Summary, Window};
 
 /// A cast's hits count until the next cast of its name, at most this long.
-const UNTIL_NEXT_CAST_MS: i32 = 15_000;
+pub(crate) const UNTIL_NEXT_CAST_MS: i32 = 15_000;
 /// A boss cast's damage counts this long from the cast start.
 const BOSS_CAST_MS: i32 = 10_000;
 
@@ -27,16 +28,7 @@ struct Attached {
 }
 
 pub(crate) fn part_cell(fight: &Fight, part: &Part) -> Cell {
-    Cell {
-        source: unit_of(fight, part.source),
-        spell: part.spell,
-        kind: part.kind,
-        target: unit_of(fight, part.target),
-        amount: part.amount,
-        absorbed: part.absorbed,
-        hits: u32::from(part.hit),
-        crits: u32::from(part.hit && part.crit),
-    }
+    Cell::scope_probe(fight, part.source, part.spell, part.kind, part.target)
 }
 
 /// The parts the event at `index` books, as the table books them.
@@ -124,6 +116,10 @@ pub(crate) fn rows(
     let mut next = 0;
     let mut amount = 0;
     for index in range {
+        // A support event is never a row of its own: the first pass attached it to its hit.
+        if is_support(&fight.events[index]) {
+            continue;
+        }
         let mut own = None;
         facts.parts(fight, index, reattributed, &mut |part| {
             if part.hit && part.row == Some(index) {
@@ -233,34 +229,35 @@ fn caster_of(fight: &Fight, facts: AmountFacts, source: ActorId) -> ActorId {
 /// Casts by caster and spell name in time order, to find the cast a hit belongs to.
 struct CastIndex {
     rule: AmountRule,
-    /// Each spell's name as a number; the IDs of one name share it.
-    names: HashMap<SpellId, u32>,
-    by_name: HashMap<(ActorId, u32), Vec<(i32, usize)>>,
+    slots: NameSlots,
+    by_name: Vec<Vec<(i32, usize)>>,
 }
 
 impl CastIndex {
     fn new(fight: &Fight, items: &[CastItem], rule: AmountRule) -> Self {
-        let names = name_ids(fight);
-        let mut by_name: HashMap<(ActorId, u32), Vec<(i32, usize)>> = HashMap::new();
+        let who = |item: &CastItem| Self::who(rule, item.caster);
+        let slots = NameSlots::new(
+            fight,
+            &name_ids(fight),
+            items.iter().map(|item| (who(item), item.spell)),
+        );
+        let mut by_name: Vec<Vec<(i32, usize)>> = vec![Vec::new(); slots.len()];
         for (i, item) in items.iter().enumerate() {
-            let Some(&name) = names.get(&item.spell) else {
+            let Some(slot) = slots.find(who(item), item.spell) else {
                 continue;
             };
             let anchor = match (rule, item.success) {
                 (AmountRule::UntilNextCast, Some(success)) => fight.events[success].t,
                 _ => item.start,
             };
-            by_name
-                .entry((Self::who(rule, item.caster), name))
-                .or_default()
-                .push((anchor, i));
+            by_name[slot].push((anchor, i));
         }
-        for list in by_name.values_mut() {
+        for list in &mut by_name {
             list.sort_unstable();
         }
         Self {
             rule,
-            names,
+            slots,
             by_name,
         }
     }
@@ -285,8 +282,8 @@ impl CastIndex {
     /// The cast a hit of `caster` at `t` belongs to: the latest of the part's spell name at or
     /// before `t`, within the limit.
     fn find(&self, caster: ActorId, part: &Part, t: i32) -> Option<usize> {
-        let name = *self.names.get(&part.spell)?;
-        let list = self.by_name.get(&(Self::who(self.rule, caster), name))?;
+        let slot = self.slots.find(Self::who(self.rule, caster), part.spell)?;
+        let list = &self.by_name[slot];
         let at = list.partition_point(|&(anchor, _)| anchor <= t);
         let (anchor, item) = *list.get(at.checked_sub(1)?)?;
         (t - anchor <= self.limit()).then_some(item)
@@ -322,7 +319,7 @@ struct ItemAcc {
     /// Every part so far is an Evoker's support credit.
     only_support: bool,
     started: bool,
-    by_target: HashMap<ActorId, Tally>,
+    by_target: Vec<(ActorId, Tally)>,
 }
 
 impl ItemAcc {
@@ -331,7 +328,18 @@ impl ItemAcc {
         self.only_support = (!self.started || self.only_support) && credit;
         self.started = true;
         self.tally.add(part);
-        self.by_target.entry(part.target).or_default().add(part);
+        match self
+            .by_target
+            .iter_mut()
+            .find(|(target, _)| *target == part.target)
+        {
+            Some((_, tally)) => tally.add(part),
+            None => {
+                let mut tally = Tally::default();
+                tally.add(part);
+                self.by_target.push((part.target, tally));
+            }
+        }
     }
 
     fn amount(&self, rule: AmountRule, healing: bool) -> ItemAmount {
@@ -339,7 +347,11 @@ impl ItemAcc {
             rule,
             amount: self.tally.amount,
             hits: self.tally.hits,
-            targets: self.by_target.keys().filter(|&&t| t != NOBODY).count() as u32,
+            targets: self
+                .by_target
+                .iter()
+                .filter(|(target, _)| *target != NOBODY)
+                .count() as u32,
             support: self.tally.support,
             healing,
         }
@@ -381,28 +393,42 @@ pub(crate) fn until_next_cast(
     shown: &[usize],
     rule: AmountRule,
 ) -> HashMap<usize, ItemAmount> {
-    let Some(first) = shown.iter().map(|&i| items[i].start).min() else {
+    if shown.is_empty() {
         return HashMap::new();
-    };
-    let last = shown
-        .iter()
-        .map(|&i| items[i].end.unwrap_or(items[i].start).max(items[i].start))
-        .max()
-        .unwrap_or(first);
+    }
     let index = CastIndex::new(fight, items, rule);
-    let wanted: HashSet<usize> = shown.iter().copied().collect();
+    let reaches: Vec<(i32, i32)> = shown
+        .iter()
+        .map(|&i| {
+            let item = &items[i];
+            let anchor = item.success.map(|success| fight.events[success].t);
+            let last = item
+                .end
+                .into_iter()
+                .chain(anchor)
+                .fold(item.start, i32::max);
+            (item.start, last + index.limit())
+        })
+        .collect();
+    let mut wanted = vec![false; items.len()];
+    for &i in shown {
+        wanted[i] = true;
+    }
     let reattributed = filter.attribution == Attribution::Reattributed;
     let range = in_range(fight, filter);
-    let from = fight
-        .events
-        .partition_point(|e| e.t < first)
-        .max(range.start);
-    let to = fight
-        .events
-        .partition_point(|e| e.t <= last + index.limit())
-        .min(range.end);
-    let mut accs: HashMap<usize, ItemAcc> = HashMap::new();
-    for i in from..to.max(from) {
+    let stretches = merged(&reaches, i32::MIN, i32::MAX)
+        .into_iter()
+        .map(|(first, last)| {
+            let from = fight
+                .events
+                .partition_point(|e| e.t < first)
+                .max(range.start);
+            let to = fight.events.partition_point(|e| e.t <= last).min(range.end);
+            from..to.max(from)
+        });
+    let mut accs: Vec<Option<ItemAcc>> =
+        std::iter::repeat_with(|| None).take(items.len()).collect();
+    for i in stretches.flatten() {
         let t = fight.events[i].t;
         timeline_parts(fight, facts, i, reattributed, &mut |part, _| {
             if scope.is_some_and(|scope| {
@@ -412,14 +438,15 @@ pub(crate) fn until_next_cast(
             }
             let caster = caster_of(fight, facts, part.source);
             if let Some(item) = index.find(caster, &part, t)
-                && wanted.contains(&item)
+                && wanted[item]
             {
-                accs.entry(item).or_default().add(&part);
+                accs[item].get_or_insert_with(ItemAcc::default).add(&part);
             }
         });
     }
     accs.into_iter()
-        .map(|(item, acc)| (item, acc.amount(rule, healing_facts(facts))))
+        .enumerate()
+        .filter_map(|(item, acc)| Some((item, acc?.amount(rule, healing_facts(facts)))))
         .collect()
 }
 
@@ -467,7 +494,7 @@ pub(crate) fn marks(
     lanes: &mut Lanes,
 ) {
     let side = scope.perspective;
-    let items = side_casts(fight, curated, side);
+    let items = side_casts(fight, side, &side_items(fight, curated, side, None));
     let rule = AmountRule::UntilNextCast;
     let index = CastIndex::new(fight, &items, rule);
     let reattributed = filter.attribution == Attribution::Reattributed;
@@ -501,18 +528,10 @@ pub(crate) fn marks(
         } else {
             CellKind::Own
         };
-        let cell = |target: ActorId| Cell {
-            source: unit_of(fight, cast.caster),
-            spell: cast.spell,
-            kind,
-            target: unit_of(fight, target),
-            amount: 0,
-            absorbed: 0,
-            hits: 0,
-            crits: 0,
-        };
+        let cell =
+            |target: ActorId| Cell::scope_probe(fight, cast.caster, cast.spell, kind, target);
         if by_target {
-            for (&target, tally) in &acc.by_target {
+            for &(target, ref tally) in &acc.by_target {
                 let mut mark = timeline_item(fight, cast);
                 mark.target = target;
                 mark.amount = Some(ItemAmount {

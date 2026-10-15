@@ -878,7 +878,8 @@ export type EventRowType =
   | 'apply'
   | 'remove'
   | 'refresh'
-  | 'stack'
+  | 'stackGained'
+  | 'stackLost'
   | 'died'
   | 'recap'
   | 'interrupt'
@@ -886,6 +887,8 @@ export type EventRowType =
   | 'steal';
 
 export type CastOutcome = 'completed' | 'interrupted' | 'released' | 'noOutcome';
+
+export type AuraType = 'buff' | 'debuff';
 
 export interface EventRow {
   /** The logged line; a boss that dies at the pull's end counts on from the last one. */
@@ -908,6 +911,8 @@ export interface EventRow {
   /** `[current, max]` of the target, when the logged unit HP is the target's. */
   targetHp: [number, number] | null;
   shares: SharePart[];
+  /** Aura rows: the aura type the line logs. */
+  auraKind: AuraType | null;
   stacks: number | null;
   /** Interrupts and dispels: the spell used; `spellId` is the one it stopped. */
   used: number | null;
@@ -943,6 +948,7 @@ export interface EventsPage {
 
 export type TimelineItemKind =
   | 'instant'
+  | 'channel'
   | 'castTime'
   | 'empowered'
   | 'interrupted'
@@ -973,6 +979,15 @@ export interface LogLine {
   reason?: string;
 }
 
+/** A channel as logged: the caster's aura of the cast's spell, applied or refreshed with the success. */
+export interface Channel {
+  /** The aura's removal, or its refresh by a recast; absent when the log has neither: it is drawn to its last tick, or stays at its press without one. */
+  endMs?: number;
+  /** Absent for a press of a channel spell whose own channel logged no hit: no ticks, no tail. */
+  lastTickMs?: number;
+  ticks: number[];
+}
+
 /** A mark of the timeline; absent parts are left out of the payload. */
 export interface TimelineItem {
   kind: TimelineItemKind;
@@ -991,6 +1006,9 @@ export interface TimelineItem {
   aliveMs?: number;
   castStartMs?: number;
   amount?: ItemAmount;
+  /** Where the drawing ends: the bar's end, or a channel's (an unclosed channel ends at its last tick); the start for a point. */
+  spanEndMs: number;
+  channel?: Channel;
   log?: LogLine[];
   /** Log lines not listed: beyond the first twelve, or every line of a wide window. */
   logMore?: number;
@@ -1014,6 +1032,8 @@ export interface TimelineLane {
   items: TimelineItem[];
   power: PowerLine[];
   dead: [number, number][];
+  /** The lane's unit is one of the encounter's boss units. */
+  boss: boolean;
 }
 
 export interface Timeline {
@@ -1028,4 +1048,6 @@ export interface Timeline {
   roster: PlayerRef[];
   spells: Record<string, { name: string }>;
   linesListed: boolean;
+  /** The widest window whose marks list their log lines. */
+  listedWindowMs: number;
 }

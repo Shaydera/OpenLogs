@@ -68,7 +68,14 @@ export function TipCard({ id, tip, tipText, onClose }: { id: string; tip: Tip; t
         <dt className="cap">{t('tl.tip.when')}</dt>
         <dd className="num">{tipText.when}</dd>
         <dt className="cap">{t('tl.tip.long')}</dt>
-        <dd>{tipText.howLong}</dd>
+        <dd>
+          {tipText.howLong}
+          {tipText.spans.map((line) => (
+            <span key={line} className="tl-tip-line">
+              {line}
+            </span>
+          ))}
+        </dd>
         {tipText.howMuch && (
           <>
             <dt className="cap">{t('tl.tip.much')}</dt>

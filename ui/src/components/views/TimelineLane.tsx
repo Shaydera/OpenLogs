@@ -1,5 +1,5 @@
-import { type MouseEvent as ReactMouseEvent, type ReactNode, memo, useMemo, useState } from 'react';
-import type { TimelineItem, TimelineLane } from '../../api/types';
+import { type CSSProperties, Fragment, type MouseEvent as ReactMouseEvent, type ReactNode, memo, useMemo, useState } from 'react';
+import type { Channel, TimelineItem, TimelineLane } from '../../api/types';
 import { spellIcon } from '../../icons';
 import { formatEventTime, formatInteger, formatScaled } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
@@ -9,6 +9,7 @@ import { GameIcon, MonogramTile } from '../GameIcon';
 import { rowValue, valueLabel } from '../filters/labels';
 import { PlayerIcon } from '../reports/PlayerName';
 import type { rosterIndex } from '../reports/reportData';
+import { PowerLane } from './PowerLane';
 import type { ViewNames } from './viewNames';
 import { percentIn } from './zoomGeometry';
 
@@ -34,7 +35,7 @@ interface MarksProps {
   names: ViewNames;
   widthPx: number;
   context: boolean;
-  /** Sub-tracks the lane shows; bars sit on their own. */
+  /** Sub-tracks the lane shows; aura bars sit on their own. */
   tracks?: number;
   /** Damage Taken's debuff names in order of appearance; a debuff takes the colour of its name's place. */
   legend: string[] | null;
@@ -48,8 +49,8 @@ const markIcon = (item: TimelineItem) => (item.kind === 'interrupt' || item.kind
 
 function isVisible(item: TimelineItem, shown: TimeRange): boolean {
   const from = percentIn(item.startMs, shown);
-  const to = percentIn(item.endMs ?? item.startMs, shown);
-  if (isBar(item)) return to >= 0 && from <= 100;
+  const to = percentIn(item.spanEndMs, shown);
+  if (isBar(item) || item.channel !== undefined) return to >= 0 && from <= 100;
   if (item.kind === 'death') return to >= 0 && to <= 100;
   return from >= 0 && from <= 100;
 }
@@ -62,7 +63,10 @@ function barColour(item: TimelineItem, names: ViewNames, legend: string[] | null
   return names.colour(item.source);
 }
 
+const castPaint = (colour: string | undefined) => (colour ? ({ '--cast': colour } as CSSProperties) : undefined);
+
 function Marks({ items, shown, names, widthPx, context, tracks = 1, legend, onEnter, onLeave, onPin }: MarksProps) {
+  const stacked = tracks > 1;
   let lastPx = -Infinity;
   let level = 0;
   return items.map((item, i) => {
@@ -87,26 +91,44 @@ function Marks({ items, shown, names, widthPx, context, tracks = 1, legend, onEn
     }
     const spell = names.spell(item.spellId);
     const label = t('tl.markLabel', { spell, time: formatEventTime(item.startMs), name: names.unit(item.source) || t('scope.environment') });
-    if (isBar(item)) {
+    const { channel } = item;
+    if (isBar(item) || channel) {
       const left = Math.max(0, from);
-      const to = Math.min(100, percentIn(item.endMs ?? item.startMs, shown));
-      const stacked = tracks > 1;
+      const to = Math.min(100, percentIn(item.spanEndMs, shown));
       const place = stacked ? { top: 4 + (item.track ?? 0) * TRACK_PX, height: TRACK_PX - 2 } : {};
-      return (
+      const icon = <GameIcon icon={spellIcon(item.spellId)} size={stacked ? 12 : 16} name={spell} />;
+      const paint = castPaint(context ? undefined : names.colour(item.source));
+      const bar = (
         <button
           key={key}
           type="button"
           className={`tl-bar ${item.kind}${context ? ' boss' : ''}${stacked ? ' thin' : ''}`}
-          style={{ left: `${left}%`, width: `${to - left}%`, background: context ? undefined : barColour(item, names, legend), ...place }}
+          style={{ left: `${left}%`, width: `${to - left}%`, background: channel || context ? undefined : barColour(item, names, legend), ...paint, ...place }}
           aria-label={label}
           {...handlers}
         >
-          <GameIcon icon={spellIcon(item.spellId)} size={stacked ? 12 : 16} name={spell} />
-          <span className="tl-bar-name">{spell}</span>
+          {channel ? (
+            <ChannelFill channel={channel} left={left} to={to} shown={shown}>
+              {icon}
+            </ChannelFill>
+          ) : (
+            icon
+          )}
         </button>
       );
+      if (!channel) return bar;
+      return (
+        <Fragment key={key}>
+          {bar}
+          {channel.ticks.map((tick) => (
+            <span key={tick} className="tl-notch" data-testid="channel-tick" style={{ left: `${percentIn(tick, shown)}%` }} />
+          ))}
+        </Fragment>
+      );
     }
-    if (item.kind === 'rejected') return <button key={key} type="button" className="tl-dot" style={{ left: `${from}%` }} aria-label={label} {...handlers} />;
+    if (item.kind === 'rejected') {
+      return <button key={key} type="button" className="tl-dot" style={{ left: `${from}%` }} aria-label={label} {...handlers} />;
+    }
     const px = (from / 100) * widthPx;
     level = px - lastPx < ICON_PX ? Math.min(STACK_DEPTH, level + 1) : 0;
     lastPx = px;
@@ -120,22 +142,31 @@ function Marks({ items, shown, names, widthPx, context, tracks = 1, legend, onEn
   });
 }
 
+/** The solid part to the last tick, which holds the icon, and the tail held after it. */
+function ChannelFill({ channel, left, to, shown, children }: { channel: Channel; left: number; to: number; shown: TimeRange; children: ReactNode }) {
+  const width = to - left;
+  const lastTick = channel.lastTickMs;
+  const solid = width > 0 && lastTick !== undefined ? Math.min(100, Math.max(0, ((percentIn(lastTick, shown) - left) / width) * 100)) : 100;
+  return (
+    <>
+      <span className="tl-fill" style={{ width: `${solid}%` }}>
+        {children}
+      </span>
+      {channel.endMs !== undefined && lastTick !== undefined && channel.endMs > lastTick && <span className="tl-tail" data-testid="channel-tail" style={{ left: `${solid}%` }} />}
+    </>
+  );
+}
+
 interface LabelProps {
   tab: FilterTab;
   lane: TimelineLane;
+  label?: string;
   names: ViewNames;
   roster: ReturnType<typeof rosterIndex>;
-  hidden: number;
-  open: boolean;
-  onToggle: () => void;
+  more: ReactNode;
 }
 
-function LaneLabel({ tab, lane, names, roster, hidden, open, onToggle }: LabelProps) {
-  const more = hidden > 0 && (
-    <button type="button" className="tl-more" aria-expanded={open} aria-label={t(open ? 'tl.fewer' : 'tl.more', { count: hidden })} onClick={onToggle}>
-      {open ? '−' : `+${hidden}`}
-    </button>
-  );
+function LaneLabel({ tab, lane, label: shownLabel, names, roster, more }: LabelProps) {
   const count = COUNTED.includes(tab) ? formatInteger(lane.total) : AMOUNTS.includes(tab) ? formatScaled(lane.total) : '';
   if (lane.key === null) {
     return (
@@ -157,7 +188,7 @@ function LaneLabel({ tab, lane, names, roster, hidden, open, onToggle }: LabelPr
     <span className="tl-label" title={label}>
       {icon}
       <span className="nm" style={{ color: player ? names.colour(player.actorId) : undefined }}>
-        {label}
+        {shownLabel ?? label}
       </span>
       {more}
       <span className="num tl-count">{count}</span>
@@ -165,33 +196,56 @@ function LaneLabel({ tab, lane, names, roster, hidden, open, onToggle }: LabelPr
   );
 }
 
-type RowProps = Omit<MarksProps, 'items' | 'context' | 'tracks'>;
+export type RowProps = Omit<MarksProps, 'items' | 'context' | 'tracks'>;
+
+/** The first sub-tracks of a lane and the items on them, with a toggle that opens the rest. */
+function useShownTracks(items: TimelineItem[], tracks: number) {
+  const [open, setOpen] = useState(false);
+  const shownItems = useMemo(() => (open ? items : items.filter((item) => (item.track ?? 0) < SHOWN_TRACKS)), [open, items]);
+  const hidden = tracks - SHOWN_TRACKS;
+  const more = hidden > 0 && (
+    <button type="button" className="tl-more" aria-expanded={open} aria-label={t(open ? 'tl.fewer' : 'tl.more', { count: hidden })} onClick={() => setOpen((current) => !current)}>
+      {open ? '−' : `+${hidden}`}
+    </button>
+  );
+  return { items: shownItems, tracks: open ? tracks : Math.min(tracks, SHOWN_TRACKS), more };
+}
+
+const trackHeight = (tracks: number) => (tracks > 1 ? { height: 8 + tracks * TRACK_PX } : undefined);
+
+export const laneKey = (lane: TimelineLane) => (lane.key === null ? 'one' : JSON.stringify(lane.key));
 
 /** One lane of the lane dimension; it draws again only when its marks, the window or the names change. */
-export const LaneRow = memo(function LaneRow(props: RowProps & { tab: FilterTab; lane: TimelineLane; roster: ReturnType<typeof rosterIndex> }) {
-  const { tab, lane, roster, ...marks } = props;
-  const [open, setOpen] = useState(false);
-  const tracks = open ? lane.tracks : Math.min(lane.tracks, SHOWN_TRACKS);
-  const items = useMemo(() => (open ? lane.items : lane.items.filter((item) => (item.track ?? 0) < SHOWN_TRACKS)), [open, lane.items]);
+export const LaneRow = memo(function LaneRow(props: RowProps & { tab: FilterTab; lane: TimelineLane; label?: string; roster: ReturnType<typeof rosterIndex> }) {
+  const { tab, lane, label, roster, ...marks } = props;
+  const { items, tracks, more } = useShownTracks(lane.items, lane.tracks);
+  const unit = lane.key?.kind === 'unit' ? lane.key.unit : null;
   return (
     <div className="tl-lane">
-      <LaneLabel tab={tab} lane={lane} names={marks.names} roster={roster} hidden={lane.tracks - SHOWN_TRACKS} open={open} onToggle={() => setOpen((current) => !current)} />
-      <div className="tl-track" style={tracks > 1 ? { height: 8 + tracks * TRACK_PX } : undefined}>
-        <Marks items={items} context={false} tracks={tracks} {...marks} />
-      </div>
+      <LaneLabel tab={tab} lane={lane} label={label} names={marks.names} roster={roster} more={more} />
+      {tab === 'resources' ? (
+        <div className="tl-track tl-track-power">
+          <PowerLane lane={lane} shown={marks.shown} player={unit?.kind === 'player' ? roster.get(unit.actorId) : undefined} />
+        </div>
+      ) : (
+        <div className="tl-track" style={trackHeight(tracks)}>
+          <Marks items={items} context={false} tracks={tracks} {...marks} />
+        </div>
+      )}
     </div>
   );
 });
 
 /** The encounter's casts above the lanes. */
 export const ContextRow = memo(function ContextRow(props: RowProps & { items: TimelineItem[] }) {
+  const { items, ...marks } = props;
   return (
     <div className="tl-lane tl-context">
       <span className="tl-label">
         <span className="cap">{t('tl.context')}</span>
       </span>
       <div className="tl-track">
-        <Marks context {...props} />
+        <Marks items={items} context {...marks} />
       </div>
     </div>
   );

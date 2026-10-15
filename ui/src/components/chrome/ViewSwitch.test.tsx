@@ -20,18 +20,25 @@ describe('ViewSwitch', () => {
     expect(setReportView).toHaveBeenCalledWith('timeline');
   });
 
-  it('names why a view is unavailable and shows the table there', () => {
+  it('tells keyboard and screen reader users why a view is unavailable and shows the table there', async () => {
     useApp.setState({ tab: 'resources', reportView: 'events' });
     render(<ViewSwitch />);
-    expect(screen.getByRole('button', { name: 'Events' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Events' })).toHaveAttribute('title', 'Resources has no events view');
+    const events = screen.getByRole('button', { name: 'Events' });
+    expect(events).toHaveAttribute('aria-disabled', 'true');
+    expect(events).toHaveAccessibleDescription('Resources has no events view');
+    await userEvent.tab();
+    await userEvent.tab();
+    await userEvent.tab();
+    expect(events).toHaveFocus();
+    await userEvent.click(events);
+    expect(setReportView).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Table' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('keeps detail pages on their own view', () => {
     useApp.setState({ reportView: 'timeline', details: [{ kind: 'player', player: 4 }] });
     render(<ViewSwitch />);
-    expect(screen.getByRole('button', { name: 'Timeline' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Timeline' })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('button', { name: 'Table' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

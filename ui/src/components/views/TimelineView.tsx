@@ -11,15 +11,17 @@ import { GroupMenu } from '../filters/GroupMenu';
 import { NoMatch } from '../filters/NoMatch';
 import { rosterIndex } from '../reports/reportData';
 import { itemTip } from './itemTip';
-import { ContextRow, DEBUFF_COLOURS, LaneRow, type MarkHandler } from './TimelineLane';
+import { ResourceLanes } from './ResourceLanes';
+import { ContextRow, DEBUFF_COLOURS, LaneRow, type MarkHandler, laneKey } from './TimelineLane';
 import { Ruler } from './TimelineRuler';
 import { TIP_PX, type Tip, TipCard } from './TimelineTip';
-import { TAB_TITLE, ViewHead } from './ViewHead';
+import { useTimelineGestures } from './useTimelineGestures';
+import { TAB_TITLE, ViewFailure, ViewHead } from './ViewHead';
 import { type ViewNames, viewNames } from './viewNames';
 import { panBy, percentIn, presetWindow, presets, rangeWindow, shownWindow, windowSpan, zoomBy } from './zoomGeometry';
 
 const TOGGLES: Partial<Record<FilterTab, (keyof ViewToggles)[]>> = { casts: ['rejected'], taken: ['hits'] };
-/** The window settles this long before the timeline asks for what it needs. */
+/** While the window moves, the timeline asks for what it needs at most this often, and announces it once it settled this long. */
 const REFRESH_MS = 120;
 
 /** The width of the element set with the returned ref callback. */
@@ -56,6 +58,19 @@ export function TimelineView({ tab }: { tab: FilterTab }) {
   const [tip, setTip] = useState<Tip | null>(null);
   const settled = useRef(windowLabel(shown));
   const [announced, setAnnounced] = useState('');
+  const lastRefresh = useRef(-Infinity);
+  const [loadingNoted, setLoadingNoted] = useState(viewLoading);
+
+  useEffect(() => {
+    const timer = setTimeout(
+      () => {
+        lastRefresh.current = Date.now();
+        void refreshTimeline();
+      },
+      Math.max(0, lastRefresh.current + REFRESH_MS - Date.now()),
+    );
+    return () => clearTimeout(timer);
+  }, [shown, refreshTimeline]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -64,13 +79,22 @@ export function TimelineView({ tab }: { tab: FilterTab }) {
         settled.current = label;
         setAnnounced(label);
       }
-      void refreshTimeline();
     }, REFRESH_MS);
     return () => clearTimeout(timer);
-  }, [shown, refreshTimeline]);
+  }, [shown]);
+
+  // While the window keeps moving the loading note stays put, so a gesture's many requests are announced once.
+  useEffect(() => {
+    if (viewLoading) {
+      setLoadingNoted(true);
+      return;
+    }
+    const timer = setTimeout(() => setLoadingNoted(false), REFRESH_MS);
+    return () => clearTimeout(timer);
+  }, [viewLoading, shown]);
 
   const title = t('tl.title', { tab: t(TAB_TITLE[tab]) });
-  const legend = tab === 'taken' && timeline && timeline.legend.length > 0 && <Legend timeline={timeline} />;
+  const legend = tab === 'taken' && timeline && timeline.legend.length > 0 && <Legend timeline={timeline} shown={shown} />;
   const lanesMenu = (
     <GroupMenu tab={tab} caption={t('lanes.caption')} value={timeline?.axis ?? lanesOf(lanes, tab)} onPick={(dimension) => void setLanes(dimension)} />
   );
@@ -112,13 +136,9 @@ export function TimelineView({ tab }: { tab: FilterTab }) {
         <span className="zbar-hint">{t('tl.hint')}</span>
       </div>
       <p className="sr-only" role="status">
-        {viewLoading ? t('report.loading') : ''}
+        {viewLoading || loadingNoted ? t('report.loading') : ''}
       </p>
-      {viewError !== null && (
-        <p className="muted pad" role="alert">
-          {t('report.failed', { reason: viewError })}
-        </p>
-      )}
+      {viewError !== null && <ViewFailure reason={viewError} retry />}
       {timeline === null ? (
         viewError === null && <p className="muted pad">{t(viewLoading ? 'report.loading' : 'tl.notLoaded')}</p>
       ) : timeline.lanes.length === 0 ? (
@@ -151,12 +171,23 @@ function cardPoint(body: HTMLElement | null, event: ReactMouseEvent<HTMLElement>
 const debuffNames = (timeline: Timeline, names: ViewNames) => [...new Set(timeline.legend.map((spellId) => names.spell(spellId)))];
 
 /** The debuffs Damage Taken draws, in order of appearance, in their colours. */
-function Legend({ timeline }: { timeline: Timeline }) {
+function Legend({ timeline, shown }: { timeline: Timeline; shown: TimeRange }) {
   const names = useMemo(() => viewNames(timeline), [timeline]);
-  const drawn = useMemo(() => new Set(timeline.lanes.flatMap((lane) => lane.items).filter((item) => item.kind === 'aura').map((item) => names.spell(item.spellId))), [timeline, names]);
+  const drawn = useMemo(
+    () =>
+      new Set(
+        timeline.lanes
+          .flatMap((lane) => lane.items)
+          .filter((item) => item.kind === 'aura' && item.startMs < shown.endMs && item.spanEndMs > shown.startMs)
+          .map((item) => names.spell(item.spellId)),
+      ),
+    [timeline, names, shown],
+  );
+  const listed = debuffNames(timeline, names);
+  if (!listed.some((name) => drawn.has(name))) return null;
   return (
     <ul className="tl-legend" aria-label={t('tl.legend')}>
-      {debuffNames(timeline, names).map((name, place) => {
+      {listed.map((name, place) => {
         if (!drawn.has(name)) return null;
         const spellId = timeline.legend.find((id) => names.spell(id) === name) ?? 0;
         return (
@@ -186,6 +217,7 @@ function TimelineBody(props: {
   const body = useRef<HTMLDivElement>(null);
   const tipId = useId();
   const [setTrack, trackPx] = useWidth(1000);
+  const grabbing = useTimelineGestures(body, whole);
 
   const onEnter = useCallback<MarkHandler>(
     (item, context, event) => {
@@ -224,7 +256,7 @@ function TimelineBody(props: {
   const legend = useMemo(() => (tab === 'taken' ? debuffNames(timeline, names) : null), [tab, timeline, names]);
   const row = { shown, names, widthPx: trackPx, legend, onEnter, onLeave, onPin };
   return (
-    <div className="tl-body" ref={body} onKeyDown={onKeyDown}>
+    <div className={grabbing ? 'tl-body grabbing' : 'tl-body'} ref={body} onKeyDown={onKeyDown}>
       <div className={busy ? 'dim' : undefined} aria-busy={busy}>
         <div className="tl-lane tl-ruler-row">
           <span className="tl-label">
@@ -233,9 +265,11 @@ function TimelineBody(props: {
           <Ruler shown={shown} whole={whole} widthPx={trackPx} trackRef={setTrack} />
         </div>
         {timeline.context.length > 0 && <ContextRow items={timeline.context} {...row} />}
-        {timeline.lanes.map((lane) => (
-          <LaneRow key={lane.key === null ? 'one' : JSON.stringify(lane.key)} tab={tab} lane={lane} roster={roster} {...row} />
-        ))}
+        {tab === 'resources' ? (
+          <ResourceLanes lanes={timeline.lanes} roster={roster} row={row} />
+        ) : (
+          timeline.lanes.map((lane) => <LaneRow key={laneKey(lane)} tab={tab} lane={lane} roster={roster} {...row} />)
+        )}
       </div>
       {tip && <TipCard id={tipId} tip={tip} tipText={itemTip(tip.item, names, timeline.linesListed, tip.context)} onClose={closeCard} />}
     </div>

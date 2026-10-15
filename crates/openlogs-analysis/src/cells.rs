@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use openlogs_gamedata::Curated;
 
+use crate::actors::ActorId;
 use crate::aura_report::book_auras;
 use crate::breakdown::Dimension;
 use crate::casts::{book_casts, presses};
@@ -99,6 +100,26 @@ pub struct Cell {
 }
 
 impl Cell {
+    /// A cell with no amounts: what the scope and the lane keys read of a cell.
+    pub(crate) fn scope_probe(
+        fight: &Fight,
+        source: ActorId,
+        spell: SpellId,
+        kind: CellKind,
+        target: ActorId,
+    ) -> Self {
+        Self {
+            source: unit_of(fight, source),
+            spell,
+            kind,
+            target: unit_of(fight, target),
+            amount: 0,
+            absorbed: 0,
+            hits: 0,
+            crits: 0,
+        }
+    }
+
     pub(crate) fn source(&self) -> Option<&UnitRef> {
         (self.kind != CellKind::Unattributed).then_some(&self.source)
     }

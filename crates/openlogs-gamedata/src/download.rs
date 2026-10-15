@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 use crate::boss_portraits::{BossPortraitError, BossPortraitTable};
+use crate::channel_spells::{ChannelSpellError, ChannelSpells};
 use crate::dungeons::{DungeonTable, DungeonTableError};
 use crate::fetch::{Fetch, FetchError};
 use crate::spell_icons::{SpellIconError, SpellIconTable};
@@ -17,19 +18,30 @@ pub const WAGO_JOURNAL_ENCOUNTER_CREATURE_URL: &str =
 pub enum DownloadError {
     #[error("download failed: {0}")]
     Fetch(#[from] FetchError),
-    #[error("downloaded spell data is invalid: {0}")]
+    #[error("downloaded spell icon data is invalid: {0}")]
     SpellIcons(#[from] SpellIconError),
+    #[error("downloaded channel spell data is invalid: {0}")]
+    ChannelSpells(#[from] ChannelSpellError),
     #[error("downloaded dungeon data is invalid: {0}")]
     Dungeons(#[from] DungeonTableError),
     #[error("downloaded boss portrait data is invalid: {0}")]
     BossPortraits(#[from] BossPortraitError),
 }
 
-/// Builds the spell icon table from the wago.tools exports.
-pub fn download_spell_icons<F: Fetch>(fetch: &F) -> Result<SpellIconTable, DownloadError> {
+/// The tables read from the spells' `SpellMisc` rows.
+pub struct SpellTables {
+    pub icons: SpellIconTable,
+    pub channels: ChannelSpells,
+}
+
+/// Builds the spell icon and channel tables from the wago.tools exports.
+pub fn download_spell_tables<F: Fetch>(fetch: &F) -> Result<SpellTables, DownloadError> {
     let spell_misc = fetch.get(WAGO_SPELL_MISC_URL)?;
     let manifest = fetch.get(WAGO_MANIFEST_URL)?;
-    Ok(SpellIconTable::from_csv(&spell_misc, &manifest)?)
+    Ok(SpellTables {
+        icons: SpellIconTable::from_csv(&spell_misc, &manifest)?,
+        channels: ChannelSpells::from_csv(&spell_misc)?,
+    })
 }
 
 /// Builds the Mythic+ dungeon table from the wago.tools exports.

@@ -1,5 +1,5 @@
 use openlogs_analysis::{Attribution, Fight, ReportFilter};
-use openlogs_gamedata::Curated;
+use openlogs_gamedata::{ChannelSpells, Curated};
 
 use crate::auras_dto::{AuraKindDto, AurasReportDto, auras_report_dto};
 use crate::casts_dto::{CastsReportDto, casts_report_dto};
@@ -286,6 +286,7 @@ pub fn events(
 pub fn timeline(
     fight: &Fight,
     curated: &Curated,
+    channels: &ChannelSpells,
     filter: FilterDto,
     scope: ScopeDto,
     metric: ScopeMetricDto,
@@ -296,6 +297,7 @@ pub fn timeline(
     let timeline = openlogs_analysis::timeline(
         fight,
         curated,
+        channels,
         &filter.to_filter(),
         &scope.to_scope(),
         metric.to_metric(),
@@ -303,5 +305,10 @@ pub fn timeline(
         &options.to_options(),
         window.to_window(),
     );
-    timeline_dto(fight, &timeline)
+    let bosses: &[_] = if metric == ScopeMetricDto::Resources {
+        &timeline.bosses
+    } else {
+        &[]
+    };
+    timeline_dto(fight, &timeline, bosses)
 }

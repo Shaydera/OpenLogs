@@ -1,12 +1,12 @@
 mod support;
 
 use openlogs_analysis::{
-    AbilityRef, ActorId, AmountRule, Attribution, AuraAction, AuraType, Damage, DamageVia,
-    Dimension, EventKind, Fight, ItemKind, ReportFilter, RowKey, Scope, ScopeMetric, Side,
-    Timeline, UnitRef, ViewOptions, Window, breakdown, timeline,
+    AbilityRef, ActorId, AmountRule, Attribution, AuraAction, AuraType, Channel, Damage, DamageVia,
+    Dimension, EventKind, Fight, Heal, ItemKind, MissType, Missed, ReportFilter, RowKey, Scope,
+    ScopeMetric, Side, Timeline, TimelineItem, UnitRef, ViewOptions, Window, breakdown, timeline,
 };
-use openlogs_gamedata::Curated;
-use support::{FightBuilder, HOSTILE_FLAGS, damage};
+use openlogs_gamedata::{ChannelSpells, Curated};
+use support::{FightBuilder, HOSTILE_FLAGS, damage, heal};
 
 const EBON_MIGHT: u32 = 395152;
 const PYROBLAST: u32 = 11366;
@@ -100,6 +100,7 @@ fn view(
     timeline(
         &p.fight,
         &Curated::bundled(),
+        &ChannelSpells::default(),
         &ReportFilter::whole(attribution),
         scope,
         metric,
@@ -361,6 +362,7 @@ fn plain(
     timeline(
         fight,
         &Curated::bundled(),
+        &ChannelSpells::default(),
         &ReportFilter::whole(Attribution::Augmented),
         scope,
         metric,
@@ -698,6 +700,7 @@ fn a_cast_keeps_its_hits_despite_rejected_inputs_interrupted_recasts_and_filters
         let view = timeline(
             &fight,
             &Curated::bundled(),
+            &ChannelSpells::default(),
             &ReportFilter::whole(Attribution::Augmented),
             scope,
             ScopeMetric::Casts,
@@ -738,6 +741,7 @@ fn a_boss_cast_amount_does_not_depend_on_the_window() {
         let view = timeline(
             &fight,
             &Curated::bundled(),
+            &ChannelSpells::default(),
             &ReportFilter::whole(Attribution::Augmented),
             &Scope::default(),
             ScopeMetric::Casts,
@@ -836,6 +840,7 @@ fn enemy_damage_taken_names_the_aug_support_inside_a_hit() {
         let view = timeline(
             &p.fight,
             &Curated::bundled(),
+            &ChannelSpells::default(),
             &ReportFilter::whole(attribution),
             &enemies,
             ScopeMetric::DamageTaken,
@@ -870,6 +875,7 @@ fn a_boss_cast_starting_at_a_phase_end_is_not_drawn_in_that_phase() {
     let view = timeline(
         &p.fight,
         &Curated::bundled(),
+        &ChannelSpells::default(),
         &phase,
         &Scope::default(),
         ScopeMetric::Casts,
@@ -979,4 +985,524 @@ fn damage_taken_legend_keeps_its_order_whatever_the_window() {
     };
     assert_eq!(legend((0, 60_000)), [CAUSTIC, later]);
     assert_eq!(legend((8_000, 25_000)), [CAUSTIC, later]);
+}
+
+fn cast_mark(view: &Timeline, spell: u32, start_ms: i32) -> Option<&TimelineItem> {
+    view.lanes
+        .iter()
+        .flat_map(|l| l.items.iter())
+        .chain(view.context.iter())
+        .find(|i| i.spell == spell && i.start_ms == start_ms)
+}
+
+fn casts_in(fight: &Fight, window: (i32, i32)) -> Timeline {
+    plain(
+        fight,
+        &Scope::default(),
+        ScopeMetric::Casts,
+        Dimension::Source,
+        ViewOptions::default(),
+        window,
+    )
+}
+
+fn periodic_hit(amount: u64) -> EventKind {
+    EventKind::Damage(damage(DamageVia::Periodic, amount, 0))
+}
+
+#[test]
+fn a_channel_runs_to_its_aura_removal_with_its_ticks() {
+    let mut b = FightBuilder::new(60_000);
+    let priest = b.player("Player-6", "Umbrasp-Frostwolf-EU", 258);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let flay = b.spell(15407, "Mind Flay");
+    let buff = |action| aura(action, AuraType::Buff, None);
+    b.push(3_775, priest, priest, flay, buff(AuraAction::Applied));
+    b.push(3_775, priest, boss, flay, EventKind::CastSuccess);
+    b.push(4_389, priest, boss, flay, periodic_hit(300));
+    let apparition = b.spell(341263, "Shadowy Apparition");
+    b.push(4_700, priest, boss, apparition, EventKind::CastSuccess);
+    b.push(4_975, priest, boss, flay, periodic_hit(300));
+    b.push(5_099, priest, priest, flay, buff(AuraAction::Removed));
+    let blast = b.spell(8092, "Mind Blast");
+    b.push(5_099, priest, boss, blast, EventKind::CastSuccess);
+    let fight = b.build();
+    let view = casts_in(&fight, (0, 60_000));
+    let cast = cast_mark(&view, flay, 3_775).unwrap();
+    assert_eq!(
+        cast.kind,
+        ItemKind::Channel,
+        "a proc's cast is no press, and a cast in the removal's millisecond clipped it"
+    );
+    assert_eq!(
+        cast.channel,
+        Some(Channel {
+            end_ms: Some(5_099),
+            last_tick_ms: Some(4_975),
+            ticks: vec![4_389, 4_975],
+        })
+    );
+    assert_eq!(
+        cast.log.iter().map(|l| (l.t, l.event)).collect::<Vec<_>>(),
+        [
+            (3_775, "SPELL_AURA_APPLIED"),
+            (3_775, "SPELL_CAST_SUCCESS"),
+            (5_099, "SPELL_AURA_REMOVED"),
+        ],
+        "the card names the lines the channel was read from"
+    );
+}
+
+#[test]
+fn a_same_id_self_buff_without_hits_is_no_channel() {
+    let mut b = FightBuilder::new(60_000);
+    let hunter = b.player("Player-7", "Shotz-Frostwolf-EU", 254);
+    let trueshot = b.spell(288613, "Trueshot");
+    let buff = |action| aura(action, AuraType::Buff, None);
+    b.push(1_000, hunter, hunter, trueshot, buff(AuraAction::Applied));
+    b.push(1_000, hunter, 0, trueshot, EventKind::CastSuccess);
+    b.push(16_000, hunter, hunter, trueshot, buff(AuraAction::Removed));
+    let fight = b.build();
+    let view = casts_in(&fight, (0, 60_000));
+    let cast = cast_mark(&view, trueshot, 1_000).unwrap();
+    assert_eq!((cast.kind, &cast.channel), (ItemKind::Instant, &None));
+}
+
+#[test]
+fn a_recast_channel_cuts_the_first_where_it_refreshes_the_aura() {
+    let mut b = FightBuilder::new(60_000);
+    let priest = b.player("Player-6", "Umbrasp-Frostwolf-EU", 258);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let flay = b.spell(15407, "Mind Flay");
+    let buff = |action| aura(action, AuraType::Buff, None);
+    b.push(49_712, priest, priest, flay, buff(AuraAction::Applied));
+    b.push(49_712, priest, boss, flay, EventKind::CastSuccess);
+    b.push(50_300, priest, boss, flay, periodic_hit(300));
+    b.push(51_322, priest, priest, flay, buff(AuraAction::Refresh));
+    b.push(51_322, priest, boss, flay, EventKind::CastSuccess);
+    b.push(51_900, priest, boss, flay, periodic_hit(300));
+    b.push(52_896, priest, priest, flay, buff(AuraAction::Removed));
+    let fight = b.build();
+    let view = casts_in(&fight, (0, 60_000));
+    let channel = |start| {
+        let cast = cast_mark(&view, flay, start).unwrap();
+        (
+            cast.kind,
+            cast.channel.as_ref().map(|c| (c.end_ms, c.ticks.clone())),
+        )
+    };
+    assert_eq!(
+        channel(49_712),
+        (ItemKind::Channel, Some((Some(51_322), vec![50_300])))
+    );
+    assert_eq!(
+        channel(51_322),
+        (ItemKind::Channel, Some((Some(52_896), vec![51_900])))
+    );
+}
+
+#[test]
+fn a_press_logged_just_before_the_removal_clipped_the_channel() {
+    let mut b = FightBuilder::new(60_000);
+    let monk = b.player("Player-11", "Kicks-Frostwolf-EU", 269);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let punch = b.spell(152175, "Whirling Dragon Punch");
+    let kick = b.spell(107428, "Rising Sun Kick");
+    let buff = |action| aura(action, AuraType::Buff, None);
+    b.push(18_303, monk, monk, punch, buff(AuraAction::Applied));
+    b.push(18_303, monk, boss, punch, EventKind::CastSuccess);
+    b.push(18_700, monk, boss, punch, spell_hit(100));
+    b.push(19_286, monk, boss, kick, EventKind::CastSuccess);
+    b.push(19_300, monk, monk, punch, buff(AuraAction::Removed));
+    let fight = b.build();
+    let view = casts_in(&fight, (0, 60_000));
+    assert_eq!(
+        cast_mark(&view, punch, 18_303).unwrap().kind,
+        ItemKind::Channel
+    );
+}
+
+#[test]
+fn a_self_cast_hot_is_no_channel() {
+    let mut b = FightBuilder::new(60_000);
+    let druid = b.player("Player-9", "Leafy-Frostwolf-EU", 105);
+    let rejuvenation = b.spell(774, "Rejuvenation");
+    let buff = |action| aura(action, AuraType::Buff, None);
+    let tick = EventKind::Heal(Heal {
+        periodic: true,
+        ..heal(400, 0)
+    });
+    b.push(1_000, druid, druid, rejuvenation, buff(AuraAction::Applied));
+    b.push(1_000, druid, druid, rejuvenation, EventKind::CastSuccess);
+    b.push(4_000, druid, druid, rejuvenation, tick);
+    b.push(7_000, druid, druid, rejuvenation, tick);
+    b.push(
+        13_000,
+        druid,
+        druid,
+        rejuvenation,
+        buff(AuraAction::Removed),
+    );
+    let fight = b.build();
+    let view = casts_in(&fight, (0, 60_000));
+    let cast = cast_mark(&view, rejuvenation, 1_000).unwrap();
+    assert_eq!((cast.kind, &cast.channel), (ItemKind::Instant, &None));
+}
+
+#[test]
+fn a_self_buff_its_caster_keeps_casting_through_is_no_channel() {
+    let mut b = FightBuilder::new(60_000);
+    let demon_hunter = b.player("Player-10", "Horns-Frostwolf-EU", 577);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let immolation = b.spell(258920, "Immolation Aura");
+    let chaos = b.spell(162794, "Chaos Strike");
+    let buff = |action| aura(action, AuraType::Buff, None);
+    b.push(
+        1_000,
+        demon_hunter,
+        demon_hunter,
+        immolation,
+        buff(AuraAction::Applied),
+    );
+    b.push(1_000, demon_hunter, 0, immolation, EventKind::CastSuccess);
+    b.push(2_000, demon_hunter, boss, immolation, spell_hit(100));
+    b.push(2_500, demon_hunter, boss, chaos, EventKind::CastSuccess);
+    b.push(3_000, demon_hunter, boss, immolation, spell_hit(100));
+    b.push(
+        7_000,
+        demon_hunter,
+        demon_hunter,
+        immolation,
+        buff(AuraAction::Removed),
+    );
+    let fight = b.build();
+    let view = casts_in(&fight, (0, 60_000));
+    let cast = cast_mark(&view, immolation, 1_000).unwrap();
+    assert_eq!((cast.kind, &cast.channel), (ItemKind::Instant, &None));
+}
+
+#[test]
+fn an_instant_with_several_hits_is_drawn_at_its_press() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-8", "Fooneses-Frostwolf-EU", 62);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let cast = b.spell(5143, "Arcane Missiles");
+    let missile = b.spell(7268, "Arcane Missiles");
+    b.push(640, mage, boss, cast, EventKind::CastSuccess);
+    for t in [1_560, 1_784, 2_026, 2_246, 2_466, 2_734, 2_949, 3_184] {
+        b.push(t, mage, boss, missile, spell_hit(500));
+    }
+    let fight = b.build();
+    let view = casts_in(&fight, (0, 60_000));
+    let press = cast_mark(&view, cast, 640).unwrap();
+    assert_eq!(
+        (press.kind, &press.channel, press.span_end_ms),
+        (ItemKind::Instant, &None, 640)
+    );
+    assert!(
+        cast_mark(&casts_in(&fight, (1_000, 4_000)), cast, 640).is_none(),
+        "its hits draw nothing after the press"
+    );
+}
+
+#[test]
+fn a_game_data_channel_without_its_aura_runs_to_its_last_hit_before_the_next_press() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-8", "Fooneses-Frostwolf-EU", 62);
+    let priest = b.player("Player-6", "Umbrasp-Frostwolf-EU", 258);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let cast = b.spell(5143, "Arcane Missiles");
+    let missile = b.spell(7268, "Arcane Missiles");
+    let volley = b.spell(1242173, "Void Volley");
+    b.push(640, mage, boss, cast, EventKind::CastSuccess);
+    let hits = [1_560, 1_784, 2_026, 2_246, 2_466, 2_734, 2_949, 3_184];
+    for t in hits {
+        b.push(t, mage, boss, missile, spell_hit(500));
+    }
+    b.push(3_498, mage, boss, cast, EventKind::CastSuccess);
+    b.push(4_464, mage, boss, missile, spell_hit(500));
+    b.push(30_000, mage, boss, cast, EventKind::CastSuccess);
+    b.push(1_000, priest, boss, volley, EventKind::CastSuccess);
+    for t in [1_200, 1_600, 2_000] {
+        b.push(t, priest, boss, volley, spell_hit(100));
+    }
+    let fight = b.build();
+    let channels = ChannelSpells::from_json(r#"{"ids":[5143]}"#).unwrap();
+    let view = plain_with(&fight, &channels, (0, 60_000));
+    let first = cast_mark(&view, cast, 640).unwrap();
+    assert_eq!(first.kind, ItemKind::Channel);
+    assert_eq!(
+        first.channel,
+        Some(Channel {
+            end_ms: None,
+            last_tick_ms: Some(3_184),
+            ticks: hits.to_vec(),
+        }),
+        "the hit after the next press is that press's"
+    );
+    assert_eq!(first.span_end_ms, 3_184);
+    assert_eq!(cast_mark(&view, cast, 3_498).unwrap().span_end_ms, 4_464);
+    let lone = cast_mark(&view, cast, 30_000).unwrap();
+    assert_eq!(
+        (lone.kind, lone.span_end_ms),
+        (ItemKind::Instant, 30_000),
+        "no hit: a point"
+    );
+    let instant = cast_mark(&view, volley, 1_000).unwrap();
+    assert_eq!(
+        (instant.kind, &instant.channel, instant.span_end_ms),
+        (ItemKind::Instant, &None, 1_000)
+    );
+}
+
+#[test]
+fn an_empowered_spell_never_runs_to_its_hits_as_a_game_data_channel() {
+    let mut b = FightBuilder::new(60_000);
+    let evoker = b.player("Player-3", "Sparkyevo-Rexxar-EU", 1467);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let breath = b.spell(357208, "Fire Breath");
+    b.push(1_000, evoker, 0, breath, EventKind::EmpowerStart);
+    b.push(1_000, evoker, 0, breath, EventKind::CastSuccess);
+    b.push(2_000, evoker, 0, breath, EventKind::EmpowerEnd { stage: 2 });
+    b.push(10_000, evoker, boss, breath, EventKind::CastSuccess);
+    for t in [10_400, 11_000] {
+        b.push(t, evoker, boss, breath, spell_hit(300));
+    }
+    let fight = b.build();
+    let channels = ChannelSpells::from_json(r#"{"ids":[357208]}"#).unwrap();
+    let view = plain_with(&fight, &channels, (0, 60_000));
+    let press = cast_mark(&view, breath, 10_000).unwrap();
+    assert_eq!(
+        (press.kind, &press.channel, press.span_end_ms),
+        (ItemKind::Instant, &None, 10_000),
+        "a press without its empower start stays a point"
+    );
+}
+
+#[test]
+fn the_dot_a_game_data_channel_left_does_not_extend_it() {
+    let mut b = FightBuilder::new(60_000);
+    let hunter = b.player("Player-7", "Shotz-Frostwolf-EU", 254);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let fire = b.spell(257044, "Rapid Fire");
+    let missed = EventKind::Missed(Missed {
+        via: DamageVia::Spell,
+        miss_type: MissType::Absorb,
+        amount_missed: 200,
+    });
+    b.push(1_000, hunter, boss, fire, EventKind::CastSuccess);
+    b.push(1_300, hunter, boss, fire, spell_hit(200));
+    b.push(1_700, hunter, boss, fire, missed);
+    for t in [3_000, 5_000] {
+        b.push(t, hunter, boss, fire, periodic_hit(50));
+    }
+    let fight = b.build();
+    let channels = ChannelSpells::from_json(r#"{"ids":[257044]}"#).unwrap();
+    let view = plain_with(&fight, &channels, (0, 60_000));
+    let press = cast_mark(&view, fire, 1_000).unwrap();
+    assert_eq!(
+        press
+            .channel
+            .as_ref()
+            .map(|c| (c.last_tick_ms, c.ticks.clone())),
+        Some((Some(1_700), vec![1_300, 1_700])),
+        "a missed hit is a tick, the periodic ones are not"
+    );
+}
+
+fn plain_with(fight: &Fight, channels: &ChannelSpells, window: (i32, i32)) -> Timeline {
+    timeline(
+        fight,
+        &Curated::bundled(),
+        channels,
+        &ReportFilter::whole(Attribution::Augmented),
+        &Scope::default(),
+        ScopeMetric::Casts,
+        Dimension::Source,
+        &ViewOptions::default(),
+        Window {
+            start_ms: window.0,
+            end_ms: window.1,
+        },
+    )
+}
+
+#[test]
+fn only_a_line_after_the_next_press_takes_a_channel_over() {
+    let mut b = FightBuilder::new(60_000);
+    let priest = b.player("Player-6", "Umbrasp-Frostwolf-EU", 258);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let flay = b.spell(15407, "Mind Flay");
+    let buff = |action| aura(action, AuraType::Buff, None);
+    for at in [1_000, 5_000] {
+        b.push(at, priest, priest, flay, buff(AuraAction::Applied));
+        b.push(at, priest, priest, flay, buff(AuraAction::Refresh));
+        b.push(at, priest, boss, flay, EventKind::CastSuccess);
+        b.push(at + 400, priest, boss, flay, periodic_hit(300));
+        b.push(at + 1_000, priest, priest, flay, buff(AuraAction::Removed));
+    }
+    let fight = b.build();
+    let view = casts_in(&fight, (0, 60_000));
+    let end = |start| {
+        cast_mark(&view, flay, start)
+            .unwrap()
+            .channel
+            .as_ref()?
+            .end_ms
+    };
+    assert_eq!(
+        end(1_000),
+        Some(2_000),
+        "its own same-millisecond refresh keeps it; only its removal ends it"
+    );
+    assert_eq!(end(5_000), Some(6_000));
+}
+
+#[test]
+fn a_self_aura_logged_a_few_milliseconds_off_the_press_still_opens_its_channel() {
+    let mut b = FightBuilder::new(60_000);
+    let monk = b.player("Player-11", "Kicks-Frostwolf-EU", 269);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let fists = b.spell(113656, "Fists of Fury");
+    let buff = |action| aura(action, AuraType::Buff, None);
+    b.push(10_000, monk, boss, fists, EventKind::CastSuccess);
+    b.push(10_004, monk, monk, fists, buff(AuraAction::Applied));
+    b.push(10_800, monk, boss, fists, spell_hit(500));
+    b.push(13_900, monk, monk, fists, buff(AuraAction::Removed));
+    b.push(20_000, monk, boss, fists, EventKind::CastSuccess);
+    b.push(20_006, monk, monk, fists, buff(AuraAction::Applied));
+    b.push(20_800, monk, boss, fists, spell_hit(500));
+    b.push(23_900, monk, monk, fists, buff(AuraAction::Removed));
+    let fight = b.build();
+    let view = casts_in(&fight, (0, 60_000));
+    let kind = |start| {
+        let cast = cast_mark(&view, fists, start).unwrap();
+        (
+            cast.kind,
+            cast.start_ms,
+            cast.channel.as_ref().and_then(|c| c.end_ms),
+        )
+    };
+    assert_eq!(kind(10_000), (ItemKind::Channel, 10_000, Some(13_900)));
+    assert_eq!(
+        kind(20_000).0,
+        ItemKind::Instant,
+        "6 ms off is another aura's line"
+    );
+}
+
+/// Three presses of a spell with its same-ID self aura, `passing` of them a clean channel with a
+/// tick on the boss; the others have no tick and a press of another spell inside.
+fn three_presses(name: &str, passing: usize) -> (Fight, u32) {
+    let mut b = FightBuilder::new(60_000);
+    let priest = b.player("Player-6", "Umbrasp-Frostwolf-EU", 258);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let spell = b.spell(15407, name);
+    let blast = b.spell(8092, "Mind Blast");
+    let buff = |action| aura(action, AuraType::Buff, None);
+    for press in 0..3 {
+        let at = 1_000 + press as i32 * 10_000;
+        b.push(at, priest, priest, spell, buff(AuraAction::Applied));
+        b.push(at, priest, boss, spell, EventKind::CastSuccess);
+        if press < passing {
+            b.push(at + 600, priest, boss, spell, periodic_hit(300));
+        } else {
+            b.push(at + 600, priest, boss, blast, EventKind::CastSuccess);
+        }
+        b.push(at + 2_000, priest, priest, spell, buff(AuraAction::Removed));
+    }
+    (b.build(), spell)
+}
+
+#[test]
+fn a_channel_spell_draws_its_unclean_presses_as_channels_too() {
+    let (fight, flay) = three_presses("Mind Flay", 2);
+    let view = casts_in(&fight, (0, 60_000));
+    let cast = cast_mark(&view, flay, 21_000).unwrap();
+    assert_eq!(cast.kind, ItemKind::Channel);
+    assert_eq!(
+        cast.channel,
+        Some(Channel {
+            end_ms: Some(23_000),
+            last_tick_ms: None,
+            ticks: Vec::new(),
+        }),
+        "no hit, so no ticks: solid from the press to the aura's removal"
+    );
+}
+
+#[test]
+fn a_spell_few_of_whose_presses_are_clean_channels_draws_none() {
+    let (fight, spell) = three_presses("Soothing Mist", 1);
+    let view = casts_in(&fight, (0, 60_000));
+    for start in [1_000, 11_000, 21_000] {
+        let cast = cast_mark(&view, spell, start).unwrap();
+        assert_eq!((cast.kind, &cast.channel), (ItemKind::Instant, &None));
+    }
+}
+
+#[test]
+fn a_channel_without_a_logged_end_says_so() {
+    let mut b = FightBuilder::new(60_000);
+    let priest = b.player("Player-6", "Umbrasp-Frostwolf-EU", 258);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let flay = b.spell(15407, "Mind Flay");
+    b.push(
+        58_000,
+        priest,
+        priest,
+        flay,
+        aura(AuraAction::Applied, AuraType::Buff, None),
+    );
+    b.push(58_000, priest, boss, flay, EventKind::CastSuccess);
+    b.push(58_600, priest, boss, flay, periodic_hit(300));
+    let fight = b.build();
+    let view = casts_in(&fight, (0, 60_000));
+    let cast = cast_mark(&view, flay, 58_000).unwrap();
+    assert_eq!(cast.channel.as_ref().unwrap().end_ms, None);
+    assert_eq!(
+        cast.span_end_ms, 58_600,
+        "drawn to its last tick, the last line it has"
+    );
+}
+
+#[test]
+fn every_mark_carries_where_its_drawing_ends() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Faelan-Emberfall-EU", 63);
+    let warrior = b.player("Player-2", "Washed-Frostwolf-EU", 71);
+    let warden = b.unit(
+        "Creature-0-1-1-1-264045-01",
+        "Doomscale Warden",
+        HOSTILE_FLAGS,
+    );
+    let (intellect, pummel, malice) = (1459, 6552, 1290779);
+    b.spell(intellect, "Arcane Intellect");
+    let buff = |action| aura(action, AuraType::Buff, None);
+    b.push(1_000, mage, mage, intellect, buff(AuraAction::Applied));
+    b.push(9_000, mage, mage, intellect, buff(AuraAction::Removed));
+    b.push(1_000, warden, warrior, malice, EventKind::CastStart);
+    b.push(
+        1_950,
+        warrior,
+        warden,
+        pummel,
+        EventKind::Interrupt {
+            interrupted: malice,
+        },
+    );
+    let fight = b.build();
+    let span = |metric| {
+        let view = plain(
+            &fight,
+            &Scope::default(),
+            metric,
+            Dimension::Source,
+            ViewOptions::default(),
+            (0, 60_000),
+        );
+        view.lanes[0].items[0].span_end_ms
+    };
+    assert_eq!(span(ScopeMetric::Buffs), 9_000, "a bar ends with it");
+    assert_eq!(span(ScopeMetric::Interrupts), 1_950, "a point at its start");
 }
