@@ -43,6 +43,7 @@ function fakeEngine() {
   const engine: Engine = {
     indexFormatVersion: async () => 5,
     setDungeons: async () => {},
+    setChannelSpells: async () => {},
     beginIndex: async () => void fed.splice(0),
     feed: async (bytes) => void fed.push(bytes.length),
     finishIndex: async (logId) => view(logId),
@@ -64,7 +65,7 @@ function source(id: string, size: number, lastModified = 1): LogSource & { read:
 function client() {
   const fake = fakeEngine();
   let clock = 0;
-  const api = createClient({ engine: () => fake.engine, dungeons: async () => null, db: memoryDatabase(), now: () => ++clock });
+  const api = createClient({ engine: () => fake.engine, dungeons: async () => null, channelSpells: async () => null, db: memoryDatabase(), now: () => ++clock });
   return { api, ...fake };
 }
 
@@ -86,6 +87,29 @@ describe('opening logs', () => {
 
     const appended = await api.openLog(source(log.id, 21 * MiB, 2));
     expect(appended.cacheHit).toBe(false);
+  });
+
+  it('gives the engine the game tables once, and keeps asking for one that was missing', async () => {
+    const fake = fakeEngine();
+    const given: string[] = [];
+    fake.engine.setDungeons = async (json) => void given.push(json);
+    fake.engine.setChannelSpells = async (json) => void given.push(json);
+    let channels: string | null = null;
+    const api = createClient({ engine: () => fake.engine, dungeons: async () => 'keys', channelSpells: async () => channels, db: memoryDatabase(), now: () => 1 });
+    await api.openLog(source('a.txt', 10));
+    channels = '{"ids":[5143]}';
+    await api.openLog(source('b.txt', 10));
+    await api.openLog(source('c.txt', 10));
+    expect(given).toEqual(['keys', '{"ids":[5143]}']);
+  });
+
+  it('opens a log without a game table the engine rejects', async () => {
+    const fake = fakeEngine();
+    fake.engine.setChannelSpells = async () => {
+      throw new Error('invalid channel table');
+    };
+    const api = createClient({ engine: () => fake.engine, dungeons: async () => null, channelSpells: async () => '{}', db: memoryDatabase(), now: () => 1 });
+    expect((await api.openLog(source('a.txt', 10))).cacheHit).toBe(false);
   });
 
   it('remembers combat logs newest first; without a file handle they must be chosen again', async () => {

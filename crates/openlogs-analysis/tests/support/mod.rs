@@ -35,6 +35,7 @@ impl FightBuilder {
                 spells: BTreeMap::new(),
                 broken_lines: 0,
                 encounters: Vec::new(),
+                fail_reasons: Vec::new(),
             },
         }
     }

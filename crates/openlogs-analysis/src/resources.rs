@@ -164,10 +164,10 @@ fn health_samples(fight: &Fight, side: Side, start: i32, end: i32) -> Vec<PowerS
     samples
 }
 
-type Gains = HashMap<(ActorId, i32), HashMap<SpellId, (f64, f64)>>;
+pub(crate) type Gains = HashMap<(ActorId, i32), HashMap<SpellId, (f64, f64)>>;
 
 /// What units gained in the range by power type and spell: energize, and heals for health.
-fn gains(fight: &Fight, start: i32, end: i32) -> Gains {
+pub(crate) fn gains(fight: &Fight, start: i32, end: i32) -> Gains {
     let mut gains: Gains = HashMap::new();
     for event in fight.events.iter().filter(|e| e.t >= start && e.t < end) {
         let (power_type, gained, wasted) = match event.kind {
@@ -193,7 +193,7 @@ fn gains(fight: &Fight, start: i32, end: i32) -> Gains {
 }
 
 /// Power and health samples of `side`'s units in the range, by unit and power type.
-fn samples_by_track(
+pub(crate) fn samples_by_track(
     fight: &Fight,
     side: Side,
     start: i32,
@@ -323,38 +323,7 @@ pub fn resources_report(fight: &Fight, filter: &ReportFilter, scope: &Scope) -> 
     if !scope.ability.is_empty() {
         units.retain(|_, tracks| tracks.iter().any(|t| !t.gains.is_empty()));
     }
-    let pull_end = fight.duration_ms.min(i32::MAX as u64) as i32;
-    let mut deaths_of: HashMap<ActorId, Vec<(i32, Option<i32>)>> = HashMap::new();
-    match side {
-        Side::Friendly => {
-            for death in deaths(fight) {
-                deaths_of
-                    .entry(death.player)
-                    .or_default()
-                    .push((death.t, death.dead_until));
-            }
-        }
-        Side::Enemy => {
-            for event in &fight.events {
-                if matches!(event.kind, EventKind::Died { unconscious: false })
-                    && units.contains_key(&event.target)
-                {
-                    deaths_of
-                        .entry(event.target)
-                        .or_insert_with(|| vec![(event.t, None)]);
-                }
-            }
-        }
-    }
-    let dead_of = |unit: ActorId| -> Vec<(i32, i32)> {
-        deaths_of
-            .get(&unit)
-            .into_iter()
-            .flatten()
-            .map(|&(t, until)| (t.max(start), until.unwrap_or(pull_end).min(end)))
-            .filter(|(a, b)| b > a)
-            .collect()
-    };
+    let dead = dead_phases(fight, side, |unit| units.contains_key(&unit), start, end);
     ResourcesReport {
         start_ms: start,
         end_ms: end,
@@ -367,9 +336,54 @@ pub fn resources_report(fight: &Fight, filter: &ReportFilter, scope: &Scope) -> 
                 UnitResources {
                     unit,
                     tracks,
-                    dead: dead_of(unit),
+                    dead: dead.get(&unit).cloned().unwrap_or_default(),
                 }
             })
             .collect(),
     }
+}
+
+/// When the `wanted` units of `side` were dead, clipped to `[start, end)`: players from death to
+/// their resurrect, enemies from their first death on.
+pub(crate) fn dead_phases(
+    fight: &Fight,
+    side: Side,
+    wanted: impl Fn(ActorId) -> bool,
+    start: i32,
+    end: i32,
+) -> HashMap<ActorId, Vec<(i32, i32)>> {
+    let pull_end = fight.duration_ms.min(i32::MAX as u64) as i32;
+    let mut deaths_of: HashMap<ActorId, Vec<(i32, Option<i32>)>> = HashMap::new();
+    match side {
+        Side::Friendly => {
+            for death in deaths(fight).into_iter().filter(|d| wanted(d.player)) {
+                deaths_of
+                    .entry(death.player)
+                    .or_default()
+                    .push((death.t, death.dead_until));
+            }
+        }
+        Side::Enemy => {
+            for event in &fight.events {
+                if matches!(event.kind, EventKind::Died { unconscious: false })
+                    && wanted(event.target)
+                {
+                    deaths_of
+                        .entry(event.target)
+                        .or_insert_with(|| vec![(event.t, None)]);
+                }
+            }
+        }
+    }
+    deaths_of
+        .into_iter()
+        .map(|(unit, deaths)| {
+            let phases = deaths
+                .into_iter()
+                .map(|(t, until)| (t.max(start), until.unwrap_or(pull_end).min(end)))
+                .filter(|(a, b)| b > a)
+                .collect();
+            (unit, phases)
+        })
+        .collect()
 }

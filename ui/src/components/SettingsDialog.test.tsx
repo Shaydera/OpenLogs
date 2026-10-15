@@ -38,4 +38,11 @@ describe('Settings dialog', () => {
     expect(await within(dialog).findByText('410,805 spells')).toBeInTheDocument();
     expect(within(dialog).getByText('From wago.tools as of Oct 11, 2026; updated with each release.')).toBeInTheDocument();
   });
+
+  it('leaves out a table an older export does not have', async () => {
+    vi.mocked(gameDataManifest).mockResolvedValue({ ...gameDataFixture, channelSpells: undefined });
+    const dialog = await openDialog();
+    expect(await within(dialog).findByText('410,805 spells')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Channel spells')).toBeNull();
+  });
 });

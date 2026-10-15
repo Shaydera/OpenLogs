@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initialState, useApp } from '../../store';
@@ -92,5 +92,16 @@ describe('RangePanel', () => {
     await userEvent.click(open);
     await userEvent.click(screen.getByRole('button', { name: 'Phase 1' }));
     expect(screen.queryByRole('form')).not.toBeInTheDocument();
+  });
+
+  it("pans the timeline's window when its band is dragged and keeps the range", () => {
+    useApp.setState({ tab: 'casts', reportView: 'timeline', zoom: { startMs: 120_000, endMs: 140_000 } });
+    renderPanel();
+    vi.spyOn(screen.getByTestId('range-plot'), 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 478.61, 64));
+    fireEvent.mouseDown(screen.getByTestId('range-zoom'), { button: 0, clientX: 120 });
+    fireEvent.mouseMove(document, { clientX: 130 });
+    fireEvent.mouseUp(document, { clientX: 130 });
+    expect(useApp.getState().zoom).toEqual({ startMs: 130_000, endMs: 150_000 });
+    expect(setRange).not.toHaveBeenCalled();
   });
 });

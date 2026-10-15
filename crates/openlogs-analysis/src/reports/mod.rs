@@ -401,12 +401,18 @@ pub(crate) const SUPPORT_MATCH_MS: i32 = 2;
 /// The ability whose hit the support event at `index` is part of. Scans all events of the
 /// fight, so a hit just before the range still matches a support inside it.
 pub(crate) fn buffed_spell(fight: &Fight, index: usize) -> Option<SpellId> {
+    buffed_hit(fight, index).map(|(_, spell)| spell)
+}
+
+/// The hit the support event at `index` is part of: its index and ability.
+pub(crate) fn buffed_hit(fight: &Fight, index: usize) -> Option<(usize, SpellId)> {
     let support = &fight.events[index];
     fight.events[..index]
         .iter()
+        .enumerate()
         .rev()
-        .take_while(|hit| support.t - hit.t <= SUPPORT_MATCH_MS)
-        .find_map(|hit| supported_spell(support, hit))
+        .take_while(|(_, hit)| support.t - hit.t <= SUPPORT_MATCH_MS)
+        .find_map(|(i, hit)| supported_spell(support, hit).map(|spell| (i, spell)))
 }
 
 fn supported_spell(support: &Event, hit: &Event) -> Option<SpellId> {

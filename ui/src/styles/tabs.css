@@ -724,6 +724,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.plink-group-title {
+  display: flex;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.plink-group-title .plink-name {
+  font-size: inherit;
+  min-width: 0;
+}
+.plink-count {
+  flex: none;
+  margin-left: 0.3em;
+}
 .plink-sub {
   font-size: 12px;
   color: var(--muted);

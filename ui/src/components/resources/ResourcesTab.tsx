@@ -10,12 +10,14 @@ import { Kpi } from '../Kpi';
 import { valueLabel } from '../filters/labels';
 import { NoMatch } from '../filters/NoMatch';
 import { ReportPickers } from '../filters/ReportPickers';
-import { classColor, ROLE_ORDER, shortName } from '../overview/players';
+import { classColor, shortName } from '../overview/players';
 import { band } from '../player/chartGeometry';
 import { PlayerIcon } from '../reports/PlayerName';
 import { reportSpellName, rosterIndex } from '../reports/reportData';
+import { GroupToggle } from './GroupToggle';
 import { formatCapTime, powerName } from './powerNames';
 import { powerColour, resourcePaths } from './resourceGeometry';
+import { memberLabel, nameGroups, orderUnits, toggled, type UnitFacts } from './unitOrder';
 
 type UnitResources = ResourcesReport['units'][number];
 
@@ -47,21 +49,15 @@ export function ResourcesTab({ report }: { report: ResourcesReport }) {
     const player = playerOf(u);
     return player ? shortName(player.name) : valueLabel(u.unit.unit, u.unit.name, u.unit.number);
   };
-  const units = [...report.units].sort(
-    (a, b) =>
-      Number(b.boss) - Number(a.boss) ||
-      ROLE_ORDER.indexOf(playerOf(a)?.role ?? null) - ROLE_ORDER.indexOf(playerOf(b)?.role ?? null) ||
-      nameOf(a).localeCompare(nameOf(b), undefined, { numeric: true }),
-  );
-  const byName = new Map<string, UnitResources[]>();
-  for (const u of units) {
-    if (u.boss || u.unit.unit.kind === 'player') continue;
-    const members = byName.get(u.unit.name);
-    if (members) members.push(u);
-    else byName.set(u.unit.name, [u]);
-  }
-  const groups = new Map<UnitResources, UnitResources[]>();
-  for (const members of byName.values()) if (members.length > 1) for (const u of members) groups.set(u, members);
+  const factsOf = (u: UnitResources): UnitFacts => ({
+    boss: u.boss,
+    player: u.unit.unit.kind === 'player',
+    role: playerOf(u)?.role ?? null,
+    label: nameOf(u),
+    name: u.unit.name,
+  });
+  const units = orderUnits(report.units, factsOf);
+  const groups = nameGroups(units, factsOf);
   const picked = units.find((u) => keyOf(u) === selectedKey);
   const selected = picked ?? units[0];
   if (!picked) {
@@ -76,12 +72,7 @@ export function ResourcesTab({ report }: { report: ResourcesReport }) {
     const player = playerOf(u);
     return player ? <PlayerIcon player={player} size={size} /> : <MonogramTile name={valueLabel(u.unit.unit, u.unit.name)} size={size} />;
   };
-  const toggleGroup = (name: string) =>
-    setOpenGroups((open) => {
-      const next = new Set(open);
-      if (!next.delete(name)) next.add(name);
-      return next;
-    });
+  const toggleGroup = (name: string) => setOpenGroups((open) => toggled(open, name));
   const unitButton = (u: UnitResources, name: string, className = 'plink') => {
     const ref = playerOf(u);
     const primary = u.tracks[0];
@@ -123,21 +114,17 @@ export function ResourcesTab({ report }: { report: ResourcesReport }) {
               const groupName = valueLabel(u.unit.unit, name);
               return (
                 <Fragment key={`group-${name}`}>
-                  <button
-                    type="button"
+                  <GroupToggle
+                    name={groupName}
+                    count={members.length}
+                    open={open}
+                    current={marked}
                     className={marked ? 'plink plink-group plink-on' : 'plink plink-group'}
-                    aria-expanded={open}
-                    aria-current={marked ? 'true' : undefined}
-                    onClick={() => toggleGroup(name)}
-                  >
-                    <span className="plink-arrow" aria-hidden="true">
-                      {open ? '▾' : '▸'}
-                    </span>
-                    <span className="plink-name">{t('resources.group', { name: groupName, count: members.length })}</span>
-                  </button>
+                    onToggle={() => toggleGroup(name)}
+                  />
                   {open && (
                     <div role="group" aria-label={groupName}>
-                      {members.map((u) => unitButton(u, u.unit.number === null ? nameOf(u) : t('scope.instanceNumber', { number: u.unit.number }), 'plink plink-instance'))}
+                      {members.map((u) => unitButton(u, memberLabel(u.unit.number) ?? nameOf(u), 'plink plink-instance'))}
                     </div>
                   )}
                 </Fragment>

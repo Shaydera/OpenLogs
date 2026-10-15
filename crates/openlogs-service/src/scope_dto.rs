@@ -299,7 +299,7 @@ fn instance_number(fight: &Fight, id: ActorId) -> u32 {
         .map_or(0, |p| p as u32 + 1)
 }
 
-fn unit_name(fight: &Fight, unit: &UnitRef) -> (String, Option<u32>) {
+pub(crate) fn unit_name(fight: &Fight, unit: &UnitRef) -> (String, Option<u32>) {
     match unit {
         UnitRef::Player(id) => (
             fight

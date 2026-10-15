@@ -2,6 +2,7 @@ import { useId, useRef, useState } from 'react';
 import type { Side } from '../../api/types';
 import { useDismiss } from '../../hooks/useDismiss';
 import { t } from '../../i18n/i18n';
+import { effectiveView } from '../../reportViews';
 import { type FightTab, useApp } from '../../store';
 
 function augCreditApplies(tab: FightTab, perspective: Side, inDetail: boolean): boolean {
@@ -9,6 +10,13 @@ function augCreditApplies(tab: FightTab, perspective: Side, inDetail: boolean): 
   if (tab === 'damage' || tab === 'healing') return perspective === 'friendly';
   // Damage taken by enemies is the raid's damage regrouped, so it moves with the credit.
   return tab === 'taken' && perspective === 'enemy';
+}
+
+interface Option {
+  label: string;
+  checked: boolean;
+  toggle: () => void;
+  disabledBy?: string;
 }
 
 export function OptionsMenu() {
@@ -23,6 +31,7 @@ export function OptionsMenu() {
   const setColorByTarget = useApp((s) => s.setColorByTarget);
   const hideProcs = useApp((s) => s.hideProcs);
   const setHideProcs = useApp((s) => s.setHideProcs);
+  const view = useApp((s) => effectiveView(s.tab, s.details.length > 0, s.reportView));
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -31,15 +40,20 @@ export function OptionsMenu() {
   const metricTab = tab === 'damage' || tab === 'healing';
   const changed = attribution !== 'reattributed';
   const title = changed ? t('options.titleAugOff') : t('options.title');
-  const table: { label: string; checked: boolean; toggle: () => void; disabledBy?: string }[] = [];
-  if (metricTab) {
+  const table: Option[] = [];
+  if (metricTab && view === 'table') {
     table.push({ label: t('options.augDelta'), checked: showAugDelta, toggle: () => setShowAugDelta(!showAugDelta) });
     table.push({ label: t('options.colorByTarget'), checked: colorByTarget, toggle: () => setColorByTarget(!colorByTarget) });
   }
+  const casts: Option[] = [];
   if (tab === 'casts') {
     const disabledBy = perspective === 'enemy' ? t('options.procsOnlyPlayers') : undefined;
-    table.push({ label: t('options.hideProcs'), checked: hideProcs, toggle: () => void setHideProcs(!hideProcs), disabledBy });
+    casts.push({ label: t('options.hideProcs'), checked: hideProcs, toggle: () => void setHideProcs(!hideProcs), disabledBy });
   }
+  const sections = [
+    { title: t('options.table'), options: table },
+    { title: t('options.casts'), options: casts },
+  ].filter((section) => section.options.length > 0);
   useDismiss(root, open, {
     onDismiss: () => setOpen(false),
     onEscape: () => {
@@ -65,12 +79,16 @@ export function OptionsMenu() {
               <span className="options-hint">{t('options.augCreditHint')}</span>
             </span>
           </label>
-          {table.length > 0 && <h3 className="cap options-head options-split">{t('options.table')}</h3>}
-          {table.map((o) => (
-            <label key={o.label} className="options-row" title={o.disabledBy}>
-              <input type="checkbox" checked={o.checked} disabled={o.disabledBy !== undefined} onChange={o.toggle} />
-              <span>{o.label}</span>
-            </label>
+          {sections.map((section) => (
+            <section key={section.title} aria-label={section.title}>
+              <h3 className="cap options-head options-split">{section.title}</h3>
+              {section.options.map((o) => (
+                <label key={o.label} className="options-row" title={o.disabledBy}>
+                  <input type="checkbox" checked={o.checked} disabled={o.disabledBy !== undefined} onChange={o.toggle} />
+                  <span>{o.label}</span>
+                </label>
+              ))}
+            </section>
           ))}
         </div>
       )}

@@ -187,6 +187,23 @@ export function formatCount(n: number): string {
   return plain.format(n);
 }
 
+/** Time since the pull with milliseconds as the log has them: `2:10.007`; prelude times are negative. */
+export function formatEventTimeMs(ms: number): string {
+  const whole = Math.abs(ms);
+  const text = `${formatDuration(whole)}.${String(whole % 1000).padStart(3, '0')}`;
+  return ms < 0 ? `-${text}` : text;
+}
+
+/** A length of time: seconds below a minute (`20 s`, `2.5 s`), else `m:ss`. */
+export function formatSpan(ms: number): string {
+  return ms < 60_000 ? t('unit.seconds', { value: upToOneDecimal.format(ms / 1000) }) : formatDuration(ms);
+}
+
+/** Seconds with two decimals, e.g. `1.20 s` (cast and hold times). */
+export function formatSecondsExact(ms: number): string {
+  return t('unit.seconds', { value: twoDecimals.format(ms / 1000) });
+}
+
 /** Time since the pull with tenths, rounded to 100 ms: `0:04.2` (hit log, death recap). */
 export function formatEventTimeTenths(ms: number): string {
   const tenths = Math.round(Math.abs(ms) / 100);

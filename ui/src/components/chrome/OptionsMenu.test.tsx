@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initialState, useApp } from '../../store';
@@ -32,6 +32,18 @@ describe('OptionsMenu', () => {
     render(<OptionsMenu />);
     await userEvent.click(screen.getByRole('button', { name: 'Options' }));
     expect(screen.getByRole('checkbox', { name: 'Hide procs' })).toBeDisabled();
+  });
+
+  it('offers Hide procs in its own Casts section in every view and the table options only in the table', async () => {
+    useApp.setState({ tab: 'casts', reportView: 'timeline' });
+    const { unmount } = render(<OptionsMenu />);
+    await userEvent.click(screen.getByRole('button', { name: 'Options' }));
+    expect(within(screen.getByRole('region', { name: 'Casts' })).getByRole('checkbox', { name: 'Hide procs' })).toBeEnabled();
+    unmount();
+    useApp.setState({ tab: 'damage', reportView: 'events' });
+    render(<OptionsMenu />);
+    await userEvent.click(screen.getByRole('button', { name: 'Options' }));
+    expect(screen.queryByRole('checkbox', { name: 'Aug difference column' })).toBeNull();
   });
 
   it('closes on Escape and when focus leaves', async () => {

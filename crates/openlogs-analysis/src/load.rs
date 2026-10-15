@@ -11,8 +11,8 @@ use openlogs_parser::{
 
 use crate::actors::{ActorId, ActorKind, Actors, NOBODY};
 use crate::fight::{
-    Absorbed, Damage, Energize, Event, EventKind, Fight, FightKind, Heal, MissType, Missed,
-    NO_SPELL, POWER_SAMPLE_MS, PowerSample, RunEncounter, SpellId, SpellInfo, UnitHp,
+    Absorbed, Damage, Energize, Event, EventKind, FailReason, Fight, FightKind, Heal, MissType,
+    Missed, NO_SPELL, POWER_SAMPLE_MS, PowerSample, RunEncounter, SpellId, SpellInfo, UnitHp,
 };
 
 /// Loads one fight, including its prelude, from the complete log bytes.
@@ -95,6 +95,7 @@ impl FightBuilder {
                 spells: BTreeMap::new(),
                 broken_lines: 0,
                 encounters: Vec::new(),
+                fail_reasons: Vec::new(),
             },
             last_power: HashMap::new(),
             last_t: i32::MIN,
@@ -187,6 +188,21 @@ impl FightBuilder {
         }
         self.encounter_open = false;
         self.resume_t = None;
+    }
+
+    fn fail_reason(&mut self, reason: &str) -> FailReason {
+        if reason == FailReason::INTERRUPTED {
+            return FailReason::Interrupted;
+        }
+        let reasons = &mut self.fight.fail_reasons;
+        let index = match reasons.iter().position(|known| known == reason) {
+            Some(index) => index,
+            None => {
+                reasons.push(reason.to_string());
+                reasons.len() - 1
+            }
+        };
+        FailReason::Other(u16::try_from(index).unwrap_or(u16::MAX))
     }
 
     fn relative_ms(&self, timestamp: Timestamp) -> i32 {
@@ -312,7 +328,9 @@ impl FightBuilder {
             }),
             CombatKind::CastStart => EventKind::CastStart,
             CombatKind::CastSuccess => EventKind::CastSuccess,
-            CombatKind::CastFailed { .. } => EventKind::CastFailed,
+            CombatKind::CastFailed { reason } => EventKind::CastFailed {
+                reason: self.fail_reason(reason),
+            },
             CombatKind::Aura(a) => EventKind::Aura {
                 action: a.action,
                 aura_type: a.aura_type,

@@ -2,18 +2,17 @@ use std::collections::HashMap;
 
 use openlogs_gamedata::Curated;
 
-use crate::actors::{ActorKind, NOBODY};
+use crate::actors::ActorId;
 use crate::aura_report::book_auras;
 use crate::breakdown::Dimension;
 use crate::casts::{book_casts, presses};
 use crate::deaths_report::book_deaths;
-use crate::fight::{AuraType, Event, EventKind, Fight, NO_SPELL, SpellId};
+use crate::fight::{AuraType, Fight, SpellId};
 use crate::filter::{Attribution, ReportFilter};
 use crate::interrupts::book_kicks;
-use crate::reports::taken::taken_amount;
-use crate::reports::{Share, buffed_spell, damage_share, healing_share};
 use crate::resources::book_resources;
 use crate::scope::{Scope, Side, UnitRef, unit_of};
+use crate::views::parts::AmountFacts;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScopeMetric {
@@ -101,6 +100,26 @@ pub struct Cell {
 }
 
 impl Cell {
+    /// A cell with no amounts: what the scope and the lane keys read of a cell.
+    pub(crate) fn scope_probe(
+        fight: &Fight,
+        source: ActorId,
+        spell: SpellId,
+        kind: CellKind,
+        target: ActorId,
+    ) -> Self {
+        Self {
+            source: unit_of(fight, source),
+            spell,
+            kind,
+            target: unit_of(fight, target),
+            amount: 0,
+            absorbed: 0,
+            hits: 0,
+            crits: 0,
+        }
+    }
+
     pub(crate) fn source(&self) -> Option<&UnitRef> {
         (self.kind != CellKind::Unattributed).then_some(&self.source)
     }
@@ -161,27 +180,55 @@ pub fn cells(
     metric: ScopeMetric,
 ) -> Vec<Cell> {
     let mut map = Facts::new();
-    match (side, metric) {
-        (Side::Friendly, ScopeMetric::DamageDone) | (Side::Enemy, ScopeMetric::DamageTaken) => {
-            own_side(fight, filter, &mut map, false)
-        }
-        (Side::Friendly, ScopeMetric::Healing) => own_side(fight, filter, &mut map, true),
-        (Side::Friendly, ScopeMetric::DamageTaken) => taken(fight, filter, &mut map, false),
-        (Side::Enemy, ScopeMetric::DamageDone) => taken(fight, filter, &mut map, true),
-        (Side::Enemy, ScopeMetric::Healing) => enemy_healing(fight, filter, &mut map),
-        (_, ScopeMetric::Casts) => book_casts(
+    if let Some(facts) = AmountFacts::of(side, metric) {
+        book_amounts(fight, filter, facts, &mut map);
+        return into_cells(map);
+    }
+    match metric {
+        ScopeMetric::Casts => book_casts(
             fight,
             curated,
             &presses(fight, curated, filter, side),
             &mut map,
         ),
-        (_, ScopeMetric::Interrupts) => book_kicks(fight, filter, side, &mut map),
-        (_, ScopeMetric::Buffs) => book_auras(fight, filter, side, AuraType::Buff, &mut map),
-        (_, ScopeMetric::Debuffs) => book_auras(fight, filter, side, AuraType::Debuff, &mut map),
-        (_, ScopeMetric::Deaths) => book_deaths(fight, filter, side, &mut map),
-        (_, ScopeMetric::Resources) => book_resources(fight, filter, side, &mut map),
+        ScopeMetric::Interrupts => book_kicks(fight, filter, side, &mut map),
+        ScopeMetric::Buffs => book_auras(fight, filter, side, AuraType::Buff, &mut map),
+        ScopeMetric::Debuffs => book_auras(fight, filter, side, AuraType::Debuff, &mut map),
+        ScopeMetric::Deaths => book_deaths(fight, filter, side, &mut map),
+        ScopeMetric::Resources => book_resources(fight, filter, side, &mut map),
+        ScopeMetric::DamageDone | ScopeMetric::Healing | ScopeMetric::DamageTaken => {
+            unreachable!("both sides of the amount metrics have amount facts")
+        }
     }
     into_cells(map)
+}
+
+fn book_amounts(fight: &Fight, filter: &ReportFilter, facts: AmountFacts, map: &mut Facts) {
+    let reattributed = filter.attribution == Attribution::Reattributed;
+    for index in in_range(fight, filter) {
+        facts.parts(fight, index, reattributed, &mut |part| {
+            book(
+                map,
+                (
+                    unit_of(fight, part.source),
+                    part.spell,
+                    part.kind,
+                    unit_of(fight, part.target),
+                ),
+                part.amount,
+                part.absorbed,
+                part.hit,
+                part.crit,
+            )
+        });
+    }
+}
+
+/// Indices of the events in the range.
+pub(crate) fn in_range(fight: &Fight, filter: &ReportFilter) -> std::ops::Range<usize> {
+    let first = fight.events.partition_point(|e| e.t < filter.start_ms);
+    let end = fight.events.partition_point(|e| e.t < filter.end_ms);
+    first..end.max(first)
 }
 
 pub(crate) fn into_cells(map: Facts) -> Vec<Cell> {
@@ -205,136 +252,4 @@ pub(crate) fn into_cells(map: Facts) -> Vec<Cell> {
         })
     });
     list
-}
-
-fn own_side(fight: &Fight, filter: &ReportFilter, map: &mut HashMap<Key, Acc>, healing: bool) {
-    let reattributed = filter.attribution == Attribution::Reattributed;
-    for (index, event) in fight
-        .events
-        .iter()
-        .enumerate()
-        .filter(|(_, e)| filter.contains(e.t))
-    {
-        let share = if healing {
-            healing_share(fight, event)
-        } else {
-            damage_share(fight, event)
-        };
-        match share {
-            Some(Share::Own {
-                actor,
-                spell,
-                amount,
-                critical,
-                ..
-            }) => book(
-                map,
-                (
-                    unit_of(fight, actor),
-                    spell,
-                    CellKind::Own,
-                    unit_of(fight, event.target),
-                ),
-                amount as i64,
-                logged_absorbed(event),
-                true,
-                critical,
-            ),
-            Some(Share::Support(support)) if reattributed => {
-                let target = unit_of(fight, support.target);
-                let amount = support.amount as i64;
-                book(
-                    map,
-                    (
-                        UnitRef::Player(support.evoker),
-                        support.buff,
-                        CellKind::Support,
-                        target.clone(),
-                    ),
-                    amount,
-                    0,
-                    false,
-                    false,
-                );
-                let (spell, kind) = match buffed_spell(fight, index) {
-                    Some(spell) => (spell, CellKind::Own),
-                    None => (NO_SPELL, CellKind::Unmatched),
-                };
-                book(
-                    map,
-                    (unit_of(fight, support.doer), spell, kind, target),
-                    -amount,
-                    0,
-                    false,
-                    false,
-                );
-            }
-            _ => {}
-        }
-    }
-}
-
-fn logged_absorbed(event: &Event) -> i64 {
-    match event.kind {
-        EventKind::Damage(damage) => damage.absorbed as i64,
-        _ => 0,
-    }
-}
-
-fn taken(
-    fight: &Fight,
-    filter: &ReportFilter,
-    map: &mut HashMap<Key, Acc>,
-    hostile_sources_only: bool,
-) {
-    for event in fight.events.iter().filter(|e| filter.contains(e.t)) {
-        let Some((amount, absorbed)) = taken_amount(event) else {
-            continue;
-        };
-        if fight.actors.get(event.target).kind != ActorKind::Player {
-            continue;
-        }
-        if hostile_sources_only && (event.source == NOBODY || !event.source_hostile) {
-            continue;
-        }
-        let crit = matches!(event.kind, EventKind::Damage(d) if d.critical);
-        book(
-            map,
-            (
-                unit_of(fight, event.source),
-                event.spell,
-                CellKind::Own,
-                UnitRef::Player(event.target),
-            ),
-            amount as i64,
-            absorbed as i64,
-            true,
-            crit,
-        );
-    }
-}
-
-fn enemy_healing(fight: &Fight, filter: &ReportFilter, map: &mut HashMap<Key, Acc>) {
-    for event in fight.events.iter().filter(|e| filter.contains(e.t)) {
-        let EventKind::Heal(heal) = event.kind else {
-            continue;
-        };
-        if !(event.source_hostile && event.target_hostile) || heal.supporter != NOBODY {
-            continue;
-        }
-        let amount = heal.amount.saturating_sub(heal.overheal) as i64;
-        book(
-            map,
-            (
-                unit_of(fight, event.source),
-                event.spell,
-                CellKind::Own,
-                unit_of(fight, event.target),
-            ),
-            amount,
-            0,
-            true,
-            heal.critical,
-        );
-    }
 }

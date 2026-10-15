@@ -27,6 +27,7 @@ mod scope;
 mod targets;
 mod timeline;
 mod usage;
+mod views;
 
 pub use ability::{AbilityDetail, AbilityHit, TargetHits, ability_detail};
 pub use actors::{Actor, ActorId, ActorKind, Actors, NOBODY};
@@ -43,8 +44,8 @@ pub use deaths::{
 };
 pub use deaths_report::{DeathsReport, Kill, deaths_report};
 pub use fight::{
-    Absorbed, AuraAction, AuraType, Damage, DamageVia, Energize, Event, EventKind, Fight,
-    FightKind, Heal, MissType, Missed, NO_SPELL, POWER_SAMPLE_MS, PowerSample, RunEncounter,
+    Absorbed, AuraAction, AuraType, Damage, DamageVia, Energize, Event, EventKind, FailReason,
+    Fight, FightKind, Heal, MissType, Missed, NO_SPELL, POWER_SAMPLE_MS, PowerSample, RunEncounter,
     SpellId, SpellInfo, UnitHp,
 };
 pub use filter::{Attribution, ReportFilter};
@@ -88,4 +89,9 @@ pub use timeline::{
 pub use usage::{
     ConsumableUse, ContextItem, ContextState, CooldownUse, DeathContext, DefensiveUse,
     RECENT_USE_MS, REPEAT_WINDOW_MS, consumable_uses, cooldown_uses, death_context, defensive_uses,
+};
+pub use views::{
+    AmountRule, CastOutcome, Channel, EventRow, EventsPage, ItemAmount, ItemKind, Lane, LogLine,
+    Page, PowerLine, RowType, SharePart, Timeline, TimelineItem, ViewOptions, Window, events,
+    timeline,
 };

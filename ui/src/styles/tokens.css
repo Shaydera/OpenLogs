@@ -30,6 +30,9 @@
   --wipe: #d9853f;
   --wipe-text: #f5a766;
   --death: #f0877f;
+  /* A channel's tick notches. */
+  --tick: #ff5c8a;
+  --tick-edge: #000000;
 
   /* The two pulls of a comparison (A earlier, B later). Checked on --panel for
      lightness band, chroma, colour-blind separation (ΔE 25) and ≥ 3:1 contrast. B's line is also dashed. */
@@ -111,6 +114,9 @@
   --wipe: #c2681f;
   --wipe-text: #a14d0c;
   --death: #b8372d;
+  /* A channel's tick notches. */
+  --tick: #d6245a;
+  --tick-edge: #1b1f24;
 
   /* The two pulls of a comparison (A earlier, B later). Checked on --panel for
      lightness band, chroma, colour-blind separation (ΔE 25) and ≥ 3:1 contrast. B's line is also dashed. */

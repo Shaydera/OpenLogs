@@ -8,12 +8,14 @@ const scope = self as unknown as {
 
 const ready = init();
 let session: Session | undefined;
+const GAME_DATA = ['set_dungeons', 'set_channel_spells'] as const;
+type GameDataMethod = (typeof GAME_DATA)[number];
 /** Given again to a session that replaces one that trapped. */
-let dungeons: string | undefined;
+const gameData = new Map<GameDataMethod, string>();
 
 function openSession(): Session {
   const fresh = new Session();
-  if (dungeons !== undefined) fresh.set_dungeons(dungeons);
+  gameData.forEach((json, method) => fresh[method](json));
   return fresh;
 }
 
@@ -22,7 +24,7 @@ scope.onmessage = async ({ data: { id, method, args } }) => {
     await ready;
     session ??= openSession();
     const result: unknown = Reflect.apply(session[method] as (...args: unknown[]) => unknown, session, args);
-    if (method === 'set_dungeons') dungeons = args[0] as string;
+    if ((GAME_DATA as readonly string[]).includes(method)) gameData.set(method as GameDataMethod, args[0] as string);
     scope.postMessage({ id, result });
   } catch (error) {
     if (error instanceof WebAssembly.RuntimeError) {

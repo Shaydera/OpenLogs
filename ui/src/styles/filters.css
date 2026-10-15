@@ -38,7 +38,7 @@
 .options-row:hover { background: var(--tile); }
 .options-row input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--accent); }
 .options-hint { display: block; font-size: 12px; color: var(--faint); }
-.view-switch button:disabled { cursor: default; opacity: 0.5; }
+.view-switch button[aria-disabled='true'] { cursor: default; opacity: 0.5; }
 .options-row:has(input:disabled) { cursor: default; opacity: 0.5; }
 .options-row:has(input:disabled):hover { background: none; }
 .rows-pop { width: 240px; }

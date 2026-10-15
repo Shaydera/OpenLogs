@@ -1,5 +1,5 @@
 import { type Engine, workerEngine } from '../engine/engine';
-import { dungeonsJson } from '../gameData';
+import { channelSpellsJson, dungeonsJson } from '../gameData';
 import { browserDatabase, type Database } from './db';
 import { type LogSource, reopenHandle } from './logSource';
 import { type RecentRecord, recentRecords, rememberLog } from './recent';
@@ -28,6 +28,10 @@ import type {
   RecentLog,
   TargetDetail,
   ReportFilter,
+  EventsPage,
+  EventsPageRequest,
+  Timeline,
+  ViewOptions,
 } from './types';
 
 const CHUNK_BYTES = 8 << 20;
@@ -48,6 +52,7 @@ interface IndexUse {
 export interface ClientDeps {
   engine: () => Engine;
   dungeons: () => Promise<string | null>;
+  channelSpells: () => Promise<string | null>;
   db: Database;
   now: () => number;
 }
@@ -61,9 +66,9 @@ async function quietly<T>(task: () => Promise<T>): Promise<T | undefined> {
   }
 }
 
-export function createClient({ engine: getEngine, dungeons, db, now }: ClientDeps) {
+export function createClient({ engine: getEngine, dungeons, channelSpells, db, now }: ClientDeps) {
   let current: { source: LogSource; engineRestarts: number } | null = null;
-  let dungeonsLoaded = false;
+  const gameDataLoaded = { dungeons: false, channelSpells: false };
   let latestOpen = 0;
   let queue: Promise<unknown> = Promise.resolve();
 
@@ -88,13 +93,21 @@ export function createClient({ engine: getEngine, dungeons, db, now }: ClientDep
     await useIndex(key);
   }
 
-  async function loadDungeons(engine: Engine) {
-    if (dungeonsLoaded) return;
-    // Without the dungeon table, runs still open; their results come from the log alone.
-    const json = await dungeons().catch(() => null);
+  async function loadTable(table: keyof typeof gameDataLoaded, load: () => Promise<string | null>, give: (json: string) => Promise<void>) {
+    if (gameDataLoaded[table]) return;
+    const json = await load().catch(() => null);
     if (json === null) return;
-    await engine.setDungeons(json);
-    dungeonsLoaded = true;
+    // A table the engine rejects is asked for again with the next log; this one opens without it.
+    gameDataLoaded[table] = await give(json).then(
+      () => true,
+      () => false,
+    );
+  }
+
+  /** Without game data, logs still open: run results and channels then come from the log alone. */
+  async function loadGameData(engine: Engine) {
+    await loadTable('dungeons', dungeons, (json) => engine.setDungeons(json));
+    await loadTable('channelSpells', channelSpells, (json) => engine.setChannelSpells(json));
   }
 
   async function index(
@@ -103,7 +116,7 @@ export function createClient({ engine: getEngine, dungeons, db, now }: ClientDep
     superseded: () => boolean,
   ): Promise<LogView> {
     const engine = getEngine();
-    await loadDungeons(engine);
+    await loadGameData(engine);
     const key = `${source.id}|${source.size}|${source.lastModified}|${await engine.indexFormatVersion()}`;
     const stored = await quietly(() => db.get<StoredIndex>('indexes', key));
     if (stored) {
@@ -210,6 +223,10 @@ export function createClient({ engine: getEngine, dungeons, db, now }: ClientDep
       report<InterruptsReport>(logId, [fightIndex], 'interrupts_report', { fightIndex, filter, scope, group }),
     resourcesReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope) =>
       report<ResourcesReport>(logId, [fightIndex], 'resources_report', { fightIndex, filter, scope }),
+    events: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, metric: ScopeMetric, options: ViewOptions, page: EventsPageRequest) =>
+      report<EventsPage>(logId, [fightIndex], 'events', { fightIndex, filter, scope, metric, options, page }),
+    timeline: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, metric: ScopeMetric, lanes: Dimension, options: ViewOptions, window: { startMs: number; endMs: number }) =>
+      report<Timeline>(logId, [fightIndex], 'timeline', { fightIndex, filter, scope, metric, lanes, options, window }),
     comparePulls: (logId: string, fightA: number, fightB: number, attribution: Attribution) =>
       report<PullComparison>(logId, [fightA, fightB], 'compare_pulls', { fightA, fightB, attribution }),
   };
@@ -220,6 +237,7 @@ let sharedEngine: Engine | null = null;
 export const api = createClient({
   engine: () => (sharedEngine ??= workerEngine()),
   dungeons: dungeonsJson,
+  channelSpells: channelSpellsJson,
   db: browserDatabase,
   now: Date.now,
 });

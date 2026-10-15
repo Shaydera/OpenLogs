@@ -10,6 +10,10 @@ import type {
   CastsReport,
   DeathsReport,
   AbilityDetail,
+  EventsPage,
+  EventsPageRequest,
+  ReportView,
+  Timeline,
   Attribution,
   Breakdown,
   DamageReport,
@@ -31,8 +35,10 @@ import type {
   TargetDetail,
   UnitRef,
 } from './api/types';
+import { rangeWindow, requestWindow, sameWindow, shownWindow, covers, windowSpan } from './components/views/zoomGeometry';
 import { type GameDataManifest, gameDataManifest } from './gameData';
 import { t } from './i18n/i18n';
+import { effectiveView, lanesOf } from './reportViews';
 import { type FilterTab, isFilterTab, SIDES } from './scopeSides';
 import { readStored, writeStored } from './storage';
 import { type ThemeMode, type ThemeName, readTheme, readThemeMode, storeTheme, storeThemeMode } from './theme';
@@ -98,11 +104,13 @@ function derivedScope(state: State): Scope {
   const same = next.perspective === scope.perspective && next.source === scope.source && next.target === scope.target && next.ability === scope.ability;
   return same ? scope : next;
 }
-const reportFilter = (s: Pick<State, 'range' | 'attribution'>): ReportFilter => ({
-  startMs: s.range?.startMs ?? null,
-  endMs: s.range?.endMs ?? null,
-  attribution: s.attribution,
-});
+/** The range a request sends; one that reaches the pull's end stays open, so the pull's last events count as they do for the whole pull. */
+function reportFilter(s: Pick<State, 'range' | 'attribution' | 'overview'>): ReportFilter {
+  const { range } = s;
+  const pullEnd = s.overview?.timeline.durationMs;
+  const endMs = range === null || (pullEnd !== undefined && range.endMs >= pullEnd) ? null : range.endMs;
+  return { startMs: range?.startMs ?? null, endMs, attribution: s.attribution };
+}
 export interface TimeRange {
   startMs: number;
   endMs: number;
@@ -132,6 +140,20 @@ export interface CastsSort {
   desc: boolean;
 }
 const DEFAULT_CASTS_SORT: CastsSort = { key: 'amount', desc: true };
+
+/** The views' toggles; kept for the session. */
+export interface ViewToggles {
+  /** Events of Casts: list begin casts with their outcome. */
+  beginCasts: boolean;
+  /** Casts: list rejected inputs, logged for the logging player only. */
+  rejected: boolean;
+  /** Timeline of Damage Taken: draw every hit. */
+  hits: boolean;
+}
+const NO_TOGGLES: ViewToggles = { beginCasts: false, rejected: false, hits: false };
+export type EventsLayout = 'grid' | 'text';
+/** Rows of an Events page. */
+export const EVENTS_PAGE_ROWS = 60;
 
 /** A pull comparison, shown instead of the pull's tabs. */
 export interface ComparisonState {
@@ -182,6 +204,9 @@ interface State {
   /** The Overview's figures for the range, loaded with the report of a tab whose header shows them. */
   rangeKpis: Kpis | null;
   reportError: string | null;
+  /** The Timeline or Events request failed; the table's report is unaffected. */
+  viewError: string | null;
+  viewLoading: boolean;
   showAugDelta: boolean;
   /** Damage Done and Healing colour their bars by target (healing: by the healed players' role). */
   colorByTarget: boolean;
@@ -194,6 +219,19 @@ interface State {
   castsSort: CastsSort;
   /** Buffs & Debuffs tab: buffs or debuffs on the perspective's side. */
   auraKind: AuraKind;
+  /** The view of the report tabs; kept across tabs, reset per pull. */
+  reportView: ReportView;
+  /** The timeline's window inside the range; `null` = the first 20 s of the range. */
+  zoom: TimeRange | null;
+  /** The lane dimension the user chose per tab. */
+  lanes: Partial<Record<FilterTab, Dimension>>;
+  /** The first row of each tab's Events page; a filter change starts over. */
+  eventsOffset: Partial<Record<FilterTab, number>>;
+  viewToggles: ViewToggles;
+  eventsLayout: EventsLayout;
+  /** The shown tab's timeline or Events page, loaded with its report. */
+  timeline: Timeline | null;
+  events: EventsPage | null;
   /** Drilldown stack; the last entry is shown instead of the report. */
   details: Detail[];
   /** Tab a detail stack was opened from; shown again once the stack is empty. */
@@ -242,6 +280,19 @@ interface Actions {
   selectCastsRow(key: string): void;
   setCastsSort(sort: CastsSort): void;
   setAuraKind(kind: AuraKind): Promise<void>;
+  setReportView(view: ReportView): Promise<void>;
+  /** Moves the timeline's window; `refreshTimeline` loads what it needs. */
+  setZoom(zoom: TimeRange | null): void;
+  /** Loads the timeline when the loaded window no longer serves the shown one. */
+  refreshTimeline(): Promise<void>;
+  setLanes(dimension: Dimension): Promise<void>;
+  setViewToggle(toggle: keyof ViewToggles, on: boolean): Promise<void>;
+  setEventsLayout(layout: EventsLayout): void;
+  showEventsPage(offset: number): Promise<void>;
+  /** The Events view at the page that holds `t`. */
+  showEventsAt(t: number): Promise<void>;
+  /** Asks again for the view the last view request asked for. */
+  retryView(): Promise<void>;
   openPlayer(player: number): Promise<void>;
   openAbility(spellId: number, pet: string | null): Promise<void>;
   openTarget(name: string): Promise<void>;
@@ -291,6 +342,8 @@ export function initialState(): State {
     reportLoading: false,
     rangeKpis: null,
     reportError: null,
+    viewError: null,
+    viewLoading: false,
     showAugDelta: readFlag(AUG_DELTA_KEY, false),
     colorByTarget: readFlag(COLOR_BY_TARGET_KEY, false),
     hideProcs: readFlag(HIDE_PROCS_KEY, true),
@@ -299,6 +352,14 @@ export function initialState(): State {
     castsRow: null,
     castsSort: DEFAULT_CASTS_SORT,
     auraKind: 'buffs',
+    reportView: 'table',
+    zoom: null,
+    lanes: {},
+    eventsOffset: {},
+    viewToggles: NO_TOGGLES,
+    eventsLayout: 'grid',
+    timeline: null,
+    events: null,
     details: [],
     detailOrigin: null,
     focusDeath: null,
@@ -311,6 +372,11 @@ export function initialState(): State {
 }
 
 let reportRequest = 0;
+let viewRequest = 0;
+/** Changes with every view request that asks for more than another window: a superseded timeline of the same value answers the same query. */
+let viewQuery = 0;
+/** The view request whose timeline is shown. */
+let shownTimelineRequest = 0;
 let logRequest = 0;
 let fightRequest = 0;
 let comparisonRequest = 0;
@@ -320,9 +386,12 @@ function dropPendingFight() {
   fightRequest += 1;
 }
 
-/** Makes every in-flight report request stale. */
-function dropPendingReports() {
+/** Makes every in-flight report and view request stale and clears the view's pending state. */
+function dropPendingReports(set: SetState) {
   reportRequest += 1;
+  viewRequest += 1;
+  viewQuery += 1;
+  set({ viewLoading: false, viewError: null });
 }
 
 /** Makes an in-flight comparison stale. */
@@ -368,27 +437,118 @@ async function fetchReport(logId: string, fight: number, input: ReportInput, fil
   }
 }
 
+type ViewData = Pick<State, 'events' | 'timeline'>;
+
+/** A failed request leaves no view data: the last payload belongs to another filter or window. */
+const NO_VIEW_DATA: ViewData = { events: null, timeline: null };
+
+/** The window the newest view request asks the timeline for; `null` when it asks for none. */
+let pendingTimeline: TimeRange | null = null;
+/** The core's widest window that lists log lines, as the last timeline carried it; `null` before any. */
+let listedWindowMs: number | null = null;
+/** The Events page the last view request named; `undefined` when it read the tab's offset. */
+let lastPage: EventsPageRequest | undefined;
+
+/** The shown tab's timeline window or Events page; neither for a table. */
+async function fetchView(logId: string, fight: number, state: State, filter: ReportFilter, page?: EventsPageRequest): Promise<ViewData> {
+  const { tab, details, reportView, scope, auraKind, lanes, viewToggles, hideProcs, eventsOffset, zoom, range, overview } = state;
+  const shown = effectiveView(tab, details.length > 0, reportView);
+  pendingTimeline = null;
+  if (shown === 'table' || !isFilterTab(tab) || !overview) return { events: null, timeline: null };
+  const metric = metricOf(tab, auraKind);
+  const options = { ...viewToggles, hideProcs };
+  if (shown === 'events') {
+    const request = page ?? { kind: 'from', offset: eventsOffset[tab] ?? 0, limit: EVENTS_PAGE_ROWS };
+    return { events: await api.events(logId, fight, filter, scope, metric, options, request), timeline: null };
+  }
+  const whole = rangeWindow(range, overview.timeline.durationMs);
+  const window = requestWindow(shownWindow(zoom, whole), whole);
+  pendingTimeline = window;
+  const timeline = await api.timeline(logId, fight, filter, scope, metric, lanesOf(lanes, tab), options, window);
+  listedWindowMs = timeline.listedWindowMs;
+  return { events: null, timeline };
+}
+
+/** How much of the timeline's shown window `timeline` holds, in ms. */
+function shownMs(timeline: Timeline | null, state: State): number {
+  if (!timeline || !state.overview) return 0;
+  const shown = shownWindow(state.zoom, rangeWindow(state.range, state.overview.timeline.durationMs));
+  return Math.max(0, Math.min(timeline.endMs, shown.endMs) - Math.max(timeline.startMs, shown.startMs));
+}
+
+/**
+ * Loads only the view payload; only the newest request may write it, except that a superseded timeline of the same query
+ * (`windowOnly`: only the window moved) is shown while it holds more of the shown window than the timeline on screen and is newer.
+ * A page at a time sets the tab's offset.
+ */
+async function loadView(get: () => State & Actions, set: SetState, page?: EventsPageRequest, windowOnly = false) {
+  const { log, view } = get();
+  if (!log || view.kind !== 'fight') return;
+  const request = ++viewRequest;
+  if (!windowOnly) viewQuery += 1;
+  const query = viewQuery;
+  lastPage = page;
+  set({ viewLoading: true, viewError: null });
+  try {
+    const next = await fetchView(log.id, view.fightIndex, get(), reportFilter(get()), page);
+    if (request !== viewRequest) {
+      const better = next.timeline && query === viewQuery && request > shownTimelineRequest && shownMs(next.timeline, get()) > shownMs(get().timeline, get());
+      if (better) {
+        shownTimelineRequest = request;
+        set({ timeline: next.timeline });
+      }
+      return;
+    }
+    shownTimelineRequest = request;
+    const { tab, eventsOffset } = get();
+    set({ ...next, viewLoading: false, ...(next.events && isFilterTab(tab) ? { eventsOffset: { ...eventsOffset, [tab]: next.events.offset } } : {}) });
+  } catch (err) {
+    if (request === viewRequest) {
+      shownTimelineRequest = request;
+      set({ ...NO_VIEW_DATA, viewError: String(err), viewLoading: false });
+    }
+  }
+}
+
 /** Loads the report of the current tab; only the newest request may write the result. */
 async function loadReport(get: () => State & Actions, set: SetState) {
   const { log, view, tab, range, details, scope, grouping } = get();
   if (!log || view.kind !== 'fight') return;
   const request = ++reportRequest;
+  const viewToken = ++viewRequest;
+  viewQuery += 1;
+  lastPage = undefined;
   if (tab === 'overview' && range === null) {
     // The whole-pull overview is already in `state.overview`.
-    set({ report: null, breakdown: null, reportError: null, reportLoading: false });
+    set({ report: null, breakdown: null, reportError: null, reportLoading: false, viewError: null, viewLoading: false });
     return;
   }
   const filter = reportFilter(get());
-  set({ reportLoading: true, reportError: null, rangeKpis: null });
+  set({ reportLoading: true, reportError: null, viewError: null, viewLoading: true, rangeKpis: null });
   try {
     // Resources' header shows the Overview's figures; a failure only leaves it at "…".
     const rangeKpis =
       tab === 'resources' && range !== null ? api.quickOverview(log.id, view.fightIndex, filter).then((o) => o.kpis, () => null) : null;
     const metricTab = isMetricTab(tab) && details.length === 0 ? tab : null;
-    const [report, breakdown] = await Promise.all([
-      fetchReport(log.id, view.fightIndex, get(), filter),
-      metricTab ? api.breakdownReport(log.id, view.fightIndex, filter, scope, SIDES[metricTab].metric, groupOf(grouping, metricTab)) : Promise.resolve(null),
+    const [tableResult, viewData] = await Promise.all([
+      Promise.all([
+        fetchReport(log.id, view.fightIndex, get(), filter),
+        metricTab ? api.breakdownReport(log.id, view.fightIndex, filter, scope, SIDES[metricTab].metric, groupOf(grouping, metricTab)) : Promise.resolve(null),
+      ]).then(
+        (data) => ({ data }),
+        (err: unknown) => ({ err }),
+      ),
+      fetchView(log.id, view.fightIndex, get(), filter).then(
+        (data) => ({ data }),
+        (err: unknown) => ({ error: String(err) }),
+      ),
     ]);
+    if (request === reportRequest && viewToken === viewRequest) {
+      shownTimelineRequest = viewToken;
+      set('data' in viewData ? { ...viewData.data, viewLoading: false } : { ...NO_VIEW_DATA, viewError: viewData.error, viewLoading: false });
+    }
+    if ('err' in tableResult) throw tableResult.err;
+    const [report, breakdown] = tableResult.data;
     if (request === reportRequest) {
       // Pin the enemy that the empty "Enemies" entry resolved to, so range changes keep it.
       const shown = get().details;
@@ -409,6 +569,7 @@ async function loadReport(get: () => State & Actions, set: SetState) {
     if (request === reportRequest) set({ reportError: String(err), breakdown: null, focusRequest: null });
   } finally {
     if (request === reportRequest) set({ reportLoading: false });
+    if (viewToken === viewRequest) set({ viewLoading: false });
   }
 }
 
@@ -474,9 +635,9 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     let replacing = false;
     const show = (log: LogView | null) => {
       dropPendingFight();
-      dropPendingReports();
+      dropPendingReports(set);
       dropPendingComparison();
-      set({ log, view: { kind: 'start' }, overview: null, fightLoading: false, fightError: null, comparison: null });
+      set({ log, view: { kind: 'start' }, overview: null, reportLoading: false, fightLoading: false, fightError: null, comparison: null });
     };
     try {
       const source = await chosen.open();
@@ -517,22 +678,22 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   async setPerspective(perspective) {
     const { filters } = get();
     if (filters.perspective === perspective) return;
-    set({ filters: { perspective, own: filters.other, other: filters.own, ability: [] }, focusRequest: null });
+    set({ filters: { perspective, own: filters.other, other: filters.own, ability: [] }, eventsOffset: {}, focusRequest: null });
     await loadReport(get, set);
   },
   async select(dimension, value) {
     const { filters, tab } = get();
-    set({ filters: { ...filters, [roleOf(dimension, tab)]: value === null ? [] : [value] } as Filters, focusRequest: null });
+    set({ filters: { ...filters, [roleOf(dimension, tab)]: value === null ? [] : [value] } as Filters, eventsOffset: {}, focusRequest: null });
     await loadReport(get, set);
   },
   async clearFilters() {
-    set({ filters: { ...EMPTY_FILTERS, perspective: get().filters.perspective }, focusRequest: null });
+    set({ filters: { ...EMPTY_FILTERS, perspective: get().filters.perspective }, eventsOffset: {}, focusRequest: null });
     await loadReport(get, set);
   },
   async clearPageFilter(dimensions) {
     const { filters, tab } = get();
     const cleared = Object.fromEntries(dimensions.map((d) => [roleOf(viewDimension(d, filters.perspective), tab), []]));
-    set({ filters: { ...filters, ...cleared }, focusRequest: null });
+    set({ filters: { ...filters, ...cleared }, eventsOffset: {}, focusRequest: null });
     await loadReport(get, set);
   },
   async setGrouping(dimension) {
@@ -551,7 +712,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     const log = get().log;
     if (!log) return;
     const request = ++fightRequest;
-    dropPendingReports();
+    dropPendingReports(set);
     dropPendingComparison();
     set({
       view: { kind: 'fight', fightIndex },
@@ -574,6 +735,11 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
       focusRequest: 'fight',
       castsRow: null,
       castsSort: DEFAULT_CASTS_SORT,
+      reportView: 'table',
+      zoom: null,
+      eventsOffset: {},
+      events: null,
+      timeline: null,
     });
     try {
       const overview = await api.quickOverview(log.id, fightIndex, null);
@@ -587,7 +753,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
 
   backToPulls() {
     dropPendingFight();
-    dropPendingReports();
+    dropPendingReports(set);
     dropPendingComparison();
     set({
       view: { kind: 'start' },
@@ -607,6 +773,11 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
       focusRequest: 'start',
       castsRow: null,
       castsSort: DEFAULT_CASTS_SORT,
+      reportView: 'table',
+      zoom: null,
+      eventsOffset: {},
+      events: null,
+      timeline: null,
     });
   },
 
@@ -624,7 +795,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     const top = details[details.length - 1];
     // An ability page belongs to one metric; switching the metric shows its player instead.
     const kept = !keep ? [] : top?.kind === 'ability' && tab !== current ? details.slice(0, -1) : details;
-    set({ tab, report: null, breakdown: null, reportError: null, details: kept, focusDeath: null, detailOrigin: null, focusRequest: focus });
+    set({ tab, report: null, breakdown: null, events: null, timeline: null, reportError: null, details: kept, focusDeath: null, detailOrigin: null, focusRequest: focus });
     await loadReport(get, set);
   },
 
@@ -749,27 +920,91 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
 
   async setAttribution(attribution) {
     // Filter changes never move focus; drop a request that no heading has taken (also in setRange and setAuraKind).
-    set({ attribution, focusRequest: null });
+    set({ attribution, eventsOffset: {}, focusRequest: null });
     // The Aug toggle on the comparison recalculates the comparison; Back recalculates the pull.
     if (get().comparison) await loadComparison(get, set);
     else await loadReport(get, set);
   },
 
   async setRange(range) {
-    set({ range, focusRequest: null });
+    const { zoom, overview } = get();
+    const inside = zoom !== null && overview !== null && covers(rangeWindow(range, overview.timeline.durationMs), zoom);
+    set({ range, zoom: inside ? zoom : null, eventsOffset: {}, focusRequest: null });
     await loadReport(get, set);
   },
 
   async setAuraKind(kind) {
     // Keep the shown report while the other kind loads, so the tab keeps its filter and focus.
-    set({ auraKind: kind, focusRequest: null });
+    set({ auraKind: kind, eventsOffset: {}, focusRequest: null });
     await loadReport(get, set);
   },
 
   async setHideProcs(hide) {
     writeFlag(HIDE_PROCS_KEY, hide);
-    set({ hideProcs: hide });
+    set({ hideProcs: hide, eventsOffset: {} });
     if (get().tab === 'casts') await loadReport(get, set);
+  },
+
+  async setReportView(reportView) {
+    if (get().reportView === reportView) return;
+    set({ reportView, focusRequest: null });
+    await loadView(get, set);
+  },
+
+  setZoom(zoom) {
+    const current = get().zoom;
+    if (zoom && current && sameWindow(zoom, current)) return;
+    set({ zoom });
+  },
+
+  async refreshTimeline() {
+    const { timeline, zoom, range, overview, viewLoading } = get();
+    if (!overview) return;
+    const whole = rangeWindow(range, overview.timeline.durationMs);
+    const shown = shownWindow(zoom, whole);
+    // A wide window lists no log lines; zooming in asks again once the request is narrow enough to list them.
+    const limit = timeline?.listedWindowMs ?? listedWindowMs;
+    const lists = (span: number) => limit === null || span <= limit;
+    const serves = (loaded: TimeRange, linesListed: boolean) => covers(loaded, shown) && (linesListed || !lists(windowSpan(requestWindow(shown, whole))));
+    // While a request is out, only its window counts: the loaded timeline is about to be replaced.
+    if (viewLoading) {
+      if (pendingTimeline && serves(pendingTimeline, lists(windowSpan(pendingTimeline)))) return;
+    } else if (timeline && serves({ startMs: timeline.startMs, endMs: timeline.endMs }, timeline.linesListed)) {
+      return;
+    }
+    await loadView(get, set, undefined, true);
+  },
+
+  async setLanes(dimension) {
+    const { tab, lanes } = get();
+    if (!isFilterTab(tab) || lanesOf(lanes, tab) === dimension) return;
+    set({ lanes: { ...lanes, [tab]: dimension } });
+    await loadView(get, set);
+  },
+
+  async setViewToggle(toggle, on) {
+    set({ viewToggles: { ...get().viewToggles, [toggle]: on }, eventsOffset: {} });
+    await loadView(get, set);
+  },
+
+  setEventsLayout(eventsLayout) {
+    set({ eventsLayout });
+  },
+
+  async showEventsPage(offset) {
+    const { tab, eventsOffset } = get();
+    if (!isFilterTab(tab)) return;
+    set({ eventsOffset: { ...eventsOffset, [tab]: offset } });
+    await loadView(get, set);
+  },
+
+  async showEventsAt(t) {
+    set({ reportView: 'events', focusRequest: null });
+    await loadView(get, set, { kind: 'at', t, limit: EVENTS_PAGE_ROWS });
+  },
+
+  async retryView() {
+    await loadView(get, set, lastPage);
   },
 
   setTheme(theme) {

@@ -9,6 +9,7 @@ use openlogs_index::Outcome;
 use openlogs_parser::Unit;
 
 pub const PLAYER_FLAGS: u32 = 0x514;
+pub const PET_FLAGS: u32 = 0x2114;
 pub const HOSTILE_FLAGS: u32 = 0x10a48;
 
 pub fn unit(actors: &mut Actors, guid: &str, name: &str, flags: u32) -> ActorId {
@@ -36,6 +37,7 @@ pub fn fight(actors: Actors, mut events: Vec<Event>) -> Fight {
         spells: BTreeMap::new(),
         broken_lines: 0,
         encounters: Vec::new(),
+        fail_reasons: Vec::new(),
     }
 }
 

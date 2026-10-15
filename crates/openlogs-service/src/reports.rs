@@ -1,5 +1,5 @@
 use openlogs_analysis::{Attribution, Fight, ReportFilter};
-use openlogs_gamedata::Curated;
+use openlogs_gamedata::{ChannelSpells, Curated};
 
 use crate::auras_dto::{AuraKindDto, AurasReportDto, auras_report_dto};
 use crate::casts_dto::{CastsReportDto, casts_report_dto};
@@ -17,6 +17,9 @@ use crate::resources_dto::{ResourcesReportDto, resources_report_dto};
 use crate::scope_dto::{
     BreakdownDto, DimensionDto, FilterOptionDto, ScopeDto, ScopeMetricDto, breakdown_dto,
     option_dto,
+};
+use crate::views_dto::{
+    EventsPageDto, PageDto, TimelineDto, ViewOptionsDto, WindowDto, events_page_dto, timeline_dto,
 };
 
 /// The overview of a pull; without a filter, of the whole pull.
@@ -254,4 +257,58 @@ pub fn filter_options(
     .iter()
     .map(|option| option_dto(fight, option))
     .collect()
+}
+
+/// One page of the tab's events in the range.
+pub fn events(
+    fight: &Fight,
+    curated: &Curated,
+    filter: FilterDto,
+    scope: ScopeDto,
+    metric: ScopeMetricDto,
+    options: ViewOptionsDto,
+    page: PageDto,
+) -> EventsPageDto {
+    let page = openlogs_analysis::events(
+        fight,
+        curated,
+        &filter.to_filter(),
+        &scope.to_scope(),
+        metric.to_metric(),
+        &options.to_options(),
+        page.to_page(),
+    );
+    events_page_dto(fight, &page)
+}
+
+/// The tab's timeline marks in `window`, in lanes by `lanes` (or its fallback).
+#[allow(clippy::too_many_arguments)]
+pub fn timeline(
+    fight: &Fight,
+    curated: &Curated,
+    channels: &ChannelSpells,
+    filter: FilterDto,
+    scope: ScopeDto,
+    metric: ScopeMetricDto,
+    lanes: DimensionDto,
+    options: ViewOptionsDto,
+    window: WindowDto,
+) -> TimelineDto {
+    let timeline = openlogs_analysis::timeline(
+        fight,
+        curated,
+        channels,
+        &filter.to_filter(),
+        &scope.to_scope(),
+        metric.to_metric(),
+        lanes.to_dimension(),
+        &options.to_options(),
+        window.to_window(),
+    );
+    let bosses: &[_] = if metric == ScopeMetricDto::Resources {
+        &timeline.bosses
+    } else {
+        &[]
+    };
+    timeline_dto(fight, &timeline, bosses)
 }

@@ -16,5 +16,6 @@ pub mod resources_dto;
 pub mod scope_dto;
 #[cfg(test)]
 mod test_fight;
+pub mod views_dto;
 
 pub use reports::*;

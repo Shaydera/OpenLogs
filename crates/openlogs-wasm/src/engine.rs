@@ -1,11 +1,12 @@
 use openlogs_analysis::{Fight, load_fight_slice};
-use openlogs_gamedata::{Curated, DungeonTable};
+use openlogs_gamedata::{ChannelSpells, Curated, DungeonTable};
 use openlogs_index::{FightSummary, Indexer, LogIndex};
 use openlogs_service::auras_dto::AuraKindDto;
 use openlogs_service::log_dto::log_view;
 use openlogs_service::player_dto::MetricDto;
 use openlogs_service::report_dto::{AttributionDto, FilterDto};
 use openlogs_service::scope_dto::{DimensionDto, ScopeDto, ScopeMetricDto};
+use openlogs_service::views_dto::{PageDto, ViewOptionsDto, WindowDto};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
@@ -20,6 +21,7 @@ pub struct Engine {
     fights: Vec<(u32, Fight)>,
     curated: Curated,
     dungeons: Option<DungeonTable>,
+    channels: ChannelSpells,
 }
 
 impl Default for Engine {
@@ -30,6 +32,7 @@ impl Default for Engine {
             fights: Vec::new(),
             curated: Curated::bundled(),
             dungeons: None,
+            channels: ChannelSpells::default(),
         }
     }
 }
@@ -37,6 +40,11 @@ impl Default for Engine {
 impl Engine {
     pub fn set_dungeons(&mut self, json: &str) -> Result<(), String> {
         self.dungeons = Some(DungeonTable::from_json(json).map_err(|err| err.to_string())?);
+        Ok(())
+    }
+
+    pub fn set_channel_spells(&mut self, json: &str) -> Result<(), String> {
+        self.channels = ChannelSpells::from_json(json).map_err(|err| err.to_string())?;
         Ok(())
     }
 
@@ -256,6 +264,32 @@ impl Engine {
                     args.attribution,
                 ))
             }
+            "events" => {
+                let args: EventsArgs = parse(args_json)?;
+                json(openlogs_service::events(
+                    self.fight(args.fight_index)?,
+                    curated,
+                    args.filter,
+                    args.scope,
+                    args.metric,
+                    args.options,
+                    args.page,
+                ))
+            }
+            "timeline" => {
+                let args: TimelineArgs = parse(args_json)?;
+                json(openlogs_service::timeline(
+                    self.fight(args.fight_index)?,
+                    curated,
+                    &self.channels,
+                    args.filter,
+                    args.scope,
+                    args.metric,
+                    args.lanes,
+                    args.options,
+                    args.window,
+                ))
+            }
             _ => Err(format!("Unknown command {command}")),
         }
     }
@@ -416,4 +450,31 @@ struct CompareArgs {
     fight_a: u32,
     fight_b: u32,
     attribution: AttributionDto,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EventsArgs {
+    fight_index: u32,
+    filter: FilterDto,
+    #[serde(default)]
+    scope: ScopeDto,
+    metric: ScopeMetricDto,
+    #[serde(default)]
+    options: ViewOptionsDto,
+    page: PageDto,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TimelineArgs {
+    fight_index: u32,
+    filter: FilterDto,
+    #[serde(default)]
+    scope: ScopeDto,
+    metric: ScopeMetricDto,
+    lanes: DimensionDto,
+    #[serde(default)]
+    options: ViewOptionsDto,
+    window: WindowDto,
 }
