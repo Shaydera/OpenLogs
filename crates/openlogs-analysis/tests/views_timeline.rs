@@ -940,3 +940,43 @@ fn an_interrupt_does_not_borrow_the_begin_of_a_finished_cast() {
     );
     assert_eq!(kicks.lanes[0].items[0].cast_start_ms, None);
 }
+
+#[test]
+fn damage_taken_legend_keeps_its_order_whatever_the_window() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-4", "Faelan-Blackhand-EU", 62);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let later = 25771;
+    b.spell(CAUSTIC, "Caustic Waves");
+    b.spell(later, "Forbearance");
+    for (spell, from, to) in [(CAUSTIC, 1_000, 4_000), (later, 10_000, 20_000)] {
+        b.push(
+            from,
+            boss,
+            mage,
+            spell,
+            aura(AuraAction::Applied, AuraType::Debuff, None),
+        );
+        b.push(
+            to,
+            boss,
+            mage,
+            spell,
+            aura(AuraAction::Removed, AuraType::Debuff, None),
+        );
+    }
+    let fight = b.build();
+    let legend = |window| {
+        plain(
+            &fight,
+            &Scope::default(),
+            ScopeMetric::DamageTaken,
+            Dimension::Target,
+            ViewOptions::default(),
+            window,
+        )
+        .legend
+    };
+    assert_eq!(legend((0, 60_000)), [CAUSTIC, later]);
+    assert_eq!(legend((8_000, 25_000)), [CAUSTIC, later]);
+}

@@ -152,12 +152,9 @@ pub(crate) fn marks(
     if lanes.axis() == Some(Dimension::Target) {
         death_lines(fight, filter, scope, window, lanes);
     }
-    let mut drawn: Vec<&AuraInterval> = debuffs
-        .iter()
-        .filter(|i| overlaps(window, i.start_ms, Some(i.end_ms)))
-        .collect();
-    drawn.sort_by_key(|i| i.start_ms);
-    first_seen(drawn.into_iter().map(|i| i.spell))
+    let mut by_start: Vec<&AuraInterval> = debuffs.iter().collect();
+    by_start.sort_by_key(|i| i.start_ms);
+    first_seen(by_start.into_iter().map(|i| i.spell))
 }
 
 /// A red line per death of a lane's unit in the window.

@@ -14,8 +14,8 @@ import { band } from '../player/chartGeometry';
 import { PlayerIcon } from '../reports/PlayerName';
 import { reportSpellName, rosterIndex } from '../reports/reportData';
 import { AURA_ROWS, auraColour, sortAuras, type AuraSort } from './auraModel';
+import { AuraKindSwitch } from './AuraKindSwitch';
 
-const KINDS = ['buffs', 'debuffs'] as const;
 const SORTS: { key: AuraSort; label: MessageKey; byTarget?: MessageKey }[] = [
   { key: 'uptime', label: 'casts.uptime' },
   { key: 'targets', label: 'auras.targets', byTarget: 'auras.auras' },
@@ -27,7 +27,6 @@ const keyOf = (row: AuraRow) => `${JSON.stringify(row.key)}#${row.spellId}`;
 /** Auras by aura (a lane per holder) or by target (a lane per aura); the lens decides whose auras. */
 export function AurasTab({ report }: { report: AurasReport }) {
   const kind = useApp((s) => s.auraKind);
-  const setAuraKind = useApp((s) => s.setAuraKind);
   const scope = useApp((s) => s.scope);
   const select = useApp((s) => s.select);
   const loading = useApp((s) => s.reportLoading);
@@ -61,15 +60,7 @@ export function AurasTab({ report }: { report: AurasReport }) {
             </span>
           )
         }
-        tools={
-          <div className="filters" role="group" aria-label={t('auras.kind')}>
-            {KINDS.map((option) => (
-              <button key={option} type="button" className={option === kind ? 'pill on' : 'pill'} aria-pressed={option === kind} onClick={() => void setAuraKind(option)}>
-                {t(`auras.${option}`)}
-              </button>
-            ))}
-          </div>
-        }
+        tools={<AuraKindSwitch />}
       />
       {/* Always mounted: screen readers announce a live region's new text, not a new region. */}
       <p className={loading ? 'muted pad' : 'sr-only'} role="status">

@@ -18,7 +18,7 @@ use crate::breakdown::{Dimension, RowKey};
 use crate::cells::ScopeMetric;
 use crate::fight::{AuraType, FailReason, Fight, SpellId};
 use crate::filter::{Attribution, ReportFilter};
-use crate::scope::{Scope, Side};
+use crate::scope::{Scope, Side, UnitRef};
 use crate::views::parts::AmountFacts;
 use crate::views::timeline::{Lanes, clip, lane_axis};
 
@@ -318,7 +318,7 @@ pub fn events(
         total: sink.total,
         offset,
         rows: sink.rows,
-        narrowed: narrowed(scope)
+        narrowed: narrowed(fight, scope)
             .into_iter()
             .filter(|dimension| !credit || *dimension == Dimension::Target)
             .collect(),
@@ -328,14 +328,24 @@ pub fn events(
     }
 }
 
-pub(crate) fn narrowed(scope: &Scope) -> Vec<Dimension> {
+/// Dimensions whose selection shows one identity in every row: never a column. A player's selection
+/// includes the pets it owns, and a unit name covers numbered instances, so those stay columns.
+pub(crate) fn narrowed(fight: &Fight, scope: &Scope) -> Vec<Dimension> {
+    let one_unit = |selected: &[UnitRef]| match selected {
+        [UnitRef::Player(id)] => !fight
+            .actors
+            .iter()
+            .any(|actor| actor.id != *id && fight.actors.credited_player(actor.id) == Some(*id)),
+        [UnitRef::Pet { .. } | UnitRef::Instance(_) | UnitRef::Environment] => true,
+        _ => false,
+    };
     [
-        (Dimension::Source, scope.source.is_empty()),
-        (Dimension::Ability, scope.ability.is_empty()),
-        (Dimension::Target, scope.target.is_empty()),
+        (Dimension::Source, one_unit(&scope.source)),
+        (Dimension::Ability, scope.ability.len() == 1),
+        (Dimension::Target, one_unit(&scope.target)),
     ]
     .into_iter()
-    .filter(|(_, open)| !open)
+    .filter(|(_, one)| *one)
     .map(|(dimension, _)| dimension)
     .collect()
 }
@@ -490,7 +500,7 @@ pub struct Timeline {
     pub lanes: Vec<Lane>,
     /// Casts of the encounter's units above the lanes.
     pub context: Vec<TimelineItem>,
-    /// Damage Taken: the debuff spells drawn, in order of appearance.
+    /// Damage Taken: the range's debuff spells in order of appearance, whatever the window.
     pub legend: Vec<SpellId>,
 }
 

@@ -28,6 +28,10 @@ import type {
   RecentLog,
   TargetDetail,
   ReportFilter,
+  EventsPage,
+  EventsPageRequest,
+  Timeline,
+  ViewOptions,
 } from './types';
 
 const CHUNK_BYTES = 8 << 20;
@@ -210,6 +214,10 @@ export function createClient({ engine: getEngine, dungeons, db, now }: ClientDep
       report<InterruptsReport>(logId, [fightIndex], 'interrupts_report', { fightIndex, filter, scope, group }),
     resourcesReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope) =>
       report<ResourcesReport>(logId, [fightIndex], 'resources_report', { fightIndex, filter, scope }),
+    events: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, metric: ScopeMetric, options: ViewOptions, page: EventsPageRequest) =>
+      report<EventsPage>(logId, [fightIndex], 'events', { fightIndex, filter, scope, metric, options, page }),
+    timeline: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, metric: ScopeMetric, lanes: Dimension, options: ViewOptions, window: { startMs: number; endMs: number }) =>
+      report<Timeline>(logId, [fightIndex], 'timeline', { fightIndex, filter, scope, metric, lanes, options, window }),
     comparePulls: (logId: string, fightA: number, fightB: number, attribution: Attribution) =>
       report<PullComparison>(logId, [fightA, fightB], 'compare_pulls', { fightA, fightB, attribution }),
   };

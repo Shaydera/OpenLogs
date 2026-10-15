@@ -1,8 +1,10 @@
-import { type FocusEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
+import { type FocusEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, useEffect, useId, useRef, useState } from 'react';
 import type { QuickOverview } from '../../api/types';
 import { formatDuration, formatEventTime } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
+import { effectiveView } from '../../reportViews';
 import { type TimeRange, useApp } from '../../store';
+import { clampWindow, rangeWindow, shownWindow } from '../views/zoomGeometry';
 import { TIMELINE_VIEW_BOX, numberRepeats, percentOf, timelineGeometry } from '../overview/timelineGeometry';
 import { fullRange, normalizeRange, rangeInPull, rangeLabel, rangeSpan, sameRange } from './rangeGeometry';
 import { SaveRangePopover } from './SaveRangePopover';
@@ -17,6 +19,9 @@ import { useRangeKeys } from './useRangeKeys';
 export function RangePanel({ overview, rangeKey, run = false }: { overview: QuickOverview; rangeKey: string; run?: boolean }) {
   const range = useApp((s) => s.range);
   const setRange = useApp((s) => s.setRange);
+  const zoom = useApp((s) => s.zoom);
+  const setZoom = useApp((s) => s.setZoom);
+  const timeline = useApp((s) => effectiveView(s.tab, s.details.length > 0, s.reportView) === 'timeline');
   const duration = overview.timeline.durationMs;
   const geometry = timelineGeometry(overview.timeline, duration);
   const pillLabels = numberRepeats(geometry.phases.map((phase) => phase.label));
@@ -40,6 +45,34 @@ export function RangePanel({ overview, rangeKey, run = false }: { overview: Quic
   const selection = shown ?? fullRange(duration);
   const from = percentOf(selection.startMs, duration);
   const to = percentOf(selection.endMs, duration);
+
+  const whole = rangeWindow(range, duration);
+  const shownZoom = shownWindow(zoom, whole);
+  const stopZoomDrag = useRef<(() => void) | null>(null);
+  useEffect(() => () => stopZoomDrag.current?.(), []);
+
+  /** Dragging the timeline's window band pans the window inside the range. */
+  function panZoom(event: ReactMouseEvent<HTMLSpanElement>) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const width = plotRef.current?.getBoundingClientRect().width ?? 0;
+    const x0 = event.clientX;
+    const from = shownZoom;
+    const move = (e: MouseEvent) => {
+      const delta = width > 0 ? Math.round(((e.clientX - x0) / width) * duration) : 0;
+      setZoom(clampWindow({ startMs: from.startMs + delta, endMs: from.endMs + delta }, whole));
+    };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      stopZoomDrag.current = null;
+    };
+    stopZoomDrag.current?.();
+    stopZoomDrag.current = up;
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  }
 
   function closeSave(returnFocus: boolean) {
     setSaving(false);
@@ -147,6 +180,15 @@ export function RangePanel({ overview, rangeKey, run = false }: { overview: Quic
           />
           <span className="range-handle range-handle-end" {...keys.handleProps('end', shown)} onMouseDown={(event) => brush.start(event, 'end')} />
         </div>
+        {timeline && (
+          <span
+            className="range-zoom"
+            data-testid="range-zoom"
+            title={t('range.zoomHint')}
+            style={{ left: `${percentOf(shownZoom.startMs, duration)}%`, width: `${percentOf(shownZoom.endMs, duration) - percentOf(shownZoom.startMs, duration)}%` }}
+            onMouseDown={panZoom}
+          />
+        )}
       </div>
       <div className="range-foot">
         <span>

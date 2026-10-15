@@ -27,6 +27,10 @@ import { HealingTab } from './reports/HealingTab';
 import { RangePanel } from './reports/RangePanel';
 import { ResourcesTab } from './resources/ResourcesTab';
 import { TargetDetailView } from './target/TargetDetailView';
+import { EventsView } from './views/EventsView';
+import { TimelineView } from './views/TimelineView';
+import { effectiveView } from '../reportViews';
+import { isFilterTab } from '../scopeSides';
 
 /** A fight screen: the top bar, then the pull header (compact on detail pages), the tab row and the tab's panel. */
 export function FightView() {
@@ -105,6 +109,10 @@ function ReportView() {
   const details = useApp((s) => s.details);
   const back = useApp((s) => s.back);
   const breakdown = useApp((s) => s.breakdown);
+  const tab = useApp((s) => s.tab);
+  const view = useApp((s) => effectiveView(s.tab, s.details.length > 0, s.reportView));
+  if (view === 'events' && isFilterTab(tab)) return <EventsView key={tab} tab={tab} />;
+  if (view === 'timeline' && isFilterTab(tab)) return <TimelineView key={tab} tab={tab} />;
   if (error)
     return (
       <div className="report-error">

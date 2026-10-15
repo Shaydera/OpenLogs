@@ -782,3 +782,62 @@ fn casts_events_reconcile_with_the_table_under_a_target_selection() {
         assert_eq!(presses as i64, table.breakdown.total);
     }
 }
+
+#[test]
+fn a_selection_is_narrowed_only_when_every_row_shows_one_identity() {
+    let mut b = FightBuilder::new(10_000);
+    let warlock = b.player("Player-1", "Wendel-Emberfall-EU", 265);
+    let mage = b.player("Player-2", "Faelan-Emberfall-EU", 63);
+    let imp = b.unit("Pet-0-0-0-0-416-0000000001", "Wild Imp", 0x1111);
+    let boss = b.unit("Creature-0-0-0-0-1-0000000001", "Ula'tek", HOSTILE_FLAGS);
+    b.fight.actors.set_owner(imp, warlock);
+    b.spell(PYROBLAST, "Pyroblast");
+    b.push(
+        1_000,
+        warlock,
+        boss,
+        PYROBLAST,
+        EventKind::Damage(damage(DamageVia::Spell, 10, 0)),
+    );
+    b.push(
+        1_100,
+        imp,
+        boss,
+        PYROBLAST,
+        EventKind::Damage(damage(DamageVia::Spell, 5, 0)),
+    );
+    let fight = b.build();
+    let source = |unit| Scope {
+        source: vec![unit],
+        ..Scope::default()
+    };
+    let narrowed = |scope: &Scope| {
+        page_of(
+            &fight,
+            &filter(Attribution::Augmented),
+            scope,
+            ScopeMetric::DamageDone,
+        )
+        .narrowed
+    };
+    assert!(
+        narrowed(&source(UnitRef::Player(warlock))).is_empty(),
+        "the warlock's pet shows its own name"
+    );
+    assert_eq!(
+        narrowed(&source(UnitRef::Player(mage))),
+        [Dimension::Source]
+    );
+    assert_eq!(
+        narrowed(&source(UnitRef::Pet {
+            owner: warlock,
+            name: "Wild Imp".into()
+        })),
+        [Dimension::Source]
+    );
+    assert!(narrowed(&source(UnitRef::Unit("Ula'tek".into()))).is_empty());
+    assert_eq!(
+        narrowed(&source(UnitRef::Instance(boss))),
+        [Dimension::Source]
+    );
+}

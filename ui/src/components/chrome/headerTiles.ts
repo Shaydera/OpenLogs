@@ -170,7 +170,8 @@ function breakdownTiles(tab: MetricTab, input: HeaderInput): HeaderTile[] {
 }
 
 /** The Overview's rule: a range from 0:00 also holds what happened before the pull (prepull lust). */
-const inRange = (range: TimeRange | null, at: number) => range === null || (at < range.endMs && (at >= range.startMs || range.startMs === 0));
+const inRange = (range: TimeRange | null, at: number, durationMs: number) =>
+  range === null || ((at < range.endMs || (at === range.endMs && range.endMs >= durationMs)) && (at >= range.startMs || range.startMs === 0));
 
 function deathsTile(times: number[]): HeaderTile {
   return {
@@ -190,7 +191,7 @@ function takenTiles(report: ReportOf['taken'] | null, input: HeaderInput): Heade
     { label: labels[0], value: formatScaled(report.total), sub: t('kpi.dtps', { amount: formatScaled(perSecond(report.total, report.durationMs)) }) },
     { label: labels[1], value: ability ? formatScaled(ability.amount) : '—', sub: ability ? hitName(ability, (id) => reportSpellName(report.spells, id)) : '' },
     { label: labels[2], value: player ? formatScaled(player.amount) : '—', sub: player ? playerName(report.roster, player.player) : '' },
-    input.overview ? deathsTile(input.overview.timeline.markers.deaths.map((d) => d.t).filter((at) => inRange(input.range, at))) : pendingTile(labels[3]),
+    input.overview ? deathsTile(input.overview.timeline.markers.deaths.map((d) => d.t).filter((at) => inRange(input.range, at, input.overview!.timeline.durationMs))) : pendingTile(labels[3]),
   ];
 }
 
@@ -238,7 +239,7 @@ function aurasTiles(report: ReportOf['buffs'] | null, input: HeaderInput): Heade
   const labels = [t('kpi.bloodlust'), t('kpi.ebonMight'), t(byTarget ? 'kpi.targets' : 'kpi.auras'), t('kpi.players')];
   if (!report) return labels.map(pendingTile);
   const overview = input.overview;
-  const lust = overview?.timeline.markers.bloodlust.find((l) => inRange(input.range, l.t));
+  const lust = overview?.timeline.markers.bloodlust.find((l) => inRange(input.range, l.t, overview.timeline.durationMs));
   const ebon = report.ebonMight;
   const onEnemies = input.scope.perspective === 'enemy';
   return [

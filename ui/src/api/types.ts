@@ -825,3 +825,207 @@ export interface ResourcesReport {
   roster: PlayerRef[];
   spells: Record<string, { name: string }>;
 }
+
+/** The views of a report tab. */
+export type ReportView = 'table' | 'timeline' | 'events';
+
+/** The views' toggles and the Casts option they share with the table. */
+export interface ViewOptions {
+  beginCasts: boolean;
+  rejected: boolean;
+  hits: boolean;
+  hideProcs: boolean;
+}
+
+export type EventsPageRequest = { kind: 'from'; offset: number; limit: number } | { kind: 'at'; t: number; limit: number };
+
+/** A unit an event or a mark names: the logged unit itself, with the player a pet belongs to. */
+export interface UnitInfo {
+  actorId: number;
+  name: string;
+  number: number | null;
+  owner: number | null;
+  player: boolean;
+}
+
+export interface ActorSpell {
+  actorId: number;
+  spellId: number;
+}
+
+/** An Evoker's share of a hit, logged as its own support event. */
+export interface SharePart {
+  buffId: number;
+  evoker: number;
+  amount: number;
+  /** Credited to the Evoker and named by the source or ability selection. */
+  selected: boolean;
+}
+
+export type EventRowType =
+  | 'damage'
+  | 'tick'
+  | 'melee'
+  | 'ranged'
+  | 'absorbed'
+  | 'heal'
+  | 'hotTick'
+  | 'absorb'
+  | 'beginCast'
+  | 'cast'
+  | 'interrupted'
+  | 'rejected'
+  | 'apply'
+  | 'remove'
+  | 'refresh'
+  | 'stack'
+  | 'died'
+  | 'recap'
+  | 'interrupt'
+  | 'dispel'
+  | 'steal';
+
+export type CastOutcome = 'completed' | 'interrupted' | 'released' | 'noOutcome';
+
+export interface EventRow {
+  /** The logged line; a boss that dies at the pull's end counts on from the last one. */
+  index: number;
+  t: number;
+  type: EventRowType;
+  /** The log's event name. */
+  event: string;
+  source: number;
+  spellId: number;
+  target: number;
+  /** The tab's figure as its table counts it. */
+  amount: number | null;
+  overkill: number;
+  absorbed: number;
+  blocked: number;
+  resisted: number;
+  overheal: number;
+  critical: boolean;
+  /** `[current, max]` of the target, when the logged unit HP is the target's. */
+  targetHp: [number, number] | null;
+  shares: SharePart[];
+  stacks: number | null;
+  /** Interrupts and dispels: the spell used; `spellId` is the one it stopped. */
+  used: number | null;
+  durationMs: number | null;
+  stage: number | null;
+  outcome: CastOutcome | null;
+  reason: string | null;
+  /** A follow-up cast: when its press was cast. */
+  pressMs: number | null;
+  by: ActorSpell | null;
+  unknownBlow: boolean;
+  environmental: boolean;
+  aliveMs: number | null;
+  /** A recap row: the index of the death it leads up to. */
+  contextOf: number | null;
+}
+
+export interface EventsPage {
+  /** Rows in the range; context rows are not counted. */
+  total: number;
+  offset: number;
+  rows: EventRow[];
+  /** Dimensions narrowed to one value: never a column. */
+  narrowed: Dimension[];
+  /** Damage and healing: the scope's sum as the table counts it. */
+  amount: number | null;
+  unlistedSupport: number;
+  hiddenProcs: number;
+  units: UnitInfo[];
+  roster: PlayerRef[];
+  spells: Record<string, { name: string }>;
+}
+
+export type TimelineItemKind =
+  | 'instant'
+  | 'castTime'
+  | 'empowered'
+  | 'interrupted'
+  | 'noOutcome'
+  | 'rejected'
+  | 'aura'
+  | 'hit'
+  | 'death'
+  | 'interrupt'
+  | 'dispel'
+  | 'steal';
+
+export interface ItemAmount {
+  rule: 'untilNextCast' | 'whileUp' | 'bossCast' | 'hit';
+  amount: number;
+  hits: number;
+  targets: number;
+  /** Aug support inside the amount. */
+  support: number;
+  healing: boolean;
+}
+
+export interface LogLine {
+  t: number;
+  event: string;
+  spellId: number;
+  stage?: number;
+  reason?: string;
+}
+
+/** A mark of the timeline; absent parts are left out of the payload. */
+export interface TimelineItem {
+  kind: TimelineItemKind;
+  startMs: number;
+  endMs?: number;
+  source: number;
+  spellId: number;
+  target: number;
+  stage?: number;
+  stacks?: number;
+  used?: number;
+  by?: ActorSpell;
+  reason?: string;
+  overkill?: number;
+  rezzedMs?: number;
+  aliveMs?: number;
+  castStartMs?: number;
+  amount?: ItemAmount;
+  log?: LogLine[];
+  /** Log lines not listed: beyond the first twelve, or every line of a wide window. */
+  logMore?: number;
+  track?: number;
+}
+
+/** A unit's power or health as logged: `[t, current, max]` samples. */
+export interface PowerLine {
+  powerType: number;
+  samples: [number, number, number][];
+}
+
+export interface TimelineLane {
+  /** `null`: the one lane of a view whose every dimension is narrowed. */
+  key: RowKey | null;
+  name: string;
+  number: number | null;
+  spellId: number;
+  total: number;
+  tracks: number;
+  items: TimelineItem[];
+  power: PowerLine[];
+  dead: [number, number][];
+}
+
+export interface Timeline {
+  /** The loaded window, clipped to the range. */
+  startMs: number;
+  endMs: number;
+  axis: Dimension | null;
+  lanes: TimelineLane[];
+  context: TimelineItem[];
+  legend: number[];
+  units: UnitInfo[];
+  roster: PlayerRef[];
+  spells: Record<string, { name: string }>;
+  linesListed: boolean;
+}
