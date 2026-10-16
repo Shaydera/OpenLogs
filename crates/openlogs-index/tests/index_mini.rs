@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use openlogs_index::{Outcome, RosterEntry, difficulty_label, index_bytes};
 use openlogs_parser::Timestamp;
 
@@ -22,10 +20,7 @@ fn file_level_summary() {
     assert!(index.warnings.is_empty());
     assert_eq!(index.line_count, 18);
     assert_eq!(index.broken_lines, 1);
-    assert_eq!(
-        index.unhandled_in_fights,
-        BTreeMap::from([("WORLD_MARKER_PLACED".to_string(), 1)])
-    );
+    assert!(index.unhandled_in_fights.is_empty());
     assert_eq!(index.fights.len(), 3);
     for fight in &index.fights {
         assert_eq!(fight.zone.as_deref(), Some("The Venomous Abyss"));

@@ -11,8 +11,9 @@ use openlogs_parser::{
 
 use crate::actors::{ActorId, ActorKind, Actors, NOBODY};
 use crate::fight::{
-    Absorbed, Damage, Energize, Event, EventKind, FailReason, Fight, FightKind, Heal, MissType,
-    Missed, NO_SPELL, POWER_SAMPLE_MS, PowerSample, RunEncounter, SpellId, SpellInfo, UnitHp,
+    Absorbed, Damage, Energize, Event, EventKind, FailReason, Fight, FightKind, Heal,
+    MarkerInterval, MissType, Missed, NO_SPELL, POWER_SAMPLE_MS, PositionSample, PowerSample,
+    RunEncounter, SpellId, SpellInfo, UnitHp, WorldMarkerInterval,
 };
 
 /// Loads one fight, including its prelude, from the complete log bytes.
@@ -72,6 +73,12 @@ struct FightBuilder {
     /// while an encounter was open: where that encounter ends unless its `ENCOUNTER_END`
     /// follows, as the index ends its pull.
     resume_t: Option<i32>,
+    /// Position samples per map, for `Fight::ui_map_id`.
+    map_samples: HashMap<u32, usize>,
+    /// Index into `fight.raid_markers` of each actor's interval still open.
+    open_raid_markers: HashMap<ActorId, usize>,
+    /// Index into `fight.world_markers` of each marker's interval still open.
+    open_world_markers: HashMap<u8, usize>,
 }
 
 impl FightBuilder {
@@ -96,6 +103,20 @@ impl FightBuilder {
                 broken_lines: 0,
                 encounters: Vec::new(),
                 fail_reasons: Vec::new(),
+                positions: Vec::new(),
+                raid_markers: Vec::new(),
+                world_markers: summary
+                    .world_markers
+                    .iter()
+                    .map(|marker| WorldMarkerInterval {
+                        marker: marker.marker,
+                        x: marker.x,
+                        y: marker.y,
+                        start_ms: 0,
+                        end_ms: 0,
+                    })
+                    .collect(),
+                ui_map_id: None,
             },
             last_power: HashMap::new(),
             last_t: i32::MIN,
@@ -103,6 +124,14 @@ impl FightBuilder {
             instance_id: summary.instance_id,
             run_end_t: None,
             resume_t: None,
+            map_samples: HashMap::new(),
+            open_raid_markers: HashMap::new(),
+            open_world_markers: summary
+                .world_markers
+                .iter()
+                .enumerate()
+                .map(|(index, marker)| (marker.marker, index))
+                .collect(),
         }
     }
 
@@ -117,6 +146,22 @@ impl FightBuilder {
             LogEvent::Combat(event) => {
                 let converted = self.convert(t, event);
                 self.fight.events.push(converted);
+            }
+            // The summary already holds the markers placed before the start line.
+            LogEvent::WorldMarkerPlaced { marker, x, y, .. } if t >= 0 => {
+                self.remove_world_marker(t, *marker);
+                self.open_world_markers
+                    .insert(*marker, self.fight.world_markers.len());
+                self.fight.world_markers.push(WorldMarkerInterval {
+                    marker: *marker,
+                    x: *x,
+                    y: *y,
+                    start_ms: t,
+                    end_ms: t,
+                });
+            }
+            LogEvent::WorldMarkerRemoved { marker } if t >= 0 => {
+                self.remove_world_marker(t, *marker);
             }
             LogEvent::EncounterStart(start) if run => self.start_encounter(t, start),
             LogEvent::EncounterEnd(end) if run => self.end_encounter(t, end),
@@ -137,8 +182,27 @@ impl FightBuilder {
 
     fn finish(mut self) -> Fight {
         self.close_encounter();
+        let end_ms = i32::try_from(self.fight.duration_ms).unwrap_or(i32::MAX);
+        for &index in self.open_raid_markers.values() {
+            self.fight.raid_markers[index].end_ms = end_ms;
+        }
+        for &index in self.open_world_markers.values() {
+            self.fight.world_markers[index].end_ms = end_ms;
+        }
+        self.fight
+            .world_markers
+            .sort_by_key(|marker| marker.start_ms);
+        self.fight
+            .raid_markers
+            .sort_by_key(|marker| marker.start_ms);
+        self.fight.ui_map_id = self
+            .map_samples
+            .iter()
+            .max_by_key(|&(&map, &count)| (count, std::cmp::Reverse(map)))
+            .map(|(&map, _)| map);
         self.fight.events.sort_by_key(|event| event.t);
         self.fight.power.sort_by_key(|p| p.t);
+        self.fight.positions.sort_by_key(|p| p.t);
         self.fight
     }
 
@@ -190,6 +254,39 @@ impl FightBuilder {
         self.resume_t = None;
     }
 
+    fn remove_world_marker(&mut self, t: i32, marker: u8) {
+        if let Some(index) = self.open_world_markers.remove(&marker) {
+            self.fight.world_markers[index].end_ms = t;
+        }
+    }
+
+    fn note_raid_marker(&mut self, t: i32, actor: ActorId, raid_flags: u32) {
+        if actor == NOBODY {
+            return;
+        }
+        let marker = match (raid_flags & 0xFF).trailing_zeros() {
+            bit @ 0..8 => Some(bit as u8 + 1),
+            _ => None,
+        };
+        if let Some(&index) = self.open_raid_markers.get(&actor) {
+            if Some(self.fight.raid_markers[index].marker) == marker {
+                return;
+            }
+            self.fight.raid_markers[index].end_ms = t;
+            self.open_raid_markers.remove(&actor);
+        }
+        if let Some(marker) = marker {
+            self.open_raid_markers
+                .insert(actor, self.fight.raid_markers.len());
+            self.fight.raid_markers.push(MarkerInterval {
+                actor,
+                marker,
+                start_ms: t,
+                end_ms: t,
+            });
+        }
+    }
+
     fn fail_reason(&mut self, reason: &str) -> FailReason {
         if reason == FailReason::INTERRUPTED {
             return FailReason::Interrupted;
@@ -214,6 +311,9 @@ impl FightBuilder {
         let actors = &mut self.fight.actors;
         let source = actors.intern(&event.source);
         let target = actors.intern(&event.target);
+        self.note_raid_marker(t, source, event.source.raid_flags);
+        self.note_raid_marker(t, target, event.target.raid_flags);
+        let actors = &mut self.fight.actors;
         let unit_hp = event.advanced.map(|info| {
             let unit = actors.intern_guid(info.info_guid);
             actors.note_advanced(unit, info.level, info.max_hp);
@@ -237,6 +337,19 @@ impl FightBuilder {
             for power in info.powers() {
                 self.note_power(t, hp.actor, power);
             }
+        }
+        if let (Some(info), Some(hp)) = (event.advanced, unit_hp)
+            && hp.actor != NOBODY
+            && (info.x != 0.0 || info.y != 0.0 || info.ui_map_id != 0)
+        {
+            self.fight.positions.push(PositionSample {
+                t,
+                actor: hp.actor,
+                x: info.x,
+                y: info.y,
+                facing: info.facing,
+            });
+            *self.map_samples.entry(info.ui_map_id).or_default() += 1;
         }
         let spell = event.spell.map_or(NO_SPELL, |spell| self.spell(spell));
         let kind = self.kind(event.kind);
