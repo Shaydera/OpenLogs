@@ -9,6 +9,8 @@
 
   /* Game icon frame: 1px black border. */
   --icon-edge: #000000;
+  /* Countdown and stack numbers on game icons, outlined in --icon-edge. */
+  --icon-text: #ffffff;
   /* Base of the dark veils (--plot-dim, --dialog-scrim) and of shadows (at 55%). */
   --scrim: #08090c;
   --shadow: #000000;
@@ -101,6 +103,13 @@
   --marker-circle: #f28a2e;
   --marker-moon: #c9d3dc;
   --marker-skull: #f4f4f4;
+
+  /* Replay HUD bars: health of players, bosses and adds, a running cast (3:1 on --bar-track); the raid frame's health tint. */
+  --hp-fill: #3f8f5f;
+  --hp-boss: #c0493f;
+  --hp-add: #b07a3a;
+  --cast-fill: #7a64c4;
+  --hp-tint: color-mix(in srgb, var(--hp-fill) 28%, transparent);
 
   /* The player chart's dashed mana line. */
   --mana: #8a7cf0;
@@ -195,6 +204,13 @@
   --marker-circle: #b35a0c;
   --marker-moon: #66717d;
   --marker-skull: #3d444d;
+
+  /* Replay HUD bars. */
+  --hp-fill: #2f7d4c;
+  --hp-boss: #b03a30;
+  --hp-add: #9a5f1c;
+  --cast-fill: #6a58b0;
+  --hp-tint: color-mix(in srgb, var(--hp-fill) 16%, transparent);
 
   /* The player chart's dashed mana line. */
   --mana: #6656d6;

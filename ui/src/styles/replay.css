@@ -232,3 +232,345 @@
 .replay-follow:not(.on) {
   color: var(--text);
 }
+
+/* HUD overlays on the stage. Only their own boxes take pointer events; the stage around them keeps wheel and drag. */
+.hud {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  pointer-events: none;
+}
+.hud-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  pointer-events: auto;
+}
+.hud-toggle {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-end;
+  gap: 4px;
+  min-height: 24px;
+  padding: 0 8px 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-raised);
+  color: var(--muted);
+  font: 600 12px var(--font-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.hud-toggle:hover {
+  color: var(--text);
+}
+.hud-toggle svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.15s;
+}
+.hud-toggle[aria-expanded='false'] svg {
+  transform: rotate(-90deg);
+}
+
+.hud-bosses {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: min(280px, calc(100% - 28px));
+  max-height: calc(50% - 21px);
+}
+.hud-bosses .hud-body {
+  overflow-y: auto;
+}
+
+/* Raid frames at the right, the unit frame centred in the room left of them; above them when that room runs out. */
+.hud-bottom {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  flex-direction: row-reverse;
+  flex-wrap: wrap-reverse;
+  align-items: flex-end;
+  gap: 10px 14px;
+  pointer-events: none;
+}
+.hud-unit {
+  width: min(340px, 100%);
+  margin: 0 auto;
+}
+.hud-unit .hud-toggle {
+  align-self: center;
+}
+.hud-raid:not(.collapsed) {
+  width: min(548px, 100%);
+}
+
+.hud-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-raised);
+}
+.hud-frame.hud-add {
+  gap: 4px;
+  padding: 6px 10px;
+}
+.hud-frame-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.hud-add .hud-frame-head {
+  font-size: 12px;
+}
+.hud-frame-name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.hud-add .hud-frame-name {
+  font-weight: 400;
+}
+.hud-frame-status,
+.hud-frame-hp,
+.hud-unit-target {
+  color: var(--muted);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.hud-frame-hp {
+  font-size: 12px;
+}
+.hud-unit-target {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+.hud-more {
+  margin: 0;
+  align-self: flex-end;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hud-hp {
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--bar-track);
+}
+.hud-hp > span {
+  display: block;
+  height: 100%;
+  background: var(--hp-fill);
+}
+.hud-hp-boss > span {
+  background: var(--hp-boss);
+}
+.hud-hp-add {
+  height: 5px;
+  border-radius: 3px;
+}
+.hud-hp-add > span {
+  background: var(--hp-add);
+}
+
+.hud-cast {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 18px;
+  font-size: 12px;
+}
+.hud-cast-idle {
+  color: var(--faint);
+}
+.hud-cast-none {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--icon-tile);
+}
+.hud-cast-bar {
+  position: relative;
+  height: 16px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bar-track);
+}
+.hud-cast-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--cast-fill);
+}
+.hud-cast-name {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  padding: 0 6px;
+  line-height: 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.hud-auras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hud-aura {
+  position: relative;
+  display: block;
+}
+.hud-aura-time,
+.hud-aura-stacks {
+  position: absolute;
+  color: var(--icon-text);
+  font: 600 9px/1 var(--font-mono);
+  text-shadow:
+    0 0 2px var(--icon-edge),
+    0 0 2px var(--icon-edge),
+    0 0 1px var(--icon-edge);
+  pointer-events: none;
+}
+.hud-aura-time {
+  left: 0;
+  right: 0;
+  bottom: 1px;
+  text-align: center;
+}
+.hud-aura-stacks {
+  top: 1px;
+  right: 1px;
+}
+.hud-unit-auras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+.hud-raid .hud-body {
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-raised);
+}
+.hud-raid-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+/* The outline and the --bar-track behind the health tint keep every frame the same visible size at any health. */
+.hud-raid-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 2px;
+  min-height: 46px;
+  padding: 4px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--bar-track);
+}
+.hud-raid-frame:hover {
+  border-color: var(--muted);
+}
+.hud-raid-frame.on {
+  border-color: var(--accent);
+}
+.hud-raid-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--hp-tint);
+}
+.hud-raid-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.hud-raid-select {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 600 12px var(--font-text);
+  text-align: left;
+  cursor: pointer;
+}
+/* The whole frame is the button's click target. */
+.hud-raid-select::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+}
+.hud-raid-select:focus-visible {
+  outline: none;
+}
+.hud-raid-select:focus-visible::after {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* Text keeps its contrast on --bar-track; the halo keeps it over the health tint and the cast fill. */
+.hud-cast-name,
+.hud-raid-select span,
+.hud-raid-status {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-shadow:
+    0 0 2px var(--bar-track),
+    0 0 2px var(--bar-track),
+    0 0 3px var(--bar-track);
+}
+.hud-raid-frame.dead .hud-raid-select span {
+  color: var(--muted);
+}
+.hud-raid-marker {
+  position: relative;
+  flex: none;
+  margin-left: auto;
+  pointer-events: none;
+}
+.hud-raid-status {
+  color: var(--muted);
+  font-size: 10px;
+}
+.hud-raid-auras {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 16px;
+  pointer-events: none;
+}
+.hud-raid-auras .hud-auras {
+  flex-wrap: nowrap;
+}

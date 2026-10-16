@@ -8,7 +8,7 @@ import { shortName } from '../overview/players';
 import { type Bounds, type Camera, facingOnScreen, gridStep, toScreen, toWorld } from './camera';
 import { healthAt, placementAt } from './playback';
 import type { StageColors } from './stageColors';
-import { type MarkerLook, type MarkerSymbol, RAID_TARGET_MARKERS, WORLD_MARKERS } from './worldMarkers';
+import { type MarkerLook, RAID_TARGET_MARKERS, WORLD_MARKERS, traceSymbol } from './worldMarkers';
 
 export const STAGE_PAD_PX = 40;
 const HIT_PX = 14;
@@ -48,7 +48,7 @@ export interface PlacedUnit {
   dead: boolean;
 }
 
-function groupBy<T>(items: T[], key: (item: T) => number): Map<number, T[]> {
+export function groupBy<T>(items: T[], key: (item: T) => number): Map<number, T[]> {
   const groups = new Map<number, T[]>();
   for (const item of items) {
     const group = groups.get(key(item));
@@ -194,60 +194,6 @@ export interface StageFrame {
 }
 
 const font = (weight: number, px: number, family: string) => `${weight} ${px}px ${family}`;
-
-function traceSymbol(ctx: CanvasRenderingContext2D, symbol: MarkerSymbol, cx: number, cy: number, size: number) {
-  const k = size / 16;
-  const polygon = (points: number[]) => {
-    ctx.moveTo(cx + (points[0] - 8) * k, cy + (points[1] - 8) * k);
-    for (let i = 2; i < points.length; i += 2) ctx.lineTo(cx + (points[i] - 8) * k, cy + (points[i + 1] - 8) * k);
-    ctx.closePath();
-  };
-  ctx.beginPath();
-  switch (symbol) {
-    case 'square':
-      polygon([3, 3, 13, 3, 13, 13, 3, 13]);
-      break;
-    case 'triangle':
-      polygon([8, 2, 14, 13, 2, 13]);
-      break;
-    case 'diamond':
-      polygon([8, 1.5, 14, 8, 8, 14.5, 2, 8]);
-      break;
-    case 'cross':
-      polygon([4, 2, 8, 6, 12, 2, 14, 4, 10, 8, 14, 12, 12, 14, 8, 10, 4, 14, 2, 12, 6, 8, 2, 4]);
-      break;
-    case 'star':
-      polygon([8, 1.5, 9.9, 6, 14.6, 6.2, 10.9, 9.2, 12.2, 13.8, 8, 11.2, 3.8, 13.8, 5.1, 9.2, 1.4, 6.2, 6.1, 6]);
-      break;
-    case 'circle':
-      ctx.arc(cx, cy, 5.5 * k, 0, 2 * Math.PI);
-      break;
-    case 'moon': {
-      // A crescent: the outer circle's arc outside the inner one, back along the inner circle's arc.
-      const r1 = 6 * k;
-      const r2 = 4.6 * k;
-      const d = 3.2 * k;
-      const toward = -Math.PI / 4;
-      const alpha = Math.acos((d * d + r1 * r1 - r2 * r2) / (2 * d * r1));
-      const beta = Math.acos((d * d + r2 * r2 - r1 * r1) / (2 * d * r2));
-      const bx = cx + d * Math.cos(toward);
-      const by = cy + d * Math.sin(toward);
-      ctx.arc(cx, cy, r1, toward + alpha, toward + 2 * Math.PI - alpha);
-      ctx.arc(bx, by, r2, toward + Math.PI + beta, toward + Math.PI - beta, true);
-      ctx.closePath();
-      break;
-    }
-    case 'skull':
-      ctx.arc(cx, cy - 1 * k, 5.5 * k, 0, 2 * Math.PI);
-      ctx.rect(cx - 3 * k, cy + 2 * k, 6 * k, 4.5 * k);
-      // Counter-wound eyes stay holes under the nonzero fill rule.
-      ctx.moveTo(cx - 0.5 * k, cy - 0.5 * k);
-      ctx.arc(cx - 2.2 * k, cy - 0.5 * k, 1.7 * k, 0, 2 * Math.PI, true);
-      ctx.moveTo(cx + 3.9 * k, cy - 0.5 * k);
-      ctx.arc(cx + 2.2 * k, cy - 0.5 * k, 1.7 * k, 0, 2 * Math.PI, true);
-      break;
-  }
-}
 
 function drawGrid(ctx: CanvasRenderingContext2D, { w, h, cam, colors }: StageFrame) {
   const step = gridStep(cam.scale);

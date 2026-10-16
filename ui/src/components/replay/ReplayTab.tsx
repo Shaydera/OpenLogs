@@ -1,11 +1,15 @@
-import { type KeyboardEvent, useEffect, useState } from 'react';
+import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import type { ReplayData } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { rangeWindow } from '../views/zoomGeometry';
+import { BossFrames } from './BossFrames';
+import { indexHud } from './hudIndex';
+import { RaidFrames } from './RaidFrames';
 import { ReplayControls, replayNow } from './ReplayControls';
 import { ReplayLegend } from './ReplayLegend';
 import { ReplayStage } from './ReplayStage';
+import { UnitFrame } from './UnitFrame';
 
 const JUMP_MS = 5_000;
 
@@ -44,6 +48,7 @@ function ReplayPanel({ data, compact }: { data: ReplayData; compact: boolean }) 
   const setReplayTime = useApp((s) => s.setReplayTime);
   const toggleReplayPlay = useApp((s) => s.toggleReplayPlay);
   const [highlight, setHighlight] = useState<number[] | null>(null);
+  const hud = useMemo(() => indexHud(data), [data]);
   const bounds = rangeWindow(range, data.durationMs);
   const { startMs, endMs } = bounds;
 
@@ -70,6 +75,11 @@ function ReplayPanel({ data, compact }: { data: ReplayData; compact: boolean }) 
       <ReplayLegend data={data} highlight={highlight} onHighlight={setHighlight} />
       <div className="replay-plot">
         <ReplayStage data={data} highlight={highlight} />
+        <BossFrames hud={hud} />
+        <div className="hud-bottom">
+          <RaidFrames hud={hud} defaultCollapsed={compact} />
+          <UnitFrame hud={hud} />
+        </div>
       </div>
       <ReplayControls data={data} bounds={bounds} />
     </section>

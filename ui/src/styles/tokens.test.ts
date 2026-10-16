@@ -30,12 +30,15 @@ const FIXED_PAIRS: [foreground: string, background: string, minimum: number][] =
   ['kill-chip', 'kill-tint', TEXT],
   ['support-text', 'support-tint', TEXT],
   ['muted', 'tag-bg', TEXT],
+  ['muted', 'bar-track', TEXT],
+  ['text', 'bar-track', TEXT],
   ['kill-text', 'kill-tint', TEXT],
   ['wipe-text', 'wipe-tint', TEXT],
   ['death', 'death-tint', TEXT],
   ...['dash', 'kill', 'wipe', 'pull-a', 'pull-b', 'lust', 'lust-line', 'mana', 'target-1', 'target-2', 'target-3', 'target-4', 'target-other', 'role-tank', 'role-healer', 'role-dps', 'tick'].map(
     (mark): [string, string, number] => [mark, 'panel', NON_TEXT],
   ),
+  ...['hp-fill', 'hp-boss', 'hp-add', 'cast-fill'].map((bar): [string, string, number] => [bar, 'bar-track', NON_TEXT]),
   ...['square', 'triangle', 'diamond', 'cross', 'star', 'circle', 'moon', 'skull'].map((symbol): [string, string, number] => [`marker-${symbol}`, 'plot', NON_TEXT]),
 ];
 
@@ -46,8 +49,8 @@ describe('theme colours', () => {
     const tokens = themeTokens(tokensCss, theme, mode);
     const classPairs = Object.keys(tokens)
       .filter((name) => name.startsWith('class-'))
-      .flatMap((name) => ['panel', 'panel-raised', 'tile'].map((background): [string, string, number] => [name, background, TEXT]));
-    expect(classPairs).toHaveLength(13 * 3);
+      .flatMap((name) => ['panel', 'panel-raised', 'tile', 'bar-track'].map((background): [string, string, number] => [name, background, TEXT]));
+    expect(classPairs).toHaveLength(13 * 4);
 
     const failures = [...FIXED_PAIRS, ...classPairs]
       .map(([foreground, background, minimum]) => ({ pair: `${foreground} on ${background}`, ratio: contrast(tokens[foreground], tokens[background]), minimum }))
