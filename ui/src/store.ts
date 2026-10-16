@@ -34,9 +34,11 @@ import type {
   Side,
   TargetDetail,
   UnitRef,
+  ReplayData,
 } from './api/types';
 import { rangeWindow, requestWindow, sameWindow, shownWindow, covers, windowSpan } from './components/views/zoomGeometry';
 import { type GameDataManifest, gameDataManifest } from './gameData';
+import { replayClock } from './components/replay/replayClock';
 import { t } from './i18n/i18n';
 import { effectiveView, lanesOf } from './reportViews';
 import { type FilterTab, isFilterTab, SIDES } from './scopeSides';
@@ -56,7 +58,27 @@ export type FightTab =
   | 'casts'
   | 'buffs'
   | 'interrupts'
-  | 'resources';
+  | 'resources'
+  | 'replay';
+export type ReplaySpeed = 0.5 | 1 | 2 | 4;
+export type ReplayLayers = { effects: boolean; worldMarkers: boolean; facing: boolean; names: boolean };
+export type ReplayFilters = { players: boolean; pets: boolean; bosses: boolean; adds: boolean; hidden: number[] };
+export type ReplayState = {
+  time: number;
+  playing: boolean;
+  speed: ReplaySpeed;
+  selected: number | null;
+  layers: ReplayLayers;
+  filters: ReplayFilters;
+  split: boolean;
+  splitWidth: number;
+  follow: boolean;
+};
+
+const REPLAY_KEY = 'replay';
+const REPLAY_SPEEDS: ReplaySpeed[] = [0.5, 1, 2, 4];
+const DEFAULT_SPLIT_WIDTH = 480;
+const REPLAY_TICK_MS = 100;
 export type MetricTab = 'damage' | 'healing' | 'taken';
 export const isMetricTab = (tab: FightTab): tab is MetricTab => tab === 'damage' || tab === 'healing' || tab === 'taken';
 /** The view filters by role: `own` is the perspective's side (Damage Taken: the target), `other` the side it faces. */
@@ -249,6 +271,12 @@ interface State {
   /** The shipped game data for the dialog; `null` until loaded, or when the app has none. */
   gameData: GameDataManifest | null;
   gameDataLoading: boolean;
+  replay: ReplayState;
+  /** The shown pull's replay bundle; loaded on first use. */
+  replayData: ReplayData | null;
+  replayRequest: number;
+  /** Why the current pull's replay could not be loaded. */
+  replayError: string | null;
 }
 
 interface Actions {
@@ -309,6 +337,17 @@ interface Actions {
   openSettings(): Promise<void>;
   closeSettings(): void;
   loadGameDataStatus(): Promise<void>;
+  loadReplay(): Promise<void>;
+  setReplayTime(ms: number): void;
+  toggleReplayPlay(): void;
+  setReplaySpeed(speed: ReplaySpeed): void;
+  selectReplayUnit(id: number | null): void;
+  setReplayLayer(layer: keyof ReplayLayers, on: boolean): void;
+  setReplayFilter(filters: Partial<ReplayFilters>): void;
+  setReplaySplit(on: boolean): void;
+  setReplaySplitWidth(width: number): void;
+  setReplayFollow(on: boolean): void;
+  openReplayAt(ms: number): void;
 }
 
 function readFlag(key: string, fallback: boolean): boolean {
@@ -318,6 +357,46 @@ function readFlag(key: string, fallback: boolean): boolean {
 
 function writeFlag(key: string, value: boolean) {
   writeStored(key, String(value));
+}
+
+const DEFAULT_REPLAY_LAYERS: ReplayLayers = { effects: true, worldMarkers: true, facing: false, names: true };
+const DEFAULT_REPLAY_FILTERS: ReplayFilters = { players: true, pets: false, bosses: true, adds: true, hidden: [] };
+
+function readReplayState(): ReplayState {
+  const state: ReplayState = {
+    time: 0,
+    playing: false,
+    speed: 1,
+    selected: null,
+    layers: DEFAULT_REPLAY_LAYERS,
+    filters: DEFAULT_REPLAY_FILTERS,
+    split: false,
+    splitWidth: DEFAULT_SPLIT_WIDTH,
+    follow: false,
+  };
+  const raw = readStored(REPLAY_KEY);
+  if (raw === null) return state;
+  try {
+    const stored = JSON.parse(raw) as Partial<Record<string, unknown>>;
+    const flags = <T extends object>(defaults: T, value: unknown): T => {
+      const read = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
+      return Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [key, typeof read[key] === 'boolean' ? read[key] : fallback])) as T;
+    };
+    return {
+      ...state,
+      layers: flags(DEFAULT_REPLAY_LAYERS, stored.layers),
+      filters: { ...flags({ ...DEFAULT_REPLAY_FILTERS, hidden: undefined }, stored.filters), hidden: [] } as ReplayFilters,
+      speed: REPLAY_SPEEDS.find((speed) => speed === stored.speed) ?? 1,
+      split: stored.split === true,
+      splitWidth: typeof stored.splitWidth === 'number' && stored.splitWidth > 0 ? stored.splitWidth : DEFAULT_SPLIT_WIDTH,
+    };
+  } catch {
+    return state;
+  }
+}
+
+function writeReplayState({ layers, filters: { hidden: _hidden, ...filters }, speed, split, splitWidth }: ReplayState) {
+  writeStored(REPLAY_KEY, JSON.stringify({ layers, filters, speed, split, splitWidth }));
 }
 
 export function initialState(): State {
@@ -368,6 +447,10 @@ export function initialState(): State {
     settingsOpen: false,
     gameData: null,
     gameDataLoading: false,
+    replay: readReplayState(),
+    replayData: null,
+    replayRequest: 0,
+    replayError: null,
   };
 }
 
@@ -380,6 +463,34 @@ let shownTimelineRequest = 0;
 let logRequest = 0;
 let fightRequest = 0;
 let comparisonRequest = 0;
+let replayRequest = 0;
+/** The pull a replay load is in flight for; `null` when none. */
+let replayLoadingFor: string | null = null;
+let replayTicker: ReturnType<typeof setInterval> | null = null;
+
+const replayKey = (logId: string, fight: number) => `${logId}#${fight}`;
+
+function stopReplayTicker() {
+  if (replayTicker !== null) clearInterval(replayTicker);
+  replayTicker = null;
+}
+
+/** The replay's time window: the selected range, else the whole pull. */
+function replayWindow(state: Pick<State, 'range' | 'replayData' | 'overview'>): { startMs: number; endMs: number } {
+  if (state.range) return state.range;
+  const durationMs = state.replayData?.durationMs ?? state.overview?.timeline.durationMs ?? Infinity;
+  return { startMs: 0, endMs: durationMs };
+}
+
+/** Pauses the clock and makes an in-flight replay load stale; the next pull starts at 0. */
+function dropReplay(set: SetState, get: () => State) {
+  replayRequest += 1;
+  replayLoadingFor = null;
+  stopReplayTicker();
+  replayClock.pause();
+  replayClock.seek(0);
+  set({ replayData: null, replayError: null, replayRequest, replay: { ...get().replay, time: 0, playing: false, selected: null, follow: false, filters: { ...get().replay.filters, hidden: [] } } });
+}
 
 /** Makes an in-flight pull load stale. */
 function dropPendingFight() {
@@ -434,6 +545,8 @@ async function fetchReport(logId: string, fight: number, input: ReportInput, fil
       return { tab, data: await api.interruptsReport(logId, fight, filter, scope, groupOf(grouping, tab)) };
     case 'resources':
       return { tab, data: await api.resourcesReport(logId, fight, filter, scope) };
+    case 'replay':
+      throw new Error('The replay has no report');
   }
 }
 
@@ -518,7 +631,20 @@ async function loadReport(get: () => State & Actions, set: SetState) {
   const viewToken = ++viewRequest;
   viewQuery += 1;
   lastPage = undefined;
-  if (tab === 'overview' && range === null) {
+  if (tab === 'replay' && range !== null) {
+    // The replay bundle loads through `loadReplay`; its header shows the Overview's figures for the range.
+    set({ report: null, breakdown: null, reportError: null, reportLoading: true, viewError: null, viewLoading: false, rangeKpis: null });
+    try {
+      const { kpis } = await api.quickOverview(log.id, view.fightIndex, reportFilter(get()));
+      if (request === reportRequest) set({ rangeKpis: kpis });
+    } catch {
+      // The header stays at "…".
+    } finally {
+      if (request === reportRequest) set({ reportLoading: false });
+    }
+    return;
+  }
+  if ((tab === 'overview' && range === null) || tab === 'replay') {
     // The whole-pull overview is already in `state.overview`.
     set({ report: null, breakdown: null, reportError: null, reportLoading: false, viewError: null, viewLoading: false });
     return;
@@ -637,6 +763,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
       dropPendingFight();
       dropPendingReports(set);
       dropPendingComparison();
+      dropReplay(set, get);
       set({ log, view: { kind: 'start' }, overview: null, reportLoading: false, fightLoading: false, fightError: null, comparison: null });
     };
     try {
@@ -714,6 +841,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     const request = ++fightRequest;
     dropPendingReports(set);
     dropPendingComparison();
+    dropReplay(set, get);
     set({
       view: { kind: 'fight', fightIndex },
       overview: null,
@@ -755,6 +883,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     dropPendingFight();
     dropPendingReports(set);
     dropPendingComparison();
+    dropReplay(set, get);
     set({
       view: { kind: 'start' },
       overview: null,
@@ -1047,5 +1176,105 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   async loadGameDataStatus() {
     set({ gameDataLoading: true });
     set({ gameData: await gameDataManifest(), gameDataLoading: false });
+  },
+
+  async loadReplay() {
+    const { log, view, replayData } = get();
+    if (!log || view.kind !== 'fight' || replayData) return;
+    const key = replayKey(log.id, view.fightIndex);
+    if (replayLoadingFor === key) return;
+    replayLoadingFor = key;
+    const request = replayRequest;
+    set({ replayError: null });
+    try {
+      const data = await api.replay(log.id, view.fightIndex);
+      if (request === replayRequest) set({ replayData: data });
+    } catch (err) {
+      if (request === replayRequest) set({ replayError: String(err) });
+    } finally {
+      if (request === replayRequest) replayLoadingFor = null;
+    }
+  },
+
+  setReplayTime(ms) {
+    const { startMs, endMs } = replayWindow(get());
+    const time = Math.min(Math.max(ms, startMs), endMs);
+    replayClock.seek(time);
+    set({ replay: { ...get().replay, time } });
+  },
+
+  toggleReplayPlay() {
+    const { replay } = get();
+    if (replay.playing) {
+      stopReplayTicker();
+      replayClock.pause();
+      set({ replay: { ...replay, playing: false, time: replayClock.now() } });
+      return;
+    }
+    const { startMs, endMs } = replayWindow(get());
+    if (replay.time >= endMs || replay.time < startMs) replayClock.seek(startMs);
+    replayClock.setSpeed(replay.speed);
+    replayClock.play();
+    set({ replay: { ...replay, playing: true, time: replayClock.now() } });
+    stopReplayTicker();
+    replayTicker = setInterval(() => {
+      const end = replayWindow(get()).endMs;
+      const now = replayClock.now();
+      if (now >= end) {
+        stopReplayTicker();
+        replayClock.pause();
+        replayClock.seek(end);
+        set({ replay: { ...get().replay, playing: false, time: end } });
+      } else {
+        set({ replay: { ...get().replay, time: now } });
+      }
+    }, REPLAY_TICK_MS);
+  },
+
+  setReplaySpeed(speed) {
+    replayClock.setSpeed(speed);
+    const replay = { ...get().replay, speed };
+    set({ replay });
+    writeReplayState(replay);
+  },
+
+  selectReplayUnit(id) {
+    set({ replay: { ...get().replay, selected: id } });
+  },
+
+  setReplayLayer(layer, on) {
+    const replay = { ...get().replay, layers: { ...get().replay.layers, [layer]: on } };
+    set({ replay });
+    writeReplayState(replay);
+  },
+
+  setReplayFilter(filters) {
+    const replay = { ...get().replay, filters: { ...get().replay.filters, ...filters } };
+    set({ replay });
+    writeReplayState(replay);
+  },
+
+  setReplaySplit(on) {
+    const replay = { ...get().replay, split: on };
+    set({ replay });
+    writeReplayState(replay);
+  },
+
+  setReplaySplitWidth(splitWidth) {
+    const replay = { ...get().replay, splitWidth };
+    set({ replay });
+    writeReplayState(replay);
+  },
+
+  setReplayFollow(follow) {
+    set({ replay: { ...get().replay, follow } });
+  },
+
+  openReplayAt(ms) {
+    if (!get().replay.split) {
+      void get().setTab('replay');
+      void get().loadReplay();
+    }
+    get().setReplayTime(ms);
   },
 })));

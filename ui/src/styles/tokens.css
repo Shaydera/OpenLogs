@@ -92,6 +92,16 @@
   --class-demonhunter: #bc66de;
   --class-evoker: #3baa93;
 
+  /* Raid target and world marker symbols on the replay stage in their game colours. */
+  --marker-square: #3d8ff5;
+  --marker-triangle: #3fbf4f;
+  --marker-diamond: #b05ce6;
+  --marker-cross: #ec5148;
+  --marker-star: #f2cf3a;
+  --marker-circle: #f28a2e;
+  --marker-moon: #c9d3dc;
+  --marker-skull: #f4f4f4;
+
   /* The player chart's dashed mana line. */
   --mana: #8a7cf0;
   /* The legend swatch of a dead band: two hatch stripes. */
@@ -175,6 +185,16 @@
   --class-druid: #ad4a0a;
   --class-demonhunter: #9b35c0;
   --class-evoker: #1e7664;
+
+  /* Raid target and world marker symbols on the replay stage; darkened, the skull and moon to greys, for 3:1 on a light plot. */
+  --marker-square: #1f6fd1;
+  --marker-triangle: #2a8237;
+  --marker-diamond: #8a3cc4;
+  --marker-cross: #c4302b;
+  --marker-star: #8f6c00;
+  --marker-circle: #b35a0c;
+  --marker-moon: #66717d;
+  --marker-skull: #3d444d;
 
   /* The player chart's dashed mana line. */
   --mana: #6656d6;

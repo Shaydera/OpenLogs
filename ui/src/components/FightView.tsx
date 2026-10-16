@@ -25,6 +25,7 @@ import { DamageDoneTab } from './reports/DamageDoneTab';
 import { DamageTakenTab } from './reports/DamageTakenTab';
 import { HealingTab } from './reports/HealingTab';
 import { RangePanel } from './reports/RangePanel';
+import { ReplayTab } from './replay/ReplayTab';
 import { ResourcesTab } from './resources/ResourcesTab';
 import { TargetDetailView } from './target/TargetDetailView';
 import { EventsView } from './views/EventsView';
@@ -92,7 +93,7 @@ export function FightView() {
               {/* Detail pages have no range panel. */}
               {details.length === 0 && <RangePanel overview={overview} rangeKey={rangeKey(row)} run={row.run !== null} />}
               <ErrorBoundary key={`${tab}-${details.length}`} onReset={() => void closeDetail()}>
-                <ReportView />
+                {tab === 'replay' ? <ReplayTab /> : <ReportView />}
               </ErrorBoundary>
             </>
           )}

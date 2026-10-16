@@ -36,6 +36,7 @@ const FIXED_PAIRS: [foreground: string, background: string, minimum: number][] =
   ...['dash', 'kill', 'wipe', 'pull-a', 'pull-b', 'lust', 'lust-line', 'mana', 'target-1', 'target-2', 'target-3', 'target-4', 'target-other', 'role-tank', 'role-healer', 'role-dps', 'tick'].map(
     (mark): [string, string, number] => [mark, 'panel', NON_TEXT],
   ),
+  ...['square', 'triangle', 'diamond', 'cross', 'star', 'circle', 'moon', 'skull'].map((symbol): [string, string, number] => [`marker-${symbol}`, 'plot', NON_TEXT]),
 ];
 
 const combinations = (['slate', 'bark'] as const).flatMap((theme) => (['dark', 'light'] as const).map((mode) => [theme, mode] as const));

@@ -13,6 +13,7 @@ const TABS: { key: MessageKey; tab: FightTab }[] = [
   { key: 'tabs.deaths', tab: 'deaths' },
   { key: 'tabs.buffs', tab: 'buffs' },
   { key: 'tabs.casts', tab: 'casts' },
+  { key: 'tabs.replay', tab: 'replay' },
   { key: 'tabs.interrupts', tab: 'interrupts' },
   { key: 'tabs.resources', tab: 'resources' },
 ];
@@ -29,7 +30,7 @@ function nextTab(current: FightTab, key: string): FightTab | null {
   return target === null ? null : TABS[(target + TABS.length) % TABS.length].tab;
 }
 
-/** The fight's tab row with the options menu and view switch at the right end. */
+/** The fight's tab row with the options menu and view switch at the right end; the replay has neither. */
 export function TabBar() {
   const tab = useApp((s) => s.tab);
   const setTab = useApp((s) => s.setTab);
@@ -71,10 +72,12 @@ export function TabBar() {
           );
         })}
       </div>
-      <div className="tab-tools">
-        <OptionsMenu />
-        <ViewSwitch />
-      </div>
+      {tab !== 'replay' && (
+        <div className="tab-tools">
+          <OptionsMenu />
+          <ViewSwitch />
+        </div>
+      )}
     </div>
   );
 }
