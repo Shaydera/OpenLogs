@@ -11,6 +11,7 @@ import type {
   ResourcesReport,
   CastsReport,
   DeathsReport,
+  ReplayData,
   AbilityDetail,
   Breakdown,
   Dimension,
@@ -211,6 +212,8 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, db, n
       report<TargetDetail>(logId, [fightIndex], 'target_detail', { fightIndex, name, filter, scope }),
     deathsReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope) =>
       report<DeathsReport>(logId, [fightIndex], 'deaths_report', { fightIndex, filter, scope }),
+    replay: (logId: string, fightIndex: number) =>
+      report<ReplayData>(logId, [fightIndex], 'replay', { fightIndex }),
     castsReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, group: Dimension, hideProcs: boolean) =>
       report<CastsReport>(logId, [fightIndex], 'casts_report', { fightIndex, filter, scope, group, hideProcs }),
     aurasReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, kind: AuraKind, group: Dimension) =>

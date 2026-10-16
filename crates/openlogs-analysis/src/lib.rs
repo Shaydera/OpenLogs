@@ -20,6 +20,7 @@ mod overview;
 mod phases;
 mod player;
 mod recap;
+mod replay;
 mod reports;
 mod resources;
 mod run_result;
@@ -66,6 +67,10 @@ pub use player::{
     player_detail,
 };
 pub use recap::{DeathRecap, RECAP_WINDOW_MS, RecapEvent, RecapKind, death_recaps};
+pub use replay::{
+    HealthTrack, Replay, ReplayAura, ReplayCast, ReplayCastOutcome, ReplayDeath, ReplayUnit,
+    StackChange, Track, UnitKind, replay,
+};
 pub use reports::damage::{DamageReport, PlayerDamage, damage_done};
 pub use reports::healing::{HealingReport, PlayerHealing, healing};
 pub use reports::taken::{DamageTakenReport, TakenAbility, TakenPlayer, damage_taken};

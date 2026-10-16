@@ -13,6 +13,7 @@ pub const DEFENSIVES_FILE: &str = "personal_defensives.json";
 pub const PROCS_FILE: &str = "procs.json";
 pub const PHASE_NAMES_FILE: &str = "phase_names.json";
 pub const PLAYER_COOLDOWNS_FILE: &str = "player_cooldowns.json";
+pub const RAID_FRAME_AURAS_FILE: &str = "raid_frame_auras.json";
 /// Folder in the override directory holding one phase config per encounter.
 pub const PHASES_DIR: &str = "phases";
 
@@ -148,6 +149,22 @@ pub struct PlayerCooldownList {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct RaidFrameAura {
+    pub spell_id: u32,
+    pub name: String,
+    /// Lower is shown first.
+    pub priority: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct RaidFrameAuras {
+    pub version: u32,
+    pub include: Vec<RaidFrameAura>,
+    /// Auras never shown on a raid frame, e.g. permanent encounter debuffs.
+    pub exclude: Vec<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PhaseTrigger {
     /// The pull itself (t = 0).
@@ -245,6 +262,8 @@ pub struct Curated {
     pub procs: ProcList,
     /// Rotational cooldowns, shields and key procs of the player page (bundled, overridable).
     pub player_cooldowns: PlayerCooldownList,
+    /// Externals and other auras the replay's raid frames show (bundled, overridable).
+    pub raid_frame_auras: RaidFrameAuras,
     /// Names for auto-detected phases (bundled, overridable).
     pub phase_names: PhaseNameList,
     /// The user's phase configs; none are bundled.
@@ -290,6 +309,12 @@ impl Curated {
             include_str!("../data/player_cooldowns.json"),
             &mut warnings,
         );
+        let raid_frame_auras = load_list(
+            override_dir,
+            RAID_FRAME_AURAS_FILE,
+            include_str!("../data/raid_frame_auras.json"),
+            &mut warnings,
+        );
         let phase_names = load_list(
             override_dir,
             PHASE_NAMES_FILE,
@@ -303,10 +328,24 @@ impl Curated {
             defensives,
             procs,
             player_cooldowns,
+            raid_frame_auras,
             phase_names,
             phases,
             warnings,
         }
+    }
+
+    /// Display priority of a curated raid frame aura (lower first); `None` if it is not listed.
+    pub fn raid_frame_priority(&self, spell_id: u32) -> Option<u8> {
+        self.raid_frame_auras
+            .include
+            .iter()
+            .find(|aura| aura.spell_id == spell_id)
+            .map(|aura| aura.priority)
+    }
+
+    pub fn raid_frame_excluded(&self, spell_id: u32) -> bool {
+        self.raid_frame_auras.exclude.contains(&spell_id)
     }
 
     /// The user's phase config for an encounter, if any.

@@ -2,13 +2,13 @@
 
 mod amounts;
 mod auras;
-mod casts;
+pub(crate) mod casts;
 mod deaths;
 mod kicks;
 mod names;
 pub(crate) mod parts;
 mod power;
-mod spans;
+pub(crate) mod spans;
 mod taken;
 mod timeline;
 

@@ -3,7 +3,7 @@ use std::fs;
 
 use openlogs_gamedata::{
     CONSUMABLES_FILE, ConsumableKind, CooldownCategory, Curated, MAJOR_CDS_FILE, PHASES_DIR,
-    PROCS_FILE, PhaseTrigger, PlayerCooldownKind, class, spec,
+    PROCS_FILE, PhaseTrigger, PlayerCooldownKind, RAID_FRAME_AURAS_FILE, class, spec,
 };
 
 #[test]
@@ -176,4 +176,29 @@ fn bundled_lists_are_consistent() {
             entry.name
         );
     }
+}
+
+#[test]
+fn raid_frame_auras_load_and_an_override_replaces_them() {
+    let bundled = Curated::bundled();
+    assert_eq!(bundled.raid_frame_auras.version, 1);
+    assert!(
+        bundled.raid_frame_priority(33206).is_some(),
+        "Pain Suppression"
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join(RAID_FRAME_AURAS_FILE),
+        r#"{ "version": 1,
+             "include": [ { "spell_id": 1, "name": "X", "priority": 0 } ],
+             "exclude": [2] }"#,
+    )
+    .unwrap();
+
+    let curated = Curated::load(Some(dir.path()));
+    assert_eq!(curated.raid_frame_priority(1), Some(0));
+    assert!(curated.raid_frame_excluded(2));
+    assert_eq!(curated.raid_frame_priority(33206), None);
+    assert!(curated.warnings.is_empty(), "{:?}", curated.warnings);
 }

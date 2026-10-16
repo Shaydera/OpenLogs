@@ -10,6 +10,7 @@ pub mod overview_dto;
 pub mod player_dto;
 pub mod recap_dto;
 mod refs;
+pub mod replay_dto;
 pub mod report_dto;
 mod reports;
 pub mod resources_dto;

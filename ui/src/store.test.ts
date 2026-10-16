@@ -35,6 +35,7 @@ vi.mock('./api/client', () => ({
     abilityDetail: vi.fn(),
     targetDetail: vi.fn(),
     deathsReport: vi.fn(),
+    replay: vi.fn(),
     castsReport: vi.fn(),
     aurasReport: vi.fn(),
     interruptsReport: vi.fn(),

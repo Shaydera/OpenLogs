@@ -20,7 +20,8 @@ pub use curated::{
     CooldownSpell, Curated, DEFENSIVES_FILE, DefensiveList, MAJOR_CDS_FILE, NamePattern,
     PHASE_NAMES_FILE, PHASES_DIR, PLAYER_COOLDOWNS_FILE, PROCS_FILE, PersonalDefensive,
     PhaseConfig, PhaseNameList, PhaseNames, PhaseRule, PhaseTrigger, PlayerCooldown,
-    PlayerCooldownKind, PlayerCooldownList, ProcList, ProcSpell,
+    PlayerCooldownKind, PlayerCooldownList, ProcList, ProcSpell, RAID_FRAME_AURAS_FILE,
+    RaidFrameAura, RaidFrameAuras,
 };
 pub use download::{
     DownloadError, SpellTables, WAGO_DUNGEON_ENCOUNTER_URL, WAGO_JOURNAL_ENCOUNTER_CREATURE_URL,

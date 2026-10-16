@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::actors::ActorId;
-use crate::fight::{AuraAction, AuraType, EventKind, Fight, SpellId};
+use crate::fight::{AuraAction, AuraType, Event, EventKind, Fight, SpellId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AuraInterval {
@@ -15,11 +15,19 @@ pub struct AuraInterval {
     pub end_ms: i32,
     /// The holder's hostile flag at the event that opened the interval.
     pub target_hostile: bool,
+    /// The applier's hostile flag at the event that opened the interval.
+    pub source_hostile: bool,
 }
 
 type Key = (ActorId, SpellId, ActorId);
-/// An open interval: its start, aura type and the holder's hostile flag.
-type Open = (i32, AuraType, bool);
+/// The holder's and the applier's hostile flags.
+type Hostile = (bool, bool);
+/// An open interval: its start, aura type and hostile flags.
+type Open = (i32, AuraType, Hostile);
+
+fn hostile(event: &Event) -> Hostile {
+    (event.target_hostile, event.source_hostile)
+}
 
 /// Aura intervals clipped to the pull `[0, duration]`. An aura whose first event is a
 /// remove, refresh or dose change was active before the log slice; one still open at the
@@ -41,12 +49,12 @@ pub fn aura_intervals(fight: &Fight) -> Vec<AuraInterval> {
         match action {
             AuraAction::Applied => {
                 open.entry(key)
-                    .or_insert((event.t, aura_type, event.target_hostile));
+                    .or_insert((event.t, aura_type, hostile(event)));
             }
             AuraAction::Refresh | AuraAction::AppliedDose | AuraAction::RemovedDose => {
                 let start = if first { i32::MIN } else { event.t };
                 open.entry(key)
-                    .or_insert((start, aura_type, event.target_hostile));
+                    .or_insert((start, aura_type, hostile(event)));
             }
             // A break names the breaker as source, not the caster; the REMOVED that
             // follows ends the aura.
@@ -57,9 +65,9 @@ pub fn aura_intervals(fight: &Fight) -> Vec<AuraInterval> {
                     None => match sibling(fight, &open, key) {
                         Some(other) => match open.remove(&other) {
                             Some((start, _, hostile)) => (other, start, hostile),
-                            None => (other, event.t, event.target_hostile),
+                            None => (other, event.t, hostile(event)),
                         },
-                        None if first => (key, i32::MIN, event.target_hostile),
+                        None if first => (key, i32::MIN, hostile(event)),
                         None => continue,
                     },
                 };
@@ -95,7 +103,7 @@ fn sibling(fight: &Fight, open: &HashMap<Key, Open>, (target, spell, source): Ke
 fn push_clipped(
     out: &mut Vec<AuraInterval>,
     (target, spell, source): Key,
-    (aura_type, target_hostile): (AuraType, bool),
+    (aura_type, (target_hostile, source_hostile)): (AuraType, Hostile),
     start: i32,
     stop: i32,
     end: i32,
@@ -110,6 +118,7 @@ fn push_clipped(
             start_ms,
             end_ms,
             target_hostile,
+            source_hostile,
         });
     }
 }
