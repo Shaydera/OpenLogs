@@ -2,8 +2,6 @@ import type { EffectInstance, ReplayData, ReplayDeath, ReplayTrack } from '../..
 import { deathAt, groupBy, placementAt } from './playback';
 
 export const RAID_BUFF_PULSE_MS = 3000;
-/** The engine's default evidence window: a logged heal counts a player as reached for this long. */
-export const EVIDENCE_WINDOW_MS = 3000;
 
 /** `center.stale`: the anchor unit's position is held, so the effect fades like the unit. */
 export type EffectState = {

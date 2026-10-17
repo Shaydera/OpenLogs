@@ -2,9 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { TimelineItem } from '../../api/types';
 import { spellIcon } from '../../icons';
 import { t } from '../../i18n/i18n';
-import { useApp } from '../../store';
+import { replayOffered, useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
-import { DEATH_LEAD_MS } from '../replay/playback';
+import { deathJumpMs } from '../replay/playback';
 import type { ItemTip } from './itemTip';
 
 /** A mark's card: shown on hover, pinned by a click. */
@@ -25,6 +25,12 @@ export interface Tip {
 export const TIP_PX = 320;
 const OFFSET_PX = 14;
 
+/** The death time of a death mark, else the mark's start. */
+const itemTime = (item: TimelineItem) => (item.kind === 'death' ? (item.endMs ?? item.startMs) : item.startMs);
+
+/** Where the replay shows a mark: at its start, a death with its run-up. */
+export const itemReplayMs = (item: TimelineItem) => (item.kind === 'death' ? deathJumpMs(itemTime(item)) : item.startMs);
+
 /** Below the pointer where the body has room, else above it; never past the body's top. */
 function cardTop(card: HTMLElement | null, pointerY: number): number {
   const below = pointerY + OFFSET_PX;
@@ -36,10 +42,11 @@ function cardTop(card: HTMLElement | null, pointerY: number): number {
 export function TipCard({ id, tip, tipText, onClose }: { id: string; tip: Tip; tipText: ItemTip; onClose: () => void }) {
   const showEventsAt = useApp((s) => s.showEventsAt);
   const openReplayAt = useApp((s) => s.openReplayAt);
+  const withReplay = useApp(replayOffered);
   const card = useRef<HTMLDivElement>(null);
   const close = useRef<HTMLButtonElement>(null);
   const [top, setTop] = useState(tip.y + OFFSET_PX);
-  const at = tip.item.kind === 'death' ? (tip.item.endMs ?? tip.item.startMs) : tip.item.startMs;
+  const at = itemTime(tip.item);
 
   useLayoutEffect(() => setTop(cardTop(card.current, tip.y)), [tip]);
 
@@ -103,9 +110,11 @@ export function TipCard({ id, tip, tipText, onClose }: { id: string; tip: Tip; t
           <button type="button" className="lnk" onClick={() => void showEventsAt(at)}>
             {t('tl.toEvents')}
           </button>
-          <button type="button" className="lnk" onClick={() => openReplayAt(tip.item.kind === 'death' ? at - DEATH_LEAD_MS : at)}>
-            {t('replay.showIn')}
-          </button>
+          {withReplay && (
+            <button type="button" className="lnk" onClick={() => openReplayAt(itemReplayMs(tip.item))}>
+              {t('replay.showIn')}
+            </button>
+          )}
         </div>
       )}
     </div>

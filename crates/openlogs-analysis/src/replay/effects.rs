@@ -47,6 +47,8 @@ pub struct EffectInstance {
     pub estimated: bool,
     pub kind: EffectKind,
     pub category: EffectCategory,
+    /// How long one evidence hit or heal counts a player as affected.
+    pub tick_window_ms: u32,
     /// Per player, in actor order, merged and inside `start_ms..end_ms`.
     pub affected: Vec<AffectedSpan>,
 }
@@ -294,6 +296,7 @@ impl<'a> Lookups<'a> {
             estimated: instance.estimated,
             kind: def.kind,
             category: def.category,
+            tick_window_ms: def.evidence.tick_window_ms,
             affected: self.affected(index, placed, &siblings[trigger.def_index]),
         }
     }

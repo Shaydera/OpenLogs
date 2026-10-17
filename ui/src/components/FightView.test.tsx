@@ -6,6 +6,7 @@ import type { LogView } from '../api/types';
 import { initialState, useApp } from '../store';
 import { compareLogFixture, comparisonFixture } from '../test/compareFixture';
 import { overviewFixture } from '../test/overviewFixture';
+import { runLogFixture } from '../test/runFixture';
 import { breakdownFixture, damageReportFixture, resourcesReportFixture } from '../test/reportFixtures';
 import { FightView } from './FightView';
 
@@ -105,6 +106,18 @@ describe('FightView', () => {
     expect(screen.getByRole('heading', { level: 1, name: "Ula'tek" })).toHaveFocus();
     await userEvent.click(within(crumbs).getByRole('button', { name: 'WoWCombatLog-100726_185823.txt' }));
     expect(useApp.getState().view).toEqual({ kind: 'start' });
+  });
+
+  it('leaves the replay out of a whole Mythic+ run but keeps it for its boss pulls', () => {
+    useApp.setState({ log: runLogFixture, view: { kind: 'fight', fightIndex: 1 }, overview: overviewFixture, replay: { ...initialState().replay, split: true } });
+    const { rerender } = render(<FightView />);
+    expect(screen.queryByRole('tab', { name: 'Replay' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Replay alongside' })).toBeNull();
+    expect(screen.queryByRole('separator', { name: 'Resize the replay' })).toBeNull();
+
+    useApp.setState({ view: { kind: 'fight', fightIndex: 2 } });
+    rerender(<FightView />);
+    expect(screen.getByRole('tab', { name: 'Replay' })).toBeInTheDocument();
   });
 
   it('offers a way back when a detail page fails', async () => {

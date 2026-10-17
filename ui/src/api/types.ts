@@ -1159,6 +1159,8 @@ export interface EffectInstance {
   estimated: boolean;
   kind: EffectKind;
   category: EffectCategory;
+  /** How long one evidence hit or heal counts a player as affected. */
+  tickWindowMs: number;
   /** Per player, merged and inside the effect's window. */
   affected: AffectedSpan[];
 }

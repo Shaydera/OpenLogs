@@ -8,9 +8,10 @@ import { castAt } from './playback';
 
 const ICON_PX = 16;
 
-/** The cast `actor` has running at `time` with its remaining time, else "No cast". */
-export function CastBar({ hud, actor, time }: { hud: HudIndex; actor: number; time: number }) {
+/** The cast `actor` has running at `time` with its remaining time, else "No cast" (or nothing with `hideIdle`). */
+export function CastBar({ hud, actor, time, hideIdle = false }: { hud: HudIndex; actor: number; time: number; hideIdle?: boolean }) {
   const running = castAt(hud.castBars.get(actor) ?? [], actor, time);
+  if (!running && hideIdle) return null;
   if (!running)
     return (
       <div className="hud-cast hud-cast-idle">

@@ -24,7 +24,7 @@ describe('ReplayStage', () => {
     const bounds = stageBounds(replayFixture);
     if (!bounds) throw new Error('the fixture has positions');
     const [clientX, clientY] = toScreen(fitCamera(bounds, W, H, STAGE_PAD_PX), 100, 200, W, H);
-    await userEvent.pointer({ keys: '[MouseLeft]', target: screen.getByRole('img', { name: 'Replay stage' }), coords: { clientX, clientY } });
+    await userEvent.pointer({ keys: '[MouseLeft]', target: screen.getByRole('application', { name: 'Replay stage' }), coords: { clientX, clientY } });
     expect(useApp.getState().replay.selected).toBe(1);
   });
 });

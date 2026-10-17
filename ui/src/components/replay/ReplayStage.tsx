@@ -52,7 +52,7 @@ export function ReplayStage({ data, highlight, selectedEffect = null }: { data: 
   }, [data, index]);
 
   return (
-    <div ref={host} className="replay-stage" role="img" aria-label={t('replay.stage')} tabIndex={0}>
+    <div ref={host} className="replay-stage" role="application" aria-roledescription={t('replay.stageRole')} aria-label={t('replay.stage')} tabIndex={0}>
       <canvas ref={canvas} />
     </div>
   );

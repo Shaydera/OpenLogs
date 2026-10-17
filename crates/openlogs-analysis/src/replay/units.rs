@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use openlogs_gamedata::spec;
 
 use crate::actors::{ActorId, ActorKind};
-use crate::fight::Fight;
+use crate::fight::{EventKind, Fight};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnitKind {
@@ -40,10 +40,14 @@ impl Roster {
             let next = first_seen.len();
             first_seen.entry(sample.actor).or_insert(next);
         }
+        let gone = killed_before_pull(fight);
         let mut units: Vec<ReplayUnit> = fight
             .actors
             .iter()
-            .filter(|actor| actor.kind == ActorKind::Player || first_seen.contains_key(&actor.id))
+            .filter(|actor| {
+                actor.kind == ActorKind::Player
+                    || (first_seen.contains_key(&actor.id) && !gone.contains(&actor.id))
+            })
             .map(|actor| {
                 let kind = if actor.kind == ActorKind::Player {
                     UnitKind::Player
@@ -76,6 +80,27 @@ impl Roster {
     pub fn kind(&self, actor: ActorId) -> Option<UnitKind> {
         self.kinds.get(actor as usize).copied().flatten()
     }
+}
+
+/// Units that died before the pull and never moved after it: trash cleared in the prelude, which
+/// would otherwise lie as a corpse for the whole pull.
+fn killed_before_pull(fight: &Fight) -> HashSet<ActorId> {
+    let moved_in_pull: HashSet<ActorId> = fight
+        .positions
+        .iter()
+        .filter(|sample| sample.t >= 0)
+        .map(|sample| sample.actor)
+        .collect();
+    fight
+        .events
+        .iter()
+        .filter(|event| {
+            event.t < 0
+                && matches!(event.kind, EventKind::Died { unconscious: false })
+                && !moved_in_pull.contains(&event.target)
+        })
+        .map(|event| event.target)
+        .collect()
 }
 
 fn number_adds(units: &mut [ReplayUnit], first_seen: &HashMap<ActorId, usize>) {

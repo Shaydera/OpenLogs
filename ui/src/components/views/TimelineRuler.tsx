@@ -1,14 +1,14 @@
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from 'react';
 import { formatEventTime } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import { type TimeRange, useApp } from '../../store';
+import { type TimeRange, replaySplitShown, useApp } from '../../store';
 import { dragWindow, percentIn, pressGesture, rulerTicks, timeAtX } from './zoomGeometry';
 
 /** The time axis of the shown window: a drag across it zooms to the span; with the replay alongside, a click seeks it. */
 export function Ruler({ shown, whole, widthPx, trackRef }: { shown: TimeRange; whole: TimeRange; widthPx: number; trackRef: (element: HTMLElement | null) => void }) {
   const setZoom = useApp((s) => s.setZoom);
   const setReplayTime = useApp((s) => s.setReplayTime);
-  const split = useApp((s) => s.replay.split);
+  const split = useApp(replaySplitShown);
   const stopDrag = useRef<(() => void) | null>(null);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   const latest = useRef({ shown, whole, split });
@@ -62,7 +62,7 @@ export function Ruler({ shown, whole, widthPx, trackRef }: { shown: TimeRange; w
 
 /** Where the replay alongside stands in the shown window: a line across the lanes' tracks, none outside the window. */
 export function Playhead({ shown }: { shown: TimeRange }) {
-  const time = useApp((s) => (s.replay.split ? s.replay.time : null));
+  const time = useApp((s) => (replaySplitShown(s) ? s.replay.time : null));
   if (time === null) return null;
   const at = percentIn(time, shown);
   if (at < 0 || at > 100) return null;

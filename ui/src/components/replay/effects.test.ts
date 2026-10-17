@@ -23,6 +23,7 @@ const effect = (overrides: Partial<EffectInstance>): EffectInstance => ({
   estimated: false,
   kind: 'beneficial',
   category: 'heal',
+  tickWindowMs: 3000,
   affected: [],
   ...overrides,
 });

@@ -1,7 +1,8 @@
-import type { PlayerRef, ReplayData, ReplayUnitKind } from '../../api/types';
+import type { ReplayData, ReplayUnitKind } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { type ReplayFilters, useApp } from '../../store';
 import { classColor, shortName } from '../overview/players';
+import { roleRank } from './hudIndex';
 
 interface LegendEntry {
   key: string;
@@ -14,13 +15,7 @@ interface LegendEntry {
 }
 
 const KIND_ORDER: ReplayUnitKind[] = ['player', 'pet', 'boss', 'add'];
-const ROLE_ORDER = ['tank', 'healer', 'damage'];
 const KIND_FILTER: Record<ReplayUnitKind, keyof Omit<ReplayFilters, 'hidden'>> = { player: 'players', pet: 'pets', boss: 'bosses', add: 'adds' };
-
-const roleRank = (player: PlayerRef | undefined) => {
-  const rank = player?.role ? ROLE_ORDER.indexOf(player.role) : -1;
-  return rank < 0 ? ROLE_ORDER.length : rank;
-};
 
 /** The legend's entries for the unit kinds `filters` shows: players by role and name, then pets, bosses and adds by name. */
 function legendEntries(data: ReplayData, filters: ReplayFilters): LegendEntry[] {

@@ -546,8 +546,8 @@
 }
 .hud-unit-auras {
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px 8px;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .hud-raid .hud-body {

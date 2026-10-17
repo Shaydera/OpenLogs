@@ -3,7 +3,7 @@ import type { QuickOverview } from '../api/types';
 import { useFocusRequest } from '../hooks/useFocusRequest';
 import { t } from '../i18n/i18n';
 import { rangeKey } from '../pulls/groupPulls';
-import { useApp } from '../store';
+import { replaySplitShown, useApp } from '../store';
 import { AbilityDetailView } from './ability/AbilityDetailView';
 import { AurasTab } from './auras/AurasTab';
 import { CastsTab } from './casts/CastsTab';
@@ -52,7 +52,7 @@ export function FightView() {
   const comparing = useApp((s) => s.comparison !== null);
   const breakdown = useApp((s) => s.breakdown);
   const scope = useApp((s) => s.scope);
-  const splitOn = useApp((s) => s.replay.split);
+  const splitOn = useApp(replaySplitShown);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const crumbRef = useRef<HTMLSpanElement>(null);
   // The pull title; on detail pages (compact header) the current breadcrumb.

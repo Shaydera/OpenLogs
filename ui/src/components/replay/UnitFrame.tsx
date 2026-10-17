@@ -18,7 +18,7 @@ function nameColor(hud: HudIndex, unit: ReplayUnit): string | undefined {
 }
 
 /** Bottom centre: the selected unit's health, cast, target and all of its auras. */
-export function UnitFrame({ hud }: { hud: HudIndex }) {
+export function UnitFrame({ hud, defaultCollapsed = false }: { hud: HudIndex; defaultCollapsed?: boolean }) {
   const time = useReplayTime();
   const selected = useApp((s) => s.replay.selected);
   const unit = selected === null ? undefined : hud.units.get(selected);
@@ -30,7 +30,7 @@ export function UnitFrame({ hud }: { hud: HudIndex }) {
   const target = targetId === null ? undefined : hud.units.get(targetId);
   const byStart = aurasAt(hud.auras.get(unit.actor) ?? [], unit.actor, time).sort((a, b) => a.startMs - b.startMs);
   return (
-    <HudPanel label={t('replay.unitFrame')} className="hud-unit">
+    <HudPanel label={t('replay.unitFrame')} className="hud-unit" defaultCollapsed={defaultCollapsed}>
       <div role="group" aria-label={label} className="hud-frame">
         <div className="hud-frame-head">
           <span className="hud-frame-name" style={{ color: dead ? undefined : nameColor(hud, unit) }}>

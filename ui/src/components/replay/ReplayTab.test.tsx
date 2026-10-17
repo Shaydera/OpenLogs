@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { t } from '../../i18n/i18n';
 import { initialState, useApp } from '../../store';
 import { replayFixture } from '../../test/replayFixture';
 import { ReplayTab } from './ReplayTab';
@@ -71,11 +72,35 @@ describe('ReplayTab', () => {
     });
   });
 
+  it('leaving the replay pauses it unless the split keeps it on screen', () => {
+    const alone = render(<ReplayTab />);
+    useApp.getState().toggleReplayPlay();
+    alone.unmount();
+    expect(replay().playing).toBe(false);
+
+    useApp.setState({ replay: { ...replay(), split: true } });
+    const beside = render(<ReplayTab />);
+    useApp.getState().toggleReplayPlay();
+    beside.unmount();
+    expect(replay().playing).toBe(true);
+    useApp.getState().toggleReplayPlay();
+  });
+
+  it('the compact pane starts the unit frame collapsed and expands it on click', async () => {
+    useApp.setState({ replay: { ...initialState().replay, selected: 1 } });
+    render(<ReplayTab compact />);
+    const caption = screen.getByRole('button', { name: t('replay.unitFrame') });
+    expect(caption).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('group', { name: 'Talwyn' })).toBeNull();
+    await userEvent.click(caption);
+    expect(screen.getByRole('group', { name: 'Talwyn' })).toBeInTheDocument();
+  });
+
   it('shows a notice without advanced logging', () => {
     useApp.setState({ replayData: { ...replayFixture, advancedLogging: false } });
     render(<ReplayTab />);
     expect(screen.getByRole('heading', { name: 'No positions in this log' })).toBeInTheDocument();
-    expect(screen.queryByRole('img', { name: 'Replay stage' })).toBeNull();
+    expect(screen.queryByRole('application', { name: 'Replay stage' })).toBeNull();
   });
 
   it('legend click hides a unit', async () => {

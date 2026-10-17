@@ -1,8 +1,15 @@
-import type { ReplayAura, ReplayCast, ReplayDeath, ReplayHealthTrack, ReplayTrack } from '../../api/types';
+import type { ReplayAura, ReplayCast, ReplayDeath, ReplayHealthTrack, ReplayTrack, ReplayUnit } from '../../api/types';
 
 export const STALE_MS = 2000;
+/** An enemy or pet with neither position nor health logged for longer than this has left: despawned, or a corpse the pull moved on from. */
+const NPC_GONE_MS = 5_000;
 /** A jump to a death starts this long before it, so the replay shows the run-up. */
-export const DEATH_LEAD_MS = 5_000;
+const DEATH_LEAD_MS = 5_000;
+
+/** Where a jump to the death at `deathMs` starts: the run-up before it, not before `floorMs`. */
+export function deathJumpMs(deathMs: number, floorMs = 0): number {
+  return Math.max(deathMs - DEATH_LEAD_MS, floorMs);
+}
 
 export function groupBy<T>(items: T[], key: (item: T) => number): Map<number, T[]> {
   const groups = new Map<number, T[]>();
@@ -70,6 +77,12 @@ export function placementAt(track: ReplayTrack, t: number, death?: ReplayDeath):
   const dead = death !== undefined && t >= death.t && (death.until === null || t < death.until);
   const placed = placementOn(track, dead ? death.t : t);
   return placed && { ...placed, stale: dead ? false : placed.stale, dead };
+}
+
+/** From when a unit counts as gone: never for a player, else `NPC_GONE_MS` after its last logged position or health. */
+export function goneAfterMs(kind: ReplayUnit['kind'], track: ReplayTrack | undefined, health: ReplayHealthTrack | undefined): number {
+  if (kind === 'player') return Infinity;
+  return Math.max(track?.t.at(-1) ?? -Infinity, health?.t.at(-1) ?? -Infinity) + NPC_GONE_MS;
 }
 
 /** The cast `caster` has running at `t`, with its progress 0..1 (an instant cast is at 1). */

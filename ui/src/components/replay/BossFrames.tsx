@@ -22,12 +22,12 @@ function EnemyFrame({ hud, unit, time }: { hud: HudIndex; unit: ReplayUnit; time
         {health && <span className="hud-frame-hp num">{healthText(health)}</span>}
       </div>
       <HealthBar percent={health?.percent ?? null} tone={boss ? 'boss' : 'add'} />
-      {boss && <CastBar hud={hud} actor={unit.actor} time={time} />}
+      <CastBar hud={hud} actor={unit.actor} time={time} hideIdle={!boss} />
     </div>
   );
 }
 
-/** Top right: every boss with its cast bar, then the adds alive now, numbered per name. */
+/** Top right: every boss with its cast bar, then the adds alive now, numbered per name, with a cast bar while they cast. */
 export function BossFrames({ hud }: { hud: HudIndex }) {
   const time = useReplayTime();
   const { units, more } = bossFrameUnits(hud, time);

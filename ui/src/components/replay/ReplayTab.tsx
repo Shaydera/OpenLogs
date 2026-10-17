@@ -1,7 +1,7 @@
 import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import type { EffectInstance, ReplayData } from '../../api/types';
 import { t } from '../../i18n/i18n';
-import { useApp } from '../../store';
+import { replaySplitShown, useApp } from '../../store';
 import { rangeWindow } from '../views/zoomGeometry';
 import { BossFrames } from './BossFrames';
 import { EffectList } from './EffectList';
@@ -14,7 +14,10 @@ import { UnitFrame } from './UnitFrame';
 
 const JUMP_MS = 5_000;
 
-/** The pull's replay: legend, stage and controls; loads its bundle on first show. `compact` is the split pane: no legend, filters or layers. */
+/**
+ * The pull's replay: legend, stage and controls; loads its bundle on first show. `compact` is the split pane: no legend, filters or layers.
+ * Leaving it pauses playback unless the split still shows the replay.
+ */
 export function ReplayTab({ compact = false }: { compact?: boolean }) {
   const data = useApp((s) => s.replayData);
   const error = useApp((s) => s.replayError);
@@ -23,6 +26,14 @@ export function ReplayTab({ compact = false }: { compact?: boolean }) {
   useEffect(() => {
     if (!data && !error) void loadReplay();
   }, [data, error, loadReplay]);
+
+  useEffect(
+    () => () => {
+      const state = useApp.getState();
+      if (state.replay.playing && !replaySplitShown(state)) state.toggleReplayPlay();
+    },
+    [],
+  );
 
   if (error)
     return (
@@ -81,7 +92,7 @@ function ReplayPanel({ data, compact }: { data: ReplayData; compact: boolean }) 
         <BossFrames hud={hud} />
         <div className="hud-bottom">
           <RaidFrames hud={hud} defaultCollapsed={compact} />
-          <UnitFrame hud={hud} />
+          <UnitFrame hud={hud} defaultCollapsed={compact} />
         </div>
       </div>
       <ReplayControls data={data} bounds={bounds} compact={compact} />

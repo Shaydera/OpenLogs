@@ -1,7 +1,7 @@
 import type { PlayerRef, ReplayAura, ReplayCast, ReplayData, ReplayDeath, ReplayHealthTrack, ReplayRaidMarker, ReplayUnit } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { ROLE_ORDER, shortName } from '../overview/players';
-import { groupBy, healthAt } from './playback';
+import { goneAfterMs, groupBy, healthAt } from './playback';
 
 const MAX_ADD_FRAMES = 8;
 const RAID_FRAME_DEBUFFS = 3;
@@ -21,6 +21,7 @@ export interface HudIndex {
   deaths: Map<number, ReplayDeath[]>;
   raidMarkers: Map<number, ReplayRaidMarker[]>;
   positioned: Set<number>;
+  goneAfterMs: Map<number, number>;
   bosses: ReplayUnit[];
   /** In order of first appearance. */
   adds: ReplayUnit[];
@@ -28,7 +29,7 @@ export interface HudIndex {
   players: ReplayUnit[];
 }
 
-const roleRank = (player: PlayerRef | undefined) => ROLE_ORDER.indexOf(player?.role ?? null);
+export const roleRank = (player: PlayerRef | undefined) => ROLE_ORDER.indexOf(player?.role ?? null);
 
 /** The bundle's per-unit lookups, built once so the HUD does not scan the whole bundle for every frame it draws. */
 export function indexHud(data: ReplayData): HudIndex {
@@ -58,6 +59,7 @@ export function indexHud(data: ReplayData): HudIndex {
     deaths: groupBy(data.deaths, (death) => death.actor),
     raidMarkers: groupBy(data.raidMarkers, (marker) => marker.actor),
     positioned: new Set(tracks.keys()),
+    goneAfterMs: new Map(data.units.map((unit) => [unit.actor, goneAfterMs(unit.kind, tracks.get(unit.actor), health.get(unit.actor))])),
     bosses: data.units.filter((unit) => unit.kind === 'boss'),
     adds,
     players,
@@ -83,9 +85,11 @@ export function healthShareAt(hud: HudIndex, actor: number, time: number): { cur
   return { ...health, percent: health.max > 0 ? (health.current / health.max) * 100 : null };
 }
 
-/** The boss frames at `time`: every boss, then the adds alive then up to the cap, and how many adds did not fit. */
+/** The boss frames at `time`: every boss, then the adds alive and still logged then up to the cap, and how many adds did not fit. */
 export function bossFrameUnits(hud: HudIndex, time: number): { units: ReplayUnit[]; more: number } {
-  const alive = hud.adds.filter((add) => healthShareAt(hud, add.actor, time) !== null && !isDeadAt(hud, add.actor, time));
+  const alive = hud.adds.filter(
+    (add) => healthShareAt(hud, add.actor, time) !== null && !isDeadAt(hud, add.actor, time) && time <= (hud.goneAfterMs.get(add.actor) ?? Infinity),
+  );
   return { units: [...hud.bosses, ...alive.slice(0, MAX_ADD_FRAMES)], more: Math.max(0, alive.length - MAX_ADD_FRAMES) };
 }
 

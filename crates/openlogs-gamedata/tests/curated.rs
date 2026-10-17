@@ -329,3 +329,53 @@ fn bundled_boss_effects_load_for_their_encounter() {
         ]
     );
 }
+
+#[test]
+fn effect_entries_without_a_trigger_or_a_positive_radius_warn_and_are_skipped() {
+    let entry = |name: &str, spell_ids: &str, radius: &str| {
+        format!(
+            r#"{{ "spell_ids": {spell_ids}, "name": "{name}", "trigger": "cast", "anchor": "caster_at_cast",
+                 "radius_yd": {radius}, "duration": {{ "type": "fixed", "ms": 5000 }},
+                 "evidence": {{ "aura_ids": [], "hit_ids": [9] }},
+                 "kind": "beneficial", "category": "raid_cd" }}"#
+        )
+    };
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join(RAID_EFFECTS_FILE),
+        format!(
+            r#"{{ "version": 1, "effects": [ {}, {}, {} ] }}"#,
+            entry("Inverted Ward", "[1]", "-3"),
+            entry("Silent Ward", "[]", "8"),
+            entry("Steady Ward", "[2]", "8")
+        ),
+    )
+    .unwrap();
+    let boss = dir.path().join(BOSS_EFFECTS_DIR);
+    fs::create_dir(&boss).unwrap();
+    fs::write(
+        boss.join("3455.json"),
+        format!(
+            r#"{{ "version": 1, "encounter_id": 3455, "effects": [ {}, {} ] }}"#,
+            entry("Pinpoint", "[3]", "0"),
+            entry("Froth", "[4]", "4.5")
+        ),
+    )
+    .unwrap();
+
+    let curated = Curated::load(Some(dir.path()));
+
+    let names: Vec<_> = curated.effects_for(3455).map(|e| e.name.as_str()).collect();
+    assert_eq!(names, ["Steady Ward", "Froth"]);
+    assert_eq!(curated.warnings.len(), 3, "{:?}", curated.warnings);
+    for (warning, (file, name)) in curated.warnings.iter().zip([
+        (RAID_EFFECTS_FILE, "Inverted Ward"),
+        (RAID_EFFECTS_FILE, "Silent Ward"),
+        ("3455.json", "Pinpoint"),
+    ]) {
+        assert!(
+            warning.contains(file) && warning.contains(name),
+            "{warning}"
+        );
+    }
+}

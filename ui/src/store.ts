@@ -81,6 +81,17 @@ const DEFAULT_SPLIT_WIDTH = 480;
 const REPLAY_TICK_MS = 100;
 export type MetricTab = 'damage' | 'healing' | 'taken';
 export const isMetricTab = (tab: FightTab): tab is MetricTab => tab === 'damage' || tab === 'healing' || tab === 'taken';
+
+/** Whole Mythic+ runs have no replay; the boss pulls inside them have one. */
+export function replayOffered({ log, view }: Pick<State, 'log' | 'view'>): boolean {
+  if (view.kind !== 'fight') return true;
+  const { fightIndex } = view;
+  return log?.fights.find((fight) => fight.index === fightIndex)?.run == null;
+}
+
+/** The replay shows beside the report: the split is on and the shown fight has a replay. */
+export const replaySplitShown = (state: Pick<State, 'log' | 'view' | 'replay'>): boolean => state.replay.split && replayOffered(state);
+
 /** The view filters by role: `own` is the perspective's side (Damage Taken: the target), `other` the side it faces. */
 export interface Filters {
   perspective: Side;
@@ -918,8 +929,9 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     set({ error: message });
   },
 
-  async setTab(tab, focus = null) {
+  async setTab(chosen, focus = null) {
     const { details, tab: current } = get();
+    const tab = chosen === 'replay' && !replayOffered(get()) ? 'overview' : chosen;
     const keep = tab === 'damage' || tab === 'healing';
     const top = details[details.length - 1];
     // An ability page belongs to one metric; switching the metric shows its player instead.
@@ -1271,7 +1283,8 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   },
 
   openReplayAt(ms) {
-    if (!get().replay.split) {
+    if (!replayOffered(get())) return;
+    if (!replaySplitShown(get())) {
       void get().setTab('replay');
       void get().loadReplay();
     }

@@ -522,3 +522,36 @@ fn phases_match_the_quick_overview() {
         quick_overview(&fight, &Curated::bundled()).timeline.phases
     );
 }
+
+#[test]
+fn trash_killed_before_the_pull_is_left_out() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Ilvaren", 62);
+    let boss = boss(&mut b);
+    let trash = b.unit(
+        "Creature-0-1-1-1-103-0000000005",
+        "Gloomfang",
+        HOSTILE_FLAGS,
+    );
+    let clutch = b.unit("Creature-0-1-1-1-101-0000000002", "Clutch", HOSTILE_FLAGS);
+    b.position(-4_000, trash, 9.0, 9.0)
+        .push(-3_000, mage, trash, MELEE, died())
+        .position(-1_000, clutch, 1.0, 1.0)
+        .position(2_000, clutch, 2.0, 1.0)
+        .position(1_000, boss, 0.0, 0.0)
+        .push(8_000, mage, clutch, MELEE, died());
+
+    let replay = replay_of(&b.build());
+
+    let units: Vec<ActorId> = replay.units.iter().map(|unit| unit.actor).collect();
+    assert_eq!(units, [mage, boss, clutch]);
+    assert!(replay.tracks.iter().all(|track| track.actor != trash));
+    assert_eq!(
+        replay.deaths,
+        vec![ReplayDeath {
+            actor: clutch,
+            t: 8_000,
+            until: None,
+        }]
+    );
+}

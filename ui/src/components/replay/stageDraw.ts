@@ -6,12 +6,14 @@ import { bossMonogram, initials } from '../../monogram';
 import type { ReplayFilters, ReplayLayers } from '../../store';
 import { shortName } from '../overview/players';
 import { type Bounds, type Camera, facingOnScreen, gridStep, toScreen, toWorld } from './camera';
-import { EVIDENCE_WINDOW_MS, type EffectState, RAID_BUFF_PULSE_MS } from './effects';
-import { deathAt, groupBy, healthAt, placementAt } from './playback';
+import { type EffectState, RAID_BUFF_PULSE_MS } from './effects';
+import { deathAt, goneAfterMs, groupBy, healthAt, placementAt } from './playback';
 import type { StageColors } from './stageColors';
 import { type MarkerLook, RAID_TARGET_MARKERS, WORLD_MARKERS, traceSymbol } from './worldMarkers';
 
 export const STAGE_PAD_PX = 40;
+/** The HUD captions along the stage top: 14 px in from the edge, 24 px high (`.hud-bosses`, `.hud-effects`, `.hud-toggle`). */
+export const HUD_CAPTION_ROW_PX = 14 + 24;
 const HIT_PX = 14;
 const UNIT_PX: Record<ReplayUnit['kind'], number> = { player: 22, pet: 16, boss: 28, add: 22 };
 const WORLD_MARKER_PX = 26;
@@ -30,6 +32,7 @@ export interface StageUnit {
   deaths: ReplayDeath[];
   raidMarkers: ReplayRaidMarker[];
   health: ReplayHealthTrack | undefined;
+  goneAfterMs: number;
   /** Lower-case class token of a player or a pet's owner. */
   classKey: string | null;
   label: string;
@@ -99,6 +102,7 @@ export function indexStage(data: ReplayData): StageIndex {
       deaths: [...(deaths.get(unit.actor) ?? [])].sort((a, b) => a.t - b.t),
       raidMarkers: raidMarkers.get(unit.actor) ?? [],
       health: health.get(unit.actor),
+      goneAfterMs: goneAfterMs(unit.kind, track, health.get(unit.actor)),
       classKey: classTokens.get(unit.kind === 'pet' ? (unit.owner ?? -1) : unit.actor) ?? null,
       label,
       icon: unitIcon(unit, data.encounterId),
@@ -108,9 +112,9 @@ export function indexStage(data: ReplayData): StageIndex {
   return { units, byActor: new Map(units.map((stage) => [stage.unit.actor, stage])), worldMarkers: data.worldMarkers, bounds: stageBounds(data) };
 }
 
-/** Where `stage` is at `t`, with the death that may hold it in place. */
+/** Where `stage` is at `t`, with the death that may hold it in place; `null` before its first sample and once it is gone. */
 export function placeUnit(stage: StageUnit, t: number) {
-  return placementAt(stage.track, t, deathAt(stage.deaths, t));
+  return t > stage.goneAfterMs ? null : placementAt(stage.track, t, deathAt(stage.deaths, t));
 }
 
 /** The units `filters` shows at `t`, with their screen positions. */
@@ -266,14 +270,14 @@ function effectLabel(effect: EffectInstance): string {
   return effect.estimated ? t('replay.effectAreaEstimated', values) : t('replay.effectArea', values);
 }
 
-/** Where the label of a circle around (`sx`, `sy`) goes: centred above it, but kept on the stage while any of the circle is. */
+/** Where the label of a circle around (`sx`, `sy`) goes: centred above it, but kept on the stage below the HUD captions while any of the circle is. */
 export function effectLabelAt(sx: number, sy: number, r: number, labelW: number, w: number, h: number): [x: number, bottom: number] {
   const above = sy - r - EFFECT_LABEL_GAP_PX;
   const onStage = sx + r >= 0 && sx - r <= w && sy + r >= 0 && sy - r <= h;
   if (!onStage) return [sx, above];
   const half = labelW / 2 + EFFECT_LABEL_PAD_PX;
   const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), Math.max(min, max));
-  return [clamp(sx, half, w - half), clamp(above, EFFECT_LABEL_PX + EFFECT_LABEL_PAD_PX, h - EFFECT_LABEL_PAD_PX)];
+  return [clamp(sx, half, w - half), clamp(above, HUD_CAPTION_ROW_PX + EFFECT_LABEL_PAD_PX + EFFECT_LABEL_PX, h - EFFECT_LABEL_PAD_PX)];
 }
 
 /** A circle in the effect's colour with its name and radius above; a raid buff is an outline that spreads from its caster and fades. */
@@ -492,7 +496,7 @@ function drawName(ctx: CanvasRenderingContext2D, frame: StageFrame, unit: Placed
 type TipLine = { text: string; color: string };
 
 function missingLine(effect: EffectInstance): string {
-  return effect.category === 'heal' ? t('replay.effectNoHeal', { name: effect.name, window: formatSpan(EVIDENCE_WINDOW_MS) }) : t('replay.effectNotLogged', { name: effect.name });
+  return effect.category === 'heal' ? t('replay.effectNoHeal', { name: effect.name, window: formatSpan(effect.tickWindowMs) }) : t('replay.effectNotLogged', { name: effect.name });
 }
 
 function tooltipLines(frame: StageFrame, unit: PlacedUnit): TipLine[] {

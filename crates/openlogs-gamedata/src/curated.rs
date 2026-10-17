@@ -1,6 +1,6 @@
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -310,6 +310,9 @@ fn load_phase_configs(override_dir: Option<&Path>, warnings: &mut Vec<String>) -
         |c: &PhaseConfig| c.encounter_id,
         warnings,
     )
+    .into_iter()
+    .map(|(_, config)| config)
+    .collect()
 }
 
 /// The bundled boss effect lists; an override file replaces the bundled list of its encounter.
@@ -328,21 +331,48 @@ fn load_boss_effects(
         |b: &BossEffects| b.encounter_id,
         warnings,
     );
-    for list in overrides {
+    for (path, mut list) in overrides {
+        list.effects = drawable_effects(list.effects, &path.display().to_string(), warnings);
         lists.retain(|b| b.encounter_id != list.encounter_id);
         lists.push(list);
     }
     lists
 }
 
-/// Per-encounter files from `<override>/<folder>/*.json` in file-name order. Unusable files
-/// and further files for an encounter that already has one add a warning.
+/// Drops entries the stage cannot draw: without a trigger spell, or without a positive radius
+/// (a negative one makes the canvas throw).
+fn drawable_effects(
+    effects: Vec<EffectDef>,
+    file: &str,
+    warnings: &mut Vec<String>,
+) -> Vec<EffectDef> {
+    effects
+        .into_iter()
+        .filter(|effect| {
+            let problem = if effect.spell_ids.is_empty() {
+                "has no spell_ids".to_owned()
+            } else if !(effect.radius_yd.is_finite() && effect.radius_yd > 0.0) {
+                format!("has radius_yd {}", effect.radius_yd)
+            } else {
+                return true;
+            };
+            warnings.push(format!(
+                "{file}: effect \"{}\" {problem} and was ignored",
+                effect.name
+            ));
+            false
+        })
+        .collect()
+}
+
+/// Per-encounter files from `<override>/<folder>/*.json` in file-name order, with their paths.
+/// Unusable files and further files for an encounter that already has one add a warning.
 fn load_encounter_files<T: DeserializeOwned>(
     override_dir: Option<&Path>,
     folder: &str,
     encounter_id: impl Fn(&T) -> u32,
     warnings: &mut Vec<String>,
-) -> Vec<T> {
+) -> Vec<(PathBuf, T)> {
     let Some(dir) = override_dir.map(|d| d.join(folder)) else {
         return Vec::new();
     };
@@ -358,7 +388,7 @@ fn load_encounter_files<T: DeserializeOwned>(
         })
         .collect();
     files.sort();
-    let mut loaded: Vec<T> = Vec::new();
+    let mut loaded: Vec<(PathBuf, T)> = Vec::new();
     for path in files {
         let parsed = fs::read_to_string(&path)
             .map_err(|err| err.to_string())
@@ -367,7 +397,7 @@ fn load_encounter_files<T: DeserializeOwned>(
             Ok(file)
                 if loaded
                     .iter()
-                    .any(|other| encounter_id(other) == encounter_id(&file)) =>
+                    .any(|(_, other)| encounter_id(other) == encounter_id(&file)) =>
             {
                 warnings.push(format!(
                     "{} repeats encounter {} and was ignored",
@@ -375,7 +405,7 @@ fn load_encounter_files<T: DeserializeOwned>(
                     encounter_id(&file)
                 ))
             }
-            Ok(file) => loaded.push(file),
+            Ok(file) => loaded.push((path, file)),
             Err(err) => warnings.push(format!(
                 "{} is invalid and was ignored: {err}",
                 path.display()
@@ -459,13 +489,17 @@ impl Curated {
             &mut warnings,
         );
         let phases = load_phase_configs(override_dir, &mut warnings);
-        let effects = load_list::<EffectList>(
-            override_dir,
-            RAID_EFFECTS_FILE,
-            include_str!("../data/raid_effects.json"),
+        let effects = drawable_effects(
+            load_list::<EffectList>(
+                override_dir,
+                RAID_EFFECTS_FILE,
+                include_str!("../data/raid_effects.json"),
+                &mut warnings,
+            )
+            .effects,
+            &list_label(override_dir, RAID_EFFECTS_FILE),
             &mut warnings,
-        )
-        .effects;
+        );
         let boss_effects = load_boss_effects(override_dir, BUNDLED_BOSS_EFFECTS, &mut warnings);
         Self {
             consumables,
@@ -618,6 +652,14 @@ impl Curated {
             .iter()
             .any(|def| def.spell_id == spell_id && def.shield)
     }
+}
+
+/// The override file's path when there is one, else the bundled file's name.
+fn list_label(override_dir: Option<&Path>, file: &str) -> String {
+    override_dir
+        .map(|dir| dir.join(file))
+        .filter(|path| path.is_file())
+        .map_or_else(|| file.to_owned(), |path| path.display().to_string())
 }
 
 fn load_list<T: DeserializeOwned>(

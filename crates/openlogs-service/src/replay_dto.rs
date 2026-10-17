@@ -172,6 +172,7 @@ pub struct EffectDto {
     pub estimated: bool,
     pub kind: EffectKindDto,
     pub category: EffectCategoryDto,
+    pub tick_window_ms: u32,
     pub affected: Vec<AffectedSpanDto>,
 }
 
@@ -358,6 +359,7 @@ fn effect_dto(fight: &Fight, refs: &mut Refs, effect: &EffectInstance) -> Effect
             EffectCategory::RaidBuff => EffectCategoryDto::RaidBuff,
             EffectCategory::BossMechanic => EffectCategoryDto::BossMechanic,
         },
+        tick_window_ms: effect.tick_window_ms,
         affected: effect
             .affected
             .iter()
@@ -473,5 +475,6 @@ mod tests {
         assert_eq!(intellect["spellId"], 1459);
         assert_eq!(intellect["category"], "raid_buff");
         assert_eq!(intellect["radiusYd"], 100.0);
+        assert_eq!(intellect["tickWindowMs"], 3000);
     }
 }
