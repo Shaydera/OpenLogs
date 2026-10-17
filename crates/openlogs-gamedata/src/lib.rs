@@ -16,12 +16,13 @@ mod spell_icons;
 pub use boss_portraits::{BossPortraitError, BossPortraitTable};
 pub use channel_spells::{ChannelSpellError, ChannelSpells};
 pub use curated::{
-    CONSUMABLES_FILE, Consumable, ConsumableKind, ConsumableList, CooldownCategory, CooldownList,
-    CooldownSpell, Curated, DEFENSIVES_FILE, DefensiveList, MAJOR_CDS_FILE, NamePattern,
-    PHASE_NAMES_FILE, PHASES_DIR, PLAYER_COOLDOWNS_FILE, PROCS_FILE, PersonalDefensive,
-    PhaseConfig, PhaseNameList, PhaseNames, PhaseRule, PhaseTrigger, PlayerCooldown,
-    PlayerCooldownKind, PlayerCooldownList, ProcList, ProcSpell, RAID_FRAME_AURAS_FILE,
-    RaidFrameAura, RaidFrameAuras,
+    BOSS_EFFECTS_DIR, BossEffects, CONSUMABLES_FILE, Consumable, ConsumableKind, ConsumableList,
+    CooldownCategory, CooldownList, CooldownSpell, Curated, DEFENSIVES_FILE, DefensiveList,
+    EffectAnchor, EffectCategory, EffectDef, EffectDuration, EffectKind, EffectList, EffectTrigger,
+    Evidence, MAJOR_CDS_FILE, NamePattern, PHASE_NAMES_FILE, PHASES_DIR, PLAYER_COOLDOWNS_FILE,
+    PROCS_FILE, PersonalDefensive, PhaseConfig, PhaseNameList, PhaseNames, PhaseRule, PhaseTrigger,
+    PlayerCooldown, PlayerCooldownKind, PlayerCooldownList, ProcList, ProcSpell, RAID_EFFECTS_FILE,
+    RAID_FRAME_AURAS_FILE, RaidFrameAura, RaidFrameAuras,
 };
 pub use download::{
     DownloadError, SpellTables, WAGO_DUNGEON_ENCOUNTER_URL, WAGO_JOURNAL_ENCOUNTER_CREATURE_URL,

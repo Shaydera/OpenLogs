@@ -2,9 +2,21 @@ use std::collections::HashSet;
 use std::fs;
 
 use openlogs_gamedata::{
-    CONSUMABLES_FILE, ConsumableKind, CooldownCategory, Curated, MAJOR_CDS_FILE, PHASES_DIR,
-    PROCS_FILE, PhaseTrigger, PlayerCooldownKind, RAID_FRAME_AURAS_FILE, class, spec,
+    BOSS_EFFECTS_DIR, CONSUMABLES_FILE, ConsumableKind, CooldownCategory, Curated, EffectAnchor,
+    EffectCategory, EffectDuration, EffectKind, EffectTrigger, MAJOR_CDS_FILE, PHASES_DIR,
+    PROCS_FILE, PhaseTrigger, PlayerCooldownKind, RAID_EFFECTS_FILE, RAID_FRAME_AURAS_FILE, class,
+    spec,
 };
+
+fn boss_effects_json(encounter_id: u32, name: &str) -> String {
+    format!(
+        r#"{{ "version": 1, "encounter_id": {encounter_id}, "effects": [
+            {{ "spell_ids": [7], "name": "{name}", "trigger": "aura_applied", "anchor": "follows_target",
+               "radius_yd": 4.5, "duration": {{ "type": "until_aura_end" }},
+               "evidence": {{ "aura_ids": [], "hit_ids": [8] }},
+               "kind": "harmful", "category": "boss_mechanic" }} ] }}"#
+    )
+}
 
 #[test]
 fn override_files_replace_a_list_and_invalid_ones_fall_back_to_the_bundled_list() {
@@ -201,4 +213,103 @@ fn raid_frame_auras_load_and_an_override_replaces_them() {
     assert!(curated.raid_frame_excluded(2));
     assert_eq!(curated.raid_frame_priority(33206), None);
     assert!(curated.warnings.is_empty(), "{:?}", curated.warnings);
+}
+
+#[test]
+fn effect_catalog_loads_with_defaults() {
+    let bundled = Curated::bundled();
+    assert!(!bundled.effects.is_empty());
+    for effect in &bundled.effects {
+        assert!(!effect.spell_ids.is_empty(), "{}", effect.name);
+        assert!(effect.radius_yd > 0.0, "{}", effect.name);
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join(RAID_EFFECTS_FILE),
+        r#"{ "version": 1, "effects": [
+            { "spell_ids": [1], "name": "Shout", "trigger": "cast", "anchor": "caster_at_cast",
+              "radius_yd": 100, "duration": { "type": "fixed", "ms": 5000 },
+              "evidence": { "aura_ids": [1], "hit_ids": [] },
+              "kind": "beneficial", "category": "raid_buff" },
+            { "spell_ids": [2], "name": "Totem", "trigger": "summon", "anchor": "summoned_unit",
+              "radius_yd": 10, "duration": { "type": "until_unit_gone" },
+              "evidence": { "aura_ids": [], "hit_ids": [3], "tick_window_ms": 1000 },
+              "kind": "beneficial", "category": "raid_cd" } ] }"#,
+    )
+    .unwrap();
+    let curated = Curated::load(Some(dir.path()));
+    assert!(curated.warnings.is_empty(), "{:?}", curated.warnings);
+    let [shout, totem] = curated.effects.as_slice() else {
+        panic!("{:?}", curated.effects);
+    };
+    assert_eq!(shout.trigger, EffectTrigger::Cast);
+    assert_eq!(shout.anchor, EffectAnchor::CasterAtCast);
+    assert_eq!(shout.duration, EffectDuration::Fixed { ms: 5000 });
+    assert_eq!(shout.kind, EffectKind::Beneficial);
+    assert_eq!(shout.category, EffectCategory::RaidBuff);
+    assert_eq!(shout.evidence.tick_window_ms, 3000);
+    assert_eq!(totem.duration, EffectDuration::UntilUnitGone);
+    assert_eq!(totem.evidence.tick_window_ms, 1000);
+}
+
+#[test]
+fn an_invalid_boss_effects_file_warns_and_is_ignored() {
+    let dir = tempfile::tempdir().unwrap();
+    let boss = dir.path().join(BOSS_EFFECTS_DIR);
+    fs::create_dir(&boss).unwrap();
+    fs::write(boss.join("3455.json"), boss_effects_json(3455, "Froth")).unwrap();
+    fs::write(boss.join("3456.json"), "{ not json").unwrap();
+    fs::write(boss.join("copy.json"), boss_effects_json(3455, "Copy")).unwrap();
+
+    let curated = Curated::load(Some(dir.path()));
+    assert_eq!(
+        curated.warnings.len(),
+        2,
+        "the invalid file and the repeated encounter: {:?}",
+        curated.warnings
+    );
+    let names: Vec<_> = curated
+        .boss_effects
+        .iter()
+        .flat_map(|boss| boss.effects.iter().map(|e| e.name.as_str()))
+        .collect();
+    assert_eq!(names, ["Froth"]);
+}
+
+#[test]
+fn effects_for_combines_raid_and_encounter_effects() {
+    let dir = tempfile::tempdir().unwrap();
+    let boss = dir.path().join(BOSS_EFFECTS_DIR);
+    fs::create_dir(&boss).unwrap();
+    fs::write(boss.join("3455.json"), boss_effects_json(3455, "Froth")).unwrap();
+    fs::write(boss.join("3421.json"), boss_effects_json(3421, "Breaker")).unwrap();
+
+    let curated = Curated::load(Some(dir.path()));
+    let names = |encounter_id| -> Vec<String> {
+        curated
+            .effects_for(encounter_id)
+            .map(|e| e.name.clone())
+            .collect()
+    };
+    let raid: Vec<String> = curated.effects.iter().map(|e| e.name.clone()).collect();
+    assert_eq!(names(3455), [raid.clone(), vec!["Froth".into()]].concat());
+    assert_eq!(names(3497), raid);
+}
+
+#[test]
+fn bundled_boss_effects_load_for_their_encounter() {
+    let curated = Curated::bundled();
+    let boss: Vec<_> = curated
+        .effects_for(3455)
+        .filter(|e| e.category == EffectCategory::BossMechanic)
+        .map(|e| (e.name.as_str(), e.kind, e.radius_yd))
+        .collect();
+    assert_eq!(
+        boss,
+        [
+            ("Plague Froth", EffectKind::Harmful, 4.5),
+            ("Stygian Infection", EffectKind::Harmful, 3.5)
+        ]
+    );
 }

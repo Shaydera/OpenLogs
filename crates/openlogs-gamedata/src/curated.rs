@@ -14,8 +14,14 @@ pub const PROCS_FILE: &str = "procs.json";
 pub const PHASE_NAMES_FILE: &str = "phase_names.json";
 pub const PLAYER_COOLDOWNS_FILE: &str = "player_cooldowns.json";
 pub const RAID_FRAME_AURAS_FILE: &str = "raid_frame_auras.json";
+pub const RAID_EFFECTS_FILE: &str = "raid_effects.json";
 /// Folder in the override directory holding one phase config per encounter.
 pub const PHASES_DIR: &str = "phases";
+/// Folder in the override directory holding one boss effect list per encounter.
+pub const BOSS_EFFECTS_DIR: &str = "boss_effects";
+
+/// Bundled boss effect lists, one file per encounter.
+const BUNDLED_BOSS_EFFECTS: &[&str] = &[include_str!("../data/boss_effects/3455.json")];
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ProcSpell {
@@ -205,10 +211,133 @@ pub struct PhaseNameList {
     pub encounters: Vec<PhaseNames>,
 }
 
-/// Phase configs from `<override>/phases/*.json` in file-name order. Unusable files and
-/// further files for an encounter that already has a config add a warning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EffectTrigger {
+    Cast,
+    AuraApplied,
+    Summon,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EffectAnchor {
+    SummonedUnit,
+    CasterAtCast,
+    FollowsCaster,
+    TargetAtCast,
+    FollowsTarget,
+    /// The log has no position for the effect: the centre of its first recipients.
+    EstimatedFromAffected,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum EffectDuration {
+    Fixed { ms: u32 },
+    UntilAuraEnd,
+    UntilChannelEnd,
+    UntilUnitGone,
+}
+
+fn default_tick_window_ms() -> u32 {
+    3000
+}
+
+/// Log events that show who an effect reached.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct Evidence {
+    pub aura_ids: Vec<u32>,
+    pub hit_ids: Vec<u32>,
+    /// How long a single hit or heal counts a player as affected.
+    #[serde(default = "default_tick_window_ms")]
+    pub tick_window_ms: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EffectKind {
+    Beneficial,
+    Harmful,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EffectCategory {
+    RaidCd,
+    Heal,
+    RaidBuff,
+    BossMechanic,
+}
+
+/// An area effect the replay draws as a circle.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct EffectDef {
+    pub spell_ids: Vec<u32>,
+    pub name: String,
+    pub trigger: EffectTrigger,
+    pub anchor: EffectAnchor,
+    pub radius_yd: f32,
+    pub duration: EffectDuration,
+    pub evidence: Evidence,
+    pub kind: EffectKind,
+    pub category: EffectCategory,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct EffectList {
+    pub version: u32,
+    pub effects: Vec<EffectDef>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct BossEffects {
+    pub version: u32,
+    pub encounter_id: u32,
+    pub effects: Vec<EffectDef>,
+}
+
 fn load_phase_configs(override_dir: Option<&Path>, warnings: &mut Vec<String>) -> Vec<PhaseConfig> {
-    let Some(dir) = override_dir.map(|d| d.join(PHASES_DIR)) else {
+    load_encounter_files(
+        override_dir,
+        PHASES_DIR,
+        |c: &PhaseConfig| c.encounter_id,
+        warnings,
+    )
+}
+
+/// The bundled boss effect lists; an override file replaces the bundled list of its encounter.
+fn load_boss_effects(
+    override_dir: Option<&Path>,
+    bundled: &[&str],
+    warnings: &mut Vec<String>,
+) -> Vec<BossEffects> {
+    let mut lists: Vec<BossEffects> = bundled
+        .iter()
+        .map(|text| serde_json::from_str(text).expect("bundled boss effect list is valid"))
+        .collect();
+    let overrides = load_encounter_files(
+        override_dir,
+        BOSS_EFFECTS_DIR,
+        |b: &BossEffects| b.encounter_id,
+        warnings,
+    );
+    for list in overrides {
+        lists.retain(|b| b.encounter_id != list.encounter_id);
+        lists.push(list);
+    }
+    lists
+}
+
+/// Per-encounter files from `<override>/<folder>/*.json` in file-name order. Unusable files
+/// and further files for an encounter that already has one add a warning.
+fn load_encounter_files<T: DeserializeOwned>(
+    override_dir: Option<&Path>,
+    folder: &str,
+    encounter_id: impl Fn(&T) -> u32,
+    warnings: &mut Vec<String>,
+) -> Vec<T> {
+    let Some(dir) = override_dir.map(|d| d.join(folder)) else {
         return Vec::new();
     };
     let Ok(entries) = fs::read_dir(&dir) else {
@@ -223,38 +352,36 @@ fn load_phase_configs(override_dir: Option<&Path>, warnings: &mut Vec<String>) -
         })
         .collect();
     files.sort();
-    let mut configs: Vec<PhaseConfig> = Vec::new();
+    let mut loaded: Vec<T> = Vec::new();
     for path in files {
         let parsed = fs::read_to_string(&path)
             .map_err(|err| err.to_string())
-            .and_then(|text| {
-                serde_json::from_str::<PhaseConfig>(&text).map_err(|err| err.to_string())
-            });
+            .and_then(|text| serde_json::from_str::<T>(&text).map_err(|err| err.to_string()));
         match parsed {
-            Ok(config)
-                if configs
+            Ok(file)
+                if loaded
                     .iter()
-                    .any(|c| c.encounter_id == config.encounter_id) =>
+                    .any(|other| encounter_id(other) == encounter_id(&file)) =>
             {
                 warnings.push(format!(
                     "{} repeats encounter {} and was ignored",
                     path.display(),
-                    config.encounter_id
+                    encounter_id(&file)
                 ))
             }
-            Ok(config) => configs.push(config),
+            Ok(file) => loaded.push(file),
             Err(err) => warnings.push(format!(
                 "{} is invalid and was ignored: {err}",
                 path.display()
             )),
         }
     }
-    configs
+    loaded
 }
 
 /// The curated lists: bundled with the app, each replaceable by a file of the same name
 /// in an override folder.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Curated {
     pub consumables: ConsumableList,
     pub cooldowns: CooldownList,
@@ -268,6 +395,10 @@ pub struct Curated {
     pub phase_names: PhaseNameList,
     /// The user's phase configs; none are bundled.
     pub phases: Vec<PhaseConfig>,
+    /// Area effects of player spells the replay draws in every fight (bundled, overridable).
+    pub effects: Vec<EffectDef>,
+    /// Area effects of boss mechanics per encounter (bundled, each overridable per encounter).
+    pub boss_effects: Vec<BossEffects>,
     /// Override files that were present but unusable; the bundled list was used instead.
     pub warnings: Vec<String>,
 }
@@ -322,6 +453,14 @@ impl Curated {
             &mut warnings,
         );
         let phases = load_phase_configs(override_dir, &mut warnings);
+        let effects = load_list::<EffectList>(
+            override_dir,
+            RAID_EFFECTS_FILE,
+            include_str!("../data/raid_effects.json"),
+            &mut warnings,
+        )
+        .effects;
+        let boss_effects = load_boss_effects(override_dir, BUNDLED_BOSS_EFFECTS, &mut warnings);
         Self {
             consumables,
             cooldowns,
@@ -331,8 +470,20 @@ impl Curated {
             raid_frame_auras,
             phase_names,
             phases,
+            effects,
+            boss_effects,
             warnings,
         }
+    }
+
+    /// The raid effects followed by the encounter's boss effects.
+    pub fn effects_for(&self, encounter_id: u32) -> impl Iterator<Item = &EffectDef> {
+        let boss = self
+            .boss_effects
+            .iter()
+            .filter(move |b| b.encounter_id == encounter_id)
+            .flat_map(|b| &b.effects);
+        self.effects.iter().chain(boss)
     }
 
     /// Display priority of a curated raid frame aura (lower first); `None` if it is not listed.
@@ -487,4 +638,55 @@ fn load_list<T: DeserializeOwned>(
         }
     }
     serde_json::from_str(bundled).expect("bundled curated list is valid")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn boss_effects_json(encounter_id: u32, name: &str) -> String {
+        format!(
+            r#"{{ "version": 1, "encounter_id": {encounter_id}, "effects": [
+                {{ "spell_ids": [7], "name": "{name}", "trigger": "cast", "anchor": "target_at_cast",
+                   "radius_yd": 3.5, "duration": {{ "type": "fixed", "ms": 2000 }},
+                   "evidence": {{ "aura_ids": [], "hit_ids": [8] }},
+                   "kind": "harmful", "category": "boss_mechanic" }} ] }}"#
+        )
+    }
+
+    fn names(lists: &[BossEffects]) -> Vec<(u32, &str)> {
+        lists
+            .iter()
+            .flat_map(|b| b.effects.iter().map(|e| (b.encounter_id, e.name.as_str())))
+            .collect()
+    }
+
+    #[test]
+    fn boss_effects_override_replaces_the_bundled_encounter() {
+        let bundled = [
+            boss_effects_json(3455, "Bundled Froth"),
+            boss_effects_json(3421, "Bundled Breaker"),
+        ];
+        let bundled: Vec<&str> = bundled.iter().map(String::as_str).collect();
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().join(BOSS_EFFECTS_DIR);
+        fs::create_dir(&folder).unwrap();
+        fs::write(
+            folder.join("froth.json"),
+            boss_effects_json(3455, "My Froth"),
+        )
+        .unwrap();
+
+        let mut warnings = Vec::new();
+        let lists = load_boss_effects(Some(dir.path()), &bundled, &mut warnings);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(
+            names(&lists),
+            [(3421, "Bundled Breaker"), (3455, "My Froth")]
+        );
+        assert_eq!(
+            names(&load_boss_effects(None, &bundled, &mut warnings)),
+            [(3455, "Bundled Froth"), (3421, "Bundled Breaker")]
+        );
+    }
 }
