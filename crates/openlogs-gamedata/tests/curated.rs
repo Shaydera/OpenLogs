@@ -235,12 +235,20 @@ fn effect_catalog_loads_with_defaults() {
             { "spell_ids": [2], "name": "Totem", "trigger": "summon", "anchor": "summoned_unit",
               "radius_yd": 10, "duration": { "type": "until_unit_gone" },
               "evidence": { "aura_ids": [], "hit_ids": [3], "tick_window_ms": 1000 },
-              "kind": "beneficial", "category": "raid_cd" } ] }"#,
+              "kind": "beneficial", "category": "raid_cd" },
+            { "spell_ids": [4], "name": "Mastery", "trigger": "aura_applied", "anchor": "follows_caster",
+              "radius_yd": 40, "duration": { "type": "until_aura_end" },
+              "evidence": { "aura_ids": [4], "hit_ids": [] },
+              "kind": "beneficial", "category": "raid_cd" },
+            { "spell_ids": [5], "name": "Burst", "trigger": "aura_applied", "anchor": "follows_target",
+              "radius_yd": 3.5, "duration": { "type": "until_aura_end", "after_ms": 2500 },
+              "evidence": { "aura_ids": [], "hit_ids": [6] },
+              "kind": "harmful", "category": "boss_mechanic" } ] }"#,
     )
     .unwrap();
     let curated = Curated::load(Some(dir.path()));
     assert!(curated.warnings.is_empty(), "{:?}", curated.warnings);
-    let [shout, totem] = curated.effects.as_slice() else {
+    let [shout, totem, mastery, burst] = curated.effects.as_slice() else {
         panic!("{:?}", curated.effects);
     };
     assert_eq!(shout.trigger, EffectTrigger::Cast);
@@ -251,6 +259,14 @@ fn effect_catalog_loads_with_defaults() {
     assert_eq!(shout.evidence.tick_window_ms, 3000);
     assert_eq!(totem.duration, EffectDuration::UntilUnitGone);
     assert_eq!(totem.evidence.tick_window_ms, 1000);
+    assert_eq!(
+        mastery.duration,
+        EffectDuration::UntilAuraEnd { after_ms: 0 }
+    );
+    assert_eq!(
+        burst.duration,
+        EffectDuration::UntilAuraEnd { after_ms: 2500 }
+    );
 }
 
 #[test]

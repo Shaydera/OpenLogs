@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
 use openlogs_analysis::{
-    ActorId, Fight, HealthTrack, PhaseKind, Replay, ReplayAura, ReplayCast, ReplayCastOutcome,
-    ReplayDeath, ReplayUnit, SpellId, StackChange, Track, UnitKind,
+    ActorId, EffectAnchorAt, EffectInstance, Fight, HealthTrack, PhaseKind, Replay, ReplayAura,
+    ReplayCast, ReplayCastOutcome, ReplayDeath, ReplayUnit, SpellId, StackChange, Track, UnitKind,
 };
+use openlogs_gamedata::{EffectCategory, EffectKind};
 use serde::Serialize;
 
 use crate::overview_dto::{PhaseDto, PhaseKindDto, PlayerRef, SpellRef};
@@ -24,6 +25,7 @@ pub struct ReplayDto {
     pub auras: Vec<ReplayAuraDto>,
     pub raid_markers: Vec<RaidMarkerDto>,
     pub world_markers: Vec<WorldMarkerDto>,
+    pub effects: Vec<EffectDto>,
     pub phases: Vec<PhaseDto>,
     pub deaths: Vec<ReplayDeathDto>,
 }
@@ -127,6 +129,53 @@ pub struct WorldMarkerDto {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EffectKindDto {
+    Beneficial,
+    Harmful,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EffectCategoryDto {
+    RaidCd,
+    Heal,
+    RaidBuff,
+    BossMechanic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum EffectAnchorDto {
+    Ground { x: f32, y: f32 },
+    Unit { actor: ActorId },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AffectedSpanDto {
+    pub actor: ActorId,
+    pub start_ms: i32,
+    pub end_ms: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectDto {
+    pub name: String,
+    pub spell_id: SpellId,
+    pub caster: ActorId,
+    pub anchor: Option<EffectAnchorDto>,
+    pub radius_yd: f32,
+    pub start_ms: i32,
+    pub end_ms: i32,
+    pub estimated: bool,
+    pub kind: EffectKindDto,
+    pub category: EffectCategoryDto,
+    pub affected: Vec<AffectedSpanDto>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplayDeathDto {
     pub actor: ActorId,
@@ -153,6 +202,11 @@ pub fn replay_dto(fight: &Fight, replay: &Replay, advanced_logging: bool) -> Rep
         .auras
         .iter()
         .map(|aura| aura_dto(fight, &mut refs, aura))
+        .collect();
+    let effects = replay
+        .effects
+        .iter()
+        .map(|effect| effect_dto(fight, &mut refs, effect))
         .collect();
     let (roster, spells) = refs.finish(fight);
     ReplayDto {
@@ -187,6 +241,7 @@ pub fn replay_dto(fight: &Fight, replay: &Replay, advanced_logging: bool) -> Rep
                 end_ms: m.end_ms,
             })
             .collect(),
+        effects,
         phases: replay
             .phases
             .iter()
@@ -277,6 +332,44 @@ fn aura_dto(fight: &Fight, refs: &mut Refs, aura: &ReplayAura) -> ReplayAuraDto 
     }
 }
 
+fn effect_dto(fight: &Fight, refs: &mut Refs, effect: &EffectInstance) -> EffectDto {
+    EffectDto {
+        name: effect.name.clone(),
+        spell_id: refs.spell(fight, effect.spell),
+        caster: effect.caster,
+        anchor: effect.anchor.map(|anchor| match anchor {
+            EffectAnchorAt::Ground { x, y } => EffectAnchorDto::Ground {
+                x: centi(x),
+                y: centi(y),
+            },
+            EffectAnchorAt::Unit { actor } => EffectAnchorDto::Unit { actor },
+        }),
+        radius_yd: effect.radius_yd,
+        start_ms: effect.start_ms,
+        end_ms: effect.end_ms,
+        estimated: effect.estimated,
+        kind: match effect.kind {
+            EffectKind::Beneficial => EffectKindDto::Beneficial,
+            EffectKind::Harmful => EffectKindDto::Harmful,
+        },
+        category: match effect.category {
+            EffectCategory::RaidCd => EffectCategoryDto::RaidCd,
+            EffectCategory::Heal => EffectCategoryDto::Heal,
+            EffectCategory::RaidBuff => EffectCategoryDto::RaidBuff,
+            EffectCategory::BossMechanic => EffectCategoryDto::BossMechanic,
+        },
+        affected: effect
+            .affected
+            .iter()
+            .map(|span| AffectedSpanDto {
+                actor: span.actor,
+                start_ms: span.start_ms,
+                end_ms: span.end_ms,
+            })
+            .collect(),
+    }
+}
+
 fn death_dto(death: &ReplayDeath) -> ReplayDeathDto {
     ReplayDeathDto {
         actor: death.actor,
@@ -287,8 +380,11 @@ fn death_dto(death: &ReplayDeath) -> ReplayDeathDto {
 
 #[cfg(test)]
 mod tests {
-    use openlogs_analysis::{Actors, Event, EventKind, NOBODY, PositionSample, SpellInfo};
+    use openlogs_analysis::{
+        Actors, AuraAction, AuraType, Event, EventKind, NO_SPELL, NOBODY, PositionSample, SpellInfo,
+    };
     use openlogs_gamedata::{ChannelSpells, Curated};
+    use serde_json::json;
 
     use super::*;
     use crate::test_fight::{PLAYER_FLAGS, fight, unit};
@@ -297,18 +393,35 @@ mod tests {
     fn replay_dto_rounds_coordinates_and_names_spells() {
         let mut actors = Actors::new();
         let mage = unit(&mut actors, "Player-1", "Faelan-Emberfall-EU", PLAYER_FLAGS);
+        let paladin = unit(
+            &mut actors,
+            "Player-2",
+            "Brannoc-Emberfall-EU",
+            PLAYER_FLAGS,
+        );
+        let event = |t, source, target, spell, kind| Event {
+            t,
+            source,
+            target,
+            spell,
+            kind,
+            source_hostile: false,
+            target_hostile: false,
+            unit_hp: None,
+        };
+        let aura_mastery = EventKind::Aura {
+            action: AuraAction::Applied,
+            aura_type: AuraType::Buff,
+            stacks: None,
+            broken_by: NO_SPELL,
+        };
         let mut fight = fight(
             actors,
-            vec![Event {
-                t: 1_000,
-                source: mage,
-                target: NOBODY,
-                spell: 44425,
-                kind: EventKind::CastSuccess,
-                source_hostile: false,
-                target_hostile: false,
-                unit_hp: None,
-            }],
+            vec![
+                event(1_000, mage, NOBODY, 44425, EventKind::CastSuccess),
+                event(1_000, paladin, paladin, 31821, aura_mastery),
+                event(1_500, mage, NOBODY, 1459, EventKind::CastSuccess),
+            ],
         );
         fight.spells.insert(
             44425,
@@ -323,6 +436,13 @@ mod tests {
             x: 417.5549,
             y: -12.3449,
             facing: 1.5,
+        });
+        fight.positions.push(PositionSample {
+            t: 1_000,
+            actor: paladin,
+            x: 0.0,
+            y: 0.0,
+            facing: 0.0,
         });
 
         let replay =
@@ -340,5 +460,18 @@ mod tests {
             tracks.contains(r#""x":[417.55]"#) && tracks.contains(r#""y":[-12.34]"#),
             "{tracks}"
         );
+        assert_eq!(
+            json["effects"][0]["anchor"],
+            json!({ "type": "unit", "actor": paladin })
+        );
+        let intellect = &json["effects"][1];
+        let effects = serde_json::to_string(&dto.effects).unwrap();
+        assert!(
+            effects.contains(r#""anchor":{"type":"ground","x":417.55,"y":-12.34}"#),
+            "{effects}"
+        );
+        assert_eq!(intellect["spellId"], 1459);
+        assert_eq!(intellect["category"], "raid_buff");
+        assert_eq!(intellect["radiusYd"], 100.0);
     }
 }

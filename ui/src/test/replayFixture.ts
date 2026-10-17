@@ -29,6 +29,7 @@ export const replayFixture: ReplayData = {
   auras: [],
   raidMarkers: [],
   worldMarkers: [],
+  effects: [],
   phases: [
     { kind: 'boss', number: 1, startMs: 0, endMs: 150_000, name: null },
     { kind: 'intermission', number: 1, startMs: 150_000, endMs: 180_000, name: null },

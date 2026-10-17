@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use openlogs_gamedata::{ChannelSpells, Curated};
 
 use crate::actors::{ActorId, NOBODY};
@@ -28,26 +30,39 @@ pub struct ReplayCast {
     pub outcome: ReplayCastOutcome,
 }
 
+/// When a channel ended, by the event index of its cast's success.
+pub(super) type ChannelEnds = HashMap<usize, i32>;
+
 pub(super) fn casts(
     fight: &Fight,
     curated: &Curated,
     channels: &ChannelSpells,
     roster: &Roster,
-) -> Vec<ReplayCast> {
+) -> (Vec<ReplayCast>, ChannelEnds) {
     let is_unit = |actor: ActorId| roster.kind(actor).is_some();
     let follow_ups = follow_up_casts(fight, curated, is_unit);
     let items = cast_items(fight, curated, &follow_ups, is_unit);
     let spans = SpanIndex::new(fight, curated, channels, &items);
-    items
+    let mut channel_ends = ChannelEnds::new();
+    let casts = items
         .iter()
         .filter_map(|item| {
+            if curated.is_proc(item.spell) {
+                return None;
+            }
             let outcome = match item.kind {
                 CastKind::NoOutcome | CastKind::Rejected => return None,
                 CastKind::Interrupted => ReplayCastOutcome::Interrupted,
                 _ if item.success.is_none() => ReplayCastOutcome::Failed,
                 _ => ReplayCastOutcome::Completed,
             };
-            let end = spans.spans(item).span_end.unwrap_or(item.start);
+            let item_spans = spans.spans(item);
+            if let (Some(success), Some(_), Some(end)) =
+                (item.success, &item_spans.channel, item_spans.span_end)
+            {
+                channel_ends.insert(success, end);
+            }
+            let end = item_spans.span_end.unwrap_or(item.start);
             let (start_ms, end_ms) = from_pull_start(item.start, end.max(item.start))?;
             Some(ReplayCast {
                 caster: item.caster,
@@ -58,5 +73,6 @@ pub(super) fn casts(
                 outcome,
             })
         })
-        .collect()
+        .collect();
+    (casts, channel_ends)
 }

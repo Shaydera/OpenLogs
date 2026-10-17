@@ -234,8 +234,14 @@ pub enum EffectAnchor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum EffectDuration {
-    Fixed { ms: u32 },
-    UntilAuraEnd,
+    Fixed {
+        ms: u32,
+    },
+    /// The trigger aura's end, plus `after_ms` for what the log shows landing after it.
+    UntilAuraEnd {
+        #[serde(default)]
+        after_ms: u32,
+    },
     UntilChannelEnd,
     UntilUnitGone,
 }

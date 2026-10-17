@@ -1133,6 +1133,36 @@ export interface ReplayDeath {
   until: number | null;
 }
 
+export type EffectKind = 'beneficial' | 'harmful';
+
+export type EffectCategory = 'raid_cd' | 'heal' | 'raid_buff' | 'boss_mechanic';
+
+/** A logged ground position, or the unit the effect moves with. */
+export type EffectAnchor = { type: 'ground'; x: number; y: number } | { type: 'unit'; actor: number };
+
+export interface AffectedSpan {
+  actor: number;
+  startMs: number;
+  endMs: number;
+}
+
+export interface EffectInstance {
+  name: string;
+  spellId: number;
+  caster: number;
+  /** `null`: the log places it nowhere; it is only listed. */
+  anchor: EffectAnchor | null;
+  radiusYd: number;
+  startMs: number;
+  endMs: number;
+  /** The anchor is the centre of the first recipients, not a logged position. */
+  estimated: boolean;
+  kind: EffectKind;
+  category: EffectCategory;
+  /** Per player, merged and inside the effect's window. */
+  affected: AffectedSpan[];
+}
+
 export interface ReplayData {
   encounterId: number;
   advancedLogging: boolean;
@@ -1146,6 +1176,7 @@ export interface ReplayData {
   auras: ReplayAura[];
   raidMarkers: ReplayRaidMarker[];
   worldMarkers: ReplayWorldMarker[];
+  effects: EffectInstance[];
   phases: Phase[];
   deaths: ReplayDeath[];
 }

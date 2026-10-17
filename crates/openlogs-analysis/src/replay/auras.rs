@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use openlogs_gamedata::{CooldownCategory, Curated};
 
 use crate::actors::ActorId;
-use crate::auras::{AuraInterval, aura_intervals};
+use crate::auras::AuraInterval;
 use crate::fight::{AuraAction, AuraType, EventKind, Fight, SpellId};
 use crate::replay::units::{Roster, UnitKind};
 
@@ -41,7 +41,12 @@ struct AuraLine {
     stacks: Option<u32>,
 }
 
-pub(super) fn auras(fight: &Fight, curated: &Curated, roster: &Roster) -> Vec<ReplayAura> {
+pub(super) fn auras(
+    fight: &Fight,
+    curated: &Curated,
+    roster: &Roster,
+    intervals: &[AuraInterval],
+) -> Vec<ReplayAura> {
     let shown = |actor: ActorId| {
         matches!(
             roster.kind(actor),
@@ -63,8 +68,8 @@ pub(super) fn auras(fight: &Fight, curated: &Curated, roster: &Roster) -> Vec<Re
                 });
         }
     }
-    aura_intervals(fight)
-        .into_iter()
+    intervals
+        .iter()
         .filter(|interval| shown(interval.target))
         .map(|interval| {
             let key = (interval.target, interval.spell, interval.source);
@@ -76,8 +81,8 @@ pub(super) fn auras(fight: &Fight, curated: &Curated, roster: &Roster) -> Vec<Re
                 buff: interval.aura_type == AuraType::Buff,
                 start_ms: interval.start_ms,
                 end_ms: interval.end_ms,
-                stacks: stack_changes(&interval, lines),
-                raid_frame: raid_frame(fight, curated, roster, &interval),
+                stacks: stack_changes(interval, lines),
+                raid_frame: raid_frame(fight, curated, roster, interval),
             }
         })
         .collect()

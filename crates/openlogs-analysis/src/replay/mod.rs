@@ -1,6 +1,8 @@
 mod auras;
 mod casts;
+mod effects;
 mod health;
+mod position;
 mod tracks;
 mod units;
 
@@ -8,11 +10,13 @@ use openlogs_gamedata::{ChannelSpells, Curated};
 
 pub use auras::{ReplayAura, StackChange};
 pub use casts::{ReplayCast, ReplayCastOutcome};
+pub use effects::{AffectedSpan, EffectAnchorAt, EffectInstance};
 pub use health::HealthTrack;
 pub use tracks::Track;
 pub use units::{ReplayUnit, UnitKind};
 
 use crate::actors::ActorId;
+use crate::auras::aura_intervals;
 use crate::deaths::deaths;
 use crate::fight::{EventKind, Fight, MarkerInterval, WorldMarkerInterval};
 use crate::overview::BOSS_HP_STEP_MS;
@@ -32,6 +36,7 @@ pub struct Replay {
     pub auras: Vec<ReplayAura>,
     pub raid_markers: Vec<MarkerInterval>,
     pub world_markers: Vec<WorldMarkerInterval>,
+    pub effects: Vec<EffectInstance>,
     pub phases: Vec<Phase>,
     pub deaths: Vec<ReplayDeath>,
 }
@@ -48,12 +53,14 @@ pub fn replay(fight: &Fight, curated: &Curated, channels: &ChannelSpells) -> Rep
     let bosses = boss_units(fight);
     let roster = Roster::new(fight, &bosses);
     let boss_hp = boss_hp_series(fight, &bosses, BOSS_HP_STEP_MS);
+    let tracks = tracks::tracks(fight, &roster.units);
+    let intervals = aura_intervals(fight);
+    let (casts, channel_ends) = casts::casts(fight, curated, channels, &roster);
     Replay {
         duration_ms: fight.duration_ms,
-        tracks: tracks::tracks(fight, &roster.units),
         health: health::health(fight, &roster),
-        casts: casts::casts(fight, curated, channels, &roster),
-        auras: auras::auras(fight, curated, &roster),
+        casts,
+        auras: auras::auras(fight, curated, &roster, &intervals),
         raid_markers: fight
             .raid_markers
             .iter()
@@ -78,6 +85,8 @@ pub fn replay(fight: &Fight, curated: &Curated, channels: &ChannelSpells) -> Rep
                 })
             })
             .collect(),
+        effects: effects::effects(fight, curated, &tracks, &intervals, &channel_ends),
+        tracks,
         phases: fight_phases(fight, curated, &boss_hp, BOSS_HP_STEP_MS),
         deaths: replay_deaths(fight, &roster),
         units: roster.units,

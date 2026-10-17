@@ -1015,6 +1015,7 @@ describe('replay', () => {
     auras: [],
     raidMarkers: [],
     worldMarkers: [],
+    effects: [],
     phases: [],
     deaths: [],
   });

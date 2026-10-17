@@ -6,7 +6,7 @@ use openlogs_analysis::{
     UnitKind, quick_overview, replay,
 };
 use openlogs_gamedata::{ChannelSpells, Curated};
-use support::{FightBuilder, HOSTILE_FLAGS, MELEE, PET_FLAGS, damage};
+use support::{FightBuilder, HOSTILE_FLAGS, MELEE, PET_FLAGS, damage, heal};
 
 const PAIN_SUPPRESSION: SpellId = 33206;
 const ICE_BLOCK: SpellId = 45438;
@@ -251,6 +251,48 @@ fn a_channel_lasts_until_its_aura_ends() {
             target: Some(boss),
             start_ms: 10_000,
             end_ms: 11_200,
+            outcome: ReplayCastOutcome::Completed,
+        }]
+    );
+}
+
+#[test]
+fn tick_casts_of_a_channel_are_not_cast_bars() {
+    let mut b = FightBuilder::new(60_000);
+    let priest = b.player("Player-1", "Ilvaren", 257);
+    let hymn = b.spell(64843, "Divine Hymn");
+    let ally = b.player("Player-2", "Torvik", 65);
+    let hymn_tick = b.spell(64844, "Divine Hymn");
+    b.push(10_000, priest, priest, hymn, EventKind::CastSuccess)
+        .push(
+            10_000,
+            priest,
+            priest,
+            hymn,
+            aura(AuraAction::Applied, AuraType::Buff, None),
+        );
+    for t in [11_000, 12_000, 13_000, 14_000] {
+        b.push(t, priest, priest, hymn_tick, EventKind::CastSuccess)
+            .push(t, priest, ally, hymn_tick, EventKind::Heal(heal(1_000, 0)));
+    }
+    b.push(
+        14_000,
+        priest,
+        priest,
+        hymn,
+        aura(AuraAction::Removed, AuraType::Buff, None),
+    );
+
+    let replay = replay_of(&b.build());
+
+    assert_eq!(
+        replay.casts,
+        vec![ReplayCast {
+            caster: priest,
+            spell: hymn,
+            target: Some(priest),
+            start_ms: 10_000,
+            end_ms: 14_000,
             outcome: ReplayCastOutcome::Completed,
         }]
     );
