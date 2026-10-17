@@ -1,12 +1,13 @@
-import type { ReplayData, ReplayDeath, ReplayHealthTrack, ReplayRaidMarker, ReplayTrack, ReplayUnit, ReplayWorldMarker } from '../../api/types';
-import { formatFixed, formatInteger } from '../../i18n/format';
+import type { EffectInstance, ReplayData, ReplayDeath, ReplayHealthTrack, ReplayRaidMarker, ReplayTrack, ReplayUnit, ReplayWorldMarker } from '../../api/types';
+import { formatFixed, formatInteger, formatSpan, formatYards } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { type IconRef, bossIcon, classIcon, specIcon } from '../../icons';
 import { bossMonogram, initials } from '../../monogram';
 import type { ReplayFilters, ReplayLayers } from '../../store';
 import { shortName } from '../overview/players';
 import { type Bounds, type Camera, facingOnScreen, gridStep, toScreen, toWorld } from './camera';
-import { healthAt, placementAt } from './playback';
+import { EVIDENCE_WINDOW_MS, type EffectState, RAID_BUFF_PULSE_MS } from './effects';
+import { deathAt, groupBy, healthAt, placementAt } from './playback';
 import type { StageColors } from './stageColors';
 import { type MarkerLook, RAID_TARGET_MARKERS, WORLD_MARKERS, traceSymbol } from './worldMarkers';
 
@@ -14,6 +15,12 @@ export const STAGE_PAD_PX = 40;
 const HIT_PX = 14;
 const UNIT_PX: Record<ReplayUnit['kind'], number> = { player: 22, pet: 16, boss: 28, add: 22 };
 const WORLD_MARKER_PX = 26;
+const EFFECT_FILL_ALPHA = 0.1;
+const EFFECT_RING_GAP_PX = 4;
+const MAX_EFFECT_RINGS = 3;
+const EFFECT_LABEL_PX = 12;
+const EFFECT_LABEL_GAP_PX = 6;
+const EFFECT_LABEL_PAD_PX = 4;
 const KIND_FILTER: Record<ReplayUnit['kind'], keyof Omit<ReplayFilters, 'hidden'>> = { player: 'players', pet: 'pets', boss: 'bosses', add: 'adds' };
 
 export interface StageUnit {
@@ -46,16 +53,6 @@ export interface PlacedUnit {
   facing: number;
   stale: boolean;
   dead: boolean;
-}
-
-export function groupBy<T>(items: T[], key: (item: T) => number): Map<number, T[]> {
-  const groups = new Map<number, T[]>();
-  for (const item of items) {
-    const group = groups.get(key(item));
-    if (group) group.push(item);
-    else groups.set(key(item), [item]);
-  }
-  return groups;
 }
 
 /** All logged positions of the pull, `null` without any. */
@@ -113,12 +110,7 @@ export function indexStage(data: ReplayData): StageIndex {
 
 /** Where `stage` is at `t`, with the death that may hold it in place. */
 export function placeUnit(stage: StageUnit, t: number) {
-  let death: ReplayDeath | undefined;
-  for (const candidate of stage.deaths) {
-    if (candidate.t > t) break;
-    death = candidate;
-  }
-  return placementAt(stage.track, t, death);
+  return placementAt(stage.track, t, deathAt(stage.deaths, t));
 }
 
 /** The units `filters` shows at `t`, with their screen positions. */
@@ -189,6 +181,10 @@ export interface StageFrame {
   selected: number | null;
   highlight: ReadonlySet<number> | null;
   hover: PlacedUnit | null;
+  /** The effects up at `t`; empty while the effects layer is off. */
+  effects: EffectState[];
+  /** The effect picked in the effect list, drawn with a thicker outline. */
+  selectedEffect: EffectInstance | null;
   /** The loaded image of an icon ref, else `null`. */
   image: (icon: IconRef) => HTMLImageElement | null;
 }
@@ -262,6 +258,94 @@ function drawWorldMarkers(ctx: CanvasRenderingContext2D, { w, h, t: now, cam, co
     ctx.globalAlpha = 1;
     drawSymbol(ctx, look, colors, sx, sy, 16);
     ctx.restore();
+  }
+}
+
+function effectLabel(effect: EffectInstance): string {
+  const values = { name: effect.name, radius: formatYards(effect.radiusYd) };
+  return effect.estimated ? t('replay.effectAreaEstimated', values) : t('replay.effectArea', values);
+}
+
+/** Where the label of a circle around (`sx`, `sy`) goes: centred above it, but kept on the stage while any of the circle is. */
+export function effectLabelAt(sx: number, sy: number, r: number, labelW: number, w: number, h: number): [x: number, bottom: number] {
+  const above = sy - r - EFFECT_LABEL_GAP_PX;
+  const onStage = sx + r >= 0 && sx - r <= w && sy + r >= 0 && sy - r <= h;
+  if (!onStage) return [sx, above];
+  const half = labelW / 2 + EFFECT_LABEL_PAD_PX;
+  const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), Math.max(min, max));
+  return [clamp(sx, half, w - half), clamp(above, EFFECT_LABEL_PX + EFFECT_LABEL_PAD_PX, h - EFFECT_LABEL_PAD_PX)];
+}
+
+/** A circle in the effect's colour with its name and radius above; a raid buff is an outline that spreads from its caster and fades. */
+function drawEffectArea(ctx: CanvasRenderingContext2D, frame: StageFrame, state: EffectState) {
+  const { effect, center } = state;
+  if (!center || (effect.category === 'raid_buff' && !state.pulse)) return;
+  const { colors, cam, w, h } = frame;
+  const [sx, sy] = toScreen(cam, center.x, center.y, w, h);
+  const color = colors.effects[effect.category];
+  const progress = state.pulse ? (frame.t - effect.startMs) / RAID_BUFF_PULSE_MS : 1;
+  const r = effect.radiusYd * cam.scale * progress;
+  ctx.save();
+  ctx.globalAlpha = (center.stale ? 0.5 : 1) * (state.pulse ? 1 - progress : 1);
+  ctx.beginPath();
+  ctx.arc(sx, sy, r, 0, 2 * Math.PI);
+  if (!state.pulse) {
+    ctx.save();
+    ctx.globalAlpha *= EFFECT_FILL_ALPHA;
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.setLineDash(effect.estimated ? [6, 4] : []);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = effect === frame.selectedEffect ? 4 : 2;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  const label = effectLabel(effect);
+  ctx.font = font(600, EFFECT_LABEL_PX, colors.fontText);
+  const [labelX, labelY] = effectLabelAt(sx, sy, r, ctx.measureText(label).width, w, h);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = colors.plot;
+  ctx.strokeText(label, labelX, labelY);
+  ctx.fillStyle = color;
+  ctx.fillText(label, labelX, labelY);
+  ctx.restore();
+}
+
+/**
+ * Rings around the players of each drawn effect: solid in its colour where the log shows it reached them, dashed where it
+ * is missing. The effect picked in the list gets the innermost, thicker rings and the others' rings fade.
+ */
+function drawEffectRings(ctx: CanvasRenderingContext2D, frame: StageFrame, units: PlacedUnit[], drawn: EffectState[]) {
+  const { colors, selected, highlight, selectedEffect } = frame;
+  const byActor = new Map(units.map((unit) => [unit.stage.unit.actor, unit]));
+  const ringCount = new Map<number, number>();
+  const anyPicked = drawn.some((state) => state.effect === selectedEffect);
+  const ring = (actor: number, color: string, dashed: boolean, picked: boolean) => {
+    const unit = byActor.get(actor);
+    const slot = ringCount.get(actor) ?? 0;
+    if (!unit || slot >= MAX_EFFECT_RINGS) return;
+    ringCount.set(actor, slot + 1);
+    const emphasized = actor === selected || (highlight?.has(actor) ?? false);
+    const r = UNIT_PX[unit.stage.unit.kind] / 2 + (emphasized ? 10 : 4) + slot * EFFECT_RING_GAP_PX;
+    ctx.save();
+    ctx.globalAlpha = (unit.stale ? 0.5 : 1) * (highlight && !emphasized ? 0.35 : 1) * (anyPicked && !picked ? 0.35 : 1);
+    ctx.beginPath();
+    ctx.arc(unit.sx, unit.sy, r, 0, 2 * Math.PI);
+    ctx.setLineDash(dashed ? [4, 3] : []);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = picked ? 3 : 2;
+    ctx.stroke();
+    ctx.restore();
+  };
+  const pickedFirst = [...drawn].sort((a, b) => Number(b.effect === selectedEffect) - Number(a.effect === selectedEffect));
+  for (const state of pickedFirst) {
+    const picked = state.effect === selectedEffect;
+    for (const actor of state.affected) ring(actor, colors.effects[state.effect.category], false, picked);
+    for (const actor of state.missing) ring(actor, colors.effectMissing, true, picked);
   }
 }
 
@@ -405,7 +489,13 @@ function drawName(ctx: CanvasRenderingContext2D, frame: StageFrame, unit: Placed
   ctx.restore();
 }
 
-function tooltipLines(frame: StageFrame, unit: PlacedUnit): string[] {
+type TipLine = { text: string; color: string };
+
+function missingLine(effect: EffectInstance): string {
+  return effect.category === 'heal' ? t('replay.effectNoHeal', { name: effect.name, window: formatSpan(EVIDENCE_WINDOW_MS) }) : t('replay.effectNotLogged', { name: effect.name });
+}
+
+function tooltipLines(frame: StageFrame, unit: PlacedUnit): TipLine[] {
   const facts: string[] = [];
   const health = unit.stage.health && healthAt(unit.stage.health, frame.t);
   if (health && health.max > 0) facts.push(t('replay.tipHealth', { value: formatInteger(Math.round((health.current / health.max) * 100)) }));
@@ -414,19 +504,23 @@ function tooltipLines(frame: StageFrame, unit: PlacedUnit): string[] {
     const at = placeUnit(selected, frame.t);
     if (at) facts.push(t('replay.tipDistance', { distance: formatFixed(Math.hypot(unit.x - at.x, unit.y - at.y), 1), name: selected.label }));
   }
-  return facts.length > 0 ? [facts.join(' · ')] : [];
+  const lines = facts.length > 0 ? [{ text: facts.join(' · '), color: frame.colors.muted }] : [];
+  for (const state of frame.effects) {
+    if (state.center && state.missing.includes(unit.stage.unit.actor)) lines.push({ text: missingLine(state.effect), color: frame.colors.effectMissing });
+  }
+  return lines;
 }
 
 function drawTooltip(ctx: CanvasRenderingContext2D, frame: StageFrame, unit: PlacedUnit) {
   const { colors, w, h } = frame;
-  const facts = tooltipLines(frame, unit);
+  const lines = tooltipLines(frame, unit);
   ctx.save();
   ctx.font = font(600, 13, colors.fontText);
   let width = ctx.measureText(unit.stage.label).width;
   ctx.font = font(400, 12, colors.fontText);
-  for (const line of facts) width = Math.max(width, ctx.measureText(line).width);
+  for (const line of lines) width = Math.max(width, ctx.measureText(line.text).width);
   const boxW = width + 20;
-  const boxH = 16 + 17 * (1 + facts.length);
+  const boxH = 16 + 17 * (1 + lines.length);
   const left = Math.max(4, Math.min(unit.sx + 16, w - boxW - 4));
   const top = unit.sy + 18 + boxH > h - 4 ? Math.max(4, unit.sy - 18 - boxH) : unit.sy + 18;
   ctx.beginPath();
@@ -442,15 +536,20 @@ function drawTooltip(ctx: CanvasRenderingContext2D, frame: StageFrame, unit: Pla
   ctx.fillStyle = labelColor(unit, colors);
   ctx.fillText(unit.stage.label, left + 10, top + 8);
   ctx.font = font(400, 12, colors.fontText);
-  ctx.fillStyle = colors.muted;
-  facts.forEach((line, i) => ctx.fillText(line, left + 10, top + 8 + 17 * (i + 1)));
+  lines.forEach((line, i) => {
+    ctx.fillStyle = line.color;
+    ctx.fillText(line.text, left + 10, top + 8 + 17 * (i + 1));
+  });
   ctx.restore();
 }
 
-/** One frame of the stage: grid and scale bar, world markers, units with their markers, names, the hover tooltip. */
+/** One frame of the stage: grid and scale bar, world markers, effect areas, units with their markers, effect rings, names, the hover tooltip. */
 export function drawStage(ctx: CanvasRenderingContext2D, frame: StageFrame) {
   drawGrid(ctx, frame);
   if (frame.layers.worldMarkers) drawWorldMarkers(ctx, frame);
+  const drawn = frame.effects.filter((state) => state.center !== null);
+  const picked = (state: EffectState) => (state.effect === frame.selectedEffect ? 1 : 0);
+  for (const state of [...drawn].sort((a, b) => picked(a) - picked(b))) drawEffectArea(ctx, frame, state);
   const rank = (unit: PlacedUnit) => {
     const actor = unit.stage.unit.actor;
     if (actor === frame.selected) return 3;
@@ -459,6 +558,7 @@ export function drawStage(ctx: CanvasRenderingContext2D, frame: StageFrame) {
   };
   const ordered = [...frame.placed].sort((a, b) => rank(a) - rank(b));
   for (const unit of ordered) drawUnit(ctx, frame, unit);
+  drawEffectRings(ctx, frame, ordered, drawn);
   for (const unit of ordered) {
     if (frame.layers.names || unit.stage.unit.actor === frame.selected) drawName(ctx, frame, unit);
   }

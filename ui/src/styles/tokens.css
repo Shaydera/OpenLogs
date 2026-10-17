@@ -111,6 +111,13 @@
   --cast-fill: #7a64c4;
   --hp-tint: color-mix(in srgb, var(--hp-fill) 28%, transparent);
 
+  /* Replay effects by category, their circles, labels and rings on --plot; --effect-missing marks a player without evidence. */
+  --effect-heal: #4fbf9a;
+  --effect-raid-cd: #7aa7f0;
+  --effect-raid-buff: #c9a24a;
+  --effect-boss: #d77be0;
+  --effect-missing: #f0877f;
+
   /* The player chart's dashed mana line. */
   --mana: #8a7cf0;
   /* The legend swatch of a dead band: two hatch stripes. */
@@ -211,6 +218,13 @@
   --hp-add: #9a5f1c;
   --cast-fill: #6a58b0;
   --hp-tint: color-mix(in srgb, var(--hp-fill) 16%, transparent);
+
+  /* Replay effects. */
+  --effect-heal: #1a7d5d;
+  --effect-raid-cd: #2f5fb3;
+  --effect-raid-buff: #9a6a00;
+  --effect-boss: #9b3aa8;
+  --effect-missing: #c0392b;
 
   /* The player chart's dashed mana line. */
   --mana: #6656d6;

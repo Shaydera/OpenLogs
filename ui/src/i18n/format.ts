@@ -199,6 +199,11 @@ export function formatSpan(ms: number): string {
   return ms < 60_000 ? t('unit.seconds', { value: upToOneDecimal.format(ms / 1000) }) : formatDuration(ms);
 }
 
+/** Yards with at most one decimal, e.g. `40 yd`, `4.5 yd`. */
+export function formatYards(yd: number): string {
+  return t('unit.yards', { value: upToOneDecimal.format(yd) });
+}
+
 /** Seconds with two decimals, e.g. `1.20 s` (cast and hold times). */
 export function formatSecondsExact(ms: number): string {
   return t('unit.seconds', { value: twoDecimals.format(ms / 1000) });

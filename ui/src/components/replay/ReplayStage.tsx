@@ -1,11 +1,12 @@
 import { type RefObject, useEffect, useMemo, useRef } from 'react';
-import type { ReplayData } from '../../api/types';
+import type { EffectInstance, ReplayData } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { type IconRef, iconSrc } from '../../icons';
 import { iconTables, loadIconTables, subscribeIconTables } from '../../gameData';
 import { useApp } from '../../store';
 import { pressGesture, wheelZoomFactor } from '../views/zoomGeometry';
 import { type Camera, fitCamera, panCamera, pinchCamera, zoomAt } from './camera';
+import { effectsAt } from './effects';
 import { replayNow } from './ReplayControls';
 import { type StageColors, readStageColors } from './stageColors';
 import { STAGE_PAD_PX, type StageIndex, drawStage, hitUnit, indexStage, placeUnit, placeUnits, stageImage } from './stageDraw';
@@ -19,12 +20,13 @@ const EMPTY_CAMERA: Camera = { cx: 0, cy: 0, scale: 4 };
 
 type Point = { x: number; y: number };
 
-/** The top-down map: units at their logged positions. Wheel or pinch zooms, a drag pans, a double click fits, a click selects. */
-export function ReplayStage({ data, highlight }: { data: ReplayData; highlight: number[] | null }) {
+/** The top-down map: units at their logged positions with the effects up. Wheel or pinch zooms, a drag pans, a double click fits, a click selects. */
+export function ReplayStage({ data, highlight, selectedEffect = null }: { data: ReplayData; highlight: number[] | null; selectedEffect?: EffectInstance | null }) {
   const host = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const index = useMemo(() => indexStage(data), [data]);
   const highlighted = useRef<ReadonlySet<number> | null>(null);
+  const pickedEffect = useRef<EffectInstance | null>(null);
   const invalidate = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -32,17 +34,22 @@ export function ReplayStage({ data, highlight }: { data: ReplayData; highlight: 
     invalidate.current();
   }, [highlight]);
 
+  useEffect(() => {
+    pickedEffect.current = selectedEffect;
+    invalidate.current();
+  }, [selectedEffect]);
+
   useEffect(loadIconTables, []);
 
   useEffect(() => {
     if (!host.current || !canvas.current) return;
-    const stage = mountStage(host.current, canvas.current, index, highlighted);
+    const stage = mountStage(host.current, canvas.current, data, index, { highlight: highlighted, selectedEffect: pickedEffect });
     invalidate.current = stage.invalidate;
     return () => {
       invalidate.current = () => {};
       stage.dispose();
     };
-  }, [index]);
+  }, [data, index]);
 
   return (
     <div ref={host} className="replay-stage" role="img" aria-label={t('replay.stage')} tabIndex={0}>
@@ -52,7 +59,13 @@ export function ReplayStage({ data, highlight }: { data: ReplayData; highlight: 
 }
 
 /** Draws the stage in an animation frame loop from the clock and the store, without React renders, and wires its gestures. */
-function mountStage(element: HTMLDivElement, canvas: HTMLCanvasElement, index: StageIndex, highlight: RefObject<ReadonlySet<number> | null>) {
+function mountStage(
+  element: HTMLDivElement,
+  canvas: HTMLCanvasElement,
+  data: ReplayData,
+  index: StageIndex,
+  picks: { highlight: RefObject<ReadonlySet<number> | null>; selectedEffect: RefObject<EffectInstance | null> },
+) {
   const ctx = canvas.getContext('2d');
   const root = document.documentElement;
   let w = 0;
@@ -117,7 +130,22 @@ function mountStage(element: HTMLDivElement, canvas: HTMLCanvasElement, index: S
     };
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    drawStage(ctx, { w, h, t: now, cam: view, colors, index, placed, layers: replay.layers, selected: replay.selected, highlight: highlight.current, hover: hovered, image });
+    drawStage(ctx, {
+      w,
+      h,
+      t: now,
+      cam: view,
+      colors,
+      index,
+      placed,
+      layers: replay.layers,
+      selected: replay.selected,
+      highlight: picks.highlight.current,
+      hover: hovered,
+      effects: replay.layers.effects ? effectsAt(data, now) : [],
+      selectedEffect: picks.selectedEffect.current,
+      image,
+    });
   };
 
   const themeKey = () => `${root.dataset.theme}/${root.dataset.mode}`;

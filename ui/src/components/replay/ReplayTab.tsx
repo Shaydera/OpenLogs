@@ -1,9 +1,10 @@
 import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
-import type { ReplayData } from '../../api/types';
+import type { EffectInstance, ReplayData } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { rangeWindow } from '../views/zoomGeometry';
 import { BossFrames } from './BossFrames';
+import { EffectList } from './EffectList';
 import { indexHud } from './hudIndex';
 import { RaidFrames } from './RaidFrames';
 import { ReplayControls, replayNow } from './ReplayControls';
@@ -48,6 +49,7 @@ function ReplayPanel({ data, compact }: { data: ReplayData; compact: boolean }) 
   const setReplayTime = useApp((s) => s.setReplayTime);
   const toggleReplayPlay = useApp((s) => s.toggleReplayPlay);
   const [highlight, setHighlight] = useState<number[] | null>(null);
+  const [selectedEffect, setSelectedEffect] = useState<EffectInstance | null>(null);
   const hud = useMemo(() => indexHud(data), [data]);
   const bounds = rangeWindow(range, data.durationMs);
   const { startMs, endMs } = bounds;
@@ -74,7 +76,8 @@ function ReplayPanel({ data, compact }: { data: ReplayData; compact: boolean }) 
     <section className={compact ? 'panel replay replay-compact' : 'panel replay'} aria-label={t('replay.region')} tabIndex={0} onKeyDown={onKey}>
       <ReplayLegend data={data} highlight={highlight} onHighlight={setHighlight} />
       <div className="replay-plot">
-        <ReplayStage data={data} highlight={highlight} />
+        <ReplayStage data={data} highlight={highlight} selectedEffect={selectedEffect} />
+        <EffectList hud={hud} selected={selectedEffect} onSelect={setSelectedEffect} defaultCollapsed={compact} />
         <BossFrames hud={hud} />
         <div className="hud-bottom">
           <RaidFrames hud={hud} defaultCollapsed={compact} />

@@ -2,6 +2,16 @@ import type { ReplayAura, ReplayCast, ReplayDeath, ReplayHealthTrack, ReplayTrac
 
 export const STALE_MS = 2000;
 
+export function groupBy<T>(items: T[], key: (item: T) => number): Map<number, T[]> {
+  const groups = new Map<number, T[]>();
+  for (const item of items) {
+    const group = groups.get(key(item));
+    if (group) group.push(item);
+    else groups.set(key(item), [item]);
+  }
+  return groups;
+}
+
 export type Placement = { x: number; y: number; facing: number; stale: boolean; dead: boolean } | null;
 
 /** Index of the last element of the sorted `values` that is `<= t`; -1 when all are later. */
@@ -41,6 +51,16 @@ function placementOn(track: ReplayTrack, t: number): { x: number; y: number; fac
     facing: lerpAngle(track.facing[i], track.facing[next], f),
     stale: false,
   };
+}
+
+/** The latest of the sorted `deaths` at or before `t`, the one that may hold the unit in place. */
+export function deathAt(deaths: ReplayDeath[], t: number): ReplayDeath | undefined {
+  let death: ReplayDeath | undefined;
+  for (const candidate of deaths) {
+    if (candidate.t > t) break;
+    death = candidate;
+  }
+  return death;
 }
 
 /** Where a unit is at `t`; `null` before its first sample. A dead unit stays where it died. */

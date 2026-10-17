@@ -1,8 +1,7 @@
 import type { PlayerRef, ReplayAura, ReplayCast, ReplayData, ReplayDeath, ReplayHealthTrack, ReplayRaidMarker, ReplayUnit } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { ROLE_ORDER, shortName } from '../overview/players';
-import { healthAt } from './playback';
-import { groupBy } from './stageDraw';
+import { groupBy, healthAt } from './playback';
 
 const MAX_ADD_FRAMES = 8;
 const RAID_FRAME_DEBUFFS = 3;

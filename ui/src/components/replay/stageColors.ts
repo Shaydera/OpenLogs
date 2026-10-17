@@ -1,4 +1,5 @@
 import classesSpecs from '../../../../crates/openlogs-gamedata/data/classes_specs.json';
+import type { EffectCategory } from '../../api/types';
 import { MARKER_SYMBOLS, type MarkerSymbol, markerColorVar } from './worldMarkers';
 
 export interface StageColors {
@@ -17,6 +18,8 @@ export interface StageColors {
   /** By lower-case class token, e.g. `priest`. */
   classes: Record<string, string>;
   markers: Record<MarkerSymbol, string>;
+  effects: Record<EffectCategory, string>;
+  effectMissing: string;
 }
 
 /** The stage's colours from the `tokens.css` variables now on `root`; read again after the theme or mode changes. */
@@ -44,5 +47,7 @@ export function readStageColors(root: HTMLElement): StageColors {
     fontLabel: token('font-label'),
     classes,
     markers,
+    effects: { heal: token('effect-heal'), raid_cd: token('effect-raid-cd'), raid_buff: token('effect-raid-buff'), boss_mechanic: token('effect-boss') },
+    effectMissing: token('effect-missing'),
   };
 }
