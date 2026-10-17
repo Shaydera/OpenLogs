@@ -14,7 +14,7 @@ import { UnitFrame } from './UnitFrame';
 
 const JUMP_MS = 5_000;
 
-/** The pull's replay: legend, stage and controls; loads its bundle on first show. `compact` is the narrow split-pane layout. */
+/** The pull's replay: legend, stage and controls; loads its bundle on first show. `compact` is the split pane: no legend, filters or layers. */
 export function ReplayTab({ compact = false }: { compact?: boolean }) {
   const data = useApp((s) => s.replayData);
   const error = useApp((s) => s.replayError);
@@ -74,7 +74,7 @@ function ReplayPanel({ data, compact }: { data: ReplayData; compact: boolean }) 
 
   return (
     <section className={compact ? 'panel replay replay-compact' : 'panel replay'} aria-label={t('replay.region')} tabIndex={0} onKeyDown={onKey}>
-      <ReplayLegend data={data} highlight={highlight} onHighlight={setHighlight} />
+      {!compact && <ReplayLegend data={data} highlight={highlight} onHighlight={setHighlight} />}
       <div className="replay-plot">
         <ReplayStage data={data} highlight={highlight} selectedEffect={selectedEffect} />
         <EffectList hud={hud} selected={selectedEffect} onSelect={setSelectedEffect} defaultCollapsed={compact} />
@@ -84,7 +84,7 @@ function ReplayPanel({ data, compact }: { data: ReplayData; compact: boolean }) 
           <UnitFrame hud={hud} />
         </div>
       </div>
-      <ReplayControls data={data} bounds={bounds} />
+      <ReplayControls data={data} bounds={bounds} compact={compact} />
     </section>
   );
 }

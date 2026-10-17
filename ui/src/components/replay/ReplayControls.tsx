@@ -38,8 +38,8 @@ export function replayNow(): number {
   return playing ? replayClock.now() : time;
 }
 
-/** The bar under the stage: the timeline, play/pause, the time, speeds, unit filters, layers and follow. */
-export function ReplayControls({ data, bounds }: { data: ReplayData; bounds: TimeRange }) {
+/** The bar under the stage: the timeline, play/pause, the time, speeds, unit filters, layers and follow (`compact`: a hint instead of the last three). */
+export function ReplayControls({ data, bounds, compact = false }: { data: ReplayData; bounds: TimeRange; compact?: boolean }) {
   const replay = useApp((s) => s.replay);
   const toggleReplayPlay = useApp((s) => s.toggleReplayPlay);
   const setReplaySpeed = useApp((s) => s.setReplaySpeed);
@@ -67,29 +67,35 @@ export function ReplayControls({ data, bounds }: { data: ReplayData; bounds: Tim
             </button>
           ))}
         </div>
-        <div className="replay-chips" role="group" aria-label={t('replay.showUnits')}>
-          <span className="cap" aria-hidden="true">
-            {t('replay.show')}
-          </span>
-          {UNIT_FILTERS.map(({ filter, key }) => (
-            <button key={filter} type="button" className={chip(replay.filters[filter])} aria-pressed={replay.filters[filter]} onClick={() => setReplayFilter({ [filter]: !replay.filters[filter] })}>
-              {t(key)}
+        {compact ? (
+          <span className="replay-hint">{t('replay.compactHint')}</span>
+        ) : (
+          <>
+            <div className="replay-chips" role="group" aria-label={t('replay.showUnits')}>
+              <span className="cap" aria-hidden="true">
+                {t('replay.show')}
+              </span>
+              {UNIT_FILTERS.map(({ filter, key }) => (
+                <button key={filter} type="button" className={chip(replay.filters[filter])} aria-pressed={replay.filters[filter]} onClick={() => setReplayFilter({ [filter]: !replay.filters[filter] })}>
+                  {t(key)}
+                </button>
+              ))}
+            </div>
+            <div className="replay-chips" role="group" aria-label={t('replay.layers')}>
+              <span className="cap" aria-hidden="true">
+                {t('replay.layers')}
+              </span>
+              {LAYERS.map(({ layer, key }) => (
+                <button key={layer} type="button" className={chip(replay.layers[layer])} aria-pressed={replay.layers[layer]} onClick={() => setReplayLayer(layer, !replay.layers[layer])}>
+                  {t(key)}
+                </button>
+              ))}
+            </div>
+            <button type="button" className={`${chip(replay.follow)} replay-follow`} aria-pressed={replay.follow} onClick={() => setReplayFollow(!replay.follow)}>
+              {t('replay.follow')}
             </button>
-          ))}
-        </div>
-        <div className="replay-chips" role="group" aria-label={t('replay.layers')}>
-          <span className="cap" aria-hidden="true">
-            {t('replay.layers')}
-          </span>
-          {LAYERS.map(({ layer, key }) => (
-            <button key={layer} type="button" className={chip(replay.layers[layer])} aria-pressed={replay.layers[layer]} onClick={() => setReplayLayer(layer, !replay.layers[layer])}>
-              {t(key)}
-            </button>
-          ))}
-        </div>
-        <button type="button" className={`${chip(replay.follow)} replay-follow`} aria-pressed={replay.follow} onClick={() => setReplayFollow(!replay.follow)}>
-          {t('replay.follow')}
-        </button>
+          </>
+        )}
       </div>
     </div>
   );

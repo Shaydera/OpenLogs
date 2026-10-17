@@ -4,6 +4,7 @@ import { spellIcon } from '../../icons';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
+import { DEATH_LEAD_MS } from '../replay/playback';
 import type { ItemTip } from './itemTip';
 
 /** A mark's card: shown on hover, pinned by a click. */
@@ -34,9 +35,11 @@ function cardTop(card: HTMLElement | null, pointerY: number): number {
 
 export function TipCard({ id, tip, tipText, onClose }: { id: string; tip: Tip; tipText: ItemTip; onClose: () => void }) {
   const showEventsAt = useApp((s) => s.showEventsAt);
+  const openReplayAt = useApp((s) => s.openReplayAt);
   const card = useRef<HTMLDivElement>(null);
   const close = useRef<HTMLButtonElement>(null);
   const [top, setTop] = useState(tip.y + OFFSET_PX);
+  const at = tip.item.kind === 'death' ? (tip.item.endMs ?? tip.item.startMs) : tip.item.startMs;
 
   useLayoutEffect(() => setTop(cardTop(card.current, tip.y)), [tip]);
 
@@ -96,9 +99,14 @@ export function TipCard({ id, tip, tipText, onClose }: { id: string; tip: Tip; t
         {tipText.more && <span className="faint">{tipText.more}</span>}
       </div>
       {tip.pinned && (
-        <button type="button" className="lnk" onClick={() => void showEventsAt(tip.item.kind === 'death' ? (tip.item.endMs ?? tip.item.startMs) : tip.item.startMs)}>
-          {t('tl.toEvents')}
-        </button>
+        <div className="tl-tip-links">
+          <button type="button" className="lnk" onClick={() => void showEventsAt(at)}>
+            {t('tl.toEvents')}
+          </button>
+          <button type="button" className="lnk" onClick={() => openReplayAt(tip.item.kind === 'death' ? at - DEATH_LEAD_MS : at)}>
+            {t('replay.showIn')}
+          </button>
+        </div>
       )}
     </div>
   );

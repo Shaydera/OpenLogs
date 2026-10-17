@@ -13,7 +13,7 @@ import { rosterIndex } from '../reports/reportData';
 import { itemTip } from './itemTip';
 import { ResourceLanes } from './ResourceLanes';
 import { ContextRow, DEBUFF_COLOURS, LaneRow, type MarkHandler, laneKey } from './TimelineLane';
-import { Ruler } from './TimelineRuler';
+import { Playhead, Ruler } from './TimelineRuler';
 import { TIP_PX, type Tip, TipCard } from './TimelineTip';
 import { useTimelineGestures } from './useTimelineGestures';
 import { TAB_TITLE, ViewFailure, ViewHead } from './ViewHead';
@@ -271,6 +271,7 @@ function TimelineBody(props: {
           timeline.lanes.map((lane) => <LaneRow key={laneKey(lane)} tab={tab} lane={lane} roster={roster} {...row} />)
         )}
       </div>
+      <Playhead shown={shown} />
       {tip && <TipCard id={tipId} tip={tip} tipText={itemTip(tip.item, names, timeline.linesListed, tip.context)} onClose={closeCard} />}
     </div>
   );

@@ -653,3 +653,98 @@
 .hud-raid-auras .hud-auras {
   flex-wrap: nowrap;
 }
+
+.split-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-soft);
+  font: 500 13px var(--font-text);
+  cursor: pointer;
+}
+.split-toggle:hover {
+  border-color: var(--accent-tint-line);
+  color: var(--text);
+}
+.split-toggle.on {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--text);
+}
+
+.replay-split {
+  display: grid;
+  align-items: start;
+}
+.replay-split-report {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.replay-split-pane {
+  position: sticky;
+  top: 12px;
+  min-width: 0;
+}
+.replay-divider {
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+.replay-divider > span {
+  position: sticky;
+  top: calc(24vh + 43px);
+  width: 4px;
+  height: 48px;
+  margin-top: calc(24vh + 31px);
+  border-radius: 2px;
+  background: var(--line);
+}
+.replay-divider:hover > span,
+.replay-divider.dragging > span,
+.replay-divider:focus-visible > span {
+  background: var(--accent);
+}
+.replay-compact .replay-bar {
+  gap: 10px 14px;
+}
+.replay-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.dlink-replay {
+  font-size: 12px;
+  color: var(--muted);
+}
+.recap-replay {
+  align-self: flex-start;
+}
+.erow-replay {
+  margin: -4px 14px 8px 228px;
+}
+.tl-tip-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 16px;
+}
+.tl-playhead {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  left: calc(170px + (100% - 170px) * var(--at));
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent);
+  pointer-events: none;
+}

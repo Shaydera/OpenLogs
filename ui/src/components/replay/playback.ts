@@ -1,6 +1,8 @@
 import type { ReplayAura, ReplayCast, ReplayDeath, ReplayHealthTrack, ReplayTrack } from '../../api/types';
 
 export const STALE_MS = 2000;
+/** A jump to a death starts this long before it, so the replay shows the run-up. */
+export const DEATH_LEAD_MS = 5_000;
 
 export function groupBy<T>(items: T[], key: (item: T) => number): Map<number, T[]> {
   const groups = new Map<number, T[]>();

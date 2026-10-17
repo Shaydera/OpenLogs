@@ -8,10 +8,12 @@ import { useApp } from '../../store';
 import { GameIcon, MonogramTile } from '../GameIcon';
 import { classColor, shortName } from '../overview/players';
 import { hitIcon, hitName, reportSpellName, rosterIndex } from '../reports/reportData';
+import { DEATH_LEAD_MS } from '../replay/playback';
 import { hitSource, recapCallout, recapPlot } from './recapModel';
 
 export function RecapPanel({ recap, report }: { recap: DeathRecap; report: DeathsReport }) {
   const openPlayer = useApp((s) => s.openPlayer);
+  const openReplayAt = useApp((s) => s.openReplayAt);
   const titleRef = useRef<HTMLHeadingElement>(null);
   useFocusRequest('page', () => titleRef.current);
   const spellName = (id: number) => reportSpellName(report.spells, id);
@@ -60,6 +62,9 @@ export function RecapPanel({ recap, report }: { recap: DeathRecap; report: Death
             )}
             {resurrected && ` · ${resurrected}`}
           </span>
+          <button type="button" className="lnk recap-replay" onClick={() => openReplayAt(recap.t - DEATH_LEAD_MS)}>
+            {t('replay.showIn')}
+          </button>
         </div>
         <div className="recap-stats" role="group" aria-label={t('recap.kpis')}>
           <div className="recap-stat">

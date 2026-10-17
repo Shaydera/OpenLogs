@@ -30,10 +30,12 @@ function nextTab(current: FightTab, key: string): FightTab | null {
   return target === null ? null : TABS[(target + TABS.length) % TABS.length].tab;
 }
 
-/** The fight's tab row with the options menu and view switch at the right end; the replay has neither. */
+/** The fight's tab row with the options menu, view switch and replay toggle at the right end; the replay has none of them. */
 export function TabBar() {
   const tab = useApp((s) => s.tab);
   const setTab = useApp((s) => s.setTab);
+  const split = useApp((s) => s.replay.split);
+  const setReplaySplit = useApp((s) => s.setReplaySplit);
   const tabRefs = useRef<Map<FightTab, HTMLButtonElement>>(new Map());
   useFocusRequest('tab', () => tabRefs.current.get(tab));
 
@@ -76,6 +78,13 @@ export function TabBar() {
         <div className="tab-tools">
           <OptionsMenu />
           <ViewSwitch />
+          <button type="button" className={split ? 'split-toggle on' : 'split-toggle'} aria-pressed={split} onClick={() => setReplaySplit(!split)}>
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M8 2.5 V13.5" stroke="currentColor" strokeWidth="1.4" />
+            </svg>
+            {t('replay.alongside')}
+          </button>
         </div>
       )}
     </div>

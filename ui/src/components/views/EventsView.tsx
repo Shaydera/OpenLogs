@@ -195,6 +195,9 @@ function Pager({ page, busy, onPage }: { page: EventsPage; busy: boolean; onPage
 
 function EventsGrid(props: { tab: FilterTab; page: EventsPage; names: ViewNames; open: string | null; busy: boolean; onOpen: (key: string | null) => void }) {
   const { tab, page, names, open, busy, onOpen } = props;
+  const split = useApp((s) => s.replay.split);
+  const setReplayTime = useApp((s) => s.setReplayTime);
+  const openReplayAt = useApp((s) => s.openReplayAt);
   const narrowed = new Set(page.narrowed);
   const showAbility = !narrowed.has('ability');
   const showSource = !narrowed.has('source');
@@ -239,7 +242,10 @@ function EventsGrid(props: { tab: FilterTab; page: EventsPage; names: ViewNames;
                     aria-expanded={expanded}
                     aria-controls={expanded ? fieldsId : undefined}
                     aria-label={t('events.toggle', { type: label, time })}
-                    onClick={() => onOpen(expanded ? null : key)}
+                    onClick={() => {
+                      onOpen(expanded ? null : key);
+                      if (split) setReplayTime(row.t);
+                    }}
                   >
                     {sameTime ? null : time}
                   </button>
@@ -285,6 +291,11 @@ function EventsGrid(props: { tab: FilterTab; page: EventsPage; names: ViewNames;
                         </div>
                       ))}
                     </dl>
+                    {!split && (
+                      <button type="button" className="lnk erow-replay" onClick={() => openReplayAt(row.t)}>
+                        {t('replay.showIn')}
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
