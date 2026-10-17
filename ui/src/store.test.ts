@@ -1018,6 +1018,8 @@ describe('replay', () => {
     effects: [],
     phases: [],
     deaths: [],
+    maps: [],
+    arenaFrame: null,
   });
 
   it('loads the replay once per pull', async () => {

@@ -6,7 +6,10 @@ mod position;
 mod tracks;
 mod units;
 
-use openlogs_gamedata::{ChannelSpells, Curated};
+use std::collections::BTreeSet;
+
+use openlogs_gamedata::{ArenaFrame, ChannelSpells, Curated};
+use openlogs_index::MapBounds;
 
 pub use auras::{ReplayAura, StackChange};
 pub use casts::{ReplayCast, ReplayCastOutcome};
@@ -39,6 +42,10 @@ pub struct Replay {
     pub effects: Vec<EffectInstance>,
     pub phases: Vec<Phase>,
     pub deaths: Vec<ReplayDeath>,
+    /// The log's bounds of the maps the tracks are on, sorted by map ID; maps the log wrote no
+    /// bounds for are left out.
+    pub maps: Vec<MapBounds>,
+    pub arena_frame: Option<ArenaFrame>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,11 +93,26 @@ pub fn replay(fight: &Fight, curated: &Curated, channels: &ChannelSpells) -> Rep
             })
             .collect(),
         effects: effects::effects(fight, curated, &tracks, &intervals, &channel_ends),
+        maps: maps_of(fight, &tracks),
+        arena_frame: curated.arena_frame(fight.encounter_id).copied(),
         tracks,
         phases: fight_phases(fight, curated, &boss_hp, BOSS_HP_STEP_MS),
         deaths: replay_deaths(fight, &roster),
         units: roster.units,
     }
+}
+
+fn maps_of(fight: &Fight, tracks: &[Track]) -> Vec<MapBounds> {
+    let used: BTreeSet<u32> = tracks
+        .iter()
+        .flat_map(|track| track.map.iter().copied())
+        .collect();
+    fight
+        .map_bounds
+        .iter()
+        .filter(|bounds| used.contains(&bounds.ui_map_id))
+        .copied()
+        .collect()
 }
 
 /// `start..end` starting at 0 at the earliest; `None` when it ended before the pull.

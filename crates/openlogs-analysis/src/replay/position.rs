@@ -38,6 +38,7 @@ mod tests {
             x: samples.iter().map(|s| s.1).collect(),
             y: vec![0.0; samples.len()],
             facing: vec![0.0; samples.len()],
+            map: vec![0; samples.len()],
         }
     }
 

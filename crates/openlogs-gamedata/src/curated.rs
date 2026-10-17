@@ -20,8 +20,13 @@ pub const PHASES_DIR: &str = "phases";
 /// Folder in the override directory holding one boss effect list per encounter.
 pub const BOSS_EFFECTS_DIR: &str = "boss_effects";
 
+/// Folder in the override directory holding one arena frame per encounter.
+pub const ARENA_FRAMES_DIR: &str = "arena_frames";
+
 /// Bundled boss effect lists, one file per encounter.
 const BUNDLED_BOSS_EFFECTS: &[&str] = &[include_str!("../data/boss_effects/3455.json")];
+/// Bundled arena frames, one file per encounter (`../data/arena_frames/<encounter>.json`).
+const BUNDLED_ARENA_FRAMES: &[&str] = &[include_str!("../data/arena_frames/3455.json")];
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ProcSpell {
@@ -303,6 +308,17 @@ pub struct BossEffects {
     pub effects: Vec<EffectDef>,
 }
 
+/// The square of the map a boss is fought in, where the replay's view starts.
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+pub struct ArenaFrame {
+    pub encounter_id: u32,
+    pub ui_map_id: u32,
+    /// Centre in log coordinates.
+    pub x: f32,
+    pub y: f32,
+    pub size_yd: f32,
+}
+
 fn load_phase_configs(override_dir: Option<&Path>, warnings: &mut Vec<String>) -> Vec<PhaseConfig> {
     load_encounter_files(
         override_dir,
@@ -337,6 +353,37 @@ fn load_boss_effects(
         lists.push(list);
     }
     lists
+}
+
+/// The bundled arena frames; an override file replaces the bundled frame of its encounter.
+fn load_arena_frames(
+    override_dir: Option<&Path>,
+    bundled: &[&str],
+    warnings: &mut Vec<String>,
+) -> Vec<ArenaFrame> {
+    let mut frames: Vec<ArenaFrame> = bundled
+        .iter()
+        .map(|text| serde_json::from_str(text).expect("bundled arena frame is valid"))
+        .collect();
+    let overrides = load_encounter_files(
+        override_dir,
+        ARENA_FRAMES_DIR,
+        |f: &ArenaFrame| f.encounter_id,
+        warnings,
+    );
+    for (path, frame) in overrides {
+        if !(frame.size_yd.is_finite() && frame.size_yd > 0.0) {
+            warnings.push(format!(
+                "{} has size_yd {} and was ignored",
+                path.display(),
+                frame.size_yd
+            ));
+            continue;
+        }
+        frames.retain(|f| f.encounter_id != frame.encounter_id);
+        frames.push(frame);
+    }
+    frames
 }
 
 /// Drops entries the stage cannot draw: without a trigger spell, or without a positive radius
@@ -435,6 +482,8 @@ pub struct Curated {
     pub effects: Vec<EffectDef>,
     /// Area effects of boss mechanics per encounter (bundled, each overridable per encounter).
     pub boss_effects: Vec<BossEffects>,
+    /// Arena frames per encounter (bundled, each overridable per encounter).
+    pub arena_frames: Vec<ArenaFrame>,
     /// Override files that were present but unusable; the bundled list was used instead.
     pub warnings: Vec<String>,
 }
@@ -501,6 +550,7 @@ impl Curated {
             &mut warnings,
         );
         let boss_effects = load_boss_effects(override_dir, BUNDLED_BOSS_EFFECTS, &mut warnings);
+        let arena_frames = load_arena_frames(override_dir, BUNDLED_ARENA_FRAMES, &mut warnings);
         Self {
             consumables,
             cooldowns,
@@ -512,6 +562,7 @@ impl Curated {
             phases,
             effects,
             boss_effects,
+            arena_frames,
             warnings,
         }
     }
@@ -524,6 +575,12 @@ impl Curated {
             .filter(move |b| b.encounter_id == encounter_id)
             .flat_map(|b| &b.effects);
         self.effects.iter().chain(boss)
+    }
+
+    pub fn arena_frame(&self, encounter_id: u32) -> Option<&ArenaFrame> {
+        self.arena_frames
+            .iter()
+            .find(|frame| frame.encounter_id == encounter_id)
     }
 
     /// Display priority of a curated raid frame aura (lower first); `None` if it is not listed.

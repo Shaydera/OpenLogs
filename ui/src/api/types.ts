@@ -1072,6 +1072,25 @@ export interface ReplayTrack {
   x: number[];
   y: number[];
   facing: number[];
+  /** uiMapID of each sample. */
+  map: number[];
+}
+
+/** World-coordinate extent of a UI map, as the log wrote it. */
+export interface ReplayMapBounds {
+  uiMapId: number;
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+/** The curated square of the map a boss is fought in, centred on `x`/`y`. */
+export interface ReplayArenaFrame {
+  uiMapId: number;
+  x: number;
+  y: number;
+  sizeYd: number;
 }
 
 export interface ReplayHealthTrack {
@@ -1181,4 +1200,7 @@ export interface ReplayData {
   effects: EffectInstance[];
   phases: Phase[];
   deaths: ReplayDeath[];
+  /** Bounds of the maps the tracks are on; maps the log wrote no bounds for are left out. */
+  maps: ReplayMapBounds[];
+  arenaFrame: ReplayArenaFrame | null;
 }

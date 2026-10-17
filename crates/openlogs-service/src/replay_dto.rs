@@ -4,7 +4,8 @@ use openlogs_analysis::{
     ActorId, EffectAnchorAt, EffectInstance, Fight, HealthTrack, PhaseKind, Replay, ReplayAura,
     ReplayCast, ReplayCastOutcome, ReplayDeath, ReplayUnit, SpellId, StackChange, Track, UnitKind,
 };
-use openlogs_gamedata::{EffectCategory, EffectKind};
+use openlogs_gamedata::{ArenaFrame, EffectCategory, EffectKind};
+use openlogs_index::MapBounds;
 use serde::Serialize;
 
 use crate::overview_dto::{PhaseDto, PhaseKindDto, PlayerRef, SpellRef};
@@ -28,6 +29,8 @@ pub struct ReplayDto {
     pub effects: Vec<EffectDto>,
     pub phases: Vec<PhaseDto>,
     pub deaths: Vec<ReplayDeathDto>,
+    pub maps: Vec<MapBoundsDto>,
+    pub arena_frame: Option<ArenaFrameDto>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -59,6 +62,26 @@ pub struct TrackDto {
     pub x: Vec<f32>,
     pub y: Vec<f32>,
     pub facing: Vec<f32>,
+    pub map: Vec<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MapBoundsDto {
+    pub ui_map_id: u32,
+    pub min_x: f32,
+    pub max_x: f32,
+    pub min_y: f32,
+    pub max_y: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArenaFrameDto {
+    pub ui_map_id: u32,
+    pub x: f32,
+    pub y: f32,
+    pub size_yd: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -259,6 +282,8 @@ pub fn replay_dto(fight: &Fight, replay: &Replay, advanced_logging: bool) -> Rep
             })
             .collect(),
         deaths: replay.deaths.iter().map(death_dto).collect(),
+        maps: replay.maps.iter().map(map_bounds_dto).collect(),
+        arena_frame: replay.arena_frame.as_ref().map(arena_frame_dto),
     }
 }
 
@@ -286,6 +311,26 @@ fn track_dto(track: &Track) -> TrackDto {
         x: track.x.iter().copied().map(centi).collect(),
         y: track.y.iter().copied().map(centi).collect(),
         facing: track.facing.iter().copied().map(centi).collect(),
+        map: track.map.clone(),
+    }
+}
+
+fn map_bounds_dto(bounds: &MapBounds) -> MapBoundsDto {
+    MapBoundsDto {
+        ui_map_id: bounds.ui_map_id,
+        min_x: centi(bounds.min_x),
+        max_x: centi(bounds.max_x),
+        min_y: centi(bounds.min_y),
+        max_y: centi(bounds.max_y),
+    }
+}
+
+fn arena_frame_dto(frame: &ArenaFrame) -> ArenaFrameDto {
+    ArenaFrameDto {
+        ui_map_id: frame.ui_map_id,
+        x: centi(frame.x),
+        y: centi(frame.y),
+        size_yd: frame.size_yd,
     }
 }
 
@@ -385,7 +430,8 @@ mod tests {
     use openlogs_analysis::{
         Actors, AuraAction, AuraType, Event, EventKind, NO_SPELL, NOBODY, PositionSample, SpellInfo,
     };
-    use openlogs_gamedata::{ChannelSpells, Curated};
+    use openlogs_gamedata::{ArenaFrame, ChannelSpells, Curated};
+    use openlogs_index::MapBounds;
     use serde_json::json;
 
     use super::*;
@@ -438,6 +484,7 @@ mod tests {
             x: 417.5549,
             y: -12.3449,
             facing: 1.5,
+            ui_map_id: 2608,
         });
         fight.positions.push(PositionSample {
             t: 1_000,
@@ -445,10 +492,25 @@ mod tests {
             x: 0.0,
             y: 0.0,
             facing: 0.0,
+            ui_map_id: 2609,
         });
+        fight.map_bounds = vec![MapBounds {
+            ui_map_id: 2608,
+            min_x: 265.004,
+            max_x: 885.0,
+            min_y: -802.5,
+            max_y: 127.5,
+        }];
+        let mut curated = Curated::bundled();
+        curated.arena_frames = vec![ArenaFrame {
+            encounter_id: fight.encounter_id,
+            ui_map_id: 2608,
+            x: 512.5,
+            y: -340.25,
+            size_yd: 110.0,
+        }];
 
-        let replay =
-            openlogs_analysis::replay(&fight, &Curated::bundled(), &ChannelSpells::default());
+        let replay = openlogs_analysis::replay(&fight, &curated, &ChannelSpells::default());
         let dto = replay_dto(&fight, &replay, true);
         let json = serde_json::to_value(&dto).unwrap();
 
@@ -461,6 +523,16 @@ mod tests {
         assert!(
             tracks.contains(r#""x":[417.55]"#) && tracks.contains(r#""y":[-12.34]"#),
             "{tracks}"
+        );
+        assert_eq!(json["tracks"][0]["map"], json!([2608]));
+        assert_eq!(json["tracks"][1]["map"], json!([2609]));
+        assert_eq!(
+            json["maps"],
+            json!([{ "uiMapId": 2608, "minX": 265.0, "maxX": 885.0, "minY": -802.5, "maxY": 127.5 }])
+        );
+        assert_eq!(
+            json["arenaFrame"],
+            json!({ "uiMapId": 2608, "x": 512.5, "y": -340.25, "sizeYd": 110.0 })
         );
         assert_eq!(
             json["effects"][0]["anchor"],

@@ -21,8 +21,8 @@ describe('units on the stage', () => {
     const data: ReplayData = {
       ...replayFixture,
       tracks: [
-        { actor: 1, t: [0, 1_000], x: [100, 101], y: [200, 201], facing: [0, 0] },
-        { actor: 11, t: [0, 1_000], x: [104, 104], y: [204, 204], facing: [0, 0] },
+        { actor: 1, t: [0, 1_000], x: [100, 101], y: [200, 201], facing: [0, 0], map: [2001, 2001] },
+        { actor: 11, t: [0, 1_000], x: [104, 104], y: [204, 204], facing: [0, 0], map: [2001, 2001] },
       ],
       health: [{ actor: 11, t: [0, 2_000], current: [500, 400], max: [500, 500] }],
     };
