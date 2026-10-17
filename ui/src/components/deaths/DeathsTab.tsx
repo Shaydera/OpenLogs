@@ -2,13 +2,14 @@ import { useMemo, type ReactNode } from 'react';
 import type { DeathsReport, Kill } from '../../api/types';
 import { formatDuration, formatEventTime } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import { useApp } from '../../store';
+import { replaySplitShown, useApp } from '../../store';
 import { GameIcon, MonogramTile } from '../GameIcon';
 import { valueLabel } from '../filters/labels';
 import { NoMatch } from '../filters/NoMatch';
 import { ReportHead } from '../filters/ReportHead';
 import { classColor, playerIndex, shortName } from '../overview/players';
 import { hitIcon, hitName, reportSpellName, rosterIndex } from '../reports/reportData';
+import { deathJumpMs } from '../replay/playback';
 import { DeathRecapView } from './DeathRecapView';
 import { hitSource } from './recapModel';
 
@@ -21,6 +22,8 @@ export function DeathsTab({ report }: { report: DeathsReport }) {
 function DeathList({ report }: { report: DeathsReport }) {
   const focus = useApp((s) => s.focusDeath);
   const selectDeath = useApp((s) => s.selectDeath);
+  const split = useApp(replaySplitShown);
+  const setReplayTime = useApp((s) => s.setReplayTime);
   const range = useApp((s) => s.range);
   const scope = useApp((s) => s.scope);
   const overview = useApp((s) => s.overview);
@@ -39,6 +42,7 @@ function DeathList({ report }: { report: DeathsReport }) {
   // Picked by (player, time): a range change keeps the death or falls back to the first.
   const index = Math.max(0, focus ? report.deaths.findIndex((d) => d.player === focus.player && d.t === focus.t) : 0);
   const spellName = (id: number) => reportSpellName(report.spells, id);
+  const replayFrom = (ms: number) => deathJumpMs(ms, range?.startMs);
   // A selected killing-blow source or ability is the same for every death: the line leaves it out.
   const blowText = (kb: NonNullable<DeathsReport['deaths'][number]['killingBlow']>) =>
     [scope.ability.length === 0 && hitName(kb, spellName), scope.source.length === 0 && hitSource(kb)].filter(Boolean).join(' · ');
@@ -57,7 +61,10 @@ function DeathList({ report }: { report: DeathsReport }) {
                 type="button"
                 className={i === index ? 'dlink dlink-on' : 'dlink'}
                 aria-pressed={i === index}
-                onClick={() => selectDeath(death.player, death.t)}
+                onClick={() => {
+                  selectDeath(death.player, death.t);
+                  if (split) setReplayTime(replayFrom(death.t));
+                }}
               >
                 <span className="num dlink-time">{formatEventTime(death.t)}</span>
                 {kb ? <GameIcon name={blow} icon={hitIcon(kb)} size={22} /> : <MonogramTile name={name} size={22} />}
@@ -68,6 +75,7 @@ function DeathList({ report }: { report: DeathsReport }) {
                     </span>
                   )}
                   <span className="dlink-blow">{kb ? blowText(kb) : t('deaths.noLethalHit')}</span>
+                  {split && i === index && <span className="dlink-replay">{t('replay.at', { time: formatEventTime(replayFrom(death.t)) })}</span>}
                 </span>
               </button>
             );

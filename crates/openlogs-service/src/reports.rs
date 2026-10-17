@@ -9,6 +9,7 @@ use crate::interrupts_dto::{InterruptsReportDto, interrupts_report_dto};
 use crate::overview_dto::{QuickOverviewDto, quick_overview_dto};
 use crate::player_dto::{MetricDto, PlayerDetailDto, player_detail_dto};
 use crate::recap_dto::{DeathsReportDto, deaths_report_dto};
+use crate::replay_dto::{ReplayDto, replay_dto};
 use crate::report_dto::{
     AttributionDto, DamageReportDto, DamageTakenReportDto, FilterDto, HealingReportDto,
     damage_report_dto, healing_report_dto, taken_report_dto,
@@ -139,6 +140,19 @@ pub fn deaths(
     let report =
         openlogs_analysis::deaths_report(fight, curated, &filter.to_filter(), &scope.to_scope());
     deaths_report_dto(fight, curated, &report)
+}
+
+pub fn replay(
+    fight: &Fight,
+    curated: &Curated,
+    channels: &ChannelSpells,
+    advanced_logging: bool,
+) -> ReplayDto {
+    replay_dto(
+        fight,
+        &openlogs_analysis::replay(fight, curated, channels),
+        advanced_logging,
+    )
 }
 
 pub fn casts(

@@ -9,6 +9,8 @@
 
   /* Game icon frame: 1px black border. */
   --icon-edge: #000000;
+  /* Countdown and stack numbers on game icons, outlined in --icon-edge. */
+  --icon-text: #ffffff;
   /* Base of the dark veils (--plot-dim, --dialog-scrim) and of shadows (at 55%). */
   --scrim: #08090c;
   --shadow: #000000;
@@ -91,6 +93,30 @@
   --class-druid: #ff7c0a;
   --class-demonhunter: #bc66de;
   --class-evoker: #3baa93;
+
+  /* Raid target and world marker symbols on the replay stage in their game colours. */
+  --marker-square: #3d8ff5;
+  --marker-triangle: #3fbf4f;
+  --marker-diamond: #b05ce6;
+  --marker-cross: #ec5148;
+  --marker-star: #f2cf3a;
+  --marker-circle: #f28a2e;
+  --marker-moon: #c9d3dc;
+  --marker-skull: #f4f4f4;
+
+  /* Replay HUD bars: health of players, bosses and adds, a running cast (3:1 on --bar-track); the raid frame's health tint. */
+  --hp-fill: #3f8f5f;
+  --hp-boss: #c0493f;
+  --hp-add: #b07a3a;
+  --cast-fill: #7a64c4;
+  --hp-tint: color-mix(in srgb, var(--hp-fill) 28%, transparent);
+
+  /* Replay effects by category, their circles, labels and rings on --plot; --effect-missing marks a player without evidence. */
+  --effect-heal: #4fbf9a;
+  --effect-raid-cd: #7aa7f0;
+  --effect-raid-buff: #c9a24a;
+  --effect-boss: #d77be0;
+  --effect-missing: #f0877f;
 
   /* The player chart's dashed mana line. */
   --mana: #8a7cf0;
@@ -175,6 +201,30 @@
   --class-druid: #ad4a0a;
   --class-demonhunter: #9b35c0;
   --class-evoker: #1e7664;
+
+  /* Raid target and world marker symbols on the replay stage; darkened, the skull and moon to greys, for 3:1 on a light plot. */
+  --marker-square: #1f6fd1;
+  --marker-triangle: #2a8237;
+  --marker-diamond: #8a3cc4;
+  --marker-cross: #c4302b;
+  --marker-star: #8f6c00;
+  --marker-circle: #b35a0c;
+  --marker-moon: #66717d;
+  --marker-skull: #3d444d;
+
+  /* Replay HUD bars. */
+  --hp-fill: #2f7d4c;
+  --hp-boss: #b03a30;
+  --hp-add: #9a5f1c;
+  --cast-fill: #6a58b0;
+  --hp-tint: color-mix(in srgb, var(--hp-fill) 16%, transparent);
+
+  /* Replay effects. */
+  --effect-heal: #1a7d5d;
+  --effect-raid-cd: #2f5fb3;
+  --effect-raid-buff: #9a6a00;
+  --effect-boss: #9b3aa8;
+  --effect-missing: #c0392b;
 
   /* The player chart's dashed mana line. */
   --mana: #6656d6;

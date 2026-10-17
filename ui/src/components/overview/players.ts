@@ -17,9 +17,9 @@ export function playerIndex(overview: QuickOverview): Map<number, PlayerRef> {
   return new Map(overview.players.map((player) => [player.actorId, player]));
 }
 
-export function spellName(overview: QuickOverview, spellId: number): string {
+export function spellName(source: Pick<QuickOverview, 'spells'>, spellId: number): string {
   if (spellId === 0) return t('overview.melee');
-  return overview.spells[String(spellId)]?.name ?? t('overview.unknownSpell', { id: spellId });
+  return source.spells[String(spellId)]?.name ?? t('overview.unknownSpell', { id: spellId });
 }
 
 export function roleTitle(role: Role | null): string {

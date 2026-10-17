@@ -8,13 +8,15 @@ use crate::model::LogIndex;
 
 /// Events that matter to the index even outside fights. Mythic+ runs start, end and list
 /// their players between boss pulls.
-const META_EVENTS: [&str; 6] = [
+const META_EVENTS: [&str; 8] = [
     "COMBAT_LOG_VERSION",
     "ENCOUNTER_START",
     "ZONE_CHANGE",
     "CHALLENGE_MODE_START",
     "CHALLENGE_MODE_END",
     "COMBATANT_INFO",
+    "WORLD_MARKER_PLACED",
+    "WORLD_MARKER_REMOVED",
 ];
 
 /// A longer line is no combat log line. It counts as broken instead of being kept, which bounds

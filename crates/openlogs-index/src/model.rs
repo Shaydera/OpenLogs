@@ -4,7 +4,7 @@ use openlogs_parser::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// Bumped whenever the index layout or its rules change; invalidates cached indexes.
-pub const INDEX_FORMAT_VERSION: u32 = 5;
+pub const INDEX_FORMAT_VERSION: u32 = 7;
 /// The combat log format this tool is built and tested against.
 pub const SUPPORTED_LOG_VERSION: u32 = 22;
 /// Lookback before `ENCOUNTER_START` that belongs to a fight (pre-pots, pre-casts).
@@ -88,6 +88,16 @@ pub struct FightSummary {
     pub challenge: Option<ChallengeMode>,
     /// `index` of the Mythic+ run this boss pull belongs to.
     pub run_index: Option<u32>,
+    /// World markers active at the start line, sorted by marker; empty for runs.
+    #[serde(default)]
+    pub world_markers: Vec<WorldMarker>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct WorldMarker {
+    pub marker: u8,
+    pub x: f32,
+    pub y: f32,
 }
 
 impl FightSummary {

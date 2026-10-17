@@ -136,12 +136,25 @@ fn affix_ids_of_a_key_start() {
 }
 
 #[test]
+fn parses_world_marker_placed_and_removed() {
+    assert_eq!(
+        event("10/7/2026 18:58:24.0242  WORLD_MARKER_PLACED,3004,1,1525.40,11.09"),
+        Event::WorldMarkerPlaced {
+            instance_id: 3004,
+            marker: 1,
+            x: 1525.40,
+            y: 11.09
+        }
+    );
+    assert_eq!(
+        event("10/7/2026 18:58:30.0000  WORLD_MARKER_REMOVED,1"),
+        Event::WorldMarkerRemoved { marker: 1 }
+    );
+}
+
+#[test]
 fn unmodelled_events_are_unhandled() {
     for (line, name) in [
-        (
-            "10/7/2026 18:58:24.0242  WORLD_MARKER_PLACED,3004,1,1525.40,11.09",
-            "WORLD_MARKER_PLACED",
-        ),
         (
             "9/6/2026 14:18:06.2502  STAGGER_CLEAR,Player-4104-0F71DD92,94.733131",
             "STAGGER_CLEAR",

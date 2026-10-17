@@ -5,10 +5,11 @@ use openlogs_parser::{
     EncounterEnd, EncounterStart, Event, LogLine, Timestamp,
 };
 
+use crate::markers::MarkerState;
 use crate::model::{
     ChallengeMode, END_GRACE_LINES, END_GRACE_MICROS, FightSummary, LogIndex,
     MYTHIC_KEYSTONE_DIFFICULTY, Outcome, PRELUDE_MICROS, RESUME_MAX_GAP_MICROS, RosterEntry,
-    SUPPORTED_LOG_VERSION,
+    SUPPORTED_LOG_VERSION, WorldMarker,
 };
 
 /// Byte range of one line in the log file.
@@ -32,6 +33,7 @@ pub struct IndexBuilder {
     last_fight_end: u64,
     /// Zone of the latest `ZONE_CHANGE`.
     zone: Option<String>,
+    markers: MarkerState,
     /// `index` of the latest fight or run. Entries are numbered by their start line, so a
     /// run comes right before its boss pulls.
     last_index: u32,
@@ -53,6 +55,7 @@ impl IndexBuilder {
             recent: VecDeque::new(),
             last_fight_end: 0,
             zone: None,
+            markers: MarkerState::default(),
             last_index: 0,
         }
     }
@@ -145,7 +148,28 @@ impl IndexBuilder {
                         .or_default() += 1;
                 }
             }
-            Event::ZoneChange { name, .. } => self.zone = Some((*name).to_string()),
+            Event::WorldMarkerPlaced {
+                instance_id,
+                marker,
+                x,
+                y,
+            } => {
+                self.markers.place(
+                    *instance_id,
+                    WorldMarker {
+                        marker: *marker,
+                        x: *x,
+                        y: *y,
+                    },
+                );
+            }
+            Event::WorldMarkerRemoved { marker } => {
+                self.markers.remove(line.timestamp, *marker);
+            }
+            Event::ZoneChange { zone_id, name, .. } => {
+                self.markers.change_zone(line.timestamp, *zone_id);
+                self.zone = Some((*name).to_string());
+            }
         }
     }
 
@@ -216,7 +240,11 @@ impl IndexBuilder {
             line.timestamp.0 <= at.0 + END_GRACE_MICROS
                 && matches!(
                     line.event,
-                    Event::Combat(_) | Event::EncounterEnd(_) | Event::Unhandled { .. }
+                    Event::Combat(_)
+                        | Event::EncounterEnd(_)
+                        | Event::Unhandled { .. }
+                        | Event::WorldMarkerPlaced { .. }
+                        | Event::WorldMarkerRemoved { .. }
                 )
         });
         if same_moment && held.lines < END_GRACE_LINES {
@@ -345,6 +373,7 @@ impl IndexBuilder {
                 broken_lines: 0,
                 challenge: None,
                 run_index: self.run.as_ref().map(|run| run.summary.index),
+                world_markers: self.markers.active(),
             },
             hostile: HashMap::new(),
             player_names: HashMap::new(),
@@ -403,6 +432,7 @@ impl IndexBuilder {
                     total_time_ms: None,
                 }),
                 run_index: None,
+                world_markers: Vec::new(),
             },
             player_names: HashMap::new(),
             last_pull: None,

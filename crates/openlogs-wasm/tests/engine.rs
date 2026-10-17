@@ -296,6 +296,7 @@ fn every_report_reaches_the_ui_with_camel_case_keys() {
                 json!({ "fightA": 1, "fightB": 3, "attribution": "augmented" }),
             ),
         ),
+        ("replay", call(&engine, "replay", pull(json!({})))),
         ("events", events),
         ("timeline", timeline),
     ];

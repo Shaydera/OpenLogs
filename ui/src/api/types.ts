@@ -1051,3 +1051,134 @@ export interface Timeline {
   /** The widest window whose marks list their log lines. */
   listedWindowMs: number;
 }
+
+export type ReplayUnitKind = 'player' | 'pet' | 'boss' | 'add';
+
+export interface ReplayUnit {
+  actor: number;
+  name: string;
+  kind: ReplayUnitKind;
+  specId: number | null;
+  classId: number | null;
+  owner: number | null;
+  /** Adds of one name are numbered from 1 in the order they were first positioned. */
+  addNumber: number | null;
+}
+
+/** A unit's positions as columns, sorted by `t`; the first sample may lie before the pull. */
+export interface ReplayTrack {
+  actor: number;
+  t: number[];
+  x: number[];
+  y: number[];
+  facing: number[];
+}
+
+export interface ReplayHealthTrack {
+  actor: number;
+  t: number[];
+  current: number[];
+  max: number[];
+}
+
+export type ReplayCastOutcome = 'completed' | 'interrupted' | 'failed';
+
+export interface ReplayCast {
+  caster: number;
+  spellId: number;
+  target: number | null;
+  startMs: number;
+  /** Equals `startMs` for an instant cast. */
+  endMs: number;
+  outcome: ReplayCastOutcome;
+}
+
+export interface ReplayStackChange {
+  t: number;
+  stacks: number;
+}
+
+export interface ReplayAura {
+  target: number;
+  source: number;
+  spellId: number;
+  buff: boolean;
+  startMs: number;
+  endMs: number;
+  stacks: ReplayStackChange[];
+  /** Raid frame priority (lower first); `null`: not shown on a raid frame. */
+  raidFrame: number | null;
+}
+
+export interface ReplayRaidMarker {
+  actor: number;
+  /** 1..=8, the raid target icon index. */
+  marker: number;
+  startMs: number;
+  endMs: number;
+}
+
+export interface ReplayWorldMarker {
+  marker: number;
+  x: number;
+  y: number;
+  startMs: number;
+  endMs: number;
+}
+
+export interface ReplayDeath {
+  actor: number;
+  t: number;
+  /** When the unit was alive again; `null`: dead to the end. */
+  until: number | null;
+}
+
+export type EffectKind = 'beneficial' | 'harmful';
+
+export type EffectCategory = 'raid_cd' | 'heal' | 'raid_buff' | 'boss_mechanic';
+
+/** A logged ground position, or the unit the effect moves with. */
+export type EffectAnchor = { type: 'ground'; x: number; y: number } | { type: 'unit'; actor: number };
+
+export interface AffectedSpan {
+  actor: number;
+  startMs: number;
+  endMs: number;
+}
+
+export interface EffectInstance {
+  name: string;
+  spellId: number;
+  caster: number;
+  /** `null`: the log places it nowhere; it is only listed. */
+  anchor: EffectAnchor | null;
+  radiusYd: number;
+  startMs: number;
+  endMs: number;
+  /** The anchor is the centre of the first recipients, not a logged position. */
+  estimated: boolean;
+  kind: EffectKind;
+  category: EffectCategory;
+  /** How long one evidence hit or heal counts a player as affected. */
+  tickWindowMs: number;
+  /** Per player, merged and inside the effect's window. */
+  affected: AffectedSpan[];
+}
+
+export interface ReplayData {
+  encounterId: number;
+  advancedLogging: boolean;
+  durationMs: number;
+  roster: PlayerRef[];
+  spells: Record<string, { name: string }>;
+  units: ReplayUnit[];
+  tracks: ReplayTrack[];
+  health: ReplayHealthTrack[];
+  casts: ReplayCast[];
+  auras: ReplayAura[];
+  raidMarkers: ReplayRaidMarker[];
+  worldMarkers: ReplayWorldMarker[];
+  effects: EffectInstance[];
+  phases: Phase[];
+  deaths: ReplayDeath[];
+}

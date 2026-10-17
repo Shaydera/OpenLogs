@@ -161,6 +161,19 @@ describe('EventsView', () => {
     expect(within(rows()[0]).getByText('overkill 120.00k')).toBeInTheDocument();
   });
 
+  it('a death row in the split seeks five seconds before the death', async () => {
+    const base = eventsPageFixture.rows[0];
+    show({
+      ...eventsPageFixture,
+      total: 1,
+      rows: [{ ...base, t: 200_000, type: 'died', event: 'UNIT_DIED', source: 9, target: 4, spellId: 30451, amount: 0, shares: [], critical: false, targetHp: null }],
+    });
+    useApp.setState({ replay: { ...initialState().replay, split: true } });
+    render(<EventsView tab="deaths" />);
+    await userEvent.click(within(rows()[0]).getByRole('button', { name: /at 3:20/ }));
+    expect(useApp.getState().replay.time).toBe(195_000);
+  });
+
   it('names an aura row a buff or a debuff by the type the log gives', () => {
     const plain = { ...eventsPageFixture.rows[0], shares: [], critical: false, amount: null, targetHp: null };
     show({

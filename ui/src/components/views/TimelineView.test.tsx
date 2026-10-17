@@ -51,6 +51,26 @@ describe('TimelineView', () => {
     expect(refreshTimeline).toHaveBeenCalled();
   });
 
+  it('the ruler click sets the replay time in the split', () => {
+    useApp.setState({ replay: { ...initialState().replay, split: true } });
+    render(<TimelineView tab="casts" />);
+    const ruler = screen.getByTestId('timeline-ruler');
+    vi.spyOn(ruler, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1_000, 30));
+    fireEvent.mouseDown(ruler, { button: 0, clientX: 250 });
+    fireEvent.mouseMove(document, { clientX: 252 });
+    fireEvent.mouseUp(document, { clientX: 252 });
+    expect(useApp.getState().replay.time).toBe(125_000);
+    expect(zoom()).toEqual({ startMs: 120_000, endMs: 140_000 });
+  });
+
+  it('a mark click in the split sets the replay time, a death five seconds early, and pins the card', async () => {
+    useApp.setState({ tab: 'taken', timeline: takenTimelineFixture, replay: { ...initialState().replay, split: true } });
+    render(<TimelineView tab="taken" />);
+    await userEvent.click(screen.getByRole('button', { name: 'Wendel died at 2:15' }));
+    expect(useApp.getState().replay.time).toBe(130_000);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
   describe('pointer gestures on the tracks', () => {
     const mark = () => screen.getByRole('button', { name: 'Arcane Blast at 2:08 by Faelan' });
     const press = (target: Element, x: number) => fireEvent.pointerDown(target, { pointerId: 1, pointerType: 'mouse', button: 0, buttons: 1, clientX: x, clientY: 10 });

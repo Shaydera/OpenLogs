@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { api } from './api/client';
+import { replayClock } from './components/replay/replayClock';
 import type { ChosenLog, LogSource } from './api/logSource';
-import type { DamageReport, LogView, PullComparison, QuickOverview, RecentLog, Scope, Timeline } from './api/types';
+import type { DamageReport, LogView, PullComparison, QuickOverview, ReplayData, RecentLog, Scope, Timeline } from './api/types';
 import { comparisonFixture } from './test/compareFixture';
 import { overviewFixture } from './test/overviewFixture';
 import {
@@ -35,6 +36,7 @@ vi.mock('./api/client', () => ({
     abilityDetail: vi.fn(),
     targetDetail: vi.fn(),
     deathsReport: vi.fn(),
+    replay: vi.fn(),
     castsReport: vi.fn(),
     aurasReport: vi.fn(),
     interruptsReport: vi.fn(),
@@ -996,5 +998,152 @@ describe('timeline and events views', () => {
     expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 300_000, endMs: null, attribution: 'reattributed' });
     await useApp.getState().setRange({ startMs: 300_000, endMs: 400_000 });
     expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 300_000, endMs: 400_000, attribution: 'reattributed' });
+  });
+});
+
+describe('replay', () => {
+  const replayOf = (durationMs: number): ReplayData => ({
+    encounterId: 1,
+    advancedLogging: true,
+    durationMs,
+    roster: [],
+    spells: {},
+    units: [],
+    tracks: [],
+    health: [],
+    casts: [],
+    auras: [],
+    raidMarkers: [],
+    worldMarkers: [],
+    effects: [],
+    phases: [],
+    deaths: [],
+  });
+
+  it('loads the replay once per pull', async () => {
+    const data = replayOf(60_000);
+    vi.mocked(api.replay).mockResolvedValue(data);
+    await openPull();
+    await Promise.all([useApp.getState().loadReplay(), useApp.getState().loadReplay()]);
+    await useApp.getState().loadReplay();
+    expect(api.replay).toHaveBeenCalledTimes(1);
+    expect(api.replay).toHaveBeenCalledWith(LOG.id, 1);
+    expect(useApp.getState().replayData).toBe(data);
+  });
+
+  it('opening another pull resets replay state and drops a stale bundle', async () => {
+    const stale = deferred<ReplayData>();
+    vi.mocked(api.replay).mockReturnValueOnce(stale.promise);
+    await openPull();
+    const loading = useApp.getState().loadReplay();
+    useApp.getState().setReplayTime(5_000);
+    useApp.getState().toggleReplayPlay();
+    expect(replayClock.playing()).toBe(true);
+
+    await useApp.getState().openFight(2);
+    expect(useApp.getState().replay).toMatchObject({ time: 0, playing: false });
+    expect(replayClock.playing()).toBe(false);
+    expect(replayClock.now()).toBe(0);
+
+    const fresh = replayOf(30_000);
+    vi.mocked(api.replay).mockResolvedValueOnce(fresh);
+    await useApp.getState().loadReplay();
+    stale.resolve(replayOf(99_000));
+    await loading;
+    expect(useApp.getState().replayData).toBe(fresh);
+  });
+
+  it('openReplayAt switches to the replay tab outside the split and only seeks inside it', async () => {
+    vi.mocked(api.replay).mockResolvedValue(replayOf(60_000));
+    await openPull();
+    await useApp.getState().setTab('casts');
+    useApp.getState().openReplayAt(12_000);
+    expect(useApp.getState()).toMatchObject({ tab: 'replay', replay: { time: 12_000 } });
+
+    await useApp.getState().setTab('casts');
+    useApp.getState().setReplaySplit(true);
+    useApp.getState().openReplayAt(20_000);
+    expect(useApp.getState()).toMatchObject({ tab: 'casts', replay: { time: 20_000 } });
+    expect(replayClock.now()).toBe(20_000);
+  });
+
+  it('replay time clamps to the selected range', async () => {
+    vi.mocked(api.replay).mockResolvedValue(replayOf(60_000));
+    await openPull();
+    useApp.getState().setReplayTime(900_000);
+    expect(useApp.getState().replay.time).toBe(overviewFixture.timeline.durationMs);
+
+    await useApp.getState().setRange({ startMs: 10_000, endMs: 20_000 });
+    useApp.getState().setReplayTime(0);
+    expect(useApp.getState().replay.time).toBe(10_000);
+    useApp.getState().setReplayTime(25_000);
+    expect(useApp.getState().replay.time).toBe(20_000);
+  });
+
+  it('keeps the clock and the stored time in step while playing, and stops at the end of the range', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
+      await openPull();
+      await useApp.getState().setRange({ startMs: 0, endMs: 1_000 });
+      useApp.getState().setReplaySpeed(2);
+      useApp.getState().toggleReplayPlay();
+      vi.advanceTimersByTime(300);
+      expect(useApp.getState().replay.time).toBeGreaterThanOrEqual(500);
+      expect(useApp.getState().replay.time).toBeLessThanOrEqual(600);
+      vi.advanceTimersByTime(1_000);
+      expect(useApp.getState().replay).toMatchObject({ time: 1_000, playing: false });
+      expect(replayClock.playing()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('plays at the persisted speed and starts inside the range', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
+      localStorage.setItem('openlogs.replay', JSON.stringify({ speed: 4 }));
+      useApp.setState(initialState());
+      await openPull();
+      await useApp.getState().setRange({ startMs: 10_000, endMs: 60_000 });
+      useApp.getState().toggleReplayPlay();
+      expect(useApp.getState().replay.time).toBe(10_000);
+      vi.advanceTimersByTime(1_000);
+      expect(useApp.getState().replay.time).toBeGreaterThanOrEqual(13_800);
+      expect(useApp.getState().replay.time).toBeLessThanOrEqual(14_000);
+      useApp.getState().toggleReplayPlay();
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('records a failed load, clears it on retry and loads the range figures for the Replay tab', async () => {
+    await openPull();
+    vi.mocked(api.replay).mockRejectedValueOnce('boom');
+    await useApp.getState().loadReplay();
+    expect(useApp.getState()).toMatchObject({ replayError: 'boom', replayData: null });
+    vi.mocked(api.replay).mockResolvedValueOnce(replayOf(60_000));
+    await useApp.getState().loadReplay();
+    expect(useApp.getState()).toMatchObject({ replayError: null });
+    expect(useApp.getState().replayData).not.toBeNull();
+
+    await useApp.getState().setTab('replay');
+    vi.mocked(api.quickOverview).mockClear();
+    await useApp.getState().setRange({ startMs: 0, endMs: 1_000 });
+    expect(api.quickOverview).toHaveBeenCalledTimes(1);
+    expect(useApp.getState()).toMatchObject({ rangeKpis: overviewFixture.kpis, reportLoading: false });
+  });
+
+  it('persists layers, filters and speed but not the hidden units', () => {
+    useApp.getState().setReplayLayer('facing', true);
+    useApp.getState().setReplayFilter({ pets: true, hidden: [4] });
+    useApp.getState().setReplaySpeed(4);
+    const restored = initialState().replay;
+    expect(restored.layers.facing).toBe(true);
+    expect(restored.filters).toMatchObject({ pets: true, hidden: [] });
+    expect(restored.speed).toBe(4);
   });
 });

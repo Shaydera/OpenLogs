@@ -5,7 +5,7 @@ import { formatEventTime, formatSpan } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { lanesOf } from '../../reportViews';
 import type { FilterTab } from '../../scopeSides';
-import { type TimeRange, type ViewToggles, useApp } from '../../store';
+import { type TimeRange, type ViewToggles, replaySplitShown, useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
 import { GroupMenu } from '../filters/GroupMenu';
 import { NoMatch } from '../filters/NoMatch';
@@ -13,8 +13,8 @@ import { rosterIndex } from '../reports/reportData';
 import { itemTip } from './itemTip';
 import { ResourceLanes } from './ResourceLanes';
 import { ContextRow, DEBUFF_COLOURS, LaneRow, type MarkHandler, laneKey } from './TimelineLane';
-import { Ruler } from './TimelineRuler';
-import { TIP_PX, type Tip, TipCard } from './TimelineTip';
+import { Playhead, Ruler } from './TimelineRuler';
+import { TIP_PX, type Tip, TipCard, itemReplayMs } from './TimelineTip';
 import { useTimelineGestures } from './useTimelineGestures';
 import { TAB_TITLE, ViewFailure, ViewHead } from './ViewHead';
 import { type ViewNames, viewNames } from './viewNames';
@@ -218,6 +218,7 @@ function TimelineBody(props: {
   const tipId = useId();
   const [setTrack, trackPx] = useWidth(1000);
   const grabbing = useTimelineGestures(body, whole);
+  const setReplayTime = useApp((s) => s.setReplayTime);
 
   const onEnter = useCallback<MarkHandler>(
     (item, context, event) => {
@@ -232,8 +233,9 @@ function TimelineBody(props: {
       // A click from the keyboard has no pointer position: the card opens under the mark and takes the focus.
       const keyboard = event.detail === 0;
       onTip({ item, context, ...cardPoint(body.current, event, keyboard), pinned: true, opener: event.currentTarget, keyboard });
+      if (replaySplitShown(useApp.getState())) setReplayTime(itemReplayMs(item));
     },
-    [onTip],
+    [onTip, setReplayTime],
   );
   const closeCard = () => {
     const opener = tip?.opener;
@@ -271,6 +273,7 @@ function TimelineBody(props: {
           timeline.lanes.map((lane) => <LaneRow key={laneKey(lane)} tab={tab} lane={lane} roster={roster} {...row} />)
         )}
       </div>
+      <Playhead shown={shown} />
       {tip && <TipCard id={tipId} tip={tip} tipText={itemTip(tip.item, names, timeline.linesListed, tip.context)} onClose={closeCard} />}
     </div>
   );

@@ -26,13 +26,22 @@ pub enum Event<'a> {
         name: &'a str,
         difficulty: u32,
     },
+    WorldMarkerPlaced {
+        instance_id: u32,
+        marker: u8,
+        x: f32,
+        y: f32,
+    },
+    WorldMarkerRemoved {
+        marker: u8,
+    },
     EncounterStart(EncounterStart<'a>),
     EncounterEnd(EncounterEnd<'a>),
     ChallengeModeStart(ChallengeModeStart<'a>),
     ChallengeModeEnd(ChallengeModeEnd),
     CombatantInfo(CombatantInfo<'a>),
     Combat(CombatEvent<'a>),
-    /// A well-formed line whose event the parser does not model (markers, emotes, …).
+    /// A well-formed line whose event the parser does not model (emotes, stagger, …).
     Unhandled {
         name: &'a str,
     },

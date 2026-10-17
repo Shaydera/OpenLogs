@@ -3,12 +3,13 @@ import type { EventRow, EventsPage, SharePart } from '../../api/types';
 import { formatEventTimeMs, formatInteger, formatScaled } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import type { FilterTab } from '../../scopeSides';
-import { EVENTS_PAGE_ROWS, type ViewToggles, useApp } from '../../store';
+import { EVENTS_PAGE_ROWS, type ViewToggles, replayOffered, replaySplitShown, useApp } from '../../store';
 import { spellIcon } from '../../icons';
 import { GameIcon } from '../GameIcon';
 import { NoMatch } from '../filters/NoMatch';
 import { captionOf } from '../filters/sides';
 import { hitIcon } from '../reports/reportData';
+import { deathJumpMs } from '../replay/playback';
 import { VALUE_CAPTION, fieldsOf, hitNoteOf, isStackRow, noteOf, sentenceOf, textNoteOf, textValueOf, typeLabel, valueOf } from './eventColumns';
 import { TAB_TITLE, ViewFailure, ViewHead } from './ViewHead';
 import { type ViewNames, viewNames } from './viewNames';
@@ -79,6 +80,7 @@ function Note({ text }: { text: string }) {
 
 const sourceFallback = (row: EventRow) => (row.environmental ? t('scope.environment') : row.unknownBlow ? t('events.noSource') : t('deaths.unknownSource'));
 const spellText = (row: EventRow, names: ViewNames) => (row.unknownBlow ? t('events.noBlow') : names.spell(row.spellId));
+const replayAt = (row: EventRow) => (row.type === 'died' ? deathJumpMs(row.t) : row.t);
 
 /** One line per event of the tab in the range, a page at a time, in log order. */
 export function EventsView({ tab }: { tab: FilterTab }) {
@@ -195,6 +197,10 @@ function Pager({ page, busy, onPage }: { page: EventsPage; busy: boolean; onPage
 
 function EventsGrid(props: { tab: FilterTab; page: EventsPage; names: ViewNames; open: string | null; busy: boolean; onOpen: (key: string | null) => void }) {
   const { tab, page, names, open, busy, onOpen } = props;
+  const split = useApp(replaySplitShown);
+  const withReplay = useApp(replayOffered);
+  const setReplayTime = useApp((s) => s.setReplayTime);
+  const openReplayAt = useApp((s) => s.openReplayAt);
   const narrowed = new Set(page.narrowed);
   const showAbility = !narrowed.has('ability');
   const showSource = !narrowed.has('source');
@@ -239,7 +245,10 @@ function EventsGrid(props: { tab: FilterTab; page: EventsPage; names: ViewNames;
                     aria-expanded={expanded}
                     aria-controls={expanded ? fieldsId : undefined}
                     aria-label={t('events.toggle', { type: label, time })}
-                    onClick={() => onOpen(expanded ? null : key)}
+                    onClick={() => {
+                      onOpen(expanded ? null : key);
+                      if (split) setReplayTime(replayAt(row));
+                    }}
                   >
                     {sameTime ? null : time}
                   </button>
@@ -285,6 +294,11 @@ function EventsGrid(props: { tab: FilterTab; page: EventsPage; names: ViewNames;
                         </div>
                       ))}
                     </dl>
+                    {withReplay && !split && (
+                      <button type="button" className="lnk erow-replay" onClick={() => openReplayAt(replayAt(row))}>
+                        {t('replay.showIn')}
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

@@ -14,6 +14,7 @@ export const VIEWS: Record<FightTab, ReportView[]> = {
   buffs: ['table', 'timeline', 'events'],
   interrupts: ['table', 'timeline', 'events'],
   resources: ['table', 'timeline'],
+  replay: ['table'],
 };
 
 /** The view a tab shows: the chosen one where the tab has it, else its table; detail pages are tables. */

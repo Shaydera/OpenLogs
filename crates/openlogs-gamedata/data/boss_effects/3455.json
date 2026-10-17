@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "encounter_id": 3455,
+  "note": "Vashnik the Malignant. Aura and hit IDs were checked against real 12.1 logs (one heroic pull: 54 Plague Froth applications, 16 Stygian Infection applications). radius_yd is SpellEffect.EffectRadiusIndex -> SpellRadius of the hit spell from wago.tools DB2 build 12.1.0.69933 (Plague Froth 1281925: index 100 = 4.5 yd; Stygian Burst 1302489: index 64 = 3.5 yd). Stygian Burst lands about 45 ms after the Stygian Infection debuff is removed, so its circle stays up for after_ms 2500 to show who the burst hit.",
+  "effects": [
+    {
+      "spell_ids": [1281913], "name": "Plague Froth", "trigger": "aura_applied", "anchor": "follows_target",
+      "radius_yd": 4.5, "duration": { "type": "until_aura_end" },
+      "evidence": { "aura_ids": [], "hit_ids": [1281925] },
+      "kind": "harmful", "category": "boss_mechanic"
+    },
+    {
+      "spell_ids": [1294994], "name": "Stygian Infection", "trigger": "aura_applied", "anchor": "follows_target",
+      "radius_yd": 3.5, "duration": { "type": "until_aura_end", "after_ms": 2500 },
+      "evidence": { "aura_ids": [], "hit_ids": [1302489] },
+      "kind": "harmful", "category": "boss_mechanic"
+    }
+  ]
+}

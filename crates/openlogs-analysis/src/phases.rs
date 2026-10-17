@@ -1,8 +1,33 @@
-use openlogs_gamedata::{PhaseConfig, PhaseTrigger};
+use openlogs_gamedata::{Curated, PhaseConfig, PhaseTrigger};
 use openlogs_index::Outcome;
 
-use crate::fight::{EventKind, Fight};
-use crate::timeline::{ABORTED_PULL_MS, Phase, PhaseKind};
+use crate::fight::{EventKind, Fight, FightKind};
+use crate::timeline::{
+    ABORTED_PULL_MS, Phase, PhaseKind, detect_phases, is_aborted, name_detected_phases,
+};
+
+/// The phases the Overview shows: a run's boss pulls and the trash between them; a pull's
+/// configured phases, else those detected from `boss_hp`. Aborted pulls have no phases,
+/// configured or detected.
+pub(crate) fn fight_phases(
+    fight: &Fight,
+    curated: &Curated,
+    boss_hp: &[Option<f32>],
+    step_ms: u32,
+) -> Vec<Phase> {
+    if fight.kind == FightKind::Run {
+        return run_phases(fight);
+    }
+    curated
+        .phase_config(fight.encounter_id)
+        .filter(|_| !is_aborted(fight))
+        .map(|config| configured_phases(fight, config, boss_hp, step_ms))
+        .filter(|phases| !phases.is_empty())
+        .unwrap_or_else(|| {
+            let detected = detect_phases(boss_hp, step_ms, fight.duration_ms as u32);
+            name_detected_phases(detected, fight.encounter_id, curated)
+        })
+}
 
 /// Named phases from a config. Each trigger is searched strictly after the previous
 /// phase started; phases whose trigger never fires within the pull are skipped.

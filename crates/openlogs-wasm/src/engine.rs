@@ -290,6 +290,15 @@ impl Engine {
                     args.window,
                 ))
             }
+            "replay" => {
+                let args: ReplayArgs = parse(args_json)?;
+                json(openlogs_service::replay(
+                    self.fight(args.fight_index)?,
+                    curated,
+                    &self.channels,
+                    self.index.advanced_logging,
+                ))
+            }
             _ => Err(format!("Unknown command {command}")),
         }
     }
@@ -330,6 +339,12 @@ fn parse<T: DeserializeOwned>(args_json: &str) -> Result<T, String> {
 
 fn json<T: serde::Serialize>(value: T) -> Result<String, String> {
     serde_json::to_string(&value).map_err(|err| err.to_string())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReplayArgs {
+    fight_index: u32,
 }
 
 #[derive(Deserialize)]

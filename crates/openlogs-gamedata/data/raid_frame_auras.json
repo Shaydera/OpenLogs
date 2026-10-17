@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "note": "Auras shown on the replay's raid frames, lower priority first. exclude lists auras that are never shown. IDs were checked against auras in real 12.1 logs where available (Ironbark, Blessing of Protection, Blessing of Sacrifice, Life Cocoon, Guardian Spirit); Pain Suppression and Time Dilation match major_cds.json.",
+  "include": [
+    { "spell_id": 33206, "name": "Pain Suppression", "priority": 0 },
+    { "spell_id": 47788, "name": "Guardian Spirit", "priority": 1 },
+    { "spell_id": 102342, "name": "Ironbark", "priority": 2 },
+    { "spell_id": 116849, "name": "Life Cocoon", "priority": 3 },
+    { "spell_id": 1022, "name": "Blessing of Protection", "priority": 4 },
+    { "spell_id": 6940, "name": "Blessing of Sacrifice", "priority": 5 },
+    { "spell_id": 357170, "name": "Time Dilation", "priority": 6 }
+  ],
+  "exclude": []
+}

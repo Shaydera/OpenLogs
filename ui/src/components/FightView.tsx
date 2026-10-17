@@ -3,7 +3,7 @@ import type { QuickOverview } from '../api/types';
 import { useFocusRequest } from '../hooks/useFocusRequest';
 import { t } from '../i18n/i18n';
 import { rangeKey } from '../pulls/groupPulls';
-import { useApp } from '../store';
+import { replaySplitShown, useApp } from '../store';
 import { AbilityDetailView } from './ability/AbilityDetailView';
 import { AurasTab } from './auras/AurasTab';
 import { CastsTab } from './casts/CastsTab';
@@ -25,6 +25,8 @@ import { DamageDoneTab } from './reports/DamageDoneTab';
 import { DamageTakenTab } from './reports/DamageTakenTab';
 import { HealingTab } from './reports/HealingTab';
 import { RangePanel } from './reports/RangePanel';
+import { ReplaySplit } from './replay/ReplaySplit';
+import { ReplayTab } from './replay/ReplayTab';
 import { ResourcesTab } from './resources/ResourcesTab';
 import { TargetDetailView } from './target/TargetDetailView';
 import { EventsView } from './views/EventsView';
@@ -50,6 +52,7 @@ export function FightView() {
   const comparing = useApp((s) => s.comparison !== null);
   const breakdown = useApp((s) => s.breakdown);
   const scope = useApp((s) => s.scope);
+  const splitOn = useApp(replaySplitShown);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const crumbRef = useRef<HTMLSpanElement>(null);
   // The pull title; on detail pages (compact header) the current breadcrumb.
@@ -69,6 +72,27 @@ export function FightView() {
   const tiles =
     details.length > 0 ? null : headerTiles({ tab, row, overview, range, report, reportLoading, reportFailed, rangeKpis, breakdown, scope });
 
+  const body = failed ? (
+    <p className="muted">{t('fight.loadFailed')}</p>
+  ) : loading || !overview ? (
+    <p className="muted">{t('fight.loading')}</p>
+  ) : onOverview ? (
+    <>
+      {/* The timeline is the Overview's brush and always shows the whole pull. */}
+      <Timeline overview={overview} run={row.run !== null} />
+      <RangeOverview whole={overview} />
+    </>
+  ) : (
+    <>
+      {/* Detail pages have no range panel. */}
+      {details.length === 0 && <RangePanel overview={overview} rangeKey={rangeKey(row)} run={row.run !== null} />}
+      <ErrorBoundary key={`${tab}-${details.length}`} onReset={() => void closeDetail()}>
+        {tab === 'replay' ? <ReplayTab /> : <ReportView />}
+      </ErrorBoundary>
+    </>
+  );
+  const alongside = splitOn && tab !== 'replay' && !failed && !loading && overview !== null;
+
   return (
     <div className="fight-view">
       <FightTopBar row={row} currentRef={crumbRef} />
@@ -77,25 +101,8 @@ export function FightView() {
         <ViewLens />
         <TabBar />
         <div role="tabpanel" id={PANEL_ID} aria-labelledby={tabId(tab)} className="tabpanel">
-          {failed ? (
-            <p className="muted">{t('fight.loadFailed')}</p>
-          ) : loading || !overview ? (
-            <p className="muted">{t('fight.loading')}</p>
-          ) : onOverview ? (
-            <>
-              {/* The timeline is the Overview's brush and always shows the whole pull. */}
-              <Timeline overview={overview} run={row.run !== null} />
-              <RangeOverview whole={overview} />
-            </>
-          ) : (
-            <>
-              {/* Detail pages have no range panel. */}
-              {details.length === 0 && <RangePanel overview={overview} rangeKey={rangeKey(row)} run={row.run !== null} />}
-              <ErrorBoundary key={`${tab}-${details.length}`} onReset={() => void closeDetail()}>
-                <ReportView />
-              </ErrorBoundary>
-            </>
-          )}
+          {/* Outside the tab-keyed error boundary: the replay pane keeps its state while the report changes tabs. */}
+          {alongside ? <ReplaySplit>{body}</ReplaySplit> : body}
         </div>
       </main>
     </div>

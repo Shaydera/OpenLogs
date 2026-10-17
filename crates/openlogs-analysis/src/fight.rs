@@ -33,6 +33,12 @@ pub struct Fight {
     pub encounters: Vec<RunEncounter>,
     /// The texts of [`FailReason::Other`], in first-seen order.
     pub fail_reasons: Vec<String>,
+    /// Where units were, sorted by `t`; samples without a known position are not kept.
+    pub positions: Vec<PositionSample>,
+    pub raid_markers: Vec<MarkerInterval>,
+    pub world_markers: Vec<WorldMarkerInterval>,
+    /// The map most position samples were logged on.
+    pub ui_map_id: Option<u32>,
 }
 
 impl Fight {
@@ -81,6 +87,37 @@ pub struct PowerSample {
     pub power_type: i32,
     pub current: i64,
     pub max: i64,
+}
+
+/// A unit's position from an advanced block, in log coordinates.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PositionSample {
+    pub t: i32,
+    pub actor: ActorId,
+    pub x: f32,
+    pub y: f32,
+    pub facing: f32,
+}
+
+/// A raid target icon on a unit, from the first event showing it to the first later event
+/// showing another icon or none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MarkerInterval {
+    pub actor: ActorId,
+    /// 1..=8, the raid target icon index.
+    pub marker: u8,
+    pub start_ms: i32,
+    pub end_ms: i32,
+}
+
+/// A ground marker placed in the world.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WorldMarkerInterval {
+    pub marker: u8,
+    pub x: f32,
+    pub y: f32,
+    pub start_ms: i32,
+    pub end_ms: i32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

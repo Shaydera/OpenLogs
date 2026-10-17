@@ -20,6 +20,7 @@ mod overview;
 mod phases;
 mod player;
 mod recap;
+mod replay;
 mod reports;
 mod resources;
 mod run_result;
@@ -45,8 +46,8 @@ pub use deaths::{
 pub use deaths_report::{DeathsReport, Kill, deaths_report};
 pub use fight::{
     Absorbed, AuraAction, AuraType, Damage, DamageVia, Energize, Event, EventKind, FailReason,
-    Fight, FightKind, Heal, MissType, Missed, NO_SPELL, POWER_SAMPLE_MS, PowerSample, RunEncounter,
-    SpellId, SpellInfo, UnitHp,
+    Fight, FightKind, Heal, MarkerInterval, MissType, Missed, NO_SPELL, POWER_SAMPLE_MS,
+    PositionSample, PowerSample, RunEncounter, SpellId, SpellInfo, UnitHp, WorldMarkerInterval,
 };
 pub use filter::{Attribution, ReportFilter};
 pub use interrupts::{
@@ -66,6 +67,10 @@ pub use player::{
     player_detail,
 };
 pub use recap::{DeathRecap, RECAP_WINDOW_MS, RecapEvent, RecapKind, death_recaps};
+pub use replay::{
+    AffectedSpan, EffectAnchorAt, EffectInstance, HealthTrack, Replay, ReplayAura, ReplayCast,
+    ReplayCastOutcome, ReplayDeath, ReplayUnit, StackChange, Track, UnitKind, replay,
+};
 pub use reports::damage::{DamageReport, PlayerDamage, damage_done};
 pub use reports::healing::{HealingReport, PlayerHealing, healing};
 pub use reports::taken::{DamageTakenReport, TakenAbility, TakenPlayer, damage_taken};

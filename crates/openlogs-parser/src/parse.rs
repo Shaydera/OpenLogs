@@ -41,6 +41,13 @@ fn parse_event<'a>(f: &Fields<'_, 'a>) -> Result<Event<'a>, ParseError> {
             name: f.str(2)?,
             difficulty: f.num(3)?,
         },
+        "WORLD_MARKER_PLACED" => Event::WorldMarkerPlaced {
+            instance_id: f.num(1)?,
+            marker: f.num(2)?,
+            x: f.num(3)?,
+            y: f.num(4)?,
+        },
+        "WORLD_MARKER_REMOVED" => Event::WorldMarkerRemoved { marker: f.num(1)? },
         "ENCOUNTER_START" => Event::EncounterStart(EncounterStart {
             encounter_id: f.num(1)?,
             name: f.str(2)?,

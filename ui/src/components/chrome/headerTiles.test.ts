@@ -114,6 +114,14 @@ describe('headerTiles', () => {
     ]);
   });
 
+  it('shows the range figures on the Replay tab and stays pending only while they load', () => {
+    const kpis = overviewFixture.kpis;
+    expect(text({ tab: 'replay', range: { startMs: 0, endMs: 1000 }, rangeKpis: kpis })[0]).toContain('Raid DPS|');
+    expect(text({ tab: 'replay', range: { startMs: 0, endMs: 1000 }, rangeKpis: kpis })[0]).not.toContain('|…|');
+    expect(text({ tab: 'replay', range: { startMs: 0, endMs: 1000 }, rangeKpis: null, reportLoading: true })[0]).toBe('Raid DPS|…|');
+    expect(text({ tab: 'replay' })[0]).toBe(text({ tab: 'overview' })[0]);
+  });
+
   it('keeps the pull figures without filters and follows the breakdown once filters are set', () => {
     const damage = { tab: 'damage' as const, data: damageReportFixture };
     expect(text({ tab: 'damage', report: damage, breakdown: breakdownFixture })[0]).toBe('Raid DPS|775.07k|370.96M damage');

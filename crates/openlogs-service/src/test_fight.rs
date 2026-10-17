@@ -38,6 +38,10 @@ pub fn fight(actors: Actors, mut events: Vec<Event>) -> Fight {
         broken_lines: 0,
         encounters: Vec::new(),
         fail_reasons: Vec::new(),
+        positions: Vec::new(),
+        raid_markers: Vec::new(),
+        world_markers: Vec::new(),
+        ui_map_id: None,
     }
 }
 

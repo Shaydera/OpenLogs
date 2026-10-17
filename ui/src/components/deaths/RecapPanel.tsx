@@ -4,14 +4,17 @@ import { useFocusRequest } from '../../hooks/useFocusRequest';
 import { classIcon } from '../../icons';
 import { formatAmount, formatEventTime, formatEventTimeTenths, formatPercent } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import { useApp } from '../../store';
+import { replayOffered, useApp } from '../../store';
 import { GameIcon, MonogramTile } from '../GameIcon';
 import { classColor, shortName } from '../overview/players';
 import { hitIcon, hitName, reportSpellName, rosterIndex } from '../reports/reportData';
+import { deathJumpMs } from '../replay/playback';
 import { hitSource, recapCallout, recapPlot } from './recapModel';
 
 export function RecapPanel({ recap, report }: { recap: DeathRecap; report: DeathsReport }) {
   const openPlayer = useApp((s) => s.openPlayer);
+  const openReplayAt = useApp((s) => s.openReplayAt);
+  const withReplay = useApp(replayOffered);
   const titleRef = useRef<HTMLHeadingElement>(null);
   useFocusRequest('page', () => titleRef.current);
   const spellName = (id: number) => reportSpellName(report.spells, id);
@@ -60,6 +63,11 @@ export function RecapPanel({ recap, report }: { recap: DeathRecap; report: Death
             )}
             {resurrected && ` · ${resurrected}`}
           </span>
+          {withReplay && (
+            <button type="button" className="lnk recap-replay" onClick={() => openReplayAt(deathJumpMs(recap.t))}>
+              {t('replay.showIn')}
+            </button>
+          )}
         </div>
         <div className="recap-stats" role="group" aria-label={t('recap.kpis')}>
           <div className="recap-stat">
