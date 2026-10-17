@@ -26,6 +26,14 @@ pub enum Event<'a> {
         name: &'a str,
         difficulty: u32,
     },
+    MapChange {
+        ui_map_id: u32,
+        name: &'a str,
+        max_x: f32,
+        min_x: f32,
+        max_y: f32,
+        min_y: f32,
+    },
     WorldMarkerPlaced {
         instance_id: u32,
         marker: u8,

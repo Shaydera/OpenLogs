@@ -153,6 +153,23 @@ fn parses_world_marker_placed_and_removed() {
 }
 
 #[test]
+fn parses_map_change() {
+    assert_eq!(
+        event(
+            r#"10/7/2026 18:58:24.0242  MAP_CHANGE,2608,"The Venomous Abyss",885.000000,265.000000,127.500000,-802.500000"#
+        ),
+        Event::MapChange {
+            ui_map_id: 2608,
+            name: "The Venomous Abyss",
+            max_x: 885.0,
+            min_x: 265.0,
+            max_y: 127.5,
+            min_y: -802.5,
+        }
+    );
+}
+
+#[test]
 fn unmodelled_events_are_unhandled() {
     for (line, name) in [
         (
