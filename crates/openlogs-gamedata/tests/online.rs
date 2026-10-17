@@ -1,7 +1,7 @@
 //! Hits the real services. `cargo test -p openlogs-gamedata --test online -- --ignored`
 
 use openlogs_gamedata::{
-    HttpFetch, download_boss_portraits, download_dungeons, download_spell_tables,
+    HttpFetch, download_boss_portraits, download_dungeons, download_map_art, download_spell_tables,
 };
 
 #[test]
@@ -27,4 +27,18 @@ fn wago_tools_provides_every_table() {
     let portraits = download_boss_portraits(&fetch).unwrap();
     assert!(portraits.len() > 1_000, "got {} portraits", portraits.len());
     assert!(portraits.portrait(3492).is_some(), "Ula'tek has a portrait");
+    let map_art = download_map_art(&fetch).unwrap();
+    assert!(
+        map_art.maps.len() > 1_000,
+        "got {} maps",
+        map_art.maps.len()
+    );
+    let vile_crypt = map_art.maps[&2608];
+    assert_eq!(
+        (vile_crypt.zone, vile_crypt.floor, vile_crypt.raid),
+        (16915, Some(2), true)
+    );
+    let sszorak_room = map_art.maps[&2609];
+    assert_eq!((sszorak_room.zone, sszorak_room.floor), (16915, Some(3)));
+    assert_eq!(map_art.pins[&3420].ui_map_id, 2609, "Sszorak has a pin");
 }

@@ -4,6 +4,7 @@ use crate::boss_portraits::{BossPortraitError, BossPortraitTable};
 use crate::channel_spells::{ChannelSpellError, ChannelSpells};
 use crate::dungeons::{DungeonTable, DungeonTableError};
 use crate::fetch::{Fetch, FetchError};
+use crate::map_art::{MapArtError, MapArtTable};
 use crate::spell_icons::{SpellIconError, SpellIconTable};
 
 pub const WAGO_SPELL_MISC_URL: &str = "https://wago.tools/db2/SpellMisc/csv";
@@ -13,6 +14,10 @@ pub const WAGO_DUNGEON_ENCOUNTER_URL: &str = "https://wago.tools/db2/DungeonEnco
 pub const WAGO_JOURNAL_ENCOUNTER_URL: &str = "https://wago.tools/db2/JournalEncounter/csv";
 pub const WAGO_JOURNAL_ENCOUNTER_CREATURE_URL: &str =
     "https://wago.tools/db2/JournalEncounterCreature/csv";
+pub const WAGO_UI_MAP_ASSIGNMENT_URL: &str = "https://wago.tools/db2/UiMapAssignment/csv";
+pub const WAGO_UI_MAP_GROUP_MEMBER_URL: &str = "https://wago.tools/db2/UiMapGroupMember/csv";
+pub const WAGO_AREA_TABLE_URL: &str = "https://wago.tools/db2/AreaTable/csv";
+pub const WAGO_MAP_URL: &str = "https://wago.tools/db2/Map/csv";
 
 #[derive(Debug, Error)]
 pub enum DownloadError {
@@ -26,6 +31,8 @@ pub enum DownloadError {
     Dungeons(#[from] DungeonTableError),
     #[error("downloaded boss portrait data is invalid: {0}")]
     BossPortraits(#[from] BossPortraitError),
+    #[error("downloaded map art data is invalid: {0}")]
+    MapArt(#[from] MapArtError),
 }
 
 /// The tables read from the spells' `SpellMisc` rows.
@@ -60,5 +67,21 @@ pub fn download_boss_portraits<F: Fetch>(fetch: &F) -> Result<BossPortraitTable,
         &encounters,
         &creatures,
         &manifest,
+    )?)
+}
+
+/// Builds the replay's map art index from the wago.tools exports.
+pub fn download_map_art<F: Fetch>(fetch: &F) -> Result<MapArtTable, DownloadError> {
+    let assignments = fetch.get(WAGO_UI_MAP_ASSIGNMENT_URL)?;
+    let group_members = fetch.get(WAGO_UI_MAP_GROUP_MEMBER_URL)?;
+    let areas = fetch.get(WAGO_AREA_TABLE_URL)?;
+    let maps = fetch.get(WAGO_MAP_URL)?;
+    let encounters = fetch.get(WAGO_JOURNAL_ENCOUNTER_URL)?;
+    Ok(MapArtTable::from_csv(
+        &assignments,
+        &group_members,
+        &areas,
+        &maps,
+        &encounters,
     )?)
 }
