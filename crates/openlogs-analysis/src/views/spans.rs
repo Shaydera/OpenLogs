@@ -50,7 +50,7 @@ impl AuraLine {
 struct Cast {
     slot: Slot,
     at: i32,
-    /// The caster's next cast of the name.
+    /// The caster's next cast of the same spell.
     next: Option<i32>,
 }
 
@@ -71,8 +71,8 @@ pub(crate) struct SpanIndex<'a> {
     /// Slots with a spell the game channels, unless its name was empowered in the request:
     /// empowered spells keep their own drawing.
     game_slots: Vec<bool>,
-    /// The success times of each slot's casts.
-    casts: Vec<Vec<i32>>,
+    /// The success times and spells of each slot's casts.
+    casts: Vec<Vec<(i32, SpellId)>>,
     /// Each unit's begin casts and successes of any spell but curated procs, which are no presses.
     unit_casts: Vec<Vec<i32>>,
     /// Spells at least half of whose presses with their self aura are clean channels in the pull.
@@ -135,10 +135,10 @@ impl<'a> SpanIndex<'a> {
                 .filter(|(item, _)| item.kind == CastKind::Instant)
                 .map(|(item, _)| (item.caster, item.spell)),
         );
-        let mut casts: Vec<Vec<i32>> = vec![Vec::new(); slots.len()];
+        let mut casts: Vec<Vec<(i32, SpellId)>> = vec![Vec::new(); slots.len()];
         for (item, success) in succeeded() {
             if let Some(slot) = slots.find(item.caster, item.spell) {
-                casts[slot].push(fight.events[success].t);
+                casts[slot].push((fight.events[success].t, item.spell));
             }
         }
         for times in &mut casts {
@@ -292,11 +292,12 @@ impl<'a> SpanIndex<'a> {
         let at = self.fight.events[item.success?].t;
         let slot = self.slots.find(item.caster, item.spell)?;
         let casts = &self.casts[slot];
-        Some(Cast {
-            slot,
-            at,
-            next: casts.get(casts.partition_point(|&t| t <= at)).copied(),
-        })
+        // A same-name spell (Divine Hymn's tick) is no recast of the channel.
+        let next = casts[casts.partition_point(|&(t, _)| t <= at)..]
+            .iter()
+            .find(|&&(_, spell)| spell == item.spell)
+            .map(|&(t, _)| t);
+        Some(Cast { slot, at, next })
     }
 
     /// The press's self aura of its spell logged with the success (the nearest within
@@ -327,7 +328,7 @@ impl<'a> SpanIndex<'a> {
     }
 
     /// The line that ended `aura`: its removal, or a recast's takeover, the caster's apply or
-    /// refresh of the name at or after his `next` cast of the name. Earlier lines stay this
+    /// refresh of the spell at or after his `next` cast of it. Earlier lines stay this
     /// cast's: the game logs some auras applied and refreshed in one millisecond, and extends
     /// others without a cast.
     fn ended(&self, slot: Slot, aura: &AuraLine, next: Option<i32>) -> Option<AuraLine> {
@@ -337,7 +338,7 @@ impl<'a> SpanIndex<'a> {
             auras[auras.partition_point(|later| later.t < next)..]
                 .iter()
                 .take_while(|later| removed.is_none_or(|removed| later.index < removed.index))
-                .find(|later| later.index > aura.index)
+                .find(|later| later.index > aura.index && later.spell == aura.spell)
                 .copied()
         });
         taken_over.or(removed)

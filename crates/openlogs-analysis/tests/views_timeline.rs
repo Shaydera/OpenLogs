@@ -1359,6 +1359,32 @@ fn only_a_line_after_the_next_press_takes_a_channel_over() {
 }
 
 #[test]
+fn a_same_name_tick_spell_does_not_end_the_channel() {
+    let mut b = FightBuilder::new(60_000);
+    let priest = b.player("Player-6", "Umbrasp-Frostwolf-EU", 257);
+    let ally = b.player("Player-7", "Shotz-Frostwolf-EU", 254);
+    let hymn = b.spell(64843, "Divine Hymn");
+    let tick = b.spell(64844, "Divine Hymn");
+    let buff = |action| aura(action, AuraType::Buff, None);
+    b.push(999, priest, priest, hymn, buff(AuraAction::Applied));
+    b.push(1_000, priest, priest, tick, buff(AuraAction::Applied));
+    b.push(1_000, priest, 0, tick, EventKind::CastSuccess);
+    b.push(1_000, priest, 0, hymn, EventKind::CastSuccess);
+    b.push(1_010, priest, ally, tick, EventKind::Heal(heal(900, 0)));
+    for at in [2_000, 3_000, 4_000, 5_000] {
+        b.push(at, priest, 0, tick, EventKind::CastSuccess);
+        b.push(at, priest, priest, tick, buff(AuraAction::Refresh));
+        b.push(at + 10, priest, ally, tick, EventKind::Heal(heal(900, 0)));
+    }
+    b.push(5_000, priest, priest, hymn, buff(AuraAction::Removed));
+    let fight = b.build();
+    let view = casts_in(&fight, (0, 60_000));
+    let cast = cast_mark(&view, hymn, 1_000).unwrap();
+    assert_eq!(cast.kind, ItemKind::Channel);
+    assert_eq!(cast.channel.as_ref().and_then(|c| c.end_ms), Some(5_000));
+}
+
+#[test]
 fn a_self_aura_logged_a_few_milliseconds_off_the_press_still_opens_its_channel() {
     let mut b = FightBuilder::new(60_000);
     let monk = b.player("Player-11", "Kicks-Frostwolf-EU", 269);
