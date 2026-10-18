@@ -2,8 +2,6 @@ import { type KeyboardEvent, type ReactNode, useRef } from 'react';
 import { useFocusRequest } from '../../hooks/useFocusRequest';
 import { type MessageKey, t } from '../../i18n/i18n';
 import { type FightTab, replayOffered, useApp } from '../../store';
-import { OptionsMenu } from './OptionsMenu';
-import { ViewSwitch } from './ViewSwitch';
 
 type TabEntry = { key: MessageKey; tab: FightTab };
 
@@ -41,17 +39,12 @@ const replayIcon = (
   </svg>
 );
 
-/**
- * The fight's tab row: `lead` at its start, the Replay tab at the right of the tabs, and the options menu, view switch and
- * replay toggle at the right end; the replay has none of them, a whole Mythic+ run no replay.
- */
+/** The fight's tab row: `lead` at its start, then the tabs with the Replay tab last; a whole Mythic+ run has no replay. */
 export function TabBar({ lead }: { lead?: ReactNode }) {
   const tab = useApp((s) => s.tab);
   const withReplay = useApp(replayOffered);
   const tabs = withReplay ? TABS : TABS_WITHOUT_REPLAY;
   const setTab = useApp((s) => s.setTab);
-  const split = useApp((s) => s.replay.split);
-  const setReplaySplit = useApp((s) => s.setReplaySplit);
   const tabRefs = useRef<Map<FightTab, HTMLButtonElement>>(new Map());
   useFocusRequest('tab', () => tabRefs.current.get(tab));
 
@@ -93,21 +86,6 @@ export function TabBar({ lead }: { lead?: ReactNode }) {
           );
         })}
       </div>
-      {tab !== 'replay' && (
-        <div className="tab-tools">
-          <OptionsMenu />
-          <ViewSwitch />
-          {withReplay && (
-            <button type="button" className={split ? 'split-toggle on' : 'split-toggle'} aria-pressed={split} onClick={() => setReplaySplit(!split)}>
-              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-                <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
-                <path d="M8 2.5 V13.5" stroke="currentColor" strokeWidth="1.4" />
-              </svg>
-              {t('replay.alongside')}
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }

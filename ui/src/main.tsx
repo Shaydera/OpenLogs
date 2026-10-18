@@ -30,9 +30,11 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { applyTheme, readTheme, readThemeMode } from './theme';
+import { applyUiScale, currentAutoScale, effectiveScale, readUiSize } from './uiScale';
 
 // Before the first render, so the stored theme paints from the start.
 applyTheme(readTheme(), readThemeMode());
+applyUiScale(effectiveScale(currentAutoScale(), readUiSize()));
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

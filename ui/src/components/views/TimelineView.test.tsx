@@ -228,6 +228,54 @@ describe('TimelineView', () => {
     expect(screen.queryByRole('dialog', { name: 'Arcane Blast' })).toBeNull();
   });
 
+  describe('scaled', () => {
+    const scaled = (element: HTMLElement) => {
+      Object.defineProperty(element, 'currentCSSZoom', { value: 1.6, configurable: true });
+      vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 0, 1_600, 40));
+    };
+    const arcaneBlast = () => screen.getByRole('button', { name: 'Arcane Blast at 2:08 by Faelan' });
+
+    it('opens a card under the pointer and keeps it inside the body', () => {
+      const { container } = render(<TimelineView tab="casts" />);
+      scaled(container.querySelector<HTMLElement>('.tl-body')!);
+      fireEvent.click(arcaneBlast(), { clientX: 900, detail: 1 });
+      expect(screen.getByRole('dialog')).toHaveStyle({ left: '514px' });
+      fireEvent.click(arcaneBlast(), { clientX: 1690, detail: 1 });
+      expect(screen.getByRole('dialog')).toHaveStyle({ left: '680px' });
+    });
+
+    it('puts a power reading under the pointer', () => {
+      useApp.setState({ tab: 'resources', timeline: resourcesTimelineFixture });
+      render(<TimelineView tab="resources" />);
+      const health = screen.getByRole('img', { name: /^Health, lowest/ });
+      scaled(health as unknown as HTMLElement);
+      fireEvent.mouseMove(health, { clientX: 1_020 });
+      expect(screen.getByText(/^Health 400.00k/)).toHaveStyle({ left: '575px' });
+    });
+
+    it('drops a ruler drag when the window resizes', () => {
+      render(<TimelineView tab="casts" />);
+      const ruler = screen.getByTestId('timeline-ruler');
+      scaled(ruler);
+      fireEvent.mouseDown(ruler, { button: 0, clientX: 260 });
+      fireEvent.mouseMove(document, { clientX: 420 });
+      fireEvent(window, new Event('resize'));
+      expect(ruler.querySelector('.tl-drag')).toBeNull();
+      fireEvent.mouseUp(document, { clientX: 420 });
+      expect(zoom()).toEqual({ startMs: 120_000, endMs: 140_000 });
+    });
+
+    it('draws the ruler drag band under the pointer', () => {
+      render(<TimelineView tab="casts" />);
+      const ruler = screen.getByTestId('timeline-ruler');
+      scaled(ruler);
+      fireEvent.mouseDown(ruler, { button: 0, clientX: 260 });
+      fireEvent.mouseMove(document, { clientX: 420 });
+      expect(ruler.querySelector('.tl-drag')).toHaveStyle({ left: '100px', width: '100px' });
+      fireEvent.mouseUp(document, { clientX: 420 });
+    });
+  });
+
   it('pins a card from the keyboard on its close button and gives the focus back on Escape', async () => {
     render(<TimelineView tab="casts" />);
     const mark = screen.getByRole('button', { name: 'Arcane Blast at 2:08 by Faelan' });

@@ -55,6 +55,16 @@ describe('useBrush', () => {
     expect(shown()).toBe('full');
   });
 
+  it('ends a drag when the window resizes without committing a range', () => {
+    const { onChange } = setup();
+    fireEvent.mouseDown(screen.getByTestId('plot'), { clientX: 400, button: 0 });
+    fireEvent.mouseMove(document, { clientX: 702, buttons: 1 });
+    fireEvent(window, new Event('resize'));
+    expect(shown()).toBe('full');
+    fireEvent.mouseUp(document, { clientX: 702 });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it('reports a click without a drag and moves one edge when its handle is dragged', () => {
     const { onChange, onClick } = setup();
     fireEvent.mouseDown(screen.getByTestId('plot'), { clientX: 400, button: 0 });

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
@@ -44,5 +44,49 @@ describe('Settings dialog', () => {
     const dialog = await openDialog();
     expect(await within(dialog).findByText('410,805 spells')).toBeInTheDocument();
     expect(within(dialog).queryByText('Channel spells')).toBeNull();
+  });
+
+  describe('UI size', () => {
+    it('reads out the automatic and the resulting size', async () => {
+      const dialog = await openDialog();
+      expect(within(dialog).getByText('Auto 100% · now 100%')).toBeInTheDocument();
+    });
+
+    it('applies the chosen size', async () => {
+      const dialog = await openDialog();
+      fireEvent.change(within(dialog).getByRole('slider', { name: 'Adjustment' }), { target: { value: '110' } });
+      expect(useApp.getState().uiSize).toBe(110);
+      expect(within(dialog).getByText('Auto 100% · now 110%')).toBeInTheDocument();
+    });
+
+    it('steps by the mouse wheel within the bounds', async () => {
+      const dialog = await openDialog();
+      const slider = within(dialog).getByRole('slider', { name: 'Adjustment' });
+      useApp.getState().setUiSize(50);
+      fireEvent.wheel(slider, { deltaY: 100 });
+      expect(useApp.getState().uiSize).toBe(50);
+      useApp.getState().setUiSize(200);
+      fireEvent.wheel(slider, { deltaY: -100 });
+      expect(useApp.getState().uiSize).toBe(200);
+      useApp.getState().setUiSize(125);
+      fireEvent.wheel(slider, { deltaY: -100 });
+      expect(useApp.getState().uiSize).toBe(130);
+    });
+
+    it('ignores a horizontal wheel swipe', async () => {
+      const dialog = await openDialog();
+      const slider = within(dialog).getByRole('slider', { name: 'Adjustment' });
+      expect(fireEvent.wheel(slider, { deltaX: 40, deltaY: 0 })).toBe(true);
+      expect(useApp.getState().uiSize).toBe(100);
+    });
+
+    it('resets to 100', async () => {
+      const dialog = await openDialog();
+      const reset = within(dialog).getByRole('button', { name: 'Reset' });
+      expect(reset).toBeDisabled();
+      useApp.getState().setUiSize(90);
+      await userEvent.click(reset);
+      expect(useApp.getState().uiSize).toBe(100);
+    });
   });
 });

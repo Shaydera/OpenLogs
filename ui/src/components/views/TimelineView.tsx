@@ -14,6 +14,7 @@ import { itemTip } from './itemTip';
 import { ResourceLanes } from './ResourceLanes';
 import { ContextRow, DEBUFF_COLOURS, LaneRow, type MarkHandler, laneKey } from './TimelineLane';
 import { Playhead, Ruler } from './TimelineRuler';
+import { cssZoom } from '../../cssZoom';
 import { TIP_PX, type Tip, TipCard, itemReplayMs } from './TimelineTip';
 import { useTimelineGestures } from './useTimelineGestures';
 import { TAB_TITLE, ViewFailure, ViewHead } from './ViewHead';
@@ -163,9 +164,10 @@ export function TimelineView({ tab }: { tab: FilterTab }) {
 function cardPoint(body: HTMLElement | null, event: ReactMouseEvent<HTMLElement>, keyboard: boolean) {
   const box = body?.getBoundingClientRect();
   const mark = keyboard ? event.currentTarget.getBoundingClientRect() : null;
-  const x = (mark ? mark.left : event.clientX) - (box?.left ?? 0);
-  const y = (mark ? mark.bottom : event.clientY) - (box?.top ?? 0);
-  return { x: box ? Math.max(0, Math.min(x, box.width - TIP_PX - 14)) : x, y };
+  const zoom = cssZoom(body);
+  const x = ((mark ? mark.left : event.clientX) - (box?.left ?? 0)) / zoom;
+  const y = ((mark ? mark.bottom : event.clientY) - (box?.top ?? 0)) / zoom;
+  return { x: box ? Math.max(0, Math.min(x, box.width / zoom - TIP_PX - 14)) : x, y };
 }
 
 const debuffNames = (timeline: Timeline, names: ViewNames) => [...new Set(timeline.legend.map((spellId) => names.spell(spellId)))];

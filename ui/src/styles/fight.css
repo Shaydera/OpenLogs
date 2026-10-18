@@ -3,7 +3,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 16px;
-  padding: 12px 28px;
+  padding: 3px 28px;
   border-bottom: 1px solid var(--line-soft);
   background: var(--header);
   color: var(--text);
@@ -57,26 +57,32 @@
   font: 600 26px var(--font-label);
 }
 .fight-page {
-  max-width: 1440px;
+  --page-top: 12px;
+  --page-gap: 12px;
+  max-width: 1656px;
   width: 100%;
   box-sizing: border-box;
   margin: 0 auto;
-  padding: 18px 28px 40px;
+  padding: var(--page-top) 28px 40px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--page-gap);
 }
 .fight-page.fight-page-overview {
-  padding: 22px 28px 40px;
-  gap: 20px;
+  --page-top: 16px;
+  --page-gap: 14px;
 }
 .fight-column {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 .fight-page-overview .fight-column {
-  gap: 20px;
+  gap: 14px;
+}
+/* The toolbar is the tab row's second line, so it sits closer to the tabs than the other header blocks. */
+.fight-column > .report-toolbar {
+  margin-top: -4px;
 }
 /* Replay tab and split view span the window; header, tabs and the range line keep the report column. */
 .fight-page.fight-page-full,
@@ -87,10 +93,15 @@
 .fight-page-full .fight-column,
 .fight-page-wide .fight-column {
   width: 100%;
-  max-width: 1440px;
+  max-width: 1656px;
   box-sizing: border-box;
   margin: 0 auto;
   padding: 0 28px;
+}
+/* The split page itself is not zoomed: its spacing scales by hand, so turning the split on does not shift the header. */
+.fight-page.fight-page-wide {
+  padding-top: calc(var(--page-top) * var(--ui-scale, 1));
+  gap: calc(var(--page-gap) * var(--ui-scale, 1));
 }
 .fight-page-wide .tabpanel {
   padding: 0 14px;
@@ -106,16 +117,21 @@
   padding-top: 6px;
   padding-bottom: 0;
 }
-.fight-view-full .appbar {
-  padding-block: 6px;
-}
 .fight-page-full .tabpanel {
   flex: 1 1 auto;
   gap: 4px;
 }
 /* Loading, failure and the no-positions notice line up with the report column. */
 .fight-page-full .tabpanel > :not(.replay-strip, .replay) {
-  margin-inline: max(28px, calc((100% - 1384px) / 2));
+  margin-inline: max(28px, calc((100% - 1600px) / 2));
+}
+/* Zoomed like `.ui-scaled`. The replay stage and the split's replay pane stay outside: the HUD's dense and narrow thresholds are in native px. */
+.fight-page:not(.fight-page-full, .fight-page-wide),
+.fight-page-full .fight-column,
+.fight-page-wide .fight-column,
+.fight-page-full .tabpanel > :not(.replay),
+.replay-split-report {
+  zoom: var(--ui-scale, 1);
 }
 /* The pull header above the tabs: portrait, name and facts, the tab's key figures. */
 .fight-header {

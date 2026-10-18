@@ -45,6 +45,7 @@ import { effectiveView, lanesOf } from './reportViews';
 import { type FilterTab, isFilterTab, SIDES } from './scopeSides';
 import { readStored, writeStored } from './storage';
 import { type ThemeMode, type ThemeName, readTheme, readThemeMode, storeTheme, storeThemeMode } from './theme';
+import { normalizeUiSize, readUiSize, storeUiSize } from './uiScale';
 
 const HIDE_ABORTED_KEY = 'hideAborted';
 const AUG_DELTA_KEY = 'showAugDelta';
@@ -257,6 +258,7 @@ interface State {
   hideProcs: boolean;
   theme: ThemeName;
   themeMode: ThemeMode;
+  uiSize: number;
   /** Casts tab: the chosen row's key (`null` = the top row) and the spell sort; kept per pull. */
   castsRow: string | null;
   castsSort: CastsSort;
@@ -326,6 +328,7 @@ interface Actions {
   setHideProcs(hide: boolean): Promise<void>;
   setTheme(theme: ThemeName): void;
   setThemeMode(mode: ThemeMode): void;
+  setUiSize(percent: number): void;
   selectCastsRow(key: string): void;
   setCastsSort(sort: CastsSort): void;
   setAuraKind(kind: AuraKind): Promise<void>;
@@ -467,6 +470,7 @@ export function initialState(): State {
     hideProcs: readFlag(HIDE_PROCS_KEY, true),
     theme: readTheme(),
     themeMode: readThemeMode(),
+    uiSize: readUiSize(),
     castsRow: null,
     castsSort: DEFAULT_CASTS_SORT,
     auraKind: 'buffs',
@@ -1171,6 +1175,12 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   setThemeMode(mode) {
     storeThemeMode(mode);
     set({ themeMode: mode });
+  },
+
+  setUiSize(percent) {
+    const uiSize = normalizeUiSize(percent);
+    storeUiSize(uiSize);
+    set({ uiSize });
   },
 
   selectCastsRow(key) {
