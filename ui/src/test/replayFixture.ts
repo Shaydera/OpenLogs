@@ -21,8 +21,8 @@ export const replayFixture: ReplayData = {
     { actor: 12, name: 'Ashen Husk', kind: 'add', specId: null, classId: null, owner: null, addNumber: 2 },
   ],
   tracks: [
-    { actor: 1, t: [0, 1_000], x: [100, 101], y: [200, 201], facing: [0, 0] },
-    { actor: 10, t: [0, 1_000], x: [105, 105], y: [205, 205], facing: [0, 0] },
+    { actor: 1, t: [0, 1_000], x: [100, 101], y: [200, 201], facing: [0, 0], map: [2001, 2001] },
+    { actor: 10, t: [0, 1_000], x: [105, 105], y: [205, 205], facing: [0, 0], map: [2001, 2001] },
   ],
   health: [],
   casts: [],
@@ -36,4 +36,6 @@ export const replayFixture: ReplayData = {
     { kind: 'boss', number: 2, startMs: 180_000, endMs: 300_000, name: null },
   ],
   deaths: [{ actor: 3, t: 194_000, until: null }],
+  maps: [],
+  arenaFrame: null,
 };

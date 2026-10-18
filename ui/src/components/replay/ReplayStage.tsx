@@ -1,4 +1,4 @@
-import { type RefObject, useEffect, useMemo, useRef } from 'react';
+import { type RefObject, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { EffectInstance, ReplayData } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { type IconRef, iconSrc } from '../../icons';
@@ -7,9 +7,10 @@ import { useApp } from '../../store';
 import { pressGesture, wheelZoomFactor } from '../views/zoomGeometry';
 import { type Camera, fitCamera, panCamera, pinchCamera, zoomAt } from './camera';
 import { effectsAt } from './effects';
+import { unitLabel } from './hudIndex';
 import { replayNow } from './ReplayControls';
 import { type StageColors, readStageColors } from './stageColors';
-import { STAGE_PAD_PX, type StageIndex, drawStage, hitUnit, indexStage, placeUnit, placeUnits, stageImage } from './stageDraw';
+import { STAGE_PAD_PX, type StageIndex, drawStage, effectsOnStage, hitUnit, indexStage, onOtherFloor, placeUnit, placeUnits, stageImage, stageImageFailed } from './stageDraw';
 
 const LINE_PX = 16;
 const PAGE_PX = 800;
@@ -19,12 +20,18 @@ const KEY_ZOOM = 1.25;
 const EMPTY_CAMERA: Camera = { cx: 0, cy: 0, scale: 4 };
 
 type Point = { x: number; y: number };
+type StageNotes = { otherFloor: string[]; mapUnavailable: boolean };
+const NO_NOTES: StageNotes = { otherFloor: [], mapUnavailable: false };
+const notesKey = ({ otherFloor, mapUnavailable }: StageNotes) => JSON.stringify([otherFloor, mapUnavailable]);
+const mapArtTable = () => iconTables().mapArt;
 
 /** The top-down map: units at their logged positions with the effects up. Wheel or pinch zooms, a drag pans, a double click fits, a click selects. */
 export function ReplayStage({ data, highlight, selectedEffect = null }: { data: ReplayData; highlight: number[] | null; selectedEffect?: EffectInstance | null }) {
   const host = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const index = useMemo(() => indexStage(data), [data]);
+  const mapArt = useSyncExternalStore(subscribeIconTables, mapArtTable);
+  const index = useMemo(() => indexStage(data, mapArt), [data, mapArt]);
+  const [notes, setNotes] = useState(NO_NOTES);
   const highlighted = useRef<ReadonlySet<number> | null>(null);
   const pickedEffect = useRef<EffectInstance | null>(null);
   const invalidate = useRef<() => void>(() => {});
@@ -43,18 +50,38 @@ export function ReplayStage({ data, highlight, selectedEffect = null }: { data: 
 
   useEffect(() => {
     if (!host.current || !canvas.current) return;
-    const stage = mountStage(host.current, canvas.current, data, index, { highlight: highlighted, selectedEffect: pickedEffect });
+    const stage = mountStage(host.current, canvas.current, data, index, { highlight: highlighted, selectedEffect: pickedEffect }, setNotes);
     invalidate.current = stage.invalidate;
     return () => {
       invalidate.current = () => {};
       stage.dispose();
+      setNotes(NO_NOTES);
     };
   }, [data, index]);
 
+  const otherFloorNames = notes.otherFloor.join(t('replay.separator'));
   return (
-    <div ref={host} className="replay-stage" role="application" aria-roledescription={t('replay.stageRole')} aria-label={t('replay.stage')} tabIndex={0}>
-      <canvas ref={canvas} />
-    </div>
+    <>
+      <div ref={host} className="replay-stage" role="application" aria-roledescription={t('replay.stageRole')} aria-label={t('replay.stage')} tabIndex={0}>
+        <canvas ref={canvas} />
+      </div>
+      {(notes.otherFloor.length > 0 || notes.mapUnavailable) && (
+        <div className="hud-notes">
+          {notes.otherFloor.length > 0 && (
+            <span
+              className="hud-note hud-note-floor"
+              role="note"
+              tabIndex={0}
+              title={otherFloorNames}
+              aria-label={t('replay.otherFloorNamed', { count: notes.otherFloor.length, names: otherFloorNames })}
+            >
+              {t('replay.otherFloor', { count: notes.otherFloor.length })}
+            </span>
+          )}
+          {notes.mapUnavailable && <span className="hud-note">{t('replay.mapUnavailable')}</span>}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -65,6 +92,7 @@ function mountStage(
   data: ReplayData,
   index: StageIndex,
   picks: { highlight: RefObject<ReadonlySet<number> | null>; selectedEffect: RefObject<EffectInstance | null> },
+  onNotes: (notes: StageNotes) => void,
 ) {
   const ctx = canvas.getContext('2d');
   const root = document.documentElement;
@@ -78,6 +106,7 @@ function mountStage(
   let colors: StageColors | null = null;
   let colorsKey = '';
   let frameId = 0;
+  let shownNotes = notesKey(NO_NOTES);
 
   const touches = new Map<number, Point>();
   let press: { pointerId: number; start: Point; origin: Camera; dragging: boolean } | null = null;
@@ -101,26 +130,36 @@ function mountStage(
     return true;
   };
 
-  const fit = (): Camera => (index.bounds ? fitCamera(index.bounds, w, h, STAGE_PAD_PX) : EMPTY_CAMERA);
+  const fit = (): Camera => {
+    const frame = index.stageMap.frame ?? index.bounds;
+    return frame ? fitCamera(frame, w, h, STAGE_PAD_PX) : EMPTY_CAMERA;
+  };
 
-  /** The camera at `now`, centred on the selected unit while following it. */
+  /** The camera at `now`, centred on the selected unit while following it, and held while that unit is on another floor. */
   const camera = (now: number): Camera => {
     cam ??= fit();
     const { selected, follow } = useApp.getState().replay;
     const followed = follow && selected !== null ? index.byActor.get(selected) : undefined;
-    const at = followed && placeUnit(followed, now);
+    const at = followed && !onOtherFloor(index, followed, now) && placeUnit(followed, now);
     if (at) cam = { ...cam, cx: at.x, cy: at.y };
     return cam;
   };
 
   const placedAt = (now: number, view = camera(now)) => placeUnits(index, now, useApp.getState().replay.filters, view, w, h);
 
+  const report = (notes: StageNotes) => {
+    const key = notesKey(notes);
+    if (key === shownNotes) return;
+    shownNotes = key;
+    onNotes(notes);
+  };
+
   const draw = () => {
     if (!ctx || !colors || w <= 0 || h <= 0) return;
     const now = replayNow();
     const { replay } = useApp.getState();
     const view = camera(now);
-    const placed = placedAt(now, view);
+    const { placed, otherFloor } = placedAt(now, view);
     const hovered = hover && !press?.dragging && !pinch ? hitUnit(placed, hover.x, hover.y) : null;
     element.style.cursor = press?.dragging || pinch ? 'grabbing' : hovered ? 'pointer' : '';
     const tables = iconTables();
@@ -128,6 +167,9 @@ function mountStage(
       const src = iconSrc(icon, tables);
       return src ? stageImage(src, invalidate) : null;
     };
+    const mapUrl = replay.layers.map ? index.stageMap.imageUrl : null;
+    const mapArt = mapUrl ? stageImage(mapUrl, invalidate) : null;
+    report({ otherFloor: otherFloor.map((stage) => unitLabel(stage.unit)), mapUnavailable: mapUrl !== null && mapArt === null && stageImageFailed(mapUrl) });
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
     drawStage(ctx, {
@@ -142,9 +184,10 @@ function mountStage(
       selected: replay.selected,
       highlight: picks.highlight.current,
       hover: hovered,
-      effects: replay.layers.effects ? effectsAt(data, now) : [],
+      effects: replay.layers.effects ? effectsOnStage(index, effectsAt(data, now), now) : [],
       selectedEffect: picks.selectedEffect.current,
       image,
+      mapArt,
     });
   };
 
@@ -229,7 +272,7 @@ function mountStage(
     if (!press || event.pointerId !== press.pointerId) return;
     if (clicked && !press.dragging) {
       const at = local(event);
-      const hit = hitUnit(placedAt(replayNow()), at.x, at.y);
+      const hit = hitUnit(placedAt(replayNow()).placed, at.x, at.y);
       if (hit) useApp.getState().selectReplayUnit(hit.stage.unit.actor);
     }
     press = null;

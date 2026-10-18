@@ -8,8 +8,8 @@ use openlogs_parser::{
 use crate::markers::MarkerState;
 use crate::model::{
     ChallengeMode, END_GRACE_LINES, END_GRACE_MICROS, FightSummary, LogIndex,
-    MYTHIC_KEYSTONE_DIFFICULTY, Outcome, PRELUDE_MICROS, RESUME_MAX_GAP_MICROS, RosterEntry,
-    SUPPORTED_LOG_VERSION, WorldMarker,
+    MYTHIC_KEYSTONE_DIFFICULTY, MapBounds, Outcome, PRELUDE_MICROS, RESUME_MAX_GAP_MICROS,
+    RosterEntry, SUPPORTED_LOG_VERSION, WorldMarker,
 };
 
 /// Byte range of one line in the log file.
@@ -34,6 +34,8 @@ pub struct IndexBuilder {
     /// Zone of the latest `ZONE_CHANGE`.
     zone: Option<String>,
     markers: MarkerState,
+    /// Latest bounds per `MAP_CHANGE` map ID; facts about the map, so never reset.
+    map_bounds: BTreeMap<u32, MapBounds>,
     /// `index` of the latest fight or run. Entries are numbered by their start line, so a
     /// run comes right before its boss pulls.
     last_index: u32,
@@ -56,6 +58,7 @@ impl IndexBuilder {
             last_fight_end: 0,
             zone: None,
             markers: MarkerState::default(),
+            map_bounds: BTreeMap::new(),
             last_index: 0,
         }
     }
@@ -166,6 +169,25 @@ impl IndexBuilder {
             Event::WorldMarkerRemoved { marker } => {
                 self.markers.remove(line.timestamp, *marker);
             }
+            Event::MapChange {
+                ui_map_id,
+                max_x,
+                min_x,
+                max_y,
+                min_y,
+                ..
+            } => {
+                self.map_bounds.insert(
+                    *ui_map_id,
+                    MapBounds {
+                        ui_map_id: *ui_map_id,
+                        min_x: *min_x,
+                        max_x: *max_x,
+                        min_y: *min_y,
+                        max_y: *max_y,
+                    },
+                );
+            }
             Event::ZoneChange { zone_id, name, .. } => {
                 self.markers.change_zone(line.timestamp, *zone_id);
                 self.zone = Some((*name).to_string());
@@ -245,6 +267,7 @@ impl IndexBuilder {
                         | Event::Unhandled { .. }
                         | Event::WorldMarkerPlaced { .. }
                         | Event::WorldMarkerRemoved { .. }
+                        | Event::MapChange { .. }
                 )
         });
         if same_moment && held.lines < END_GRACE_LINES {
@@ -374,6 +397,7 @@ impl IndexBuilder {
                 challenge: None,
                 run_index: self.run.as_ref().map(|run| run.summary.index),
                 world_markers: self.markers.active(),
+                map_bounds: self.map_bounds.values().copied().collect(),
             },
             hostile: HashMap::new(),
             player_names: HashMap::new(),
@@ -433,6 +457,7 @@ impl IndexBuilder {
                 }),
                 run_index: None,
                 world_markers: Vec::new(),
+                map_bounds: Vec::new(),
             },
             player_names: HashMap::new(),
             last_pull: None,

@@ -10,6 +10,7 @@ const TABLES: { key: keyof Omit<GameDataManifest, 'fetchedUnixMs'>; name: Messag
   { key: 'channelSpells', name: 'settings.channelSpells', entries: 'settings.entries.spellIcons' },
   { key: 'dungeons', name: 'settings.dungeons', entries: 'settings.entries.dungeons' },
   { key: 'bossPortraits', name: 'settings.bossPortraits', entries: 'settings.entries.bossPortraits' },
+  { key: 'mapArt', name: 'settings.mapArt', entries: 'settings.entries.mapArt' },
 ];
 
 const THEME_TEXT: Record<ThemeName, { name: MessageKey; hint: MessageKey }> = {

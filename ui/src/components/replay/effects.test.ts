@@ -3,11 +3,11 @@ import type { EffectInstance, ReplayData } from '../../api/types';
 import { replayFixture } from '../../test/replayFixture';
 import { effectsAt } from './effects';
 
-const still = (actor: number, x: number) => ({ actor, t: [0, 60_000], x: [x, x], y: [0, 0], facing: [0, 0] });
+const still = (actor: number, x: number) => ({ actor, t: [0, 60_000], x: [x, x], y: [0, 0], facing: [0, 0], map: [2001, 2001] });
 
 const data = (effects: EffectInstance[], deaths = replayFixture.deaths): ReplayData => ({
   ...replayFixture,
-  tracks: [still(1, 100), still(2, 110), still(3, 120), { actor: 4, t: [20_000, 21_000], x: [0, 10], y: [0, 0], facing: [0, 0] }],
+  tracks: [still(1, 100), still(2, 110), still(3, 120), { actor: 4, t: [20_000, 21_000], x: [0, 10], y: [0, 0], facing: [0, 0], map: [2001, 2001] }],
   effects,
   deaths,
 });

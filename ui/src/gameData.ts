@@ -1,3 +1,5 @@
+import type { MapArtTable } from './api/types';
+
 /** Game data shipped next to the app in `game-data/`, written by `openlogs-cli export-game-data`. */
 export interface GameDataManifest {
   /** When the tables were downloaded from wago.tools (a real instant, Unix ms). */
@@ -7,6 +9,8 @@ export interface GameDataManifest {
   channelSpells?: number;
   dungeons: number;
   bossPortraits: number;
+  /** Absent in an export made before map art was exported. */
+  mapArt?: number;
 }
 
 /** Spell ID → icon name, as sorted parallel arrays. */
@@ -20,6 +24,7 @@ export interface IconTables {
   spells: SpellIcons | null;
   /** Encounter ID → Encounter Journal portrait name. */
   portraits: Record<string, string> | null;
+  mapArt: MapArtTable | null;
 }
 
 const DIRECTORY = `${import.meta.env.BASE_URL}game-data/`;
@@ -82,9 +87,9 @@ export function spellIconName(spells: SpellIcons, spellId: number): string | nul
 /** A table that could not be loaded is asked for again after this long. */
 const RETRY_MS = 30_000;
 
-let tables: IconTables = { spells: null, portraits: null };
+let tables: IconTables = { spells: null, portraits: null, mapArt: null };
 const listeners = new Set<() => void>();
-const nextAttempt: Record<keyof IconTables, number> = { spells: 0, portraits: 0 };
+const nextAttempt: Record<keyof IconTables, number> = { spells: 0, portraits: 0, mapArt: 0 };
 
 function loadTable<K extends keyof IconTables>(key: K, file: string, parse: (text: string) => IconTables[K]) {
   if (tables[key] !== null || Date.now() < nextAttempt[key]) return;
@@ -102,6 +107,7 @@ function loadTable<K extends keyof IconTables>(key: K, file: string, parse: (tex
 export function loadIconTables() {
   loadTable('spells', 'spell-icons.json', (text) => decodeSpellIcons(JSON.parse(text)));
   loadTable('portraits', 'boss-portraits.json', (text) => JSON.parse(text));
+  loadTable('mapArt', 'map-art.json', (text) => JSON.parse(text));
 }
 
 export const iconTables = () => tables;

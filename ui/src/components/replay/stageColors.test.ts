@@ -26,4 +26,19 @@ describe('stage colours', () => {
     root.dataset.theme = 'bark';
     expect(readStageColors(root).plot).not.toBe(slateLight.plot);
   });
+
+  it('re-reads the map dim when theme or mode changes', () => {
+    style.textContent = tokensCss;
+    document.head.append(style);
+    root.dataset.theme = 'slate';
+    root.dataset.mode = 'dark';
+    const slateDark = readStageColors(root).mapDim;
+
+    root.dataset.mode = 'light';
+    const slateLight = readStageColors(root).mapDim;
+    expect(slateLight).not.toBe(slateDark);
+
+    root.dataset.theme = 'bark';
+    expect(readStageColors(root).mapDim).not.toBe(slateLight);
+  });
 });

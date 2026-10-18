@@ -77,6 +77,7 @@
 
 .replay-plot {
   position: relative;
+  container-type: inline-size;
   height: clamp(360px, 64vh, 660px);
   overflow: hidden;
   background: var(--plot);
@@ -292,6 +293,45 @@
 }
 .hud-bosses .hud-body {
   overflow-y: auto;
+}
+
+.hud-notes {
+  /* Room the wider caption toggle takes from each side; centred notes must clear both. */
+  --hud-caption-reserve: 184px;
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  width: max-content;
+  max-width: calc(100% - 2 * var(--hud-caption-reserve));
+  pointer-events: none;
+}
+@container (max-width: 560px) {
+  .hud-notes {
+    top: calc(14px + 24px + 6px);
+    max-width: calc(100% - 28px);
+  }
+}
+.hud-note {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-raised);
+  color: var(--muted);
+  font: 600 12px var(--font-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.hud-note-floor {
+  pointer-events: auto;
 }
 
 .hud-effects {

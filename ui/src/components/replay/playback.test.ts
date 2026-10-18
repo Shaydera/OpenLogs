@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ReplayAura, ReplayCast, ReplayTrack } from '../../api/types';
 import { aurasAt, castAt, healthAt, lastTargetAt, placementAt, stacksAt } from './playback';
 
-const track = (t: number[], x: number[], y: number[] = x.map(() => 0)): ReplayTrack => ({ actor: 1, t, x, y, facing: x.map(() => 0) });
+const track = (t: number[], x: number[], y: number[] = x.map(() => 0)): ReplayTrack => ({ actor: 1, t, x, y, facing: x.map(() => 0), map: x.map(() => 2001) });
 
 const cast = (startMs: number, endMs: number, target: number | null = null): ReplayCast => ({
   caster: 1,
@@ -39,7 +39,7 @@ describe('placement', () => {
   });
 
   it('turns the short way round across the facing wrap', () => {
-    const turning: ReplayTrack = { actor: 1, t: [0, 1000], x: [0, 0], y: [0, 0], facing: [6, 0.28] };
+    const turning: ReplayTrack = { actor: 1, t: [0, 1000], x: [0, 0], y: [0, 0], facing: [6, 0.28], map: [2001, 2001] };
     const { facing } = placementAt(turning, 500)!;
     expect(Math.abs(facing - 2 * Math.PI)).toBeLessThan(0.01);
   });

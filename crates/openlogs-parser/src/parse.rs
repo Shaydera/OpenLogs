@@ -41,6 +41,14 @@ fn parse_event<'a>(f: &Fields<'_, 'a>) -> Result<Event<'a>, ParseError> {
             name: f.str(2)?,
             difficulty: f.num(3)?,
         },
+        "MAP_CHANGE" => Event::MapChange {
+            ui_map_id: f.num(1)?,
+            name: f.str(2)?,
+            max_x: f.num(3)?,
+            min_x: f.num(4)?,
+            max_y: f.num(5)?,
+            min_y: f.num(6)?,
+        },
         "WORLD_MARKER_PLACED" => Event::WorldMarkerPlaced {
             instance_id: f.num(1)?,
             marker: f.num(2)?,

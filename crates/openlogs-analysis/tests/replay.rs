@@ -5,8 +5,9 @@ use openlogs_analysis::{
     Replay, ReplayCast, ReplayCastOutcome, ReplayDeath, ReplayUnit, SpellId, StackChange, Track,
     UnitKind, quick_overview, replay,
 };
-use openlogs_gamedata::{ChannelSpells, Curated};
-use support::{FightBuilder, HOSTILE_FLAGS, MELEE, PET_FLAGS, damage, heal};
+use openlogs_gamedata::{ArenaFrame, ChannelSpells, Curated};
+use openlogs_index::MapBounds;
+use support::{ARENA_MAP, FightBuilder, HOSTILE_FLAGS, MELEE, PET_FLAGS, damage, heal};
 
 const PAIN_SUPPRESSION: SpellId = 33206;
 const ICE_BLOCK: SpellId = 45438;
@@ -56,6 +57,7 @@ fn tracks_are_columnar_per_unit_and_sorted() {
                 x: vec![1.0, 3.0],
                 y: vec![2.0, 4.0],
                 facing: vec![0.0, 0.0],
+                map: vec![ARENA_MAP, ARENA_MAP],
             },
             Track {
                 actor: priest,
@@ -63,6 +65,7 @@ fn tracks_are_columnar_per_unit_and_sorted() {
                 x: vec![5.0, 7.0],
                 y: vec![6.0, 8.0],
                 facing: vec![0.0, 0.0],
+                map: vec![ARENA_MAP, ARENA_MAP],
             },
         ]
     );
@@ -554,4 +557,65 @@ fn trash_killed_before_the_pull_is_left_out() {
             until: None,
         }]
     );
+}
+
+fn bounds(ui_map_id: u32) -> MapBounds {
+    MapBounds {
+        ui_map_id,
+        min_x: -10.0,
+        max_x: 10.0,
+        min_y: -20.0,
+        max_y: 20.0,
+    }
+}
+
+#[test]
+fn tracks_carry_the_floor_per_sample() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Ilvaren", 62);
+    b.position_on(-600, mage, 1.0, 1.0, 2601)
+        .position_on(-300, mage, 2.0, 2.0, 2602)
+        .position_on(500, mage, 3.0, 3.0, 2602)
+        .position_on(900, mage, 4.0, 4.0, 2603);
+
+    let replay = replay_of(&b.build());
+
+    assert_eq!(replay.tracks[0].t, vec![-300, 500, 900]);
+    assert_eq!(replay.tracks[0].map, vec![2602, 2602, 2603]);
+}
+
+#[test]
+fn the_bundle_lists_bounds_for_the_floors_it_uses() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Ilvaren", 62);
+    let priest = b.player("Player-2", "Somra", 256);
+    b.position_on(-600, mage, 1.0, 1.0, 2700)
+        .position_on(-300, mage, 2.0, 2.0, 2608)
+        .position_on(500, priest, 3.0, 3.0, 2609)
+        .position_on(800, priest, 3.0, 3.0, 2650);
+    b.fight.map_bounds = vec![bounds(2600), bounds(2608), bounds(2609), bounds(2700)];
+
+    let replay = replay_of(&b.build());
+
+    assert_eq!(replay.maps, vec![bounds(2608), bounds(2609)]);
+}
+
+#[test]
+fn an_arena_frame_reaches_the_bundle() {
+    let mut b = FightBuilder::new(60_000);
+    b.player("Player-1", "Ilvaren", 62);
+    let fight = b.build();
+    let frame = |encounter_id| ArenaFrame {
+        encounter_id,
+        ui_map_id: 2608,
+        x: 512.5,
+        y: -340.25,
+        size_yd: 110.0,
+    };
+    let mut curated = Curated::bundled();
+    curated.arena_frames = vec![frame(fight.encounter_id + 1), frame(fight.encounter_id)];
+
+    let replay = replay(&fight, &curated, &ChannelSpells::default());
+
+    assert_eq!(replay.arena_frame, Some(frame(fight.encounter_id)));
 }

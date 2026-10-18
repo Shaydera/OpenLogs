@@ -20,6 +20,7 @@ export interface StageColors {
   markers: Record<MarkerSymbol, string>;
   effects: Record<EffectCategory, string>;
   effectMissing: string;
+  mapDim: string;
 }
 
 /** The stage's colours from the `tokens.css` variables now on `root`; read again after the theme or mode changes. */
@@ -49,5 +50,6 @@ export function readStageColors(root: HTMLElement): StageColors {
     markers,
     effects: { heal: token('effect-heal'), raid_cd: token('effect-raid-cd'), raid_buff: token('effect-raid-buff'), boss_mechanic: token('effect-boss') },
     effectMissing: token('effect-missing'),
+    mapDim: token('map-dim'),
   };
 }

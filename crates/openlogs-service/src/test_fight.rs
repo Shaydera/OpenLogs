@@ -42,6 +42,7 @@ pub fn fight(actors: Actors, mut events: Vec<Event>) -> Fight {
         raid_markers: Vec::new(),
         world_markers: Vec::new(),
         ui_map_id: None,
+        map_bounds: Vec::new(),
     }
 }
 

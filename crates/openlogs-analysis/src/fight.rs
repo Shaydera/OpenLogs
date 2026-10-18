@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use openlogs_index::Outcome;
+use openlogs_index::{MapBounds, Outcome};
 pub use openlogs_parser::{AuraAction, AuraType, DamageVia};
 
 use crate::actors::{ActorId, Actors};
@@ -39,6 +39,9 @@ pub struct Fight {
     pub world_markers: Vec<WorldMarkerInterval>,
     /// The map most position samples were logged on.
     pub ui_map_id: Option<u32>,
+    /// Bounds of every map the log wrote before the end of the fight (latest wins), sorted by
+    /// map ID; for a run only those written during it.
+    pub map_bounds: Vec<MapBounds>,
 }
 
 impl Fight {
@@ -97,6 +100,7 @@ pub struct PositionSample {
     pub x: f32,
     pub y: f32,
     pub facing: f32,
+    pub ui_map_id: u32,
 }
 
 /// A raid target icon on a unit, from the first event showing it to the first later event

@@ -1,5 +1,5 @@
 use openlogs_analysis::{Fight, MarkerInterval, load_fight};
-use openlogs_index::index_bytes;
+use openlogs_index::{MapBounds, index_bytes};
 
 const VERSION: &str = "9/6/2026 11:50:00.0000  COMBAT_LOG_VERSION,22,ADVANCED_LOG_ENABLED,1,BUILD_VERSION,12.1.0,PROJECT_ID,1";
 const ZONE: &str = "9/6/2026 11:50:00.0000  ZONE_CHANGE,3004,\"Test Zone\",15";
@@ -141,6 +141,57 @@ fn world_markers_span_the_pull() {
             (5, 387.15, 436.06, 0, 2_000),
             (6, 1.0, 2.0, 0, 10_000),
             (2, 100.5, 200.5, 3_000, 10_000),
+        ]
+    );
+}
+
+#[test]
+fn a_position_keeps_its_floor() {
+    let fight = pull(&[cast(2, KNOWN_BLOCK)]);
+    assert_eq!(fight.positions[0].ui_map_id, 2608);
+}
+
+fn map_change(
+    time: &str,
+    ui_map_id: u32,
+    max_x: f32,
+    min_x: f32,
+    max_y: f32,
+    min_y: f32,
+) -> String {
+    format!(
+        "9/6/2026 {time}  MAP_CHANGE,{ui_map_id},\"Test Floor\",{max_x:.1},{min_x:.1},{max_y:.1},{min_y:.1}"
+    )
+}
+
+fn bounds(ui_map_id: u32, max_x: f32, min_x: f32, max_y: f32, min_y: f32) -> MapBounds {
+    MapBounds {
+        ui_map_id,
+        min_x,
+        max_x,
+        min_y,
+        max_y,
+    }
+}
+
+#[test]
+fn map_bounds_reach_the_fight_from_the_summary_and_the_slice() {
+    let fight = load(&[
+        VERSION.to_string(),
+        ZONE.to_string(),
+        map_change("11:51:00.0000", 2608, 885.0, 265.0, 127.5, -802.5),
+        map_change("11:51:30.0000", 2500, 100.0, -100.0, 50.0, -50.0),
+        PULL.to_string(),
+        map_change("11:53:04.0000", 2608, 900.0, 270.0, 130.0, -800.0),
+        map_change("11:53:05.0000", 2700, 10.0, -10.0, 5.0, -5.0),
+        END.to_string(),
+    ]);
+    assert_eq!(
+        fight.map_bounds,
+        [
+            bounds(2500, 100.0, -100.0, 50.0, -50.0),
+            bounds(2608, 900.0, 270.0, 130.0, -800.0),
+            bounds(2700, 10.0, -10.0, 5.0, -5.0),
         ]
     );
 }

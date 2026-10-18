@@ -7,4 +7,5 @@ export const gameDataFixture: GameDataManifest = {
   channelSpells: 20_634,
   dungeons: 87,
   bossPortraits: 1_083,
+  mapArt: 214,
 };

@@ -4,7 +4,7 @@ use openlogs_parser::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// Bumped whenever the index layout or its rules change; invalidates cached indexes.
-pub const INDEX_FORMAT_VERSION: u32 = 7;
+pub const INDEX_FORMAT_VERSION: u32 = 8;
 /// The combat log format this tool is built and tested against.
 pub const SUPPORTED_LOG_VERSION: u32 = 22;
 /// Lookback before `ENCOUNTER_START` that belongs to a fight (pre-pots, pre-casts).
@@ -91,6 +91,10 @@ pub struct FightSummary {
     /// World markers active at the start line, sorted by marker; empty for runs.
     #[serde(default)]
     pub world_markers: Vec<WorldMarker>,
+    /// Bounds of every map the log wrote before the start line (latest wins), sorted by
+    /// map ID; empty for runs.
+    #[serde(default)]
+    pub map_bounds: Vec<MapBounds>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -98,6 +102,16 @@ pub struct WorldMarker {
     pub marker: u8,
     pub x: f32,
     pub y: f32,
+}
+
+/// World-coordinate extent of a UI map, from `MAP_CHANGE`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct MapBounds {
+    pub ui_map_id: u32,
+    pub min_x: f32,
+    pub max_x: f32,
+    pub min_y: f32,
+    pub max_y: f32,
 }
 
 impl FightSummary {

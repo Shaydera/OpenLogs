@@ -279,6 +279,8 @@
   --icon-tile: #282827;
   /* Timeline and range plots, report bars, role pills, the hit chart's baseline. */
   --plot: #141414;
+  /* The veil over the replay's map image: --plot at 35 %. */
+  --map-dim: #14141459;
   --dps-area: #253e51;
   --hatch: #191919;
   --bar-track: #212020;
@@ -323,6 +325,8 @@
   --icon-tile: #ededec;
   /* Timeline and range plots, report bars, role pills, the hit chart's baseline. */
   --plot: #fbfaf8;
+  /* The veil over the replay's map image: --plot at 35 %. */
+  --map-dim: #fbfaf859;
   --dps-area: #c2d8eb;
   --hatch: #f2f1ef;
   --bar-track: #f0efee;
@@ -368,6 +372,8 @@
   --icon-tile: #232833;
   /* Timeline and range plots, report bars, role pills, the hit chart's baseline. */
   --plot: #0f1216;
+  /* The veil over the replay's map image: --plot at 35 %. */
+  --map-dim: #0f121659;
   --dps-area: #2b4a66;
   --hatch: #12151a;
   --bar-track: #1a1e25;
@@ -412,6 +418,8 @@
   --icon-tile: #ededed;
   /* Timeline and range plots, report bars, role pills, the hit chart's baseline. */
   --plot: #fbfbfc;
+  /* The veil over the replay's map image: --plot at 35 %. */
+  --map-dim: #fbfbfc59;
   --dps-area: #c2d8ee;
   --hatch: #f2f2f3;
   --bar-track: #efeff0;

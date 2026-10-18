@@ -13,6 +13,7 @@ pub struct Track {
     pub x: Vec<f32>,
     pub y: Vec<f32>,
     pub facing: Vec<f32>,
+    pub map: Vec<u32>,
 }
 
 impl Track {
@@ -23,6 +24,7 @@ impl Track {
             x: Vec::new(),
             y: Vec::new(),
             facing: Vec::new(),
+            map: Vec::new(),
         }
     }
 
@@ -31,6 +33,7 @@ impl Track {
         self.x.clear();
         self.y.clear();
         self.facing.clear();
+        self.map.clear();
     }
 }
 
@@ -47,6 +50,7 @@ pub(super) fn tracks(fight: &Fight, units: &[ReplayUnit]) -> Vec<Track> {
         track.x.push(sample.x);
         track.y.push(sample.y);
         track.facing.push(sample.facing);
+        track.map.push(sample.ui_map_id);
     }
     units
         .iter()

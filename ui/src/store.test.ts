@@ -1018,6 +1018,8 @@ describe('replay', () => {
     effects: [],
     phases: [],
     deaths: [],
+    maps: [],
+    arenaFrame: null,
   });
 
   it('loads the replay once per pull', async () => {
@@ -1145,5 +1147,10 @@ describe('replay', () => {
     expect(restored.layers.facing).toBe(true);
     expect(restored.filters).toMatchObject({ pets: true, hidden: [] });
     expect(restored.speed).toBe(4);
+  });
+
+  it('new layers get their defaults for stored replay settings', () => {
+    localStorage.setItem('openlogs.replay', JSON.stringify({ layers: { effects: false, worldMarkers: true, facing: true, names: true } }));
+    expect(initialState().replay.layers).toEqual({ map: true, grid: false, effects: false, worldMarkers: true, facing: true, names: true });
   });
 });

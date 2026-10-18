@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use openlogs_index::{FightSummary, Outcome};
+use openlogs_index::{FightSummary, MapBounds, Outcome};
 use openlogs_parser::{
     CombatEvent, CombatKind, EncounterEnd, EncounterStart, Event as LogEvent, HealVia, Lines,
     LogLine, Spell, Timestamp, parse_line,
@@ -117,6 +117,7 @@ impl FightBuilder {
                     })
                     .collect(),
                 ui_map_id: None,
+                map_bounds: summary.map_bounds.clone(),
             },
             last_power: HashMap::new(),
             last_t: i32::MIN,
@@ -163,6 +164,21 @@ impl FightBuilder {
             LogEvent::WorldMarkerRemoved { marker } if t >= 0 => {
                 self.remove_world_marker(t, *marker);
             }
+            // The summary already holds the bounds written before the start line.
+            LogEvent::MapChange {
+                ui_map_id,
+                max_x,
+                min_x,
+                max_y,
+                min_y,
+                ..
+            } if t >= 0 => self.note_map_bounds(MapBounds {
+                ui_map_id: *ui_map_id,
+                min_x: *min_x,
+                max_x: *max_x,
+                min_y: *min_y,
+                max_y: *max_y,
+            }),
             LogEvent::EncounterStart(start) if run => self.start_encounter(t, start),
             LogEvent::EncounterEnd(end) if run => self.end_encounter(t, end),
             // The index ends a run's range right after an `ENCOUNTER_END` that follows its
@@ -252,6 +268,14 @@ impl FightBuilder {
         }
         self.encounter_open = false;
         self.resume_t = None;
+    }
+
+    fn note_map_bounds(&mut self, bounds: MapBounds) {
+        let all = &mut self.fight.map_bounds;
+        match all.binary_search_by_key(&bounds.ui_map_id, |b| b.ui_map_id) {
+            Ok(index) => all[index] = bounds,
+            Err(index) => all.insert(index, bounds),
+        }
     }
 
     fn remove_world_marker(&mut self, t: i32, marker: u8) {
@@ -348,6 +372,7 @@ impl FightBuilder {
                 x: info.x,
                 y: info.y,
                 facing: info.facing,
+                ui_map_id: info.ui_map_id,
             });
             *self.map_samples.entry(info.ui_map_id).or_default() += 1;
         }

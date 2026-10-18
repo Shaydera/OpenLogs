@@ -1,0 +1,4 @@
+ID,ZoneName,AreaName_lang,ContinentID,ParentAreaID,AreaBit,SoundProviderPref,SoundProviderPrefUnderwater,AmbienceID,UwAmbience,ZoneMusic,UwZoneMusic,IntroSound,UwIntroSound,FactionGroupMask,Ambient_multiplier,MountFlags,PvpCombatWorldStateID,WildBattlePetLevelMin,WildBattlePetLevelMax,WindSettingsID,ContentTuningID,Flags_0,Flags_1,LiquidTypeID_0,LiquidTypeID_1,LiquidTypeID_2,LiquidTypeID_3
+14883,TheRingingDeeps,"The Stonevault",2652,0,12220,0,0,2786,0,0,0,0,0,0,0,0,-1,0,0,0,2975,-1879048192,12,0,0,0,0
+16915,UlatekTempleRaid,"The Venomous Abyss",3004,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,7359,268435456,136,0,0,0,0
+17683,CryptoftheSoulcoilers,"Crypt of the Soulcoilers",3004,16915,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,1342177280,136,0,0,0,0

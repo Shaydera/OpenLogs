@@ -1,4 +1,4 @@
-import type { EffectInstance, ReplayData, ReplayDeath, ReplayHealthTrack, ReplayRaidMarker, ReplayTrack, ReplayUnit, ReplayWorldMarker } from '../../api/types';
+import type { EffectInstance, MapArtTable, ReplayData, ReplayDeath, ReplayHealthTrack, ReplayRaidMarker, ReplayTrack, ReplayUnit, ReplayWorldMarker } from '../../api/types';
 import { formatFixed, formatInteger, formatSpan, formatYards } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { type IconRef, bossIcon, classIcon, specIcon } from '../../icons';
@@ -7,7 +7,8 @@ import type { ReplayFilters, ReplayLayers } from '../../store';
 import { shortName } from '../overview/players';
 import { type Bounds, type Camera, facingOnScreen, gridStep, toScreen, toWorld } from './camera';
 import { type EffectState, RAID_BUFF_PULSE_MS } from './effects';
-import { deathAt, goneAfterMs, groupBy, healthAt, placementAt } from './playback';
+import { type MapBoundsYd, type StageMap, stageMap } from './mapArt';
+import { UNKNOWN_MAP, deathAt, floorAt, goneAfterMs, groupBy, healthAt, placementAt } from './playback';
 import type { StageColors } from './stageColors';
 import { type MarkerLook, RAID_TARGET_MARKERS, WORLD_MARKERS, traceSymbol } from './worldMarkers';
 
@@ -45,6 +46,7 @@ export interface StageIndex {
   byActor: Map<number, StageUnit>;
   worldMarkers: ReplayWorldMarker[];
   bounds: Bounds | null;
+  stageMap: StageMap;
 }
 
 export interface PlacedUnit {
@@ -84,8 +86,8 @@ function unitIcon(unit: ReplayUnit, encounterId: number): IconRef | null {
   return null;
 }
 
-/** The bundle's per-unit lookups, built once so the stage does not scan the whole bundle every frame. */
-export function indexStage(data: ReplayData): StageIndex {
+/** The bundle's per-unit lookups and its floor, built once so the stage does not scan the whole bundle every frame. */
+export function indexStage(data: ReplayData, mapArt: MapArtTable | null): StageIndex {
   const tracks = new Map(data.tracks.map((track) => [track.actor, track]));
   const health = new Map(data.health.map((track) => [track.actor, track]));
   const deaths = groupBy(data.deaths, (death) => death.actor);
@@ -109,7 +111,13 @@ export function indexStage(data: ReplayData): StageIndex {
       monogram: unit.kind === 'boss' ? bossMonogram(label) : unit.kind === 'player' ? label.slice(0, 2) : initials(label).toUpperCase(),
     });
   }
-  return { units, byActor: new Map(units.map((stage) => [stage.unit.actor, stage])), worldMarkers: data.worldMarkers, bounds: stageBounds(data) };
+  return {
+    units,
+    byActor: new Map(units.map((stage) => [stage.unit.actor, stage])),
+    worldMarkers: data.worldMarkers,
+    bounds: stageBounds(data),
+    stageMap: stageMap(data, mapArt),
+  };
 }
 
 /** Where `stage` is at `t`, with the death that may hold it in place; `null` before its first sample and once it is gone. */
@@ -117,18 +125,49 @@ export function placeUnit(stage: StageUnit, t: number) {
   return t > stage.goneAfterMs ? null : placementAt(stage.track, t, deathAt(stage.deaths, t));
 }
 
-/** The units `filters` shows at `t`, with their screen positions. */
-export function placeUnits(index: StageIndex, t: number, filters: ReplayFilters, cam: Camera, w: number, h: number): PlacedUnit[] {
+/** Whether `stage` is at `t` on a known floor other than the one the stage shows, and so is not drawn. */
+export function onOtherFloor(index: StageIndex, stage: StageUnit, t: number): boolean {
+  const shownFloor = index.stageMap.uiMapId;
+  if (shownFloor === null) return false;
+  const floor = floorAt(stage.track, t, deathAt(stage.deaths, t));
+  return floor !== UNKNOWN_MAP && floor !== shownFloor;
+}
+
+/** `states` without the effects anchored to a unit on another floor. */
+export function effectsOnStage(index: StageIndex, states: EffectState[], t: number): EffectState[] {
+  return states.filter(({ effect: { anchor } }) => {
+    const anchorUnit = anchor?.type === 'unit' ? index.byActor.get(anchor.actor) : undefined;
+    return !anchorUnit || !onOtherFloor(index, anchorUnit, t);
+  });
+}
+
+/** The units `filters` shows at `t` with their screen positions, and those it would show but are on another floor than the stage. */
+export function placeUnits(index: StageIndex, t: number, filters: ReplayFilters, cam: Camera, w: number, h: number): { placed: PlacedUnit[]; otherFloor: StageUnit[] } {
   const hidden = new Set(filters.hidden);
   const placed: PlacedUnit[] = [];
+  const otherFloor: StageUnit[] = [];
   for (const stage of index.units) {
     if (!filters[KIND_FILTER[stage.unit.kind]] || hidden.has(stage.unit.actor)) continue;
     const at = placeUnit(stage, t);
     if (!at) continue;
+    if (onOtherFloor(index, stage, t)) {
+      otherFloor.push(stage);
+      continue;
+    }
     const [sx, sy] = toScreen(cam, at.x, at.y, w, h);
     placed.push({ stage, ...at, sx, sy });
   }
-  return placed;
+  return { placed, otherFloor };
+}
+
+type ScreenPoint = [x: number, y: number];
+
+/** Where a map image with `bounds` lands on screen: its top-left corner and the screen vectors along its top and left edges. */
+export function mapArtOnScreen(cam: Camera, bounds: MapBoundsYd, w: number, h: number): { origin: ScreenPoint; right: ScreenPoint; down: ScreenPoint } {
+  const origin = toScreen(cam, bounds.maxX, bounds.maxY, w, h);
+  const topRight = toScreen(cam, bounds.maxX, bounds.minY, w, h);
+  const bottomLeft = toScreen(cam, bounds.minX, bounds.maxY, w, h);
+  return { origin, right: [topRight[0] - origin[0], topRight[1] - origin[1]], down: [bottomLeft[0] - origin[0], bottomLeft[1] - origin[1]] };
 }
 
 /** The unit nearest to (`sx`, `sy`) within 14 px, else `null`. */
@@ -173,6 +212,12 @@ export function stageImage(src: string, onSettled: () => void): HTMLImageElement
   return image.naturalWidth > 0 ? image : null;
 }
 
+/** Whether the image at `src` was asked for through `stageImage` and failed to load. */
+export function stageImageFailed(src: string): boolean {
+  const image = images.get(src);
+  return image !== undefined && image.complete && image.naturalWidth === 0;
+}
+
 export interface StageFrame {
   w: number;
   h: number;
@@ -191,9 +236,27 @@ export interface StageFrame {
   selectedEffect: EffectInstance | null;
   /** The loaded image of an icon ref, else `null`. */
   image: (icon: IconRef) => HTMLImageElement | null;
+  /** The loaded map image of the shown floor while the map layer is on, else `null`. */
+  mapArt: HTMLImageElement | null;
 }
 
 const font = (weight: number, px: number, family: string) => `${weight} ${px}px ${family}`;
+
+/** The map image placed by its floor's bounds, under a veil in the plot colour so units and effects keep their contrast. */
+function drawMapArt(ctx: CanvasRenderingContext2D, { w, h, cam, colors, index }: StageFrame, image: HTMLImageElement): boolean {
+  const { bounds } = index.stageMap;
+  if (!bounds) return false;
+  const { origin, right, down } = mapArtOnScreen(cam, bounds, w, h);
+  ctx.save();
+  ctx.transform(right[0] / image.naturalWidth, right[1] / image.naturalWidth, down[0] / image.naturalHeight, down[1] / image.naturalHeight, origin[0], origin[1]);
+  ctx.drawImage(image, 0, 0);
+  ctx.restore();
+  ctx.save();
+  ctx.fillStyle = colors.mapDim;
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+  return true;
+}
 
 function drawGrid(ctx: CanvasRenderingContext2D, { w, h, cam, colors }: StageFrame) {
   const step = gridStep(cam.scale);
@@ -217,7 +280,10 @@ function drawGrid(ctx: CanvasRenderingContext2D, { w, h, cam, colors }: StageFra
   for (let y = Math.ceil(minY / step) * step; y <= maxY; y += step) line(minX, y, maxX, y);
   ctx.stroke();
   ctx.restore();
+}
 
+function drawScaleBar(ctx: CanvasRenderingContext2D, { h, cam, colors }: StageFrame) {
+  const step = gridStep(cam.scale);
   const barPx = step * cam.scale;
   const x0 = 14.5;
   const y0 = Math.round(h - 14) + 0.5;
@@ -504,7 +570,7 @@ function tooltipLines(frame: StageFrame, unit: PlacedUnit): TipLine[] {
   const health = unit.stage.health && healthAt(unit.stage.health, frame.t);
   if (health && health.max > 0) facts.push(t('replay.tipHealth', { value: formatInteger(Math.round((health.current / health.max) * 100)) }));
   const selected = frame.selected === null ? undefined : frame.index.byActor.get(frame.selected);
-  if (selected && selected !== unit.stage) {
+  if (selected && selected !== unit.stage && !onOtherFloor(frame.index, selected, frame.t)) {
     const at = placeUnit(selected, frame.t);
     if (at) facts.push(t('replay.tipDistance', { distance: formatFixed(Math.hypot(unit.x - at.x, unit.y - at.y), 1), name: selected.label }));
   }
@@ -547,9 +613,14 @@ function drawTooltip(ctx: CanvasRenderingContext2D, frame: StageFrame, unit: Pla
   ctx.restore();
 }
 
-/** One frame of the stage: grid and scale bar, world markers, effect areas, units with their markers, effect rings, names, the hover tooltip. */
+/**
+ * One frame of the stage: map image (the grid without one, or when its layer is on) and scale bar, world markers, effect
+ * areas, units with their markers, effect rings, names, the hover tooltip.
+ */
 export function drawStage(ctx: CanvasRenderingContext2D, frame: StageFrame) {
-  drawGrid(ctx, frame);
+  const artShown = frame.mapArt !== null && drawMapArt(ctx, frame, frame.mapArt);
+  if (frame.layers.grid || !artShown) drawGrid(ctx, frame);
+  drawScaleBar(ctx, frame);
   if (frame.layers.worldMarkers) drawWorldMarkers(ctx, frame);
   const drawn = frame.effects.filter((state) => state.center !== null);
   const picked = (state: EffectState) => (state.effect === frame.selectedEffect ? 1 : 0);

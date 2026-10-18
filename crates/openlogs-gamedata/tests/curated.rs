@@ -2,10 +2,10 @@ use std::collections::HashSet;
 use std::fs;
 
 use openlogs_gamedata::{
-    BOSS_EFFECTS_DIR, CONSUMABLES_FILE, ConsumableKind, CooldownCategory, Curated, EffectAnchor,
-    EffectCategory, EffectDuration, EffectKind, EffectTrigger, MAJOR_CDS_FILE, PHASES_DIR,
-    PROCS_FILE, PhaseTrigger, PlayerCooldownKind, RAID_EFFECTS_FILE, RAID_FRAME_AURAS_FILE, class,
-    spec,
+    ARENA_FRAMES_DIR, ArenaFrame, BOSS_EFFECTS_DIR, CONSUMABLES_FILE, ConsumableKind,
+    CooldownCategory, Curated, EffectAnchor, EffectCategory, EffectDuration, EffectKind,
+    EffectTrigger, MAJOR_CDS_FILE, PHASES_DIR, PROCS_FILE, PhaseTrigger, PlayerCooldownKind,
+    RAID_EFFECTS_FILE, RAID_FRAME_AURAS_FILE, class, spec,
 };
 
 fn boss_effects_json(encounter_id: u32, name: &str) -> String {
@@ -186,6 +186,15 @@ fn bundled_lists_are_consistent() {
                     .all(|d| d.spell_id != entry.spell_id),
             "{} is a personal defensive",
             entry.name
+        );
+    }
+    let mut seen = HashSet::new();
+    for frame in &curated.arena_frames {
+        assert!(seen.insert(frame.encounter_id), "{}", frame.encounter_id);
+        assert!(
+            frame.size_yd.is_finite() && frame.size_yd > 0.0,
+            "{}",
+            frame.encounter_id
         );
     }
 }
@@ -378,4 +387,66 @@ fn effect_entries_without_a_trigger_or_a_positive_radius_warn_and_are_skipped() 
             "{warning}"
         );
     }
+}
+
+fn arena_frame_json(encounter_id: u32, size_yd: f32) -> String {
+    format!(
+        r#"{{ "encounter_id": {encounter_id}, "ui_map_id": 2608, "x": 512.5, "y": -340.25,
+             "size_yd": {size_yd}, "note": "Measured on a test pull" }}"#
+    )
+}
+
+#[test]
+fn the_vashnik_arena_frame_is_centred_on_the_fight() {
+    assert_eq!(
+        Curated::bundled().arena_frame(3455),
+        Some(&ArenaFrame {
+            encounter_id: 3455,
+            ui_map_id: 2608,
+            x: 454.0,
+            y: -329.0,
+            size_yd: 110.0,
+        })
+    );
+}
+
+#[test]
+fn arena_frames_load_like_boss_effects() {
+    let dir = tempfile::tempdir().unwrap();
+    let frames = dir.path().join(ARENA_FRAMES_DIR);
+    fs::create_dir(&frames).unwrap();
+    fs::write(frames.join("3455.json"), arena_frame_json(3455, 110.0)).unwrap();
+
+    let curated = Curated::load(Some(dir.path()));
+
+    assert!(curated.warnings.is_empty(), "{:?}", curated.warnings);
+    assert_eq!(
+        curated.arena_frame(3455),
+        Some(&ArenaFrame {
+            encounter_id: 3455,
+            ui_map_id: 2608,
+            x: 512.5,
+            y: -340.25,
+            size_yd: 110.0,
+        })
+    );
+    assert_eq!(curated.arena_frame(3421), None);
+}
+
+#[test]
+fn an_arena_frame_without_a_positive_size_warns_and_is_ignored() {
+    let dir = tempfile::tempdir().unwrap();
+    let frames = dir.path().join(ARENA_FRAMES_DIR);
+    fs::create_dir(&frames).unwrap();
+    fs::write(frames.join("3421.json"), arena_frame_json(3421, 0.0)).unwrap();
+
+    let curated = Curated::load(Some(dir.path()));
+
+    assert_eq!(curated.arena_frame(3421), None);
+    assert_eq!(curated.warnings.len(), 1, "{:?}", curated.warnings);
+    assert!(
+        curated.warnings[0].contains("3421.json"),
+        "{:?}",
+        curated.warnings
+    );
 }

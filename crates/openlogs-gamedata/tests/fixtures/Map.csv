@@ -1,0 +1,3 @@
+ID,Directory,MapName_lang,MapDescription0_lang,MapDescription1_lang,PvpShortDescription_lang,PvpLongDescription_lang,Corpse_0,Corpse_1,MapType,InstanceType,ExpansionID,AreaTableID,LoadingScreenID,TimeOfDayOverride,ParentMapID,CosmeticParentMapID,TimeOffset,MinimapIconScale,CorpseMapID,MaxPlayers,WindSettingsID,ZmpFileDataID,WdtFileDataID,NavigationMaxDistance,PreloadFileDataID,Flags_0,Flags_1,Flags_2
+2652,2652,"The Stonevault",,,,,0,0,1,1,10,0,618,600,-1,-1,0,1,-1,0,12,0,5218128,0,0,144711261,134513200,0
+3004,3004,"The Venomous Abyss",,,,,0,0,1,2,11,0,699,-1,-1,-1,0,1,-1,0,12,0,7296601,0,0,142614109,33808,16484

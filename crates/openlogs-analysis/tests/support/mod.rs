@@ -13,6 +13,7 @@ use openlogs_parser::Unit;
 pub const PLAYER_FLAGS: u32 = 0x514;
 pub const PET_FLAGS: u32 = 0x2114;
 pub const HOSTILE_FLAGS: u32 = 0x10a48;
+pub const ARENA_MAP: u32 = 2608;
 
 /// Builds a `Fight` event by event for analysis tests.
 pub struct FightBuilder {
@@ -40,6 +41,7 @@ impl FightBuilder {
                 raid_markers: Vec::new(),
                 world_markers: Vec::new(),
                 ui_map_id: None,
+                map_bounds: Vec::new(),
             },
         }
     }
@@ -137,14 +139,26 @@ impl FightBuilder {
         self
     }
 
-    /// A position sample for `actor`.
+    /// A position sample for `actor` on [`ARENA_MAP`].
     pub fn position(&mut self, t: i32, actor: ActorId, x: f32, y: f32) -> &mut Self {
+        self.position_on(t, actor, x, y, ARENA_MAP)
+    }
+
+    pub fn position_on(
+        &mut self,
+        t: i32,
+        actor: ActorId,
+        x: f32,
+        y: f32,
+        ui_map_id: u32,
+    ) -> &mut Self {
         self.fight.positions.push(PositionSample {
             t,
             actor,
             x,
             y,
             facing: 0.0,
+            ui_map_id,
         });
         self
     }
