@@ -1,4 +1,4 @@
-import type { PlayerRef, ReplayAura, ReplayCast, ReplayData, ReplayDeath, ReplayHealthTrack, ReplayRaidMarker, ReplayUnit } from '../../api/types';
+import type { PlayerRef, ReplayAura, ReplayCast, ReplayData, ReplayDeath, ReplayHealthTrack, ReplayPowerTrack, ReplayRaidMarker, ReplayTargetTrack, ReplayUnit } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { ROLE_ORDER, shortName } from '../overview/players';
 import { goneAfterMs, groupBy, healthAt } from './playback';
@@ -12,6 +12,8 @@ export interface HudIndex {
   units: Map<number, ReplayUnit>;
   roster: Map<number, PlayerRef>;
   health: Map<number, ReplayHealthTrack>;
+  power: Map<number, ReplayPowerTrack>;
+  targets: Map<number, ReplayTargetTrack>;
   /** By caster. */
   casts: Map<number, ReplayCast[]>;
   /** By caster, only casts with a cast time: an instant cast at the same moment must not hide a running one. */
@@ -50,6 +52,8 @@ export function indexHud(data: ReplayData): HudIndex {
     units: new Map(data.units.map((unit) => [unit.actor, unit])),
     roster,
     health,
+    power: new Map(data.power.map((track) => [track.actor, track])),
+    targets: new Map(data.targets.map((track) => [track.actor, track])),
     casts: groupBy(data.casts, (cast) => cast.caster),
     castBars: groupBy(
       data.casts.filter((cast) => cast.endMs > cast.startMs),

@@ -10,7 +10,7 @@ import { RaidFrames } from './RaidFrames';
 import { ReplayControls, replayNow } from './ReplayControls';
 import { ReplayLegend } from './ReplayLegend';
 import { ReplayStage } from './ReplayStage';
-import { UnitFrame } from './UnitFrame';
+import { UnitFrames } from './UnitFrames';
 
 const JUMP_MS = 5_000;
 
@@ -92,7 +92,7 @@ function ReplayPanel({ data, compact }: { data: ReplayData; compact: boolean }) 
         <BossFrames hud={hud} />
         <div className="hud-bottom">
           <RaidFrames hud={hud} defaultCollapsed={compact} />
-          <UnitFrame hud={hud} defaultCollapsed={compact} />
+          <UnitFrames hud={hud} defaultCollapsed={compact} />
         </div>
       </div>
       <ReplayControls data={data} bounds={bounds} compact={compact} />

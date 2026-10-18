@@ -413,22 +413,84 @@
   color: var(--effect-missing);
 }
 
-/* Raid frames at the right, the unit frame centred in the room left of them; above them when that room runs out. */
+/* Raid frames at the left, the unit frames centred in the room right of them; above them when that room runs out. */
 .hud-bottom {
   position: absolute;
   left: 14px;
   right: 14px;
   bottom: 14px;
   display: flex;
-  flex-direction: row-reverse;
-  flex-wrap: wrap-reverse;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 10px 14px;
   pointer-events: none;
 }
 .hud-unit {
-  width: min(340px, 100%);
+  width: min(840px, 100%);
   margin: 0 auto;
+}
+.hud-unit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+}
+.hud-unit-frame {
+  width: 320px;
+  max-width: 100%;
+}
+.hud-unit-tot {
+  width: 170px;
+  gap: 4px;
+}
+.hud-unit-tot .hud-hp {
+  height: 10px;
+}
+.hud-unit-caption {
+  color: var(--muted);
+  font-size: 11px;
+}
+.hud-frame-pick {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.hud-frame-pick:hover {
+  text-decoration: underline;
+}
+.hud-bar {
+  position: relative;
+}
+.hud-bar-health .hud-hp {
+  height: 20px;
+}
+.hud-power {
+  height: 13px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--bar-track);
+}
+.hud-power > span {
+  display: block;
+  height: 100%;
+}
+.hud-bar-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+  color: var(--text);
+  font-size: 11px;
+  text-shadow: 0 0 3px var(--bg);
+  pointer-events: none;
 }
 .hud-unit .hud-toggle {
   align-self: center;
@@ -471,20 +533,13 @@
   font-weight: 400;
 }
 .hud-frame-status,
-.hud-frame-hp,
-.hud-unit-target {
+.hud-frame-hp {
   color: var(--muted);
   font-weight: 400;
   white-space: nowrap;
 }
 .hud-frame-hp {
   font-size: 12px;
-}
-.hud-unit-target {
-  min-width: 0;
-  overflow: hidden;
-  font-size: 12px;
-  text-overflow: ellipsis;
 }
 .hud-more {
   margin: 0;

@@ -111,6 +111,20 @@
   --cast-fill: #7a64c4;
   --hp-tint: color-mix(in srgb, var(--hp-fill) 28%, transparent);
 
+  /* Primary-power bars of the replay unit frames. */
+  --power-mana: #4a7bea;
+  --power-rage: #d8433a;
+  --power-focus: #e0883a;
+  --power-energy: #e6c84a;
+  --power-runic: #3fb9d9;
+  --power-astral: #6c8ff0;
+  --power-maelstrom: #3f8be6;
+  --power-insanity: #9b5ae0;
+  --power-fury: #c54ae0;
+  --power-pain: #ff9c00;
+  --power-essence: #3fb8a8;
+  --power-other: var(--text-soft);
+
   /* Replay effects by category, their circles, labels and rings on --plot; --effect-missing marks a player without evidence. */
   --effect-heal: #4fbf9a;
   --effect-raid-cd: #7aa7f0;
@@ -217,6 +231,20 @@
   --hp-add: #9a5f1c;
   --cast-fill: #6a58b0;
   --hp-tint: color-mix(in srgb, var(--hp-fill) 16%, transparent);
+
+  /* Primary-power bars of the replay unit frames. */
+  --power-mana: #2f5fd0;
+  --power-rage: #c0392b;
+  --power-focus: #b8641a;
+  --power-energy: #a88a00;
+  --power-runic: #1a7f9a;
+  --power-astral: #3e63c8;
+  --power-maelstrom: #1f63b8;
+  --power-insanity: #7a3fc0;
+  --power-fury: #9b2fb5;
+  --power-pain: #b86e00;
+  --power-essence: #1f8577;
+  --power-other: var(--text-soft);
 
   /* Replay effects. */
   --effect-heal: #1a7d5d;

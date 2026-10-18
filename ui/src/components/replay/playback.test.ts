@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ReplayAura, ReplayCast, ReplayTrack } from '../../api/types';
-import { aurasAt, castAt, healthAt, lastTargetAt, placementAt, stacksAt } from './playback';
+import type { HudIndex } from './hudIndex';
+import { aurasAt, castAt, healthAt, placementAt, powerAt, stacksAt, targetAt } from './playback';
 
 const track = (t: number[], x: number[], y: number[] = x.map(() => 0)): ReplayTrack => ({ actor: 1, t, x, y, facing: x.map(() => 0), map: x.map(() => 2001) });
 
@@ -94,10 +95,16 @@ describe('casts, auras and health', () => {
     expect(healthAt(health, 1000)).toEqual({ current: 40, max: 100 });
   });
 
-  it('last target is the target of the latest cast before t', () => {
-    const casts = [cast(1000, 1000, 7), cast(3000, 3500, 8), cast(5000, 5000, null)];
-    expect(lastTargetAt(casts, 1, 500)).toBeNull();
-    expect(lastTargetAt(casts, 1, 4000)).toBe(8);
-    expect(lastTargetAt(casts, 1, 9000)).toBe(8);
+  it('targetAt returns the latest change at or before t', () => {
+    const hud = { targets: new Map([[1, { actor: 1, t: [0, 4000], target: [7, 8] }]]) } as unknown as HudIndex;
+    expect(targetAt(hud, 1, 3999)).toBe(7);
+    expect(targetAt(hud, 1, 4000)).toBe(8);
+    expect(targetAt(hud, 2, 4000)).toBeNull();
+  });
+
+  it('powerAt is null before the first sample', () => {
+    const hud = { power: new Map([[1, { actor: 1, powerType: 0, t: [500, 1000], current: [90, 40], max: [100, 100] }]]) } as unknown as HudIndex;
+    expect(powerAt(hud, 1, 499)).toBeNull();
+    expect(powerAt(hud, 1, 1000)).toEqual({ powerType: 0, current: 40, max: 100 });
   });
 });

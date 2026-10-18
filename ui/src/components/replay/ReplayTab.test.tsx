@@ -89,7 +89,7 @@ describe('ReplayTab', () => {
   it('the compact pane starts the unit frame collapsed and expands it on click', async () => {
     useApp.setState({ replay: { ...initialState().replay, selected: 1 } });
     render(<ReplayTab compact />);
-    const caption = screen.getByRole('button', { name: t('replay.unitFrame') });
+    const caption = screen.getByRole('button', { name: t('replay.unitFrames') });
     expect(caption).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('group', { name: 'Talwyn' })).toBeNull();
     await userEvent.click(caption);
