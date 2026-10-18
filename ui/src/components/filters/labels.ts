@@ -1,5 +1,6 @@
 import type { AbilityRef, BreakdownRow, BreakdownRowKind, FilterOption, RowKey, UnitRef } from '../../api/types';
 import { t } from '../../i18n/i18n';
+import { shortName } from '../overview/players';
 
 export type ScopeValue = UnitRef | AbilityRef;
 
@@ -30,5 +31,15 @@ export function valueLabel(value: ScopeValue, name: string, number: number | nul
 
 export const rowLabel = (row: BreakdownRow) =>
   valueLabel(rowValue(row.key), row.name, row.number, row.key.kind === 'ability' ? row.key.rowKind : 'own');
+
+export const rowPet = (key: RowKey): string | null => (key.kind === 'ability' && key.pet ? shortName(key.pet) : null);
+
+/** The label with the pets behind an ability, for where the pet name is not shown beside it. */
+export function petLabel(label: string, key: RowKey): string {
+  const pet = rowPet(key);
+  return pet ? t('scope.petAbility', { name: label, pet }) : label;
+}
+
+export const showOnlyLabel = (row: BreakdownRow) => t('breakdown.showOnly', { name: petLabel(rowLabel(row), row.key) });
 
 export const optionLabel = (option: FilterOption) => valueLabel(optionValue(option), option.name, option.number);

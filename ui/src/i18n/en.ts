@@ -360,6 +360,7 @@ export const en = {
   'scope.target': 'Target',
   'scope.takenBy': 'Taken by',
   'scope.ability': 'Ability',
+  'scope.petAbility': '{name} by {pet}',
   'scope.stopped': 'Interrupted / removed',
   'scope.aura': 'Aura',
   'scope.auraOn': 'On',

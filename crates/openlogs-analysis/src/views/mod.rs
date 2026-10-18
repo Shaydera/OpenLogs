@@ -562,7 +562,7 @@ pub fn timeline(
         window
     };
     let axis = lane_axis(scope, metric, wanted);
-    let mut lanes = Lanes::new(axis);
+    let mut lanes = Lanes::new(axis, metric);
     let mut legend = Vec::new();
     let bosses = boss_units(fight);
     let shows_context = !(metric == ScopeMetric::Casts && scope.perspective == Side::Enemy);

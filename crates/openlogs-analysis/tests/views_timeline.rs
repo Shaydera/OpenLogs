@@ -194,6 +194,7 @@ fn a_cast_carries_its_lines_and_the_hits_until_the_next_cast_of_its_name() {
                 == Some(RowKey::Ability {
                     ability: AbilityRef::Name("Pyroblast".into()),
                     kind: openlogs_analysis::CellKind::Own,
+                    pet: None,
                 })
         })
         .unwrap();

@@ -18,7 +18,12 @@ pub enum Dimension {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum RowKey {
     Unit(UnitRef),
-    Ability { ability: AbilityRef, kind: CellKind },
+    Ability {
+        ability: AbilityRef,
+        kind: CellKind,
+        /// The name of the pets that cast it; `None` for what players cast themselves.
+        pet: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +31,8 @@ pub struct BreakdownRow {
     pub key: RowKey,
     /// Ability rows: the ID with the largest amount (for the icon); 0 for unit rows.
     pub spell: SpellId,
+    /// Pet ability rows: the pets the amounts come from, one per owner.
+    pub pets: Vec<UnitRef>,
     pub amount: i64,
     pub absorbed: i64,
     pub hits: u32,
@@ -88,13 +95,26 @@ pub(crate) fn side_dimensions(
         .collect()
 }
 
-pub(crate) fn key_of(fight: &Fight, cell: &Cell, dimension: Dimension) -> RowKey {
+pub(crate) fn key_of(
+    fight: &Fight,
+    cell: &Cell,
+    dimension: Dimension,
+    metric: ScopeMetric,
+) -> RowKey {
     match dimension {
         Dimension::Source => RowKey::Unit(cell.source.grouped(fight)),
         Dimension::Target => RowKey::Unit(cell.target.grouped(fight)),
         Dimension::Ability => RowKey::Ability {
             ability: AbilityRef::of(fight, cell.spell),
             kind: cell.kind,
+            pet: match &cell.source {
+                UnitRef::Pet { name, .. }
+                    if metric.splits_pet_abilities() && cell.ability().is_some() =>
+                {
+                    Some(name.clone())
+                }
+                _ => None,
+            },
         },
     }
 }
@@ -106,6 +126,7 @@ struct Acc {
     hits: u32,
     crits: u32,
     by_spell: HashMap<SpellId, i64>,
+    pets: Vec<UnitRef>,
 }
 
 impl Acc {
@@ -115,9 +136,19 @@ impl Acc {
         self.hits += cell.hits;
         self.crits += cell.crits;
         *self.by_spell.entry(cell.spell).or_default() += cell.amount;
+        if matches!(cell.source, UnitRef::Pet { .. }) && !self.pets.contains(&cell.source) {
+            self.pets.push(cell.source.clone());
+        }
     }
 
-    fn into_row(self, key: RowKey) -> BreakdownRow {
+    fn into_row(mut self, key: RowKey) -> BreakdownRow {
+        let pets = match key {
+            RowKey::Ability { pet: Some(_), .. } => {
+                self.pets.sort();
+                self.pets
+            }
+            _ => Vec::new(),
+        };
         BreakdownRow {
             spell: match key {
                 RowKey::Ability { .. } => self
@@ -127,6 +158,7 @@ impl Acc {
                     .map_or(0, |(spell, _)| *spell),
                 RowKey::Unit(_) => 0,
             },
+            pets,
             key,
             amount: self.amount,
             absorbed: self.absorbed,
@@ -144,10 +176,11 @@ fn rows_of<'a>(
     fight: &Fight,
     list: impl Iterator<Item = &'a Cell>,
     dimension: Dimension,
+    metric: ScopeMetric,
 ) -> Vec<BreakdownRow> {
     let mut map: HashMap<RowKey, Acc> = HashMap::new();
     for cell in list {
-        map.entry(key_of(fight, cell, dimension))
+        map.entry(key_of(fight, cell, dimension, metric))
             .or_default()
             .add(cell);
     }
@@ -187,7 +220,7 @@ pub(crate) fn group_cells(
     for cell in all.iter().filter(|c| in_scope(scope, fight, c)) {
         total += cell.amount;
         buckets
-            .entry(key_of(fight, cell, group))
+            .entry(key_of(fight, cell, group, metric))
             .or_default()
             .push(cell);
     }
@@ -202,7 +235,7 @@ pub(crate) fn group_cells(
                 .iter()
                 .map(|&dimension| Split {
                     dimension,
-                    rows: rows_of(fight, mine.iter().copied(), dimension),
+                    rows: rows_of(fight, mine.iter().copied(), dimension, metric),
                 })
                 .collect();
             GroupedRow {

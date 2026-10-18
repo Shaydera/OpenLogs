@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { api } from './api/client';
 import { replayClock } from './components/replay/replayClock';
 import type { ChosenLog, LogSource } from './api/logSource';
-import type { DamageReport, LogView, PullComparison, QuickOverview, ReplayData, RecentLog, Scope, Timeline } from './api/types';
+import type { BreakdownRow, DamageReport, LogView, PullComparison, QuickOverview, ReplayData, RecentLog, Scope, Timeline, UnitRef } from './api/types';
 import { comparisonFixture } from './test/compareFixture';
 import { overviewFixture } from './test/overviewFixture';
 import {
@@ -592,6 +592,26 @@ describe('view filters', () => {
     await useApp.getState().setRange({ startMs: 10_000, endMs: 20_000 });
     useApp.getState().setColorByTarget(true);
     expect(useApp.getState().scope).toBe(scope);
+  });
+
+  it('narrows a pet ability row to the ability and the pets behind it', async () => {
+    const wolves: UnitRef[] = [{ kind: 'pet', owner: 3, name: 'Wolf' }];
+    const melee: BreakdownRow = {
+      key: { kind: 'ability', ability: { kind: 'id', spellId: 0 }, rowKind: 'own', pet: 'Wolf' },
+      name: '',
+      number: null,
+      spellId: 0,
+      amount: 500,
+      share: 1,
+      absorbed: 0,
+      hits: 2,
+      crits: 0,
+      pets: wolves,
+    };
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().showOnly('ability', melee);
+    expect(vi.mocked(api.breakdownReport).mock.calls.at(-1)![3]).toEqual({ perspective: 'friendly', source: wolves, target: [], ability: [{ kind: 'id', spellId: 0 }] });
   });
 
   it('swaps the sides when the perspective changes and drops the ability', async () => {

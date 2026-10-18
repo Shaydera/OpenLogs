@@ -6,7 +6,7 @@ import { t } from '../../i18n/i18n';
 import type { FilterTab } from '../../scopeSides';
 import type { TimeRange } from '../../store';
 import { GameIcon, MonogramTile } from '../GameIcon';
-import { rowValue, valueLabel } from '../filters/labels';
+import { petLabel, rowPet, rowValue, valueLabel } from '../filters/labels';
 import { PlayerIcon } from '../reports/PlayerName';
 import type { rosterIndex } from '../reports/reportData';
 import { PowerLane } from './PowerLane';
@@ -180,16 +180,18 @@ function LaneLabel({ tab, lane, label: shownLabel, names, roster, more }: LabelP
   const value = rowValue(lane.key);
   const label = valueLabel(value, lane.name, lane.number, lane.key.kind === 'ability' ? lane.key.rowKind : 'own');
   const player = value.kind === 'player' ? roster.get(value.actorId) : undefined;
+  const pet = rowPet(lane.key);
   let icon: ReactNode;
   if (lane.key.kind === 'ability') icon = <GameIcon icon={spellIcon(lane.spellId)} size={18} name={label} />;
   else if (player) icon = <PlayerIcon player={player} size={18} />;
   else icon = <MonogramTile name={label} size={18} />;
   return (
-    <span className="tl-label" title={label}>
+    <span className="tl-label" title={petLabel(label, lane.key)}>
       {icon}
       <span className="nm" style={{ color: player ? names.colour(player.actorId) : undefined }}>
         {shownLabel ?? label}
       </span>
+      {pet && <span className="ab-pet">{pet}</span>}
       {more}
       <span className="num tl-count">{count}</span>
     </span>

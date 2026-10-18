@@ -291,7 +291,7 @@ export const targetDetailFixture: TargetDetail = {
 };
 
 const playerKey = (actorId: number) => ({ kind: 'unit' as const, unit: { kind: 'player' as const, actorId } });
-const spellKey = (name: string) => ({ kind: 'ability' as const, ability: { kind: 'name' as const, name }, rowKind: 'own' as const });
+const spellKey = (name: string) => ({ kind: 'ability' as const, ability: { kind: 'name' as const, name }, rowKind: 'own' as const, pet: null });
 const castRow = (key: ReturnType<typeof playerKey> | ReturnType<typeof spellKey>, name: string, spellId: number, amount: number, total: number) => ({
   key,
   name,
@@ -302,6 +302,7 @@ const castRow = (key: ReturnType<typeof playerKey> | ReturnType<typeof spellKey>
   absorbed: 0,
   hits: amount,
   crits: 0,
+  pets: [],
 });
 
 /** Two minutes of casts with Hide procs on: Pyrrin's 50 Soul Fragment procs are left out. */
@@ -518,18 +519,18 @@ export const breakdownFixture: Breakdown = {
   rows: [
     {
       key: { kind: 'unit', unit: { kind: 'player', actorId: 3 } },
-      name: 'Wendel', number: null, spellId: 0, amount: 2_000_000, share: 2 / 3, absorbed: 250_000, hits: 10, crits: 3, perSecond: 200_000,
+      name: 'Wendel', number: null, spellId: 0, amount: 2_000_000, share: 2 / 3, absorbed: 250_000, hits: 10, crits: 3, pets: [], perSecond: 200_000,
       splits: [
-        { dimension: 'ability', rows: [{ key: { kind: 'ability', ability: { kind: 'name', name: 'Mortal Strike' }, rowKind: 'own' }, name: 'Mortal Strike', number: null, spellId: 12294, amount: 2_000_000, share: 1, absorbed: 0, hits: 10, crits: 3 }] },
-        { dimension: 'target', rows: [{ key: { kind: 'unit', unit: { kind: 'unit', name: "Ula'tek" } }, name: "Ula'tek", number: null, spellId: 0, amount: 2_000_000, share: 1, absorbed: 0, hits: 10, crits: 3 }] },
+        { dimension: 'ability', rows: [{ key: { kind: 'ability', ability: { kind: 'name', name: 'Mortal Strike' }, rowKind: 'own', pet: null }, name: 'Mortal Strike', number: null, spellId: 12294, amount: 2_000_000, share: 1, absorbed: 0, hits: 10, crits: 3, pets: [] }] },
+        { dimension: 'target', rows: [{ key: { kind: 'unit', unit: { kind: 'unit', name: "Ula'tek" } }, name: "Ula'tek", number: null, spellId: 0, amount: 2_000_000, share: 1, absorbed: 0, hits: 10, crits: 3, pets: [] }] },
       ],
     },
     {
       key: { kind: 'unit', unit: { kind: 'player', actorId: 5 } },
-      name: 'Speronis', number: null, spellId: 0, amount: 1_000_000, share: 1 / 3, absorbed: 0, hits: 5, crits: 1, perSecond: 100_000,
+      name: 'Speronis', number: null, spellId: 0, amount: 1_000_000, share: 1 / 3, absorbed: 0, hits: 5, crits: 1, pets: [], perSecond: 100_000,
       splits: [
-        { dimension: 'ability', rows: [{ key: { kind: 'ability', ability: { kind: 'name', name: 'Ebon Might' }, rowKind: 'support' }, name: 'Ebon Might', number: null, spellId: 395152, amount: 1_000_000, share: 1, absorbed: 0, hits: 0, crits: 0 }] },
-        { dimension: 'target', rows: [{ key: { kind: 'unit', unit: { kind: 'unit', name: "Ula'tek" } }, name: "Ula'tek", number: null, spellId: 0, amount: 1_000_000, share: 1, absorbed: 0, hits: 5, crits: 1 }] },
+        { dimension: 'ability', rows: [{ key: { kind: 'ability', ability: { kind: 'name', name: 'Ebon Might' }, rowKind: 'support', pet: null }, name: 'Ebon Might', number: null, spellId: 395152, amount: 1_000_000, share: 1, absorbed: 0, hits: 0, crits: 0, pets: [] }] },
+        { dimension: 'target', rows: [{ key: { kind: 'unit', unit: { kind: 'unit', name: "Ula'tek" } }, name: "Ula'tek", number: null, spellId: 0, amount: 1_000_000, share: 1, absorbed: 0, hits: 5, crits: 1, pets: [] }] },
       ],
     },
   ],

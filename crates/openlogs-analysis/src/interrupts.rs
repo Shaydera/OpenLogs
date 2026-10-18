@@ -178,7 +178,7 @@ pub fn interrupts_report(
         if !in_scope(scope, fight, &cell) {
             continue;
         }
-        let key = key_of(fight, &cell, group);
+        let key = key_of(fight, &cell, group, ScopeMetric::Interrupts);
         let (row, spells) = rows.entry(key.clone()).or_insert_with(|| {
             (
                 KickRow {

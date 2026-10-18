@@ -5,7 +5,7 @@ import { type MessageKey, t } from '../../i18n/i18n';
 import { spellIcon } from '../../icons';
 import { type MetricTab, useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
-import { rowLabel, rowValue } from '../filters/labels';
+import { rowLabel, rowPet, showOnlyLabel } from '../filters/labels';
 import { NoMatch } from '../filters/NoMatch';
 import { ReportPickers } from '../filters/ReportPickers';
 import { RowsMenu } from '../filters/RowsMenu';
@@ -60,7 +60,7 @@ const keyOf = (row: BreakdownRow) => JSON.stringify(row.key);
 export function BreakdownPanel(props: Props) {
   const { tab, breakdown, title, unit, hint, sideExtras, extraColumns = [], fill, total, onPreview, describedBy, legend, panelRef, popup } = props;
   const scope = useApp((s) => s.scope);
-  const select = useApp((s) => s.select);
+  const showOnly = useApp((s) => s.showOnly);
   const openPlayer = useApp((s) => s.openPlayer);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [splitDimension, setSplitDimension] = useState<Dimension | null>(null);
@@ -73,7 +73,7 @@ export function BreakdownPanel(props: Props) {
   const selectedPlayer = selectedUnit?.kind === 'player' ? selectedUnit.actorId : null;
   const grid = GRID[extraColumns.length];
   const narrowable = (row: BreakdownRow) => scope[breakdown.group].length === 0 && !(row.key.kind === 'ability' && row.key.rowKind === 'unmatched');
-  const narrowTo = (row: BreakdownRow) => void select(breakdown.group, rowValue(row.key));
+  const narrowTo = (row: BreakdownRow) => void showOnly(breakdown.group, row);
 
   const playerOf = (row: BreakdownRow) => {
     const unitRef = row.key.kind === 'unit' ? row.key.unit : null;
@@ -98,9 +98,11 @@ export function BreakdownPanel(props: Props) {
 
   const name = (row: BreakdownRow) => {
     const player = playerOf(row);
+    const pet = rowPet(row.key);
     return (
       <span className="player-name" style={player ? { color: classColor(player.classToken) } : undefined}>
         <span className="name-label">{rowLabel(row)}</span>
+        {pet && <span className="ab-pet">{pet}</span>}
         {row.key.kind === 'ability' && row.key.rowKind === 'support' && <span className="rtag rtag-support">{t('report.supportTag')}</span>}
       </span>
     );
@@ -222,7 +224,7 @@ export function BreakdownPanel(props: Props) {
             )}
             {narrowable(selected) && (
               <button type="button" className="link-accent" onClick={() => narrowTo(selected)}>
-                {t('breakdown.showOnly', { name: rowLabel(selected) })}
+                {showOnlyLabel(selected)}
               </button>
             )}
           </div>

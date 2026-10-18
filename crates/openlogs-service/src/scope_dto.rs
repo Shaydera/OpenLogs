@@ -94,6 +94,8 @@ pub enum RowKeyDto {
     Ability {
         ability: AbilityRefDto,
         row_kind: RowKindDto,
+        /// The name of the pets that cast it, as logged; `None` for what players cast themselves.
+        pet: Option<String>,
     },
 }
 
@@ -121,6 +123,8 @@ pub struct BreakdownRowDto {
     pub absorbed: i64,
     pub hits: u32,
     pub crits: u32,
+    /// Pet ability rows: the pets the amounts come from, what "Show only" selects as the source.
+    pub pets: Vec<UnitRefDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -342,7 +346,7 @@ pub(crate) fn key_dto(fight: &Fight, key: &RowKey) -> (RowKeyDto, String, Option
                 number,
             )
         }
-        RowKey::Ability { ability, kind } => {
+        RowKey::Ability { ability, kind, pet } => {
             let row_kind = match kind {
                 CellKind::Own => RowKindDto::Own,
                 CellKind::Support => RowKindDto::Support,
@@ -355,6 +359,7 @@ pub(crate) fn key_dto(fight: &Fight, key: &RowKey) -> (RowKeyDto, String, Option
                 RowKeyDto::Ability {
                     ability: AbilityRefDto::of(ability),
                     row_kind,
+                    pet: pet.clone(),
                 },
                 ability_name(ability),
                 None,
@@ -405,6 +410,7 @@ impl RowDtos<'_> {
             absorbed: row.absorbed,
             hits: row.hits,
             crits: row.crits,
+            pets: row.pets.iter().map(UnitRefDto::of).collect(),
         }
     }
 }
