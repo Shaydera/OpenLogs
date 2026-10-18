@@ -50,6 +50,7 @@ export function useBrush(
       document.removeEventListener('mousemove', move);
       document.removeEventListener('mouseup', up);
       window.removeEventListener('blur', stop);
+      window.removeEventListener('resize', stop);
       stopDrag.current = null;
       setPreview(undefined);
     };
@@ -72,6 +73,7 @@ export function useBrush(
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', up);
     window.addEventListener('blur', stop);
+    window.addEventListener('resize', stop);
     stopDrag.current = stop;
   }
 

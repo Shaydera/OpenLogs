@@ -34,7 +34,7 @@ export function StartPage({ dragOver }: { dragOver: boolean }) {
   }
 
   return (
-    <div>
+    <div className="ui-scaled">
       <header className="topbar brand-island">
         <div className="brand-row">
           <AppWordmark size={32} />

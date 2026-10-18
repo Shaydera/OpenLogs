@@ -1,5 +1,6 @@
 import { type MouseEvent, useMemo, useState } from 'react';
 import type { PlayerRef, TimelineLane } from '../../api/types';
+import { cssZoom } from '../../cssZoom';
 import { formatEventTimeMs, formatScaled, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import type { TimeRange } from '../../store';
@@ -18,7 +19,7 @@ const describe = (powerType: number, sample: Sample) =>
 
 /** A unit's power and health in the window, one line each as logged, broken where it was dead. */
 export function PowerLane({ lane, shown, player }: { lane: TimelineLane; shown: TimeRange; player: PlayerRef | undefined }) {
-  const [hover, setHover] = useState<{ powerType: number; x: number; width: number } | null>(null);
+  const [hover, setHover] = useState<{ powerType: number; x: number; width: number; zoom: number } | null>(null);
   const lines = useMemo(
     () =>
       lane.power.map((line) => ({
@@ -39,7 +40,7 @@ export function PowerLane({ lane, shown, player }: { lane: TimelineLane; shown: 
   );
   const move = (powerType: number) => (event: MouseEvent<SVGSVGElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
-    setHover({ powerType, x: event.clientX - box.left, width: box.width });
+    setHover({ powerType, x: event.clientX - box.left, width: box.width, zoom: cssZoom(event.currentTarget) });
   };
   return (
     <div className="tl-power">
@@ -68,7 +69,7 @@ export function PowerLane({ lane, shown, player }: { lane: TimelineLane; shown: 
             </svg>
             <span className="tl-power-name">{name}</span>
             {at && (
-              <span className="tl-power-tip num" style={{ left: hover?.x }}>
+              <span className="tl-power-tip num" style={{ left: hover ? hover.x / hover.zoom : undefined }}>
                 {t(wasDead ? 'tl.power.atDead' : 'tl.power.at', { name, value: describe(line.powerType, at), time: formatEventTimeMs(at[0]) })}
               </span>
             )}

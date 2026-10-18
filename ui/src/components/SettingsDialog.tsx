@@ -48,7 +48,7 @@ export function SettingsDialog() {
         if (event.target === event.currentTarget) closeSettings();
       }}
     >
-      <section className="panel settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" onKeyDown={onKeyDown}>
+      <section className="panel settings ui-scaled" role="dialog" aria-modal="true" aria-labelledby="settings-title" onKeyDown={onKeyDown}>
         <div className="panel-head">
           <h2 id="settings-title" className="h2">
             {t('settings.title')}

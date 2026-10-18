@@ -1,4 +1,5 @@
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from 'react';
+import { cssZoom } from '../../cssZoom';
 import { formatEventTime } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { type TimeRange, replaySplitShown, useApp } from '../../store';
@@ -22,11 +23,18 @@ export function Ruler({ shown, whole, widthPx, trackRef }: { shown: TimeRange; w
     const box = event.currentTarget.getBoundingClientRect();
     const from = event.clientX - box.left;
     const fromY = event.clientY;
-    const move = (e: MouseEvent) => setDrag({ from, to: e.clientX - box.left });
+    // The band is styled in local px; rect and pointer are visual px.
+    const zoom = cssZoom(event.currentTarget);
+    const move = (e: MouseEvent) => setDrag({ from: from / zoom, to: (e.clientX - box.left) / zoom });
     const stop = () => {
       document.removeEventListener('mousemove', move);
       document.removeEventListener('mouseup', up);
+      window.removeEventListener('resize', cancel);
       stopDrag.current = null;
+    };
+    const cancel = () => {
+      stop();
+      setDrag(null);
     };
     const up = (e: MouseEvent) => {
       stop();
@@ -43,6 +51,7 @@ export function Ruler({ shown, whole, widthPx, trackRef }: { shown: TimeRange; w
     stopDrag.current = stop;
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', up);
+    window.addEventListener('resize', cancel);
   }
 
   return (

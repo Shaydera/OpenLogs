@@ -1172,3 +1172,14 @@ describe('replay', () => {
     expect(initialState().replay.layers).toEqual({ map: true, grid: false, effects: false, worldMarkers: true, facing: true, names: true });
   });
 });
+
+describe('ui size', () => {
+  it('stores a valid size and falls back to 100 for an invalid one', () => {
+    useApp.getState().setUiSize(110);
+    expect(useApp.getState().uiSize).toBe(110);
+    expect(localStorage.getItem('openlogs.uiScale')).toBe('110');
+
+    useApp.getState().setUiSize(7);
+    expect(useApp.getState().uiSize).toBe(100);
+  });
+});

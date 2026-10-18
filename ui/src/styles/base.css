@@ -39,6 +39,9 @@ html {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
+.ui-scaled {
+  zoom: var(--ui-scale, 1);
+}
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);

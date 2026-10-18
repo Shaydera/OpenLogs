@@ -29,7 +29,7 @@ export function PullComparisonView({ row }: { row: FightRow }) {
   if (!comparison || !pullA || !pullB || !shown) return null;
 
   return (
-    <div>
+    <div className="ui-scaled">
       <header className="fight-head">
         <button type="button" className="btn" onClick={() => void closeComparison()}>
           {t('compare.back', { n: shown.n })}

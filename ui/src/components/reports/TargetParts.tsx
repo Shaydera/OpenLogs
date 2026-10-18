@@ -1,5 +1,6 @@
 import { type ReactNode, useRef, useState } from 'react';
 import type { PlayerRef, TargetShare } from '../../api/types';
+import { cssZoom } from '../../cssZoom';
 import { spellIcon } from '../../icons';
 import { formatCount, formatMillions, formatScaled, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
@@ -36,13 +37,15 @@ export function usePanelPopup<T>(owner: object) {
       setState(null);
       return;
     }
+    // Rects are visual px, the popup's styles local px.
+    const zoom = cssZoom(box);
     const frame = box.getBoundingClientRect();
-    const left = anchor.getBoundingClientRect().left - frame.left;
+    const left = (anchor.getBoundingClientRect().left - frame.left) / zoom;
     setState({
       data,
       owner,
       attribution,
-      at: { top: row.getBoundingClientRect().bottom - frame.top + 2, left: Math.max(8, Math.min(left, frame.width - width - 8)) },
+      at: { top: (row.getBoundingClientRect().bottom - frame.top) / zoom + 2, left: Math.max(8, Math.min(left, frame.width / zoom - width - 8)) },
     });
   };
   const popup = state && state.owner === owner && state.attribution === attribution ? state : null;

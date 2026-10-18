@@ -29,4 +29,16 @@ describe('HealingTab', () => {
     act(() => useApp.setState({ filters: { ...initialState().filters, perspective: 'enemy' } }));
     expect(screen.getByRole('complementary')).not.toHaveTextContent('Augmentation buffs');
   });
+
+  it('keeps a popup inside its panel when the panel is scaled', async () => {
+    const healer = { ...healingReportFixture.players[0], player: 3, supportReceived: 3_000_000, supportReceivedFrom: [{ player: 5, amount: 3_000_000 }] };
+    render(<HealingTab report={{ ...healingReportFixture, players: [healer] }} breakdown={breakdownFixture} />);
+    const panel = screen.getAllByRole('region').find((element) => element.classList.contains('report-main'))!;
+    Object.defineProperty(panel, 'currentCSSZoom', { value: 1.6, configurable: true });
+    vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 0, 1_600, 600));
+    const anchor = within(within(screen.getByRole('group', { name: 'Healing rows' })).getByRole('button', { name: /Wendel/ })).getByText('2.00M');
+    vi.spyOn(anchor, 'getBoundingClientRect').mockReturnValue(new DOMRect(1_500, 80, 60, 20));
+    await userEvent.hover(anchor);
+    expect(parseFloat(screen.getByRole('tooltip').style.left)).toBeLessThanOrEqual(1_000 - 360 - 8);
+  });
 });

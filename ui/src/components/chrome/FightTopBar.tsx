@@ -54,7 +54,7 @@ export function FightTopBar({ row, currentRef }: { row: FightRow; currentRef?: R
   }
 
   return (
-    <header className="appbar brand-island">
+    <header className="appbar brand-island ui-scaled">
       <button type="button" className="appbar-home" aria-label={t('chrome.home')} onClick={backToPulls}>
         <AppWordmark size={26} />
       </button>
