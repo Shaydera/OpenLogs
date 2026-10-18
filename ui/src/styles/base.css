@@ -57,8 +57,13 @@ html {
   min-height: 44px;
   cursor: pointer;
 }
-.btn:hover {
+.btn:hover:not(:disabled) {
   border-color: var(--accent);
+}
+.btn:disabled {
+  color: var(--muted);
+  opacity: 0.55;
+  cursor: default;
 }
 .btn-accent {
   background: var(--accent);

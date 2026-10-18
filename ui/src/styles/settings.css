@@ -53,3 +53,23 @@
   padding-top: 12px;
   border-top: 1px solid var(--line-soft);
 }
+.ui-size {
+  display: grid;
+  grid-template-columns: auto 1fr 44px auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 6px;
+}
+.ui-size-label {
+  font-size: 14px;
+}
+.ui-size input[type='range'] {
+  min-width: 0;
+  accent-color: var(--accent);
+}
+.ui-size-value {
+  font-size: 13px;
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { createEvent, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MapArtEntry, MapArtTable, ReplayData, ReplayTrack } from '../../api/types';
@@ -61,6 +61,20 @@ afterEach(() => {
 });
 
 describe('ReplayStage', () => {
+  it('keeps Ctrl + wheel for itself at the zoom limit but leaves a plain wheel to the page', () => {
+    render(<ReplayStage data={replayFixture} highlight={null} />);
+    let clock = 0;
+    const turn = (ctrlKey: boolean) => {
+      clock += 10_000;
+      const event = createEvent.wheel(stage(), { deltaY: 100, ctrlKey });
+      Object.defineProperty(event, 'timeStamp', { value: clock });
+      return fireEvent(stage(), event);
+    };
+    for (let i = 0; i < 40; i++) turn(false);
+    expect(turn(false)).toBe(true);
+    expect(turn(true)).toBe(false);
+  });
+
   it('clicking a unit selects it', async () => {
     render(<ReplayStage data={replayFixture} highlight={null} />);
     const { frame } = stageMap(replayFixture, null);

@@ -293,8 +293,8 @@ function mountStage(
     const current = camera(replayNow());
     const next = zoomAt(current, 1 / wheelZoomFactor(event.deltaY * unit), at.x, at.y, w, h);
     const turning = event.timeStamp < wheelTurnUntil;
-    // A fresh turn that cannot zoom any further leaves the wheel to the page.
-    if (!turning && next.scale === current.scale) return;
+    // A fresh turn that cannot zoom any further leaves a plain wheel to the page; Ctrl + wheel stays here so it cannot resize the UI.
+    if (!turning && next.scale === current.scale && !(event.ctrlKey || event.metaKey)) return;
     event.preventDefault();
     wheelTurnUntil = event.timeStamp + WHEEL_TURN_MS;
     moveCamera(next);

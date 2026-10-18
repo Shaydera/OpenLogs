@@ -2,7 +2,7 @@ import { readStored, writeStored } from './storage';
 
 export const BASE_WIDTH = 1920;
 export const BASE_HEIGHT = 1000;
-export const UI_SIZES: readonly number[] = Array.from({ length: 11 }, (_, i) => 80 + i * 5);
+export const UI_SIZES: readonly number[] = Array.from({ length: 31 }, (_, i) => 50 + i * 5);
 const DEFAULT_UI_SIZE = 100;
 const UI_SIZE_KEY = 'uiScale';
 

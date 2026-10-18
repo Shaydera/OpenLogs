@@ -1,9 +1,11 @@
-import { type KeyboardEvent, useEffect, useId, useRef } from 'react';
+import { type CSSProperties, type KeyboardEvent, useEffect, useId, useRef } from 'react';
 import type { GameDataManifest } from '../gameData';
 import { formatLocalDate } from '../i18n/format';
 import { type MessageKey, t } from '../i18n/i18n';
 import { useApp } from '../store';
 import { THEMES, type ThemeName } from '../theme';
+import { effectiveScale, UI_SIZES } from '../uiScale';
+import { useAutoScale } from '../hooks/useAutoScale';
 
 const TABLES: { key: keyof Omit<GameDataManifest, 'fetchedUnixMs'>; name: MessageKey; entries: MessageKey }[] = [
   { key: 'spellIcons', name: 'settings.spellIcons', entries: 'settings.entries.spellIcons' },
@@ -18,14 +20,19 @@ const THEME_TEXT: Record<ThemeName, { name: MessageKey; hint: MessageKey }> = {
   bark: { name: 'theme.bark', hint: 'theme.barkHint' },
 };
 
-/** The theme and the shipped game data. */
+/** The theme, the UI size and the shipped game data. */
 export function SettingsDialog() {
   const closeSettings = useApp((s) => s.closeSettings);
   const theme = useApp((s) => s.theme);
   const setTheme = useApp((s) => s.setTheme);
   const gameData = useApp((s) => s.gameData);
   const loading = useApp((s) => s.gameDataLoading);
+  const uiSize = useApp((s) => s.uiSize);
+  const setUiSize = useApp((s) => s.setUiSize);
+  const auto = useAutoScale();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const sliderRef = useRef<HTMLInputElement>(null);
+  const sliderId = useId();
   const hintId = useId();
 
   // Focus moves into the dialog and back to where it came from (the Settings button).
@@ -33,6 +40,22 @@ export function SettingsDialog() {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeRef.current?.focus();
     return () => previous?.focus();
+  }, []);
+
+  // Native and non-passive: React's onWheel cannot stop the dialog from scrolling under the slider.
+  useEffect(() => {
+    const slider = sliderRef.current;
+    if (!slider) return;
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY === 0) return;
+      event.preventDefault();
+      const direction = event.deltaY < 0 ? 1 : -1;
+      const current = useApp.getState().uiSize;
+      const next = Math.min(UI_SIZES[UI_SIZES.length - 1], Math.max(UI_SIZES[0], current + direction * 5));
+      if (next !== current) useApp.getState().setUiSize(next);
+    };
+    slider.addEventListener('wheel', onWheel, { passive: false });
+    return () => slider.removeEventListener('wheel', onWheel);
   }, []);
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
@@ -48,7 +71,15 @@ export function SettingsDialog() {
         if (event.target === event.currentTarget) closeSettings();
       }}
     >
-      <section className="panel settings ui-scaled" role="dialog" aria-modal="true" aria-labelledby="settings-title" onKeyDown={onKeyDown}>
+      <section
+        className="panel settings ui-scaled"
+        // Zoomed by the automatic factor only: the user's size would move the slider away from the pointer while dragging.
+        style={{ '--ui-scale': auto } as CSSProperties}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        onKeyDown={onKeyDown}
+      >
         <div className="panel-head">
           <h2 id="settings-title" className="h2">
             {t('settings.title')}
@@ -79,6 +110,30 @@ export function SettingsDialog() {
               </label>
             ))}
           </fieldset>
+          <h3 className="cap settings-label">{t('uiSize.title')}</h3>
+          <p className="settings-note">
+            {t('uiSize.readout', { auto: Math.round(auto * 100), now: Math.round(effectiveScale(auto, uiSize) * 100) })}
+          </p>
+          <div className="ui-size">
+            <label htmlFor={sliderId} className="ui-size-label">
+              {t('uiSize.adjust')}
+            </label>
+            <input
+              ref={sliderRef}
+              id={sliderId}
+              type="range"
+              min={UI_SIZES[0]}
+              max={UI_SIZES[UI_SIZES.length - 1]}
+              step={5}
+              value={uiSize}
+              aria-valuetext={`${uiSize}%`}
+              onChange={(event) => setUiSize(Number(event.target.value))}
+            />
+            <span className="ui-size-value">{uiSize}%</span>
+            <button type="button" className="btn" disabled={uiSize === 100} onClick={() => setUiSize(100)}>
+              {t('uiSize.reset')}
+            </button>
+          </div>
           <h3 className="cap settings-label">{t('settings.gameData')}</h3>
           {gameData === null ? (
             <p className="settings-note">{loading ? t('settings.loading') : t('settings.statusUnavailable')}</p>

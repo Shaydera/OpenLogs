@@ -32,9 +32,14 @@ describe('effectiveScale', () => {
 });
 
 describe('readUiSize', () => {
-  it.each(['abc', '135', '82', null])('falls back to 100 for %s', (stored) => {
+  it.each(['abc', '45', '205', '52', null])('falls back to 100 for %s', (stored) => {
     if (stored !== null) localStorage.setItem('openlogs.uiScale', stored);
     expect(readUiSize()).toBe(100);
+  });
+
+  it.each(['50', '200'])('keeps the bound %s', (stored) => {
+    localStorage.setItem('openlogs.uiScale', stored);
+    expect(readUiSize()).toBe(Number(stored));
   });
 
   it('reads a valid stored size', () => {
