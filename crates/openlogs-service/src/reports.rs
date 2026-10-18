@@ -1,5 +1,5 @@
 use openlogs_analysis::{ActorId, Attribution, Fight, ReportFilter};
-use openlogs_gamedata::{ChannelSpells, Curated};
+use openlogs_gamedata::{ChannelSpells, Curated, SpellClasses};
 
 use crate::auras_dto::{AuraKindDto, AurasReportDto, auras_report_dto};
 use crate::casts_dto::{CastsReportDto, casts_report_dto};
@@ -147,11 +147,12 @@ pub fn replay(
     fight: &Fight,
     curated: &Curated,
     channels: &ChannelSpells,
+    spell_classes: &SpellClasses,
     advanced_logging: bool,
 ) -> ReplayDto {
     replay_dto(
         fight,
-        &openlogs_analysis::replay(fight, curated, channels),
+        &openlogs_analysis::replay(fight, curated, channels, spell_classes),
         advanced_logging,
     )
 }

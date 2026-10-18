@@ -79,6 +79,8 @@ describe('casts, auras and health', () => {
         { t: 4000, stacks: 3 },
       ],
       raidFrame: null,
+      category: 'other',
+      sourcePlayer: null,
     };
     expect(stacksAt(aura, 500)).toBeNull();
     expect(stacksAt(aura, 3999)).toBe(1);

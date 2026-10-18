@@ -1,5 +1,5 @@
 import { type Engine, workerEngine } from '../engine/engine';
-import { channelSpellsJson, dungeonsJson } from '../gameData';
+import { channelSpellsJson, dungeonsJson, spellClassesJson } from '../gameData';
 import { browserDatabase, type Database } from './db';
 import { type LogSource, reopenHandle } from './logSource';
 import { type RecentRecord, recentRecords, rememberLog } from './recent';
@@ -56,6 +56,7 @@ export interface ClientDeps {
   engine: () => Engine;
   dungeons: () => Promise<string | null>;
   channelSpells: () => Promise<string | null>;
+  spellClasses: () => Promise<string | null>;
   db: Database;
   now: () => number;
 }
@@ -69,9 +70,9 @@ async function quietly<T>(task: () => Promise<T>): Promise<T | undefined> {
   }
 }
 
-export function createClient({ engine: getEngine, dungeons, channelSpells, db, now }: ClientDeps) {
+export function createClient({ engine: getEngine, dungeons, channelSpells, spellClasses, db, now }: ClientDeps) {
   let current: { source: LogSource; engineRestarts: number } | null = null;
-  const gameDataLoaded = { dungeons: false, channelSpells: false };
+  const gameDataLoaded = { dungeons: false, channelSpells: false, spellClasses: false };
   let latestOpen = 0;
   let queue: Promise<unknown> = Promise.resolve();
 
@@ -111,6 +112,7 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, db, n
   async function loadGameData(engine: Engine) {
     await loadTable('dungeons', dungeons, (json) => engine.setDungeons(json));
     await loadTable('channelSpells', channelSpells, (json) => engine.setChannelSpells(json));
+    await loadTable('spellClasses', spellClasses, (json) => engine.setSpellClasses(json));
   }
 
   async function index(
@@ -245,6 +247,7 @@ export const api = createClient({
   engine: () => (sharedEngine ??= workerEngine()),
   dungeons: dungeonsJson,
   channelSpells: channelSpellsJson,
+  spellClasses: spellClassesJson,
   db: browserDatabase,
   now: Date.now,
 });

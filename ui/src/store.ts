@@ -75,6 +75,7 @@ export type ReplayState = {
   splitWidth: number;
   follow: boolean;
   rangeOpen: boolean;
+  allAuras: boolean;
   meter: ReplayMeter;
 };
 export type MeterMode = 'cumulative' | 'window';
@@ -367,6 +368,7 @@ interface Actions {
   setReplaySplit(on: boolean): void;
   setReplaySplitWidth(width: number): void;
   setReplayRangeOpen(open: boolean): void;
+  setReplayAllAuras(all: boolean): void;
   setReplayMeter(meter: Partial<ReplayMeter>): void;
   setReplayFollow(on: boolean): void;
   openReplayAt(ms: number): void;
@@ -396,6 +398,7 @@ function readReplayState(): ReplayState {
     splitWidth: DEFAULT_SPLIT_WIDTH,
     follow: false,
     rangeOpen: false,
+    allAuras: false,
     meter: DEFAULT_REPLAY_METER,
   };
   const raw = readStored(REPLAY_KEY);
@@ -414,6 +417,7 @@ function readReplayState(): ReplayState {
       split: stored.split === true,
       splitWidth: typeof stored.splitWidth === 'number' && stored.splitWidth > 0 ? stored.splitWidth : DEFAULT_SPLIT_WIDTH,
       rangeOpen: stored.rangeOpen === true,
+      allAuras: stored.allAuras === true,
       meter: readMeter(stored.meter),
     };
   } catch {
@@ -430,8 +434,8 @@ function readMeter(value: unknown): ReplayMeter {
   };
 }
 
-function writeReplayState({ layers, filters: { hidden: _hidden, ...filters }, speed, split, splitWidth, rangeOpen, meter }: ReplayState) {
-  writeStored(REPLAY_KEY, JSON.stringify({ layers, filters, speed, split, splitWidth, rangeOpen, meter }));
+function writeReplayState({ layers, filters: { hidden: _hidden, ...filters }, speed, split, splitWidth, rangeOpen, allAuras, meter }: ReplayState) {
+  writeStored(REPLAY_KEY, JSON.stringify({ layers, filters, speed, split, splitWidth, rangeOpen, allAuras, meter }));
 }
 
 export function initialState(): State {
@@ -1304,6 +1308,12 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
 
   setReplayRangeOpen(rangeOpen) {
     const replay = { ...get().replay, rangeOpen };
+    set({ replay });
+    writeReplayState(replay);
+  },
+
+  setReplayAllAuras(allAuras) {
+    const replay = { ...get().replay, allAuras };
     set({ replay });
     writeReplayState(replay);
   },

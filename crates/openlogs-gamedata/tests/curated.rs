@@ -3,9 +3,10 @@ use std::fs;
 
 use openlogs_gamedata::{
     ARENA_FRAMES_DIR, ArenaFrame, BOSS_EFFECTS_DIR, CONSUMABLES_FILE, ConsumableKind,
-    CooldownCategory, Curated, EffectAnchor, EffectCategory, EffectDuration, EffectKind,
-    EffectTrigger, MAJOR_CDS_FILE, PHASES_DIR, PROCS_FILE, PhaseTrigger, PlayerCooldownKind,
-    RAID_EFFECTS_FILE, RAID_FRAME_AURAS_FILE, class, spec,
+    CooldownCategory, Curated, ENEMY_DEBUFFS_FILE, EffectAnchor, EffectCategory, EffectDuration,
+    EffectKind, EffectTrigger, EnemyDebuffKind, LOCKOUT_DEBUFFS_FILE, MAJOR_CDS_FILE, PHASES_DIR,
+    PROCS_FILE, PhaseTrigger, PlayerCooldownKind, RAID_EFFECTS_FILE, RAID_FRAME_AURAS_FILE, class,
+    spec,
 };
 
 fn boss_effects_json(encounter_id: u32, name: &str) -> String {
@@ -221,6 +222,51 @@ fn raid_frame_auras_load_and_an_override_replaces_them() {
     assert_eq!(curated.raid_frame_priority(1), Some(0));
     assert!(curated.raid_frame_excluded(2));
     assert_eq!(curated.raid_frame_priority(33206), None);
+    assert!(curated.warnings.is_empty(), "{:?}", curated.warnings);
+}
+
+#[test]
+fn lockout_debuffs_load_and_an_override_replaces_them() {
+    let bundled = Curated::bundled();
+    assert!(bundled.is_lockout(57724), "Sated");
+    assert!(!bundled.is_lockout(1490));
+
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join(LOCKOUT_DEBUFFS_FILE),
+        r#"{ "version": 1, "debuffs": [ { "spell_id": 1, "name": "X" } ] }"#,
+    )
+    .unwrap();
+
+    let curated = Curated::load(Some(dir.path()));
+    assert!(curated.is_lockout(1));
+    assert!(!curated.is_lockout(57724));
+    assert!(curated.warnings.is_empty(), "{:?}", curated.warnings);
+}
+
+#[test]
+fn enemy_debuffs_load_and_an_override_replaces_them() {
+    let bundled = Curated::bundled();
+    assert_eq!(bundled.enemy_debuff_kind(1490), Some(EnemyDebuffKind::Amp));
+    assert_eq!(
+        bundled.enemy_debuff_kind(210824),
+        Some(EnemyDebuffKind::Cooldown)
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join(ENEMY_DEBUFFS_FILE),
+        r#"{ "version": 1,
+             "debuffs": [ { "spell_id": 1, "name": "X", "kind": "cooldown" } ] }"#,
+    )
+    .unwrap();
+
+    let curated = Curated::load(Some(dir.path()));
+    assert_eq!(
+        curated.enemy_debuff_kind(1),
+        Some(EnemyDebuffKind::Cooldown)
+    );
+    assert_eq!(curated.enemy_debuff_kind(1490), None);
     assert!(curated.warnings.is_empty(), "{:?}", curated.warnings);
 }
 

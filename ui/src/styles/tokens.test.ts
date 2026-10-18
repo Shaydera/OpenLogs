@@ -61,8 +61,8 @@ describe('theme colours', () => {
     expect(failures).toEqual([]);
   });
 
-  it.each((['slate', 'bark'] as const).map((theme) => [theme] as const))('give bar text 4.5:1 on every fill and the track in %s, light', (theme) => {
-    const tokens = themeTokens(tokensCss, theme, 'light');
+  it.each(combinations)('give bar text 4.5:1 on every fill and the track in %s, %s', (theme, mode) => {
+    const tokens = themeTokens(tokensCss, theme, mode);
     const resolve = (value: string): string => (value.startsWith('var(--') ? resolve(tokens[value.slice(6, -1)]) : value);
     const fills = ['hp-fill', 'cast-fill', ...[...Object.values(POWER_TOKENS), 'other'].map((power) => `power-${power}`)];
     const failures = [...fills.map((fill) => [tokens[`${fill}-text`] ?? tokens['bar-text-on-fill'], tokens[fill], fill]), [tokens.text, tokens['bar-track'], 'bar-track']]

@@ -1131,6 +1131,9 @@ export interface ReplayStackChange {
   stacks: number;
 }
 
+/** What an aura stands for in the replay; the unit frames filter by it. */
+export type AuraCategory = 'encounter' | 'crowdControl' | 'amp' | 'cooldown' | 'other';
+
 export interface ReplayAura {
   target: number;
   source: number;
@@ -1141,6 +1144,9 @@ export interface ReplayAura {
   stacks: ReplayStackChange[];
   /** Raid frame priority (lower first); `null`: not shown on a raid frame. */
   raidFrame: number | null;
+  category: AuraCategory;
+  /** The player credited with the source (a pet's or guardian's owner); `null`: no player. */
+  sourcePlayer: number | null;
 }
 
 export interface ReplayRaidMarker {

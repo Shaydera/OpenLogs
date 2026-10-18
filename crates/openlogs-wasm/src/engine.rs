@@ -1,5 +1,5 @@
 use openlogs_analysis::{Fight, load_fight_slice};
-use openlogs_gamedata::{ChannelSpells, Curated, DungeonTable};
+use openlogs_gamedata::{ChannelSpells, Curated, DungeonTable, SpellClasses};
 use openlogs_index::{FightSummary, Indexer, LogIndex};
 use openlogs_service::auras_dto::AuraKindDto;
 use openlogs_service::log_dto::log_view;
@@ -23,6 +23,7 @@ pub struct Engine {
     curated: Curated,
     dungeons: Option<DungeonTable>,
     channels: ChannelSpells,
+    spell_classes: SpellClasses,
 }
 
 impl Default for Engine {
@@ -34,6 +35,7 @@ impl Default for Engine {
             curated: Curated::bundled(),
             dungeons: None,
             channels: ChannelSpells::default(),
+            spell_classes: SpellClasses::default(),
         }
     }
 }
@@ -46,6 +48,11 @@ impl Engine {
 
     pub fn set_channel_spells(&mut self, json: &str) -> Result<(), String> {
         self.channels = ChannelSpells::from_json(json).map_err(|err| err.to_string())?;
+        Ok(())
+    }
+
+    pub fn set_spell_classes(&mut self, json: &str) -> Result<(), String> {
+        self.spell_classes = SpellClasses::from_json(json).map_err(|err| err.to_string())?;
         Ok(())
     }
 
@@ -306,6 +313,7 @@ impl Engine {
                     self.fight(args.fight_index)?,
                     curated,
                     &self.channels,
+                    &self.spell_classes,
                     self.index.advanced_logging,
                 ))
             }

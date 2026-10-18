@@ -10,10 +10,10 @@ mod units;
 
 use std::collections::BTreeSet;
 
-use openlogs_gamedata::{ArenaFrame, ChannelSpells, Curated};
+use openlogs_gamedata::{ArenaFrame, ChannelSpells, Curated, SpellClasses};
 use openlogs_index::MapBounds;
 
-pub use auras::{ReplayAura, StackChange};
+pub use auras::{AuraCategory, ReplayAura, StackChange};
 pub use casts::{ReplayCast, ReplayCastOutcome};
 pub use effects::{AffectedSpan, EffectAnchorAt, EffectInstance};
 pub use health::HealthTrack;
@@ -64,7 +64,12 @@ pub struct ReplayDeath {
     pub until: Option<i32>,
 }
 
-pub fn replay(fight: &Fight, curated: &Curated, channels: &ChannelSpells) -> Replay {
+pub fn replay(
+    fight: &Fight,
+    curated: &Curated,
+    channels: &ChannelSpells,
+    spell_classes: &SpellClasses,
+) -> Replay {
     let bosses = boss_units(fight);
     let roster = Roster::new(fight, &bosses);
     let boss_hp = boss_hp_series(fight, &bosses, BOSS_HP_STEP_MS);
@@ -77,7 +82,7 @@ pub fn replay(fight: &Fight, curated: &Curated, channels: &ChannelSpells) -> Rep
         power: power::power(fight, &roster),
         targets: targets::targets(fight, &roster),
         casts,
-        auras: auras::auras(fight, curated, &roster, &intervals),
+        auras: auras::auras(fight, curated, spell_classes, &roster, &intervals),
         raid_markers: fight
             .raid_markers
             .iter()

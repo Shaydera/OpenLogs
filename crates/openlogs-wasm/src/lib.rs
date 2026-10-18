@@ -43,6 +43,10 @@ impl Session {
         self.engine.set_channel_spells(json).map_err(to_js)
     }
 
+    pub fn set_spell_classes(&mut self, json: &str) -> Result<(), JsValue> {
+        self.engine.set_spell_classes(json).map_err(to_js)
+    }
+
     pub fn begin_index(&mut self) {
         self.engine.begin_index();
     }

@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 
 use openlogs_analysis::{
-    ActorId, EffectAnchorAt, EffectInstance, Fight, HealthTrack, PhaseKind, Replay, ReplayAura,
-    ReplayCast, ReplayCastOutcome, ReplayDeath, ReplayUnit, SpellId, StackChange, Track, UnitKind,
+    ActorId, AuraCategory, EffectAnchorAt, EffectInstance, Fight, HealthTrack, PhaseKind, Replay,
+    ReplayAura, ReplayCast, ReplayCastOutcome, ReplayDeath, ReplayUnit, SpellId, StackChange,
+    Track, UnitKind,
 };
 use openlogs_gamedata::{ArenaFrame, EffectCategory, EffectKind};
 use openlogs_index::MapBounds;
@@ -139,6 +140,16 @@ pub struct StackChangeDto {
     pub stacks: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AuraCategoryDto {
+    Encounter,
+    CrowdControl,
+    Amp,
+    Cooldown,
+    Other,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplayAuraDto {
@@ -150,6 +161,8 @@ pub struct ReplayAuraDto {
     pub end_ms: i32,
     pub stacks: Vec<StackChangeDto>,
     pub raid_frame: Option<u8>,
+    pub category: AuraCategoryDto,
+    pub source_player: Option<ActorId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -414,6 +427,14 @@ fn aura_dto(fight: &Fight, refs: &mut Refs, aura: &ReplayAura) -> ReplayAuraDto 
             })
             .collect(),
         raid_frame: aura.raid_frame,
+        category: match aura.category {
+            AuraCategory::Encounter => AuraCategoryDto::Encounter,
+            AuraCategory::CrowdControl => AuraCategoryDto::CrowdControl,
+            AuraCategory::Amp => AuraCategoryDto::Amp,
+            AuraCategory::Cooldown => AuraCategoryDto::Cooldown,
+            AuraCategory::Other => AuraCategoryDto::Other,
+        },
+        source_player: aura.source_player,
     }
 }
 
@@ -469,7 +490,7 @@ mod tests {
         Actors, AuraAction, AuraType, Event, EventKind, NO_SPELL, NOBODY, PositionSample,
         PowerSample, SpellInfo,
     };
-    use openlogs_gamedata::{ArenaFrame, ChannelSpells, Curated};
+    use openlogs_gamedata::{ArenaFrame, ChannelSpells, Curated, SpellClasses};
     use openlogs_index::MapBounds;
     use serde_json::json;
 
@@ -557,7 +578,12 @@ mod tests {
             size_yd: 110.0,
         }];
 
-        let replay = openlogs_analysis::replay(&fight, &curated, &ChannelSpells::default());
+        let replay = openlogs_analysis::replay(
+            &fight,
+            &curated,
+            &ChannelSpells::default(),
+            &SpellClasses::default(),
+        );
         let dto = replay_dto(&fight, &replay, true);
         let json = serde_json::to_value(&dto).unwrap();
 
@@ -603,5 +629,50 @@ mod tests {
         assert_eq!(rallying["category"], "raid_cd");
         assert_eq!(rallying["radiusYd"], 40.0);
         assert_eq!(rallying["tickWindowMs"], 3000);
+    }
+
+    #[test]
+    fn replay_auras_carry_their_category_and_crediting_player() {
+        let mut actors = Actors::new();
+        let rogue = unit(&mut actors, "Player-1", "Faelan-Emberfall-EU", PLAYER_FLAGS);
+        let paladin = unit(
+            &mut actors,
+            "Player-2",
+            "Brannoc-Emberfall-EU",
+            PLAYER_FLAGS,
+        );
+        let stun = 900_042;
+        let fight = fight(
+            actors,
+            vec![Event {
+                t: 1_000,
+                source: rogue,
+                target: paladin,
+                spell: stun,
+                kind: EventKind::Aura {
+                    action: AuraAction::Applied,
+                    aura_type: AuraType::Debuff,
+                    stacks: None,
+                    broken_by: NO_SPELL,
+                },
+                source_hostile: false,
+                target_hostile: false,
+                unit_hp: None,
+            }],
+        );
+        let spell_classes =
+            SpellClasses::from_json(r#"{ "classSpells": [900042], "crowdControl": [900042] }"#)
+                .unwrap();
+
+        let replay = openlogs_analysis::replay(
+            &fight,
+            &Curated::bundled(),
+            &ChannelSpells::default(),
+            &spell_classes,
+        );
+        let json = serde_json::to_value(replay_dto(&fight, &replay, false)).unwrap();
+
+        assert_eq!(json["auras"][0]["category"], "crowdControl");
+        assert_eq!(json["auras"][0]["sourcePlayer"], rogue);
     }
 }

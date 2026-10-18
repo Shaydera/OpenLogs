@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "note": "Debuffs players put on enemies that the replay's enemy frames show: amp raises the damage the target takes or lowers the damage it deals, cooldown marks a big damage window, encounter marks a boss mechanic a player puts on an enemy (shown like a hostile debuff; player-sourced debuffs on enemies are otherwise never encounter). Every ID was checked against SPELL_AURA_APPLIED DEBUFF lines from players on boss units (Nek'zali, Sszorak, the Twin Fangs, Vashnik) in two real 12.1 raid logs; Atrophic Poison only appears in the second log.",
+  "debuffs": [
+    { "spell_id": 113746, "name": "Mystic Touch", "kind": "amp" },
+    { "spell_id": 1490, "name": "Chaos Brand", "kind": "amp" },
+    { "spell_id": 257284, "name": "Hunter's Mark", "kind": "amp" },
+    { "spell_id": 392388, "name": "Atrophic Poison", "kind": "amp" },
+    { "spell_id": 210824, "name": "Touch of the Magi", "kind": "cooldown" },
+    { "spell_id": 208086, "name": "Colossus Smash", "kind": "cooldown" },
+    { "spell_id": 320338, "name": "Essence Break", "kind": "cooldown" },
+    { "spell_id": 343527, "name": "Execution Sentence", "kind": "cooldown" }
+  ]
+}

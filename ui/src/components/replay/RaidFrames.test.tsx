@@ -23,6 +23,8 @@ const aura = (spellId: number, buff: boolean, raidFrame: number | null, startMs:
   endMs,
   stacks: [],
   raidFrame,
+  category: 'other',
+  sourcePlayer: null,
 });
 
 describe('RaidFrames', () => {
@@ -65,5 +67,12 @@ describe('RaidFrames', () => {
     await userEvent.click(miravel);
     expect(useApp.getState().replay.selected).toBeNull();
     expect(miravel).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('a mouse click on an aura icon selects the player too', async () => {
+    const data: ReplayData = { ...replayFixture, spells: { '5000': { name: 'Grave Mark' } }, auras: [aura(5000, false, 0, 10_000)] };
+    render(<RaidFrames hud={indexHud(data)} />);
+    await userEvent.click(within(screen.getByRole('group', { name: 'Talwyn' })).getByRole('img', { name: 'Grave Mark' }));
+    expect(useApp.getState().replay.selected).toBe(1);
   });
 });

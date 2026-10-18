@@ -6,6 +6,7 @@ import { useApp } from '../../store';
 import { classColor } from '../overview/players';
 import { powerName } from '../resources/powerNames';
 import { AuraIcons } from './AuraIcons';
+import { type AuraHolder, ownPlayerOf, shownAuras } from './auraFilter';
 import { CastBar } from './CastBar';
 import { type HudIndex, healthShareAt, isDeadAt, unitLabel } from './hudIndex';
 import { HealthBar, HudPanel, healthText } from './HudParts';
@@ -49,11 +50,13 @@ function UnitName({ hud, unit, dead, onSelect }: { hud: HudIndex; unit: ReplayUn
   );
 }
 
-function BigFrame({ hud, unit, time, label, onSelect }: { hud: HudIndex; unit: ReplayUnit; time: number; label: string; onSelect?: () => void }) {
+function BigFrame({ hud, unit, time, label, ownPlayer, onSelect }: { hud: HudIndex; unit: ReplayUnit; time: number; label: string; ownPlayer: number | null; onSelect?: () => void }) {
+  const allAuras = useApp((s) => s.replay.allAuras);
   const dead = isDeadAt(hud, unit.actor, time);
   const health = healthShareAt(hud, unit.actor, time);
   const power = powerAt(hud, unit.actor, time);
-  const auras = aurasAt(hud.auras.get(unit.actor) ?? [], unit.actor, time).sort((a, b) => a.startMs - b.startMs);
+  const holder: AuraHolder = unit.kind === 'boss' || unit.kind === 'add' ? 'enemy' : 'player';
+  const auras = shownAuras(aurasAt(hud.auras.get(unit.actor) ?? [], unit.actor, time), holder, ownPlayer, allAuras).sort((a, b) => a.startMs - b.startMs);
   const healthFill = dead || !health ? 0 : share(health.current, health.max);
   return (
     <div role="group" aria-label={label} className="hud-frame hud-unit-frame">
@@ -113,18 +116,33 @@ export function UnitFrames({ hud, defaultCollapsed = false }: { hud: HudIndex; d
   const time = useReplayTime();
   const selected = useApp((s) => s.replay.selected);
   const selectReplayUnit = useApp((s) => s.selectReplayUnit);
+  const allAuras = useApp((s) => s.replay.allAuras);
+  const setAllAuras = useApp((s) => s.setReplayAllAuras);
   const unit = selected === null ? undefined : hud.units.get(selected);
   if (!unit) return null;
   const targetId = targetAt(hud, unit.actor, time);
   const target = targetId === null ? undefined : hud.units.get(targetId);
   const targetsTargetId = target ? targetAt(hud, target.actor, time) : null;
   const targetsTarget = targetsTargetId === null ? undefined : hud.units.get(targetsTargetId);
+  const ownPlayer = ownPlayerOf(hud, selected);
   return (
-    <HudPanel label={t('replay.unitFrames')} className="hud-unit" defaultCollapsed={defaultCollapsed}>
+    <HudPanel
+      label={t('replay.unitFrames')}
+      className="hud-unit"
+      defaultCollapsed={defaultCollapsed}
+      captionBelow
+      captionAside={
+        <div className="replay-seg hud-unit-aura-switch">
+          <button type="button" className={allAuras ? 'on' : undefined} aria-pressed={allAuras} onClick={() => setAllAuras(!allAuras)}>
+            {t('replay.allAuras')}
+          </button>
+        </div>
+      }
+    >
       <div className="hud-unit-row">
-        <BigFrame hud={hud} unit={unit} time={time} label={unitLabel(unit)} />
+        <BigFrame hud={hud} unit={unit} time={time} label={unitLabel(unit)} ownPlayer={ownPlayer} />
         {targetsTarget && <TargetOfTarget hud={hud} unit={targetsTarget} time={time} onSelect={() => selectReplayUnit(targetsTarget.actor)} />}
-        {target && <BigFrame hud={hud} unit={target} time={time} label={t('replay.targetFrame')} onSelect={() => selectReplayUnit(target.actor)} />}
+        {target && <BigFrame hud={hud} unit={target} time={time} label={t('replay.targetFrame')} ownPlayer={ownPlayer} onSelect={() => selectReplayUnit(target.actor)} />}
       </div>
     </HudPanel>
   );

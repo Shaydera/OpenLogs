@@ -1157,6 +1157,12 @@ describe('replay', () => {
     expect(initialState().replay.rangeOpen).toBe(true);
   });
 
+  it('remembers the all auras switch', () => {
+    expect(useApp.getState().replay.allAuras).toBe(false);
+    useApp.getState().setReplayAllAuras(true);
+    expect(initialState().replay.allAuras).toBe(true);
+  });
+
   it('remembers the meter settings and ignores invalid stored values', () => {
     expect(useApp.getState().replay.meter).toEqual({ category: 'damageDone', mode: 'cumulative', windowMs: 10_000 });
     useApp.getState().setReplayMeter({ category: 'healingDone', mode: 'window' });

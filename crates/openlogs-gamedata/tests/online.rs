@@ -1,7 +1,8 @@
 //! Hits the real services. `cargo test -p openlogs-gamedata --test online -- --ignored`
 
 use openlogs_gamedata::{
-    HttpFetch, download_boss_portraits, download_dungeons, download_map_art, download_spell_tables,
+    HttpFetch, download_boss_portraits, download_dungeons, download_map_art,
+    download_spell_classes, download_spell_tables,
 };
 
 #[test]
@@ -21,6 +22,26 @@ fn wago_tools_provides_every_table() {
     assert!(
         spells.channels.contains(5143),
         "Arcane Missiles is channelled"
+    );
+    let classes = download_spell_classes(&fetch).unwrap();
+    assert!(
+        classes.class_spell_count() > 10_000,
+        "got {} class spells",
+        classes.class_spell_count()
+    );
+    assert!(classes.is_class_spell(133), "Fireball is a class spell");
+    for (spell, name) in [
+        (408, "Kidney Shot"),
+        (118, "Polymorph"),
+        (853, "Hammer of Justice"),
+        (119381, "Leg Sweep"),
+        (118699, "Fear"),
+    ] {
+        assert!(classes.is_crowd_control(spell), "{name} is crowd control");
+    }
+    assert!(
+        !classes.is_crowd_control(133),
+        "Fireball is no crowd control"
     );
     let dungeons = download_dungeons(&fetch).unwrap();
     assert!(dungeons.len() > 80, "got {} keys", dungeons.len());

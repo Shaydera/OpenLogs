@@ -5,9 +5,12 @@ use crate::channel_spells::{ChannelSpellError, ChannelSpells};
 use crate::dungeons::{DungeonTable, DungeonTableError};
 use crate::fetch::{Fetch, FetchError};
 use crate::map_art::{MapArtError, MapArtTable};
+use crate::spell_classes::{SpellClasses, SpellClassesError};
 use crate::spell_icons::{SpellIconError, SpellIconTable};
 
 pub const WAGO_SPELL_MISC_URL: &str = "https://wago.tools/db2/SpellMisc/csv";
+pub const WAGO_SPELL_CLASS_OPTIONS_URL: &str = "https://wago.tools/db2/SpellClassOptions/csv";
+pub const WAGO_SPELL_EFFECT_URL: &str = "https://wago.tools/db2/SpellEffect/csv";
 pub const WAGO_MANIFEST_URL: &str = "https://wago.tools/db2/ManifestInterfaceData/csv";
 pub const WAGO_MAP_CHALLENGE_MODE_URL: &str = "https://wago.tools/db2/MapChallengeMode/csv";
 pub const WAGO_DUNGEON_ENCOUNTER_URL: &str = "https://wago.tools/db2/DungeonEncounter/csv";
@@ -27,6 +30,8 @@ pub enum DownloadError {
     SpellIcons(#[from] SpellIconError),
     #[error("downloaded channel spell data is invalid: {0}")]
     ChannelSpells(#[from] ChannelSpellError),
+    #[error("downloaded spell class data is invalid: {0}")]
+    SpellClasses(#[from] SpellClassesError),
     #[error("downloaded dungeon data is invalid: {0}")]
     Dungeons(#[from] DungeonTableError),
     #[error("downloaded boss portrait data is invalid: {0}")]
@@ -49,6 +54,13 @@ pub fn download_spell_tables<F: Fetch>(fetch: &F) -> Result<SpellTables, Downloa
         icons: SpellIconTable::from_csv(&spell_misc, &manifest)?,
         channels: ChannelSpells::from_csv(&spell_misc)?,
     })
+}
+
+/// Builds the class and crowd-control spell table from the wago.tools exports.
+pub fn download_spell_classes<F: Fetch>(fetch: &F) -> Result<SpellClasses, DownloadError> {
+    let spell_class_options = fetch.get(WAGO_SPELL_CLASS_OPTIONS_URL)?;
+    let spell_effect = fetch.get(WAGO_SPELL_EFFECT_URL)?;
+    Ok(SpellClasses::from_csv(&spell_class_options, &spell_effect)?)
 }
 
 /// Builds the Mythic+ dungeon table from the wago.tools exports.

@@ -112,11 +112,9 @@
   --hp-tint: color-mix(in srgb, var(--hp-fill) 28%, transparent);
   /* How much of a player's class colour fills a replay meter row. */
   --meter-fill-mix: 26%;
-  /* Text on the unit-frame and cast bars: --bar-text on top, the two-colour paint below it (light modes) and its halos. */
-  --bar-text: var(--text);
-  --bar-text-on-fill: var(--text);
-  --bar-text-halo: var(--bg);
-  --cast-text-halo: var(--bar-track);
+  /* Text on the unit-frame and cast bars where they are filled (--text where they are not): black, white on the cast fill. */
+  --bar-text-on-fill: #000000;
+  --cast-fill-text: #ffffff;
 
   /* Primary-power bars of the replay unit frames. */
   --power-mana: #4a7bea;
@@ -239,11 +237,8 @@
   --cast-fill: #6a58b0;
   --hp-tint: color-mix(in srgb, var(--hp-fill) 16%, transparent);
   --meter-fill-mix: 20%;
-  /* Bar text: white on the fills, black on the bright power fills (--power-*-text), --text on the track. */
-  --bar-text: transparent;
+  /* Bar text: white on the fills, black on the bright power fills (--power-*-text). */
   --bar-text-on-fill: #ffffff;
-  --bar-text-halo: transparent;
-  --cast-text-halo: transparent;
 
   /* Primary-power bars of the replay unit frames. */
   --power-mana: #2f5fd0;

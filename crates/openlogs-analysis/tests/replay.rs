@@ -1,11 +1,11 @@
 mod support;
 
 use openlogs_analysis::{
-    ActorId, AuraAction, AuraType, DamageVia, EventKind, Fight, HealthTrack, NO_SPELL, NOBODY,
-    Replay, ReplayCast, ReplayCastOutcome, ReplayDeath, ReplayPowerTrack, ReplayUnit, SpellId,
-    StackChange, TargetTrack, Track, UnitKind, quick_overview, replay,
+    ActorId, AuraAction, AuraCategory, AuraType, DamageVia, EventKind, Fight, HealthTrack,
+    NO_SPELL, NOBODY, Replay, ReplayCast, ReplayCastOutcome, ReplayDeath, ReplayPowerTrack,
+    ReplayUnit, SpellId, StackChange, TargetTrack, Track, UnitKind, quick_overview, replay,
 };
-use openlogs_gamedata::{ArenaFrame, ChannelSpells, Curated};
+use openlogs_gamedata::{ArenaFrame, ChannelSpells, Curated, SpellClasses};
 use openlogs_index::MapBounds;
 use support::{ARENA_MAP, FightBuilder, HOSTILE_FLAGS, MELEE, PET_FLAGS, damage, heal};
 
@@ -16,7 +16,12 @@ const ARCANE_INTELLECT: SpellId = 1459;
 const NEUTRAL_FLAGS: u32 = 0x10a28;
 
 fn replay_of(fight: &Fight) -> Replay {
-    replay(fight, &Curated::bundled(), &ChannelSpells::default())
+    replay(
+        fight,
+        &Curated::bundled(),
+        &ChannelSpells::default(),
+        &SpellClasses::default(),
+    )
 }
 
 fn boss(b: &mut FightBuilder) -> ActorId {
@@ -338,7 +343,12 @@ fn raid_frame_priority_follows_the_curated_rules() {
     let mut curated = Curated::bundled();
     curated.raid_frame_auras.exclude.push(doom);
 
-    let replay = replay(&fight, &curated, &ChannelSpells::default());
+    let replay = replay(
+        &fight,
+        &curated,
+        &ChannelSpells::default(),
+        &SpellClasses::default(),
+    );
 
     let mut frames: Vec<(SpellId, bool, Option<u8>)> = replay
         .auras
@@ -615,7 +625,12 @@ fn an_arena_frame_reaches_the_bundle() {
     let mut curated = Curated::bundled();
     curated.arena_frames = vec![frame(fight.encounter_id + 1), frame(fight.encounter_id)];
 
-    let replay = replay(&fight, &curated, &ChannelSpells::default());
+    let replay = replay(
+        &fight,
+        &curated,
+        &ChannelSpells::default(),
+        &SpellClasses::default(),
+    );
 
     assert_eq!(replay.arena_frame, Some(frame(fight.encounter_id)));
 }
@@ -807,4 +822,214 @@ fn self_casts_and_casts_on_units_outside_the_roster_keep_the_target() {
             target: vec![boss],
         }]
     );
+}
+
+const MYSTIC_TOUCH: SpellId = 113746;
+const SATED: SpellId = 57724;
+
+/// A loaded spell-classes table listing `class_spells`, of which `crowd_control` take control.
+fn spell_classes(class_spells: &[SpellId], crowd_control: &[SpellId]) -> SpellClasses {
+    let deltas = |ids: &[SpellId]| {
+        let mut ids = ids.to_vec();
+        ids.sort_unstable();
+        let mut previous = 0;
+        ids.iter()
+            .map(|&id| {
+                let delta = id - previous;
+                previous = id;
+                delta.to_string()
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    SpellClasses::from_json(&format!(
+        r#"{{ "classSpells": [{}], "crowdControl": [{}] }}"#,
+        deltas(class_spells),
+        deltas(crowd_control)
+    ))
+    .unwrap()
+}
+
+fn apply_aura(
+    b: &mut FightBuilder,
+    source: ActorId,
+    target: ActorId,
+    spell: SpellId,
+    aura_type: AuraType,
+) {
+    b.push(
+        1_000,
+        source,
+        target,
+        spell,
+        aura(AuraAction::Applied, aura_type, None),
+    )
+    .push(
+        5_000,
+        source,
+        target,
+        spell,
+        aura(AuraAction::Removed, aura_type, None),
+    );
+}
+
+/// Each aura's spell with its category and crediting player.
+fn categorised(
+    fight: &Fight,
+    spell_classes: &SpellClasses,
+) -> Vec<(SpellId, AuraCategory, Option<ActorId>)> {
+    let replay = replay(
+        fight,
+        &Curated::bundled(),
+        &ChannelSpells::default(),
+        spell_classes,
+    );
+    let mut auras: Vec<_> = replay
+        .auras
+        .iter()
+        .map(|aura| (aura.spell, aura.category, aura.source_player))
+        .collect();
+    auras.sort_unstable_by_key(|&(spell, ..)| spell);
+    auras
+}
+
+#[test]
+fn a_hostile_debuff_is_encounter() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Ilvaren", 62);
+    let boss = boss(&mut b);
+    let shackle = b.spell(900_040, "Shadow Shackle");
+    apply_aura(&mut b, boss, mage, shackle, AuraType::Debuff);
+
+    let auras = categorised(&b.build(), &spell_classes(&[shackle], &[shackle]));
+
+    assert_eq!(auras, vec![(shackle, AuraCategory::Encounter, None)]);
+}
+
+#[test]
+fn a_mechanic_spread_by_a_player_is_encounter() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Ilvaren", 62);
+    let priest = b.player("Player-2", "Somra", 256);
+    let blight = b.spell(900_041, "Spreading Blight");
+    apply_aura(&mut b, mage, priest, blight, AuraType::Debuff);
+
+    let auras = categorised(&b.build(), &spell_classes(&[ICE_BLOCK], &[]));
+
+    assert_eq!(auras, vec![(blight, AuraCategory::Encounter, Some(mage))]);
+}
+
+#[test]
+fn a_class_stun_is_crowd_control() {
+    let mut b = FightBuilder::new(60_000);
+    let rogue = b.player("Player-1", "Tavish", 259);
+    let boss = boss(&mut b);
+    let stun = b.spell(900_042, "Gut Strike");
+    b.position(0, boss, 0.0, 0.0);
+    apply_aura(&mut b, rogue, boss, stun, AuraType::Debuff);
+
+    let auras = categorised(&b.build(), &spell_classes(&[stun], &[stun]));
+
+    assert_eq!(auras, vec![(stun, AuraCategory::CrowdControl, Some(rogue))]);
+}
+
+#[test]
+fn a_curated_amp_is_amp() {
+    let mut b = FightBuilder::new(60_000);
+    let monk = b.player("Player-1", "Lirien", 269);
+    let boss = boss(&mut b);
+    b.position(0, boss, 0.0, 0.0);
+    apply_aura(&mut b, monk, boss, MYSTIC_TOUCH, AuraType::Debuff);
+
+    let auras = categorised(&b.build(), &spell_classes(&[MYSTIC_TOUCH], &[]));
+
+    assert_eq!(auras, vec![(MYSTIC_TOUCH, AuraCategory::Amp, Some(monk))]);
+}
+
+#[test]
+fn a_defensive_buff_is_cooldown() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Ilvaren", 62);
+    apply_aura(&mut b, mage, mage, ICE_BLOCK, AuraType::Buff);
+    apply_aura(&mut b, mage, mage, ARCANE_INTELLECT, AuraType::Buff);
+
+    let auras = categorised(
+        &b.build(),
+        &spell_classes(&[ICE_BLOCK, ARCANE_INTELLECT], &[ICE_BLOCK]),
+    );
+
+    assert_eq!(
+        auras,
+        vec![
+            (ARCANE_INTELLECT, AuraCategory::Other, Some(mage)),
+            (ICE_BLOCK, AuraCategory::Cooldown, Some(mage)),
+        ]
+    );
+}
+
+#[test]
+fn a_lockout_debuff_is_other_even_without_a_class_family() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Ilvaren", 62);
+    let sated = b.spell(SATED, "Sated");
+    apply_aura(&mut b, mage, mage, sated, AuraType::Debuff);
+
+    let auras = categorised(&b.build(), &spell_classes(&[ICE_BLOCK], &[]));
+
+    assert_eq!(auras, vec![(SATED, AuraCategory::Other, Some(mage))]);
+}
+
+#[test]
+fn a_class_dot_is_other_and_credits_the_pet_owner() {
+    let mut b = FightBuilder::new(60_000);
+    let hunter = b.player("Player-1", "Corvane", 253);
+    let wolf = b.unit("Pet-0-1-1-1-102-0000000004", "Wolf", PET_FLAGS);
+    b.fight.actors.set_owner(wolf, hunter);
+    let boss = boss(&mut b);
+    let bite = b.spell(900_043, "Venom Bite");
+    b.position(0, boss, 0.0, 0.0);
+    apply_aura(&mut b, wolf, boss, bite, AuraType::Debuff);
+
+    let auras = categorised(&b.build(), &spell_classes(&[bite], &[]));
+
+    assert_eq!(auras, vec![(bite, AuraCategory::Other, Some(hunter))]);
+}
+
+#[test]
+fn without_spell_classes_encounter_is_the_hostile_source_only() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Ilvaren", 62);
+    let priest = b.player("Player-2", "Somra", 256);
+    let boss = boss(&mut b);
+    let shackle = b.spell(900_040, "Shadow Shackle");
+    let blight = b.spell(900_041, "Spreading Blight");
+    b.position(0, boss, 0.0, 0.0);
+    apply_aura(&mut b, boss, mage, shackle, AuraType::Debuff);
+    apply_aura(&mut b, mage, priest, blight, AuraType::Debuff);
+    apply_aura(&mut b, priest, boss, MYSTIC_TOUCH, AuraType::Debuff);
+
+    let auras = categorised(&b.build(), &SpellClasses::default());
+
+    assert_eq!(
+        auras,
+        vec![
+            (MYSTIC_TOUCH, AuraCategory::Amp, Some(priest)),
+            (shackle, AuraCategory::Encounter, None),
+            (blight, AuraCategory::Other, Some(mage)),
+        ]
+    );
+}
+
+#[test]
+fn a_trinket_debuff_a_player_puts_on_a_boss_is_other() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Ilvaren", 62);
+    let boss = boss(&mut b);
+    let rune = b.spell(900_044, "Rune of Lingering");
+    b.position(0, boss, 0.0, 0.0);
+    apply_aura(&mut b, mage, boss, rune, AuraType::Debuff);
+
+    let auras = categorised(&b.build(), &spell_classes(&[ICE_BLOCK], &[]));
+
+    assert_eq!(auras, vec![(rune, AuraCategory::Other, Some(mage))]);
 }

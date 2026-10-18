@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import type { ReplayAura, ReplayData } from '../../api/types';
 import { formatSpan } from '../../i18n/format';
@@ -16,6 +17,8 @@ const aura = (spellId: number, endMs: number, stacks: number): ReplayAura => ({
   endMs,
   stacks: [{ t: 40_000, stacks }],
   raidFrame: null,
+  category: 'other',
+  sourcePlayer: null,
 });
 
 describe('AuraIcons', () => {
@@ -36,5 +39,35 @@ describe('AuraIcons', () => {
     const untilEnd = screen.getByRole('img', { name: 'Long Vigil' });
     expect(untilEnd).toHaveTextContent(/^2$/);
     expect(untilEnd).toHaveAttribute('aria-description', t('replay.auraStacks', { count: 2 }));
+  });
+
+  it('shows the name, source and time left while an icon is hovered', async () => {
+    const user = userEvent.setup();
+    const data: ReplayData = { ...replayFixture, spells: { '7000': { name: 'Venom Bite' } } };
+    const bite: ReplayAura = { ...aura(7000, 62_000, 3), target: 10, source: 4, buff: false, sourcePlayer: 3 };
+    render(<AuraIcons hud={indexHud(data)} auras={[bite]} time={50_000} label={t('replay.debuffs')} size={18} />);
+
+    await user.hover(screen.getByRole('img', { name: 'Venom Bite' }));
+    const tip = screen.getByRole('tooltip');
+    expect(within(tip).getByText('Venom Bite')).toBeInTheDocument();
+    expect(within(tip).getByText(t('replay.auraDebuff'))).toBeInTheDocument();
+    expect(within(tip).getByText('Orsek')).toBeInTheDocument();
+    expect(within(tip).getByText(`${t('replay.auraLeft', { time: formatSpan(12_000) })}${t('replay.separator')}${formatSpan(22_000)}`)).toBeInTheDocument();
+    expect(within(tip).getByText(t('replay.auraStacks', { count: 3 }))).toBeInTheDocument();
+
+    await user.unhover(screen.getByRole('img', { name: 'Venom Bite' }));
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('a tap opens the tooltip and a tap elsewhere closes it', async () => {
+    const user = userEvent.setup();
+    const data: ReplayData = { ...replayFixture, spells: { '7000': { name: 'Venom Bite' } } };
+    render(<AuraIcons hud={indexHud(data)} auras={[aura(7000, 62_000, 1)]} time={50_000} label={t('replay.buffs')} size={18} />);
+
+    await user.pointer({ keys: '[TouchA]', target: screen.getByRole('img', { name: 'Venom Bite' }) });
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Venom Bite');
+
+    await user.pointer({ keys: '[TouchA]', target: document.body });
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 });
