@@ -1122,7 +1122,7 @@
 .replay-split-report {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   min-width: 0;
 }
 .replay-split-pane {

@@ -1,4 +1,3 @@
-/* Tab row with its right-end control. */
 .tabbar {
   display: flex;
   flex-wrap: wrap;
@@ -55,16 +54,39 @@
   background: var(--accent-tint);
   color: var(--accent-hover);
 }
-/* Report "Time range" panel: pills, plot with the brush, footer. */
+/* Report "Time range" panel: one control line (pills, selection, save), plot with the brush. */
 .range-panel {
-  padding: 12px 18px 12px;
+  padding: 4px 18px;
 }
 .range-pills {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px 8px;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 4px;
+}
+.range-pills > .pill,
+.range-save > .pill {
+  min-height: 28px;
+}
+/* Selection, bounds and "+ Save range" wrap as one group and stay at the right end. */
+.range-end {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px 12px;
+  margin-left: auto;
+}
+.range-details {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.range-details > * + * {
+  padding-left: 12px;
+  border-left: 1px solid var(--line-strong);
 }
 .range-cap {
   margin-right: 6px;
@@ -73,8 +95,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
@@ -127,6 +149,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  box-sizing: border-box;
   padding: 0 6px 0 14px;
 }
 .pill-saved button {
@@ -138,7 +161,7 @@
   cursor: pointer;
 }
 .pill-saved-name {
-  min-height: 34px;
+  min-height: 26px;
 }
 /* A saved range outside this pull: it can still be deleted. */
 .pill-saved-name:disabled {
@@ -160,7 +183,6 @@
   cursor: default;
 }
 .range-save {
-  margin-left: auto;
   position: relative;
 }
 /* The name form of "+ Save range", in the tooltip style. */
@@ -243,13 +265,6 @@
 .range-handle:focus-visible {
   outline: 2px solid var(--text);
   outline-offset: -2px;
-}
-.range-foot {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--muted);
 }
 .range-value {
   color: var(--text);
@@ -455,11 +470,11 @@
 .tabpanel {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   min-width: 0;
 }
 .fight-page-overview .tabpanel {
-  gap: 20px;
+  gap: 14px;
 }
 
 .dim {

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initialState, useApp } from '../../store';
 import { overviewFixture } from '../../test/overviewFixture';
 import { RangePanel } from './RangePanel';
-import { rangeLabel } from './rangeGeometry';
+import { rangeLabel, rangeSpan } from './rangeGeometry';
 
 vi.mock('../../api/client', () => ({ api: {} }));
 
@@ -115,5 +115,17 @@ describe('RangePanel', () => {
     fireEvent.mouseUp(document, { clientX: 130 });
     expect(useApp.getState().zoom).toEqual({ startMs: 130_000, endMs: 150_000 });
     expect(setRange).not.toHaveBeenCalled();
+  });
+
+  it('shows the selection being dragged in the control line before it is applied', () => {
+    renderPanel();
+    const plot = screen.getByTestId('range-plot');
+    vi.spyOn(plot, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 478.61, 64));
+    const line = screen.getByRole('button', { name: 'Full fight' }).parentElement as HTMLElement;
+    fireEvent.mouseDown(plot, { button: 0, clientX: 100 });
+    fireEvent.mouseMove(document, { clientX: 200, buttons: 1 });
+    expect(line).toHaveTextContent(rangeSpan({ startMs: 100_000, endMs: 200_000 }));
+    expect(setRange).not.toHaveBeenCalled();
+    fireEvent.mouseUp(document, { clientX: 200 });
   });
 });

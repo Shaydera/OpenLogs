@@ -14,7 +14,8 @@ import { useRangeKeys } from './useRangeKeys';
 
 /**
  * The report tabs' "Time range" panel: pills for the full pull, its phases and the saved ranges,
- * "+ Save range", a plot with the selection as an accent brush, and the selection with its duration.
+ * the selection with its duration and the pull's bounds, "+ Save range", and a plot with the selection
+ * as an accent brush.
  * With `collapsible`, it folds into one line with the selection that opens it again.
  */
 export function RangePanel({
@@ -190,29 +191,38 @@ export function RangePanel({
             </span>
           );
         })}
-        <div className="range-save" onKeyDown={onSaveKey} onBlur={onSaveBlur}>
-          <button
-            ref={saveRef}
-            type="button"
-            className="pill"
-            disabled={range === null}
-            title={range === null ? t('range.saveNeedsRange') : undefined}
-            aria-expanded={saving}
-            aria-controls={saving ? popoverId : undefined}
-            onClick={() => setSaving(!saving)}
-          >
-            {t('range.saveOpen')}
-          </button>
-          {saving && range !== null && (
-            <SaveRangePopover
-              id={popoverId}
-              onSave={(name) => {
-                setSaved(saveRange(rangeKey, { name, startMs: range.startMs, endMs: range.endMs }));
-                closeSave(true);
-              }}
-              onCancel={() => closeSave(true)}
-            />
-          )}
+        <div className="range-end">
+          <div className="range-details">
+            <span>
+              {t('range.selection')} <span className="num range-value">{rangeSpan(selection)}</span> · {t('range.duration')}{' '}
+              <span className="num range-value">{formatDuration(selection.endMs - selection.startMs)}</span>
+            </span>
+            <span className="num">{t('range.bounds', { start: formatEventTime(0), end: formatEventTime(duration) })}</span>
+          </div>
+          <div className="range-save" onKeyDown={onSaveKey} onBlur={onSaveBlur}>
+            <button
+              ref={saveRef}
+              type="button"
+              className="pill"
+              disabled={range === null}
+              title={range === null ? t('range.saveNeedsRange') : undefined}
+              aria-expanded={saving}
+              aria-controls={saving ? popoverId : undefined}
+              onClick={() => setSaving(!saving)}
+            >
+              {t('range.saveOpen')}
+            </button>
+            {saving && range !== null && (
+              <SaveRangePopover
+                id={popoverId}
+                onSave={(name) => {
+                  setSaved(saveRange(rangeKey, { name, startMs: range.startMs, endMs: range.endMs }));
+                  closeSave(true);
+                }}
+                onCancel={() => closeSave(true)}
+              />
+            )}
+          </div>
         </div>
       </div>
       <div
@@ -245,13 +255,6 @@ export function RangePanel({
             onMouseDown={panZoom}
           />
         )}
-      </div>
-      <div className="range-foot">
-        <span>
-          {t('range.selection')} <span className="num range-value">{rangeSpan(selection)}</span> · {t('range.duration')}{' '}
-          <span className="num range-value">{formatDuration(selection.endMs - selection.startMs)}</span>
-        </span>
-        <span className="num">{t('range.bounds', { start: formatEventTime(0), end: formatEventTime(duration) })}</span>
       </div>
       <p className="sr-only" id={hintId}>
         {t('range.keysHint')}

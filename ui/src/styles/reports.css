@@ -17,8 +17,8 @@
 .panel-head.panel-head-report {
   flex-wrap: nowrap;
   gap: 16px;
-  height: 52px;
-  padding: 4px 16px 0;
+  height: 42px;
+  padding: 0 16px;
   box-sizing: border-box;
 }
 .report-title {

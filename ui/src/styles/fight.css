@@ -3,7 +3,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 16px;
-  padding: 12px 28px;
+  padding: 3px 28px;
   border-bottom: 1px solid var(--line-soft);
   background: var(--header);
   color: var(--text);
@@ -57,8 +57,8 @@
   font: 600 26px var(--font-label);
 }
 .fight-page {
-  --page-top: 18px;
-  --page-gap: 18px;
+  --page-top: 12px;
+  --page-gap: 12px;
   max-width: 1656px;
   width: 100%;
   box-sizing: border-box;
@@ -69,16 +69,20 @@
   gap: var(--page-gap);
 }
 .fight-page.fight-page-overview {
-  --page-top: 22px;
-  --page-gap: 20px;
+  --page-top: 16px;
+  --page-gap: 14px;
 }
 .fight-column {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 .fight-page-overview .fight-column {
-  gap: 20px;
+  gap: 14px;
+}
+/* The toolbar is the tab row's second line, so it sits closer to the tabs than the other header blocks. */
+.fight-column > .report-toolbar {
+  margin-top: -4px;
 }
 /* Replay tab and split view span the window; header, tabs and the range line keep the report column. */
 .fight-page.fight-page-full,
@@ -112,9 +116,6 @@
   gap: 0;
   padding-top: 6px;
   padding-bottom: 0;
-}
-.fight-view-full .appbar {
-  padding-block: 6px;
 }
 .fight-page-full .tabpanel {
   flex: 1 1 auto;
