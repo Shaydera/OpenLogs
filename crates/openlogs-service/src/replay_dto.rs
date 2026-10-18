@@ -22,6 +22,8 @@ pub struct ReplayDto {
     pub units: Vec<ReplayUnitDto>,
     pub tracks: Vec<TrackDto>,
     pub health: Vec<HealthTrackDto>,
+    pub power: Vec<PowerTrackDto>,
+    pub targets: Vec<TargetTrackDto>,
     pub casts: Vec<ReplayCastDto>,
     pub auras: Vec<ReplayAuraDto>,
     pub raid_markers: Vec<RaidMarkerDto>,
@@ -31,6 +33,24 @@ pub struct ReplayDto {
     pub deaths: Vec<ReplayDeathDto>,
     pub maps: Vec<MapBoundsDto>,
     pub arena_frame: Option<ArenaFrameDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PowerTrackDto {
+    pub actor: ActorId,
+    pub power_type: i32,
+    pub t: Vec<i32>,
+    pub current: Vec<i64>,
+    pub max: Vec<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TargetTrackDto {
+    pub actor: ActorId,
+    pub t: Vec<i32>,
+    pub target: Vec<ActorId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -241,6 +261,26 @@ pub fn replay_dto(fight: &Fight, replay: &Replay, advanced_logging: bool) -> Rep
         units: replay.units.iter().map(unit_dto).collect(),
         tracks: replay.tracks.iter().map(track_dto).collect(),
         health: replay.health.iter().map(health_dto).collect(),
+        power: replay
+            .power
+            .iter()
+            .map(|track| PowerTrackDto {
+                actor: track.actor,
+                power_type: track.power_type,
+                t: track.t.clone(),
+                current: track.current.clone(),
+                max: track.max.clone(),
+            })
+            .collect(),
+        targets: replay
+            .targets
+            .iter()
+            .map(|track| TargetTrackDto {
+                actor: track.actor,
+                t: track.t.clone(),
+                target: track.target.clone(),
+            })
+            .collect(),
         casts,
         auras,
         raid_markers: replay
@@ -426,7 +466,8 @@ fn death_dto(death: &ReplayDeath) -> ReplayDeathDto {
 #[cfg(test)]
 mod tests {
     use openlogs_analysis::{
-        Actors, AuraAction, AuraType, Event, EventKind, NO_SPELL, NOBODY, PositionSample, SpellInfo,
+        Actors, AuraAction, AuraType, Event, EventKind, NO_SPELL, NOBODY, PositionSample,
+        PowerSample, SpellInfo,
     };
     use openlogs_gamedata::{ArenaFrame, ChannelSpells, Curated};
     use openlogs_index::MapBounds;
@@ -464,7 +505,7 @@ mod tests {
         let mut fight = fight(
             actors,
             vec![
-                event(1_000, mage, NOBODY, 44425, EventKind::CastSuccess),
+                event(1_000, mage, paladin, 44425, EventKind::CastSuccess),
                 event(1_000, paladin, paladin, 31821, aura_mastery),
                 event(1_500, mage, NOBODY, 97462, EventKind::CastSuccess),
             ],
@@ -492,6 +533,14 @@ mod tests {
             facing: 0.0,
             ui_map_id: 2609,
         });
+        fight.power.push(PowerSample {
+            t: 1_000,
+            actor: mage,
+            power_type: 0,
+            current: 120,
+            max: 200,
+            primary: true,
+        });
         fight.map_bounds = vec![MapBounds {
             ui_map_id: 2608,
             min_x: 265.004,
@@ -517,6 +566,14 @@ mod tests {
         assert_eq!(json["roster"][0]["name"], "Faelan-Emberfall-EU");
         assert_eq!(json["spells"]["44425"]["name"], "Arcane Barrage");
         assert_eq!(json["casts"][0]["spellId"], 44425);
+        assert_eq!(
+            json["power"],
+            json!([{ "actor": mage, "powerType": 0, "t": [1000], "current": [120], "max": [200] }])
+        );
+        assert_eq!(
+            json["targets"],
+            json!([{ "actor": mage, "t": [1000], "target": [paladin] }])
+        );
         let tracks = serde_json::to_string(&dto.tracks).unwrap();
         assert!(
             tracks.contains(r#""x":[417.55]"#) && tracks.contains(r#""y":[-12.34]"#),

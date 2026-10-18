@@ -1100,6 +1100,20 @@ export interface ReplayHealthTrack {
   max: number[];
 }
 
+export interface ReplayPowerTrack {
+  actor: number;
+  powerType: number;
+  t: number[];
+  current: number[];
+  max: number[];
+}
+
+export interface ReplayTargetTrack {
+  actor: number;
+  t: number[];
+  target: number[];
+}
+
 export type ReplayCastOutcome = 'completed' | 'interrupted' | 'failed';
 
 export interface ReplayCast {
@@ -1193,6 +1207,8 @@ export interface ReplayData {
   units: ReplayUnit[];
   tracks: ReplayTrack[];
   health: ReplayHealthTrack[];
+  power: ReplayPowerTrack[];
+  targets: ReplayTargetTrack[];
   casts: ReplayCast[];
   auras: ReplayAura[];
   raidMarkers: ReplayRaidMarker[];

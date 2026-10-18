@@ -32,6 +32,7 @@ impl FightBuilder {
                 duration_ms,
                 events: Vec::new(),
                 power: Vec::new(),
+                npc_power: Vec::new(),
                 actors: Actors::new(),
                 spells: BTreeMap::new(),
                 broken_lines: 0,
@@ -135,6 +136,47 @@ impl FightBuilder {
             power_type,
             current,
             max,
+            primary: true,
+        });
+        self
+    }
+
+    /// A power sample of a power the block lists after the first.
+    pub fn secondary_power(
+        &mut self,
+        t: i32,
+        actor: ActorId,
+        power_type: i32,
+        current: i64,
+        max: i64,
+    ) -> &mut Self {
+        self.fight.power.push(PowerSample {
+            t,
+            actor,
+            power_type,
+            current,
+            max,
+            primary: false,
+        });
+        self
+    }
+
+    /// A primary power sample of a boss or add.
+    pub fn npc_power(
+        &mut self,
+        t: i32,
+        actor: ActorId,
+        power_type: i32,
+        current: i64,
+        max: i64,
+    ) -> &mut Self {
+        self.fight.npc_power.push(PowerSample {
+            t,
+            actor,
+            power_type,
+            current,
+            max,
+            primary: true,
         });
         self
     }

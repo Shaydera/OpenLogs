@@ -68,8 +68,9 @@ pub use player::{
 };
 pub use recap::{DeathRecap, RECAP_WINDOW_MS, RecapEvent, RecapKind, death_recaps};
 pub use replay::{
-    AffectedSpan, EffectAnchorAt, EffectInstance, HealthTrack, Replay, ReplayAura, ReplayCast,
-    ReplayCastOutcome, ReplayDeath, ReplayUnit, StackChange, Track, UnitKind, replay,
+    AffectedSpan, EffectAnchorAt, EffectInstance, HealthTrack, PowerTrack as ReplayPowerTrack,
+    Replay, ReplayAura, ReplayCast, ReplayCastOutcome, ReplayDeath, ReplayUnit, StackChange,
+    TargetTrack, Track, UnitKind, replay,
 };
 pub use reports::damage::{DamageReport, PlayerDamage, damage_done};
 pub use reports::healing::{HealingReport, PlayerHealing, healing};

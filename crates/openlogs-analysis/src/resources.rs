@@ -159,6 +159,7 @@ fn health_samples(fight: &Fight, side: Side, start: i32, end: i32) -> Vec<PowerS
             power_type: HEALTH,
             current: hp.current as i64,
             max: hp.max as i64,
+            primary: true,
         });
     }
     samples

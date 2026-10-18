@@ -98,6 +98,7 @@ impl FightBuilder {
                 duration_ms: summary.duration_ms,
                 events: Vec::new(),
                 power: Vec::new(),
+                npc_power: Vec::new(),
                 actors: Actors::new(),
                 spells: BTreeMap::new(),
                 broken_lines: 0,
@@ -218,6 +219,7 @@ impl FightBuilder {
             .map(|(&map, _)| map);
         self.fight.events.sort_by_key(|event| event.t);
         self.fight.power.sort_by_key(|p| p.t);
+        self.fight.npc_power.sort_by_key(|p| p.t);
         self.fight.positions.sort_by_key(|p| p.t);
         self.fight
     }
@@ -356,10 +358,11 @@ impl FightBuilder {
         }
         // `unit_hp.actor` is the advanced block's unit, interned above.
         if let (Some(info), Some(hp)) = (event.advanced, unit_hp)
-            && self.fight.actors.get(hp.actor).kind == ActorKind::Player
+            && hp.actor != NOBODY
         {
-            for power in info.powers() {
-                self.note_power(t, hp.actor, power);
+            let player = self.fight.actors.get(hp.actor).kind == ActorKind::Player;
+            for (position, power) in info.powers().enumerate() {
+                self.note_power(t, hp.actor, power, position == 0, player);
             }
         }
         if let (Some(info), Some(hp)) = (event.advanced, unit_hp)
@@ -390,7 +393,14 @@ impl FightBuilder {
         }
     }
 
-    fn note_power(&mut self, t: i32, actor: ActorId, power: openlogs_parser::Power) {
+    fn note_power(
+        &mut self,
+        t: i32,
+        actor: ActorId,
+        power: openlogs_parser::Power,
+        primary: bool,
+        player: bool,
+    ) {
         let key = (actor, power.power_type);
         if self
             .last_power
@@ -400,12 +410,18 @@ impl FightBuilder {
             return;
         }
         self.last_power.insert(key, t);
-        self.fight.power.push(PowerSample {
+        let samples = if player {
+            &mut self.fight.power
+        } else {
+            &mut self.fight.npc_power
+        };
+        samples.push(PowerSample {
             t,
             actor,
             power_type: power.power_type,
             current: power.current,
             max: power.max,
+            primary,
         });
     }
 

@@ -3,6 +3,8 @@ mod casts;
 mod effects;
 mod health;
 mod position;
+mod power;
+mod targets;
 mod tracks;
 mod units;
 
@@ -15,6 +17,8 @@ pub use auras::{ReplayAura, StackChange};
 pub use casts::{ReplayCast, ReplayCastOutcome};
 pub use effects::{AffectedSpan, EffectAnchorAt, EffectInstance};
 pub use health::HealthTrack;
+pub use power::PowerTrack;
+pub use targets::TargetTrack;
 pub use tracks::Track;
 pub use units::{ReplayUnit, UnitKind};
 
@@ -35,6 +39,10 @@ pub struct Replay {
     pub units: Vec<ReplayUnit>,
     pub tracks: Vec<Track>,
     pub health: Vec<HealthTrack>,
+    /// Each unit's primary power.
+    pub power: Vec<PowerTrack>,
+    /// Each unit's target, per change.
+    pub targets: Vec<TargetTrack>,
     pub casts: Vec<ReplayCast>,
     pub auras: Vec<ReplayAura>,
     pub raid_markers: Vec<MarkerInterval>,
@@ -66,6 +74,8 @@ pub fn replay(fight: &Fight, curated: &Curated, channels: &ChannelSpells) -> Rep
     Replay {
         duration_ms: fight.duration_ms,
         health: health::health(fight, &roster),
+        power: power::power(fight, &roster),
+        targets: targets::targets(fight, &roster),
         casts,
         auras: auras::auras(fight, curated, &roster, &intervals),
         raid_markers: fight

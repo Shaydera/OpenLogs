@@ -1011,6 +1011,8 @@ describe('replay', () => {
     units: [],
     tracks: [],
     health: [],
+    power: [],
+    targets: [],
     casts: [],
     auras: [],
     raidMarkers: [],

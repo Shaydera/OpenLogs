@@ -2,8 +2,8 @@ mod support;
 
 use openlogs_analysis::{
     ActorId, AuraAction, AuraType, DamageVia, EventKind, Fight, HealthTrack, NO_SPELL, NOBODY,
-    Replay, ReplayCast, ReplayCastOutcome, ReplayDeath, ReplayUnit, SpellId, StackChange, Track,
-    UnitKind, quick_overview, replay,
+    Replay, ReplayCast, ReplayCastOutcome, ReplayDeath, ReplayPowerTrack, ReplayUnit, SpellId,
+    StackChange, TargetTrack, Track, UnitKind, quick_overview, replay,
 };
 use openlogs_gamedata::{ArenaFrame, ChannelSpells, Curated};
 use openlogs_index::MapBounds;
@@ -618,4 +618,135 @@ fn an_arena_frame_reaches_the_bundle() {
     let replay = replay(&fight, &curated, &ChannelSpells::default());
 
     assert_eq!(replay.arena_frame, Some(frame(fight.encounter_id)));
+}
+
+#[test]
+fn replay_power_keeps_the_primary_power_per_unit() {
+    let mut b = FightBuilder::new(60_000);
+    let rogue = b.player("Player-1", "Ilvaren", 261);
+    b.power(-500, rogue, 3, 90, 100)
+        .secondary_power(-500, rogue, 4, 2, 5)
+        .power(1_000, rogue, 3, 60, 100)
+        .secondary_power(1_000, rogue, 4, 3, 5)
+        .power(1_500, rogue, 3, 60, 100)
+        .power(2_000, rogue, 3, 85, 100);
+
+    let replay = replay_of(&b.build());
+
+    assert_eq!(
+        replay.power,
+        vec![ReplayPowerTrack {
+            actor: rogue,
+            power_type: 3,
+            t: vec![0, 1_000, 2_000],
+            current: vec![90, 60, 85],
+            max: vec![100, 100, 100],
+        }]
+    );
+}
+
+#[test]
+fn bosses_get_power_tracks_from_their_advanced_blocks() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Ilvaren", 62);
+    let boss = boss(&mut b);
+    b.position(0, mage, 0.0, 0.0)
+        .position(0, boss, 5.0, 5.0)
+        .npc_power(1_000, boss, 3, 40, 100);
+
+    let replay = replay_of(&b.build());
+
+    assert_eq!(
+        replay.power,
+        vec![ReplayPowerTrack {
+            actor: boss,
+            power_type: 3,
+            t: vec![1_000],
+            current: vec![40],
+            max: vec![100],
+        }]
+    );
+}
+
+fn swing(via: DamageVia) -> EventKind {
+    EventKind::Damage(damage(via, 100, 0))
+}
+
+#[test]
+fn a_bosses_target_follows_its_melee_swings() {
+    let mut b = FightBuilder::new(60_000);
+    let tank_a = b.player("Player-1", "Ilvaren", 73);
+    let tank_b = b.player("Player-2", "Thornwick", 66);
+    let boss = boss(&mut b);
+    b.position(0, boss, 5.0, 5.0)
+        .push(1_000, boss, tank_a, MELEE, swing(DamageVia::Swing))
+        .push(1_000, boss, tank_a, MELEE, swing(DamageVia::SwingLanded))
+        .push(2_000, boss, tank_a, MELEE, swing(DamageVia::Swing))
+        .push(
+            3_000,
+            boss,
+            tank_b,
+            MELEE,
+            EventKind::Missed(openlogs_analysis::Missed {
+                via: DamageVia::Swing,
+                miss_type: openlogs_analysis::MissType::Dodge,
+                amount_missed: 0,
+            }),
+        );
+
+    let replay = replay_of(&b.build());
+
+    assert_eq!(
+        replay.targets,
+        vec![TargetTrack {
+            actor: boss,
+            t: vec![1_000, 3_000],
+            target: vec![tank_a, tank_b],
+        }]
+    );
+}
+
+#[test]
+fn a_cast_with_a_target_sets_the_target_and_repeats_are_not_stored() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Ilvaren", 62);
+    let boss = boss(&mut b);
+    let bolt = b.spell(116, "Frostbolt");
+    b.position(0, boss, 5.0, 5.0)
+        .push(1_000, mage, boss, bolt, EventKind::CastSuccess)
+        .push(2_500, mage, boss, bolt, EventKind::CastSuccess)
+        .push(3_000, mage, NOBODY, bolt, EventKind::CastSuccess);
+
+    let replay = replay_of(&b.build());
+
+    assert_eq!(
+        replay.targets,
+        vec![TargetTrack {
+            actor: mage,
+            t: vec![1_000],
+            target: vec![boss],
+        }]
+    );
+}
+
+#[test]
+fn a_target_before_the_pull_is_kept_at_zero() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Ilvaren", 62);
+    let boss = boss(&mut b);
+    let bolt = b.spell(116, "Frostbolt");
+    b.position(0, boss, 5.0, 5.0)
+        .push(-3_000, mage, boss, bolt, EventKind::CastSuccess)
+        .push(-1_000, mage, boss, bolt, EventKind::CastSuccess);
+
+    let replay = replay_of(&b.build());
+
+    assert_eq!(
+        replay.targets,
+        vec![TargetTrack {
+            actor: mage,
+            t: vec![0],
+            target: vec![boss],
+        }]
+    );
 }
