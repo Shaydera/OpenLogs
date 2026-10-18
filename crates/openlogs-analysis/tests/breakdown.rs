@@ -109,7 +109,8 @@ fn rows_group_pets_with_owners_and_offer_only_free_dimensions() {
         imps.rows[0].row.key,
         RowKey::Ability {
             ability: AbilityRef::Name("Fel Firebolt".into()),
-            kind: CellKind::Own
+            kind: CellKind::Own,
+            pet: Some("Wild Imp".into())
         }
     );
     assert_eq!(imps.rows[0].row.amount, 500);
@@ -212,14 +213,16 @@ fn unmatched_support_stays_a_negative_ability_row() {
             (
                 RowKey::Ability {
                     ability: AbilityRef::Name("Mortal Strike".into()),
-                    kind: CellKind::Own
+                    kind: CellKind::Own,
+                    pet: None
                 },
                 1_000
             ),
             (
                 RowKey::Ability {
                     ability: AbilityRef::Id(0),
-                    kind: CellKind::Unmatched
+                    kind: CellKind::Unmatched,
+                    pet: None
                 },
                 -50
             ),
@@ -351,4 +354,71 @@ fn damage_taken_rows_carry_hits_and_absorbed_damage_on_both_sides() {
     .rows[0]
         .row;
     assert_eq!((boss_row.amount, boss_row.absorbed), (2_300, 300));
+}
+
+#[test]
+fn pet_abilities_get_rows_of_their_own_that_narrow_to_the_pets() {
+    let mut b = FightBuilder::new(10_000);
+    let first = b.player("Player-1", "Tarvo-Emberfall-EU", 253);
+    let second = b.player("Player-2", "Ilsa-Stonevale-EU", 253);
+    let first_wolf = b.unit("Pet-0-1-1-1-165189-0001", "Wolf", PET_FLAGS);
+    let second_wolf = b.unit("Pet-0-1-1-1-165189-0002", "Wolf", PET_FLAGS);
+    b.fight.actors.set_owner(first_wolf, first);
+    b.fight.actors.set_owner(second_wolf, second);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let swing = |amount| EventKind::Damage(damage(DamageVia::Swing, amount, 0));
+    b.push(1_000, first, boss, MELEE, swing(500));
+    b.push(1_100, first_wolf, boss, MELEE, swing(300));
+    b.push(1_200, second_wolf, boss, MELEE, swing(250));
+    let fight = b.build();
+    let filter = ReportFilter::whole(Attribution::Reattributed);
+    let by_ability = breakdown(
+        &fight,
+        &Curated::bundled(),
+        &filter,
+        &Scope::default(),
+        ScopeMetric::DamageDone,
+        Dimension::Ability,
+    );
+    let rows: Vec<(Option<String>, i64, Vec<UnitRef>)> = by_ability
+        .rows
+        .iter()
+        .map(|r| match &r.row.key {
+            RowKey::Ability { pet, .. } => (pet.clone(), r.row.amount, r.row.pets.clone()),
+            RowKey::Unit(_) => unreachable!(),
+        })
+        .collect();
+    let wolves = vec![
+        UnitRef::Pet {
+            owner: first,
+            name: "Wolf".into(),
+        },
+        UnitRef::Pet {
+            owner: second,
+            name: "Wolf".into(),
+        },
+    ];
+    assert_eq!(
+        rows,
+        vec![
+            (Some("Wolf".into()), 550, wolves.clone()),
+            (None, 500, vec![]),
+        ]
+    );
+
+    let only_the_wolves = Scope {
+        source: wolves,
+        ability: vec![AbilityRef::Id(MELEE)],
+        ..Scope::default()
+    };
+    let narrowed = breakdown(
+        &fight,
+        &Curated::bundled(),
+        &filter,
+        &only_the_wolves,
+        ScopeMetric::DamageDone,
+        Dimension::Ability,
+    );
+    assert_eq!(narrowed.group, Dimension::Target);
+    assert_eq!(narrowed.total, 550);
 }

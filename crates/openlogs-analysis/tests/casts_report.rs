@@ -31,7 +31,7 @@ fn spells_of(report: &CastsReport, player: u32) -> Vec<(AbilityRef, i64, CellKin
         .rows
         .iter()
         .map(|r| match &r.key {
-            RowKey::Ability { ability, kind } => (ability.clone(), r.amount, *kind),
+            RowKey::Ability { ability, kind, .. } => (ability.clone(), r.amount, *kind),
             RowKey::Unit(_) => unreachable!(),
         })
         .collect()

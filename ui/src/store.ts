@@ -16,6 +16,7 @@ import type {
   Timeline,
   Attribution,
   Breakdown,
+  BreakdownRow,
   DamageReport,
   DamageTakenReport,
   Detail,
@@ -41,6 +42,7 @@ import { rangeWindow, requestWindow, sameWindow, shownWindow, covers, windowSpan
 import { type GameDataManifest, gameDataManifest } from './gameData';
 import { replayClock } from './components/replay/replayClock';
 import { t } from './i18n/i18n';
+import { rowValue } from './components/filters/labels';
 import { effectiveView, lanesOf } from './reportViews';
 import { type FilterTab, isFilterTab, SIDES } from './scopeSides';
 import { readStored, writeStored } from './storage';
@@ -305,6 +307,8 @@ interface State {
 interface Actions {
   setPerspective(side: Side): Promise<void>;
   select(dimension: Dimension, value: UnitRef | AbilityRef | null): Promise<void>;
+  /** Narrows `dimension` to `row`; a pet ability row also narrows the sources to its pets. */
+  showOnly(dimension: Dimension, row: BreakdownRow): Promise<void>;
   clearFilters(): Promise<void>;
   /** Clears the selections behind a detail page's dimensions and keeps the rest. */
   clearPageFilter(dimensions: Dimension[]): Promise<void>;
@@ -841,6 +845,12 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   async select(dimension, value) {
     const { filters, tab } = get();
     set({ filters: { ...filters, [roleOf(dimension, tab)]: value === null ? [] : [value] } as Filters, eventsOffset: {}, focusRequest: null });
+    await loadReport(get, set);
+  },
+  async showOnly(dimension, row) {
+    const { filters, tab } = get();
+    const pets = row.pets.length > 0 ? { [roleOf('source', tab)]: row.pets } : {};
+    set({ filters: { ...filters, [roleOf(dimension, tab)]: [rowValue(row.key)], ...pets } as Filters, eventsOffset: {}, focusRequest: null });
     await loadReport(get, set);
   },
   async clearFilters() {

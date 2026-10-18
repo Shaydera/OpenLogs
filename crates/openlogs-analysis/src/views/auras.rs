@@ -158,6 +158,7 @@ pub(crate) fn place_bars(
         _ => RowKey::Ability {
             ability: AbilityRef::of(fight, interval.spell),
             kind: CellKind::Own,
+            pet: None,
         },
     };
     let mut groups: HashMap<Option<RowKey>, BarGroups> = HashMap::new();

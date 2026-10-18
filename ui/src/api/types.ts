@@ -257,7 +257,8 @@ export interface Scope {
 export type ScopeMetric = 'damageDone' | 'healing' | 'damageTaken' | 'casts' | 'interrupts' | 'buffs' | 'debuffs' | 'deaths' | 'resources';
 export type Dimension = 'source' | 'ability' | 'target';
 export type BreakdownRowKind = 'own' | 'support' | 'unmatched' | 'proc';
-export type RowKey = { kind: 'unit'; unit: UnitRef } | { kind: 'ability'; ability: AbilityRef; rowKind: BreakdownRowKind };
+/** `pet`: the name of the pets that cast the ability, as logged; `null` for what players cast themselves. */
+export type RowKey = { kind: 'unit'; unit: UnitRef } | { kind: 'ability'; ability: AbilityRef; rowKind: BreakdownRowKind; pet: string | null };
 /** `name` is as logged and empty when the log has none; `number` numbers one instance among the units of its name. */
 export interface BreakdownRow {
   key: RowKey;
@@ -270,6 +271,8 @@ export interface BreakdownRow {
   absorbed: number;
   hits: number;
   crits: number;
+  /** Pet ability rows: the pets the amounts come from, what "Show only" selects as the source. */
+  pets: UnitRef[];
 }
 export interface GroupedRow extends BreakdownRow {
   perSecond: number;

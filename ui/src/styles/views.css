@@ -77,6 +77,8 @@
 .tl-lane { display: grid; grid-template-columns: 170px minmax(0, 1fr); align-items: stretch; border-top: 1px solid var(--line-soft); }
 .tl-label { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 10px 0 14px; font-size: 13px; border-right: 1px solid var(--line); }
 .tl-label .cap { font-size: 11px; }
+.tl-label .nm, .tl-label .ab-pet { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-label .ab-pet { margin-left: 0; flex-shrink: 2; }
 .tl-count { margin-left: auto; font-size: 11px; color: var(--faint); }
 .tl-track { position: relative; height: 36px; overflow: hidden; cursor: grab; touch-action: pan-y; user-select: none; }
 .tl-body.grabbing, .tl-body.grabbing * { cursor: grabbing; }

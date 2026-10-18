@@ -56,6 +56,15 @@ impl ScopeMetric {
         }
     }
 
+    /// Whether ability rows keep a pet's amounts apart from its owner's. Interrupts and auras name
+    /// the spell acted on, not the pet's own; casts count no pets.
+    pub fn splits_pet_abilities(self) -> bool {
+        matches!(
+            self,
+            ScopeMetric::DamageDone | ScopeMetric::Healing | ScopeMetric::DamageTaken
+        )
+    }
+
     /// The row groupings in fallback order: own side, ability, other side.
     pub fn groupings(self) -> &'static [Dimension] {
         match self {

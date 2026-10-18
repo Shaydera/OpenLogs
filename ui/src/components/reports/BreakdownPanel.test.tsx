@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Breakdown, GroupedRow, UnitRef } from '../../api/types';
 import { initialState, useApp } from '../../store';
 import { breakdownFixture } from '../../test/reportFixtures';
 import { BreakdownPanel } from './BreakdownPanel';
@@ -11,7 +12,7 @@ beforeEach(() => {
   useApp.setState({
     ...initialState(),
     tab: 'damage',
-    select: vi.fn(async () => {}),
+    showOnly: vi.fn(async () => {}),
     clearFilters: vi.fn(async () => {}),
     openPlayer: vi.fn(async () => {}),
   });
@@ -26,7 +27,7 @@ describe('BreakdownPanel', () => {
     const side = screen.getByRole('complementary');
     expect(within(side).getByRole('button', { name: 'Abilities' })).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(within(side).getByRole('button', { name: 'Show only Wendel' }));
-    expect(useApp.getState().select).toHaveBeenCalledWith('source', { kind: 'player', actorId: 3 });
+    expect(useApp.getState().showOnly).toHaveBeenCalledWith('source', expect.objectContaining({ name: 'Wendel' }));
     await userEvent.click(within(side).getByRole('button', { name: /Player details/ }));
     expect(useApp.getState().openPlayer).toHaveBeenCalledWith(3);
   });
@@ -92,12 +93,37 @@ describe('BreakdownPanel', () => {
     render(<BreakdownPanel tab="damage" breakdown={breakdownFixture} title="Damage Done" unit="DPS" />);
     const [wendel, speronis] = within(screen.getByRole('group', { name: 'Damage Done rows' })).getAllByRole('button');
     await userEvent.click(within(speronis).getByText('Speronis'));
-    expect(useApp.getState().select).toHaveBeenCalledWith('source', { kind: 'player', actorId: 5 });
+    expect(useApp.getState().showOnly).toHaveBeenCalledWith('source', expect.objectContaining({ name: 'Speronis' }));
     expect(wendel).toHaveAttribute('aria-pressed', 'true');
-    vi.mocked(useApp.getState().select).mockClear();
+    vi.mocked(useApp.getState().showOnly).mockClear();
     await userEvent.click(within(speronis).getByText('100.00k'));
     expect(speronis).toHaveAttribute('aria-pressed', 'true');
-    expect(useApp.getState().select).not.toHaveBeenCalled();
+    expect(useApp.getState().showOnly).not.toHaveBeenCalled();
+  });
+
+  it('names the pets behind a pet ability row and narrows to the ability and those pets', async () => {
+    const wolves: UnitRef[] = [{ kind: 'pet', owner: 3, name: 'Wolf' }];
+    const melee = (pet: string | null, amount: number, pets: UnitRef[]): GroupedRow => ({
+      key: { kind: 'ability', ability: { kind: 'id', spellId: 0 }, rowKind: 'own', pet },
+      name: '',
+      number: null,
+      spellId: 0,
+      amount,
+      share: amount / 1_000,
+      absorbed: 0,
+      hits: 1,
+      crits: 0,
+      pets,
+      perSecond: amount,
+      splits: [],
+    });
+    const byAbility: Breakdown = { ...breakdownFixture, group: 'ability', side: ['target'], rows: [melee('Wolf', 600, wolves), melee(null, 400, [])] };
+    render(<BreakdownPanel tab="damage" breakdown={byAbility} title="Damage Done" unit="DPS" />);
+    const [wolf, own] = within(screen.getByRole('group', { name: 'Damage Done rows' })).getAllByRole('button');
+    expect(within(wolf).getByText('Wolf')).toBeInTheDocument();
+    expect(within(own).queryByText('Wolf')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Show only Melee by Wolf' }));
+    expect(useApp.getState().showOnly).toHaveBeenCalledWith('ability', expect.objectContaining({ pets: wolves }));
   });
 
   it('hides "Show only" and selects on a name click when the row dimension is already narrowed', async () => {
@@ -106,6 +132,6 @@ describe('BreakdownPanel', () => {
     expect(screen.queryByRole('button', { name: /Show only/ })).toBeNull();
     await userEvent.click(screen.getByText('Speronis'));
     expect(screen.getByRole('button', { name: /Speronis/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(useApp.getState().select).not.toHaveBeenCalled();
+    expect(useApp.getState().showOnly).not.toHaveBeenCalled();
   });
 });

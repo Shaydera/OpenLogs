@@ -87,14 +87,16 @@ struct LaneAcc {
 /// Lanes keyed by the axis, ordered by their figure in the range.
 pub(crate) struct Lanes {
     axis: Option<Dimension>,
+    metric: ScopeMetric,
     ids: HashMap<Option<RowKey>, usize>,
     lanes: Vec<LaneAcc>,
 }
 
 impl Lanes {
-    pub(crate) fn new(axis: Option<Dimension>) -> Self {
+    pub(crate) fn new(axis: Option<Dimension>, metric: ScopeMetric) -> Self {
         Self {
             axis,
+            metric,
             ids: HashMap::new(),
             lanes: Vec::new(),
         }
@@ -105,7 +107,7 @@ impl Lanes {
     }
 
     pub(crate) fn key(&self, fight: &Fight, cell: &Cell) -> Option<RowKey> {
-        self.axis.map(|axis| key_of(fight, cell, axis))
+        self.axis.map(|axis| key_of(fight, cell, axis, self.metric))
     }
 
     /// The lane of `key`, made on first use.

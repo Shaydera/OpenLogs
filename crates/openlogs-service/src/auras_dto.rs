@@ -110,6 +110,7 @@ pub fn auras_report_dto(
                 None => RowKey::Ability {
                     ability: AbilityRef::of(fight, row.spell),
                     kind: CellKind::Own,
+                    pet: None,
                 },
             };
             let (key, name, _) = key_dto(fight, &key);
@@ -198,7 +199,7 @@ mod tests {
         };
         assert_eq!(
             json(Dimension::Ability)["rows"][0]["key"],
-            serde_json::json!({ "kind": "ability", "ability": { "kind": "name", "name": "Power Infusion" }, "rowKind": "own" })
+            serde_json::json!({ "kind": "ability", "ability": { "kind": "name", "name": "Power Infusion" }, "rowKind": "own", "pet": null })
         );
         let by_target = json(Dimension::Target);
         assert_eq!(
