@@ -7,7 +7,7 @@ import { replaySplitShown, useApp } from '../store';
 import { AbilityDetailView } from './ability/AbilityDetailView';
 import { AurasTab } from './auras/AurasTab';
 import { CastsTab } from './casts/CastsTab';
-import { FightHeader } from './chrome/FightHeader';
+import { FightHeader, FightHeading } from './chrome/FightHeader';
 import { headerTiles } from './chrome/headerTiles';
 import { FightTopBar } from './chrome/FightTopBar';
 import { PANEL_ID, TabBar, tabId } from './chrome/TabBar';
@@ -34,7 +34,7 @@ import { TimelineView } from './views/TimelineView';
 import { effectiveView } from '../reportViews';
 import { isFilterTab } from '../scopeSides';
 
-/** A fight screen: the top bar, then the pull header (compact on detail pages), the tab row and the tab's panel. */
+/** A fight screen: the top bar, then the pull header (compact on detail pages, inside the tab row on the replay), the tab row and the tab's panel. */
 export function FightView() {
   const view = useApp((s) => s.view);
   const log = useApp((s) => s.log);
@@ -73,7 +73,7 @@ export function FightView() {
   const onOverview = tab === 'overview';
   const onReplay = tab === 'replay';
   const tiles =
-    details.length > 0 ? null : headerTiles({ tab, row, overview, range, report, reportLoading, reportFailed, rangeKpis, breakdown, scope });
+    details.length > 0 || onReplay ? null : headerTiles({ tab, row, overview, range, report, reportLoading, reportFailed, rangeKpis, breakdown, scope });
 
   const body = failed ? (
     <p className="muted">{t('fight.loadFailed')}</p>
@@ -88,16 +88,19 @@ export function FightView() {
   ) : (
     <>
       {/* Detail pages have no range panel. */}
-      {details.length === 0 &&
-        (onReplay ? (
-          <div className="fight-column">
-            <RangePanel overview={overview} rangeKey={rangeKey(row)} run={row.run !== null} collapsible={{ open: rangeOpen, onToggle: setReplayRangeOpen }} />
-          </div>
-        ) : (
-          <RangePanel overview={overview} rangeKey={rangeKey(row)} run={row.run !== null} />
-        ))}
+      {details.length === 0 && !onReplay && <RangePanel overview={overview} rangeKey={rangeKey(row)} run={row.run !== null} />}
       <ErrorBoundary key={`${tab}-${details.length}`} onReset={() => void closeDetail()}>
-        {onReplay ? <ReplayTab /> : <ReportView />}
+        {onReplay ? (
+          <ReplayTab
+            rangePanel={
+              details.length === 0 && (
+                <RangePanel overview={overview} rangeKey={rangeKey(row)} run={row.run !== null} collapsible={{ open: rangeOpen, onToggle: setReplayRangeOpen }} />
+              )
+            }
+          />
+        ) : (
+          <ReportView />
+        )}
       </ErrorBoundary>
     </>
   );
@@ -109,9 +112,9 @@ export function FightView() {
       <FightTopBar row={row} currentRef={crumbRef} />
       <main className={page}>
         <div className="fight-column">
-          <FightHeader row={row} tiles={tiles} titleRef={titleRef} />
+          {!onReplay && <FightHeader row={row} tiles={tiles} titleRef={titleRef} />}
           <ViewLens />
-          <TabBar />
+          <TabBar lead={onReplay && <FightHeading row={row} titleRef={titleRef} />} />
         </div>
         <div role="tabpanel" id={PANEL_ID} aria-labelledby={tabId(tab)} className="tabpanel">
           {/* Outside the tab-keyed error boundary: the replay pane keeps its state while the report changes tabs. */}

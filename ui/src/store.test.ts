@@ -1124,7 +1124,7 @@ describe('replay', () => {
     }
   });
 
-  it('records a failed load, clears it on retry and loads the range figures for the Replay tab', async () => {
+  it('records a failed load and clears it on retry', async () => {
     await openPull();
     vi.mocked(api.replay).mockRejectedValueOnce('boom');
     await useApp.getState().loadReplay();
@@ -1133,12 +1133,6 @@ describe('replay', () => {
     await useApp.getState().loadReplay();
     expect(useApp.getState()).toMatchObject({ replayError: null });
     expect(useApp.getState().replayData).not.toBeNull();
-
-    await useApp.getState().setTab('replay');
-    vi.mocked(api.quickOverview).mockClear();
-    await useApp.getState().setRange({ startMs: 0, endMs: 1_000 });
-    expect(api.quickOverview).toHaveBeenCalledTimes(1);
-    expect(useApp.getState()).toMatchObject({ rangeKpis: overviewFixture.kpis, reportLoading: false });
   });
 
   it('persists layers, filters and speed but not the hidden units', () => {

@@ -670,21 +670,8 @@ async function loadReport(get: () => State & Actions, set: SetState) {
   const viewToken = ++viewRequest;
   viewQuery += 1;
   lastPage = undefined;
-  if (tab === 'replay' && range !== null) {
-    // The replay bundle loads through `loadReplay`; its header shows the Overview's figures for the range.
-    set({ report: null, breakdown: null, reportError: null, reportLoading: true, viewError: null, viewLoading: false, rangeKpis: null });
-    try {
-      const { kpis } = await api.quickOverview(log.id, view.fightIndex, reportFilter(get()));
-      if (request === reportRequest) set({ rangeKpis: kpis });
-    } catch {
-      // The header stays at "…".
-    } finally {
-      if (request === reportRequest) set({ reportLoading: false });
-    }
-    return;
-  }
   if ((tab === 'overview' && range === null) || tab === 'replay') {
-    // The whole-pull overview is already in `state.overview`.
+    // The whole-pull overview is already in `state.overview`; the replay bundle loads through `loadReplay`.
     set({ report: null, breakdown: null, reportError: null, reportLoading: false, viewError: null, viewLoading: false });
     return;
   }

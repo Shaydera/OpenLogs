@@ -18,7 +18,8 @@ export interface HeaderTile {
 }
 
 export interface HeaderInput {
-  tab: FightTab;
+  /** The replay's header has no key figures. */
+  tab: Exclude<FightTab, 'replay'>;
   row: FightRow;
   /** The whole pull; `null` while it loads. */
   overview: QuickOverview | null;
@@ -53,8 +54,6 @@ export function headerTiles(input: HeaderInput): HeaderTile[] {
   switch (tab) {
     case 'overview':
       return overviewTiles(input.range === null ? (input.overview?.kpis ?? null) : (ready('overview')?.kpis ?? null), input.range !== null);
-    case 'replay':
-      return overviewTiles(input.range === null ? (input.overview?.kpis ?? null) : input.reportLoading ? null : input.rangeKpis, input.range !== null);
     case 'resources': {
       const data = ready('resources');
       const one = input.scope.source.length === 1 && data?.units.length === 1 ? data.units[0].tracks[0] : undefined;

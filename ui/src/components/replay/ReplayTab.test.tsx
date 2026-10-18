@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../../i18n/i18n';
@@ -115,6 +115,43 @@ describe('ReplayTab', () => {
     expect(screen.getByRole('button', { name: t('replay.meter') })).toHaveAttribute('aria-expanded', 'true');
     await userEvent.click(caption);
     expect(caption).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('turns the HUD dense while the measured stage is shorter than 800 px and keeps the open panels open', () => {
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ width: 1500, height: 900 }));
+    const resized: ResizeObserverCallback[] = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resized.push(callback);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    try {
+      render(<ReplayTab />);
+      const region = screen.getByRole('region', { name: 'Replay' });
+      expect(region).not.toHaveAttribute('data-dense');
+
+      const short = DOMRect.fromRect({ width: 1500, height: 700 });
+      rect.mockReturnValue(short);
+      act(() => resized.forEach((callback) => callback([{ contentRect: short } as ResizeObserverEntry], {} as ResizeObserver)));
+      expect(region).toHaveAttribute('data-dense');
+      expect(screen.getByRole('button', { name: t('replay.raidFrames') })).toHaveAttribute('aria-expanded', 'true');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('the wheel scrolls an overflowing legend sideways', () => {
+    render(<ReplayTab />);
+    const legend = screen.getByRole('group', { name: 'Legend' });
+    Object.defineProperties(legend, { scrollWidth: { value: 900 }, clientWidth: { value: 300 } });
+    expect(fireEvent.wheel(legend, { deltaY: 120 })).toBe(false);
+    expect(legend.scrollLeft).toBe(120);
   });
 
   it('shows a notice without advanced logging', () => {

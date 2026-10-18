@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useRef } from 'react';
+import { type KeyboardEvent, type ReactNode, useRef } from 'react';
 import { useFocusRequest } from '../../hooks/useFocusRequest';
 import { type MessageKey, t } from '../../i18n/i18n';
 import { type FightTab, replayOffered, useApp } from '../../store';
@@ -15,9 +15,9 @@ const TABS: TabEntry[] = [
   { key: 'tabs.deaths', tab: 'deaths' },
   { key: 'tabs.buffs', tab: 'buffs' },
   { key: 'tabs.casts', tab: 'casts' },
-  { key: 'tabs.replay', tab: 'replay' },
   { key: 'tabs.interrupts', tab: 'interrupts' },
   { key: 'tabs.resources', tab: 'resources' },
+  { key: 'tabs.replay', tab: 'replay' },
 ];
 
 /** The one panel every tab controls; its content follows the selected tab. */
@@ -34,8 +34,18 @@ function nextTab(tabs: TabEntry[], current: FightTab, key: string): FightTab | n
   return target === null ? null : tabs[(target + tabs.length) % tabs.length].tab;
 }
 
-/** The fight's tab row with the options menu, view switch and replay toggle at the right end; the replay has none of them, a whole Mythic+ run no replay. */
-export function TabBar() {
+const replayIcon = (
+  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+    <rect x="1.5" y="4" width="9" height="8" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M10.5 7 L14.5 4.8 V11.2 L10.5 9 Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+  </svg>
+);
+
+/**
+ * The fight's tab row: `lead` at its start, the Replay tab at the right of the tabs, and the options menu, view switch and
+ * replay toggle at the right end; the replay has none of them, a whole Mythic+ run no replay.
+ */
+export function TabBar({ lead }: { lead?: ReactNode }) {
   const tab = useApp((s) => s.tab);
   const withReplay = useApp(replayOffered);
   const tabs = withReplay ? TABS : TABS_WITHOUT_REPLAY;
@@ -56,9 +66,11 @@ export function TabBar() {
 
   return (
     <div className="tabbar">
+      {lead}
       <div className="tabs" role="tablist" aria-label={t('tabs.label')} onKeyDown={onTabKey}>
         {tabs.map((entry) => {
           const selected = entry.tab === tab;
+          const replay = entry.tab === 'replay';
           return (
             <button
               key={entry.key}
@@ -69,12 +81,13 @@ export function TabBar() {
               id={tabId(entry.tab)}
               type="button"
               role="tab"
-              className={selected ? 'tab on' : 'tab'}
+              className={['tab', replay && 'tab-replay', selected && 'on'].filter(Boolean).join(' ')}
               aria-selected={selected}
               aria-controls={selected ? PANEL_ID : undefined}
               tabIndex={selected ? 0 : -1}
               onClick={() => void setTab(entry.tab)}
             >
+              {replay && replayIcon}
               {t(entry.key)}
             </button>
           );
