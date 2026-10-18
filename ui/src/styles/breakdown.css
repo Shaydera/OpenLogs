@@ -55,6 +55,7 @@
 }
 .rrow-name {
   display: flex;
+  gap: 3px;
   min-width: 0;
 }
 .rrow-name-narrow:hover .name-label {
