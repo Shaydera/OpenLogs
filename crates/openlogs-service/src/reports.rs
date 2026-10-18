@@ -1,4 +1,4 @@
-use openlogs_analysis::{Attribution, Fight, ReportFilter};
+use openlogs_analysis::{ActorId, Attribution, Fight, ReportFilter};
 use openlogs_gamedata::{ChannelSpells, Curated};
 
 use crate::auras_dto::{AuraKindDto, AurasReportDto, auras_report_dto};
@@ -6,6 +6,7 @@ use crate::casts_dto::{CastsReportDto, casts_report_dto};
 use crate::compare_dto::{PullComparisonDto, pull_comparison_dto};
 use crate::detail_dto::{AbilityDetailDto, TargetDetailDto, ability_detail_dto, target_detail_dto};
 use crate::interrupts_dto::{InterruptsReportDto, interrupts_report_dto};
+use crate::meter_dto::{MeterCategoryDto, MeterDto, meter_dto};
 use crate::overview_dto::{QuickOverviewDto, quick_overview_dto};
 use crate::player_dto::{MetricDto, PlayerDetailDto, player_detail_dto};
 use crate::recap_dto::{DeathsReportDto, deaths_report_dto};
@@ -152,6 +153,18 @@ pub fn replay(
         fight,
         &openlogs_analysis::replay(fight, curated, channels),
         advanced_logging,
+    )
+}
+
+pub fn replay_meter(
+    fight: &Fight,
+    filter: FilterDto,
+    category: MeterCategoryDto,
+    expand: Option<ActorId>,
+) -> MeterDto {
+    meter_dto(
+        fight,
+        &openlogs_analysis::meter(fight, &filter.to_filter(), category.to_category(), expand),
     )
 }
 

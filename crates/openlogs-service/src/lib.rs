@@ -6,6 +6,7 @@ pub mod compare_dto;
 pub mod detail_dto;
 pub mod interrupts_dto;
 pub mod log_dto;
+pub mod meter_dto;
 pub mod overview_dto;
 pub mod player_dto;
 pub mod recap_dto;

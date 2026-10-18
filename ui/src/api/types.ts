@@ -1221,6 +1221,32 @@ export interface ReplayData {
   arenaFrame: ReplayArenaFrame | null;
 }
 
+export type MeterCategory = 'damageDone' | 'healingDone' | 'damageTaken' | 'healingReceived' | 'interrupts' | 'dispels';
+
+export interface MeterRow {
+  player: number;
+  amount: number;
+  /** 0 for interrupts and dispels. */
+  perSecond: number;
+}
+
+export type MeterEntry =
+  | { kind: 'ability'; spellId: number; actorId: number; rowKind: RowKind; amount: number }
+  /** `environmental`: world damage, kept apart from melee (both spell 0). */
+  | { kind: 'spell'; spellId: number; environmental: boolean; amount: number }
+  | { kind: 'unit'; actorId: number; amount: number };
+
+export interface MeterData {
+  durationMs: number;
+  /** Players with an amount, largest first. */
+  rows: MeterRow[];
+  /** The expanded player's split, largest first; empty without one. */
+  breakdown: MeterEntry[];
+  spells: Record<string, { name: string }>;
+  /** Names of the units in `breakdown`. */
+  units: Record<string, string>;
+}
+
 export interface MapArtEntry {
   zone: number;
   /** `null` when the map has no floor number. */

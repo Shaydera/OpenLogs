@@ -53,6 +53,17 @@ pub enum RowKindDto {
     Unmatched,
 }
 
+impl From<RowKind> for RowKindDto {
+    fn from(kind: RowKind) -> Self {
+        match kind {
+            RowKind::Own => Self::Own,
+            RowKind::Pet => Self::Pet,
+            RowKind::SupportGiven => Self::SupportGiven,
+            RowKind::Unmatched => Self::Unmatched,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AbilityRowDto {
@@ -331,12 +342,7 @@ impl<'a> Names<'a> {
             spell_id: self.spell(row.spell),
             actor_id: row.actor,
             actor_name: actor.name.clone().unwrap_or_default(),
-            kind: match row.kind {
-                RowKind::Own => RowKindDto::Own,
-                RowKind::Pet => RowKindDto::Pet,
-                RowKind::SupportGiven => RowKindDto::SupportGiven,
-                RowKind::Unmatched => RowKindDto::Unmatched,
-            },
+            kind: row.kind.into(),
             amount: row.amount,
             support: row.support,
             overheal: row.overheal,

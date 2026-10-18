@@ -6,7 +6,7 @@ use crate::actors::{ActorId, ActorKind, NOBODY};
 use crate::auras::{aura_intervals, merged, union_ms};
 use crate::casts::non_press_casts;
 use crate::deaths::{Death, deaths};
-use crate::fight::{AuraType, DamageVia, EventKind, Fight, SpellId};
+use crate::fight::{AuraType, DamageVia, Event, EventKind, Fight, SpellId};
 use crate::filter::{Attribution, ReportFilter};
 use crate::links::{AbilityIndex, AbilityLink, SpellKey, spell_key};
 use crate::reports::damage::damage_done_in;
@@ -796,6 +796,20 @@ fn augmentation(
     rows
 }
 
+/// Effective healing and absorbs `player` received, without Aug support shares.
+pub(crate) fn received_healing(event: &Event, player: ActorId) -> Option<u64> {
+    if event.target != player {
+        return None;
+    }
+    match event.kind {
+        EventKind::Heal(heal) if heal.supporter == NOBODY => {
+            Some(heal.amount.saturating_sub(heal.overheal))
+        }
+        EventKind::Absorbed(absorbed) if absorbed.supporter == NOBODY => Some(absorbed.amount),
+        _ => None,
+    }
+}
+
 pub(crate) fn is_player(fight: &Fight, id: ActorId) -> bool {
     id as usize <= fight.actors.len() && fight.actors.get(id).kind == ActorKind::Player
 }
@@ -917,16 +931,10 @@ pub fn player_detail(
                 }
                 *casts.entry(spell_key(fight, event.spell)).or_default() += 1;
             }
-            EventKind::Heal(heal) if event.target == player && heal.supporter == NOBODY => {
-                healing_received += heal.amount.saturating_sub(heal.overheal);
-            }
-            EventKind::Absorbed(absorbed)
-                if event.target == player && absorbed.supporter == NOBODY =>
-            {
-                healing_received += absorbed.amount;
-            }
             _ if event.target == player => {
-                if let Some((amount, _)) = taken_amount(event) {
+                if let Some(amount) = received_healing(event, player) {
+                    healing_received += amount;
+                } else if let Some((amount, _)) = taken_amount(event) {
                     let environmental = matches!(event.kind, EventKind::Damage(d) if d.via == DamageVia::Environmental);
                     *taken.entry((event.spell, environmental)).or_default() += amount;
                 }

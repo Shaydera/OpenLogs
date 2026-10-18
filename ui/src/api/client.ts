@@ -22,6 +22,8 @@ import type {
   DamageTakenReport,
   HealingReport,
   LogView,
+  MeterCategory,
+  MeterData,
   Metric,
   PlayerDetail,
   PullComparison,
@@ -214,6 +216,8 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, db, n
       report<DeathsReport>(logId, [fightIndex], 'deaths_report', { fightIndex, filter, scope }),
     replay: (logId: string, fightIndex: number) =>
       report<ReplayData>(logId, [fightIndex], 'replay', { fightIndex }),
+    replayMeter: (logId: string, fightIndex: number, filter: ReportFilter, category: MeterCategory, expand: number | null) =>
+      report<MeterData>(logId, [fightIndex], 'replay_meter', { fightIndex, filter, category, expand }),
     castsReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, group: Dimension, hideProcs: boolean) =>
       report<CastsReport>(logId, [fightIndex], 'casts_report', { fightIndex, filter, scope, group, hideProcs }),
     aurasReport: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, kind: AuraKind, group: Dimension) =>

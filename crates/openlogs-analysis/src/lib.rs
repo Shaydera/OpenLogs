@@ -15,6 +15,7 @@ mod filter;
 mod interrupts;
 mod links;
 mod load;
+mod meter;
 mod options;
 mod overview;
 mod phases;
@@ -55,6 +56,7 @@ pub use interrupts::{
 };
 pub use links::AbilityLink;
 pub use load::{load_fight, load_fight_file, load_fight_slice};
+pub use meter::{Meter, MeterCategory, MeterEntry, MeterKey, MeterRow, meter};
 pub use options::{FilterOption, OptionValue, SpellVariant, filter_options};
 pub use overview::{
     BOSS_HP_STEP_MS, DPS_STEP_MS, DeathReport, Kpis, OverviewMarkers, OverviewTimeline,
