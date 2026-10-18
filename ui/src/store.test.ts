@@ -1157,6 +1157,16 @@ describe('replay', () => {
     expect(initialState().replay.rangeOpen).toBe(true);
   });
 
+  it('remembers the meter settings and ignores invalid stored values', () => {
+    expect(useApp.getState().replay.meter).toEqual({ category: 'damageDone', mode: 'cumulative', windowMs: 10_000 });
+    useApp.getState().setReplayMeter({ category: 'healingDone', mode: 'window' });
+    useApp.getState().setReplayMeter({ windowMs: 30_000 });
+    expect(initialState().replay.meter).toEqual({ category: 'healingDone', mode: 'window', windowMs: 30_000 });
+
+    localStorage.setItem('openlogs.replay', JSON.stringify({ meter: { category: 'overhealing', mode: 'window', windowMs: 7_000 } }));
+    expect(initialState().replay.meter).toEqual({ category: 'damageDone', mode: 'window', windowMs: 10_000 });
+  });
+
   it('new layers get their defaults for stored replay settings', () => {
     localStorage.setItem('openlogs.replay', JSON.stringify({ layers: { effects: false, worldMarkers: true, facing: true, names: true } }));
     expect(initialState().replay.layers).toEqual({ map: true, grid: false, effects: false, worldMarkers: true, facing: true, names: true });

@@ -110,6 +110,13 @@
   --hp-add: #b07a3a;
   --cast-fill: #7a64c4;
   --hp-tint: color-mix(in srgb, var(--hp-fill) 28%, transparent);
+  /* How much of a player's class colour fills a replay meter row. */
+  --meter-fill-mix: 26%;
+  /* Text on the unit-frame and cast bars: --bar-text on top, the two-colour paint below it (light modes) and its halos. */
+  --bar-text: var(--text);
+  --bar-text-on-fill: var(--text);
+  --bar-text-halo: var(--bg);
+  --cast-text-halo: var(--bar-track);
 
   /* Primary-power bars of the replay unit frames. */
   --power-mana: #4a7bea;
@@ -231,6 +238,12 @@
   --hp-add: #9a5f1c;
   --cast-fill: #6a58b0;
   --hp-tint: color-mix(in srgb, var(--hp-fill) 16%, transparent);
+  --meter-fill-mix: 20%;
+  /* Bar text: white on the fills, black on the bright power fills (--power-*-text), --text on the track. */
+  --bar-text: transparent;
+  --bar-text-on-fill: #ffffff;
+  --bar-text-halo: transparent;
+  --cast-text-halo: transparent;
 
   /* Primary-power bars of the replay unit frames. */
   --power-mana: #2f5fd0;
@@ -245,6 +258,10 @@
   --power-pain: #b86e00;
   --power-essence: #1f8577;
   --power-other: var(--text-soft);
+  --power-focus-text: #000000;
+  --power-energy-text: #000000;
+  --power-pain-text: #000000;
+  --power-essence-text: #000000;
 
   /* Replay effects. */
   --effect-heal: #1a7d5d;

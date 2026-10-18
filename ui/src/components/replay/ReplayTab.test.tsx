@@ -14,6 +14,8 @@ beforeEach(() => {
   useApp.setState({ ...initialState(), tab: 'replay', replayData: replayFixture });
 });
 
+afterEach(() => vi.restoreAllMocks());
+
 describe('ReplayTab', () => {
   it('space toggles play and arrows jump five seconds', async () => {
     useApp.setState({ replay: { ...initialState().replay, time: 60_000 } });
@@ -27,6 +29,14 @@ describe('ReplayTab', () => {
     expect(replay().playing).toBe(true);
     await userEvent.keyboard(' ');
     expect(replay().playing).toBe(false);
+  });
+
+  it('arrow keys and space in the meter category stay with the menu', async () => {
+    useApp.setState({ replay: { ...initialState().replay, time: 60_000 } });
+    render(<ReplayTab />);
+    screen.getByRole('combobox', { name: t('replay.meterCategory') }).focus();
+    await userEvent.keyboard('{ArrowRight}{ArrowLeft} ');
+    expect(replay()).toMatchObject({ time: 60_000, playing: false });
   });
 
   it('a held space toggles play only once', () => {
@@ -86,14 +96,25 @@ describe('ReplayTab', () => {
     useApp.getState().toggleReplayPlay();
   });
 
-  it('the compact pane starts the unit frame collapsed and expands it on click', async () => {
+  it('the compact pane starts the meter and the unit frame collapsed and expands on click', async () => {
     useApp.setState({ replay: { ...initialState().replay, selected: 1 } });
     render(<ReplayTab compact />);
     const caption = screen.getByRole('button', { name: t('replay.unitFrames') });
     expect(caption).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: t('replay.meter') })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('group', { name: 'Talwyn' })).toBeNull();
     await userEvent.click(caption);
     expect(screen.getByRole('group', { name: 'Talwyn' })).toBeInTheDocument();
+  });
+
+  it('a short stage starts the raid frames collapsed and they still expand', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ width: 1500, height: 400 }));
+    render(<ReplayTab />);
+    const caption = screen.getByRole('button', { name: t('replay.raidFrames') });
+    expect(caption).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: t('replay.meter') })).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.click(caption);
+    expect(caption).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('shows a notice without advanced logging', () => {

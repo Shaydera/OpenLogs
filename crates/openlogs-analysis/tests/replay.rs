@@ -668,6 +668,35 @@ fn bosses_get_power_tracks_from_their_advanced_blocks() {
     );
 }
 
+#[test]
+fn a_unit_logging_an_empty_power_pool_has_no_power_track() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Ilvaren", 62);
+    let boss = boss(&mut b);
+    let add = b.unit(
+        "Creature-0-1-1-1-200-0000000002",
+        "Grasping Tendril",
+        HOSTILE_FLAGS,
+    );
+    b.position(0, mage, 0.0, 0.0)
+        .position(0, boss, 5.0, 5.0)
+        .position(0, add, 8.0, 8.0)
+        .npc_power(1_000, boss, 3, 40, 100)
+        .npc_power(1_000, add, 1, 0, 0)
+        .npc_power(2_000, add, 1, 0, 0);
+
+    let replay = replay_of(&b.build());
+
+    assert_eq!(
+        replay
+            .power
+            .iter()
+            .map(|track| track.actor)
+            .collect::<Vec<_>>(),
+        vec![boss]
+    );
+}
+
 fn swing(via: DamageVia) -> EventKind {
     EventKind::Damage(damage(via, 100, 0))
 }
@@ -746,6 +775,35 @@ fn a_target_before_the_pull_is_kept_at_zero() {
         vec![TargetTrack {
             actor: mage,
             t: vec![0],
+            target: vec![boss],
+        }]
+    );
+}
+
+#[test]
+fn self_casts_and_casts_on_units_outside_the_roster_keep_the_target() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Ilvaren", 62);
+    let boss = boss(&mut b);
+    let critter = b.unit(
+        "Creature-0-1-1-1-300-0000000003",
+        "Dusk Moth",
+        NEUTRAL_FLAGS,
+    );
+    let bolt = b.spell(116, "Frostbolt");
+    let barrier = b.spell(11426, "Ice Barrier");
+    b.position(0, boss, 5.0, 5.0)
+        .push(1_000, mage, boss, bolt, EventKind::CastSuccess)
+        .push(2_000, mage, mage, barrier, EventKind::CastSuccess)
+        .push(3_000, mage, critter, bolt, EventKind::CastSuccess);
+
+    let replay = replay_of(&b.build());
+
+    assert_eq!(
+        replay.targets,
+        vec![TargetTrack {
+            actor: mage,
+            t: vec![1_000],
             target: vec![boss],
         }]
     );

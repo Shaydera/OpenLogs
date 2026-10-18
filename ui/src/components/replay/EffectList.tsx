@@ -40,7 +40,7 @@ interface Props {
   defaultCollapsed?: boolean;
 }
 
-/** Top left: the effects up now with their caster, remaining time and how many players the log shows them reaching; a click highlights one on the stage, a second click clears it. */
+/** Top right, under the boss frames: the effects up now with their caster, remaining time and how many players the log shows them reaching; a click highlights one on the stage, a second click clears it. */
 export function EffectList({ hud, selected, onSelect, defaultCollapsed = false }: Props) {
   const time = useReplayTime();
   const shown = useApp((s) => s.replay.layers.effects);

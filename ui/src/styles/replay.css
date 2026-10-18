@@ -260,6 +260,7 @@
 }
 .hud-toggle {
   display: inline-flex;
+  flex: none;
   align-items: center;
   align-self: flex-end;
   gap: 4px;
@@ -290,20 +291,205 @@
   transform: rotate(-90deg);
 }
 
-.hud-bosses {
+.hud-layout {
+  --hud-meter-width: 330px;
+  --hud-side-width: 280px;
+  --hud-column-gap: 14px;
   position: absolute;
-  top: 14px;
-  right: 14px;
-  width: min(280px, calc(100% - 28px));
-  max-height: calc(50% - 21px);
+  inset: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, var(--hud-meter-width)) minmax(0, 1fr) minmax(0, var(--hud-side-width));
+  grid-template-rows: minmax(160px, 1fr) minmax(0, auto);
+  grid-template-areas:
+    'meter . side'
+    'bottom bottom bottom';
+  gap: 10px var(--hud-column-gap);
+  pointer-events: none;
 }
-.hud-bosses .hud-body {
+.hud-side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.hud-side > .hud {
+  flex: 0 1 auto;
+}
+.hud-bosses .hud-body,
+.hud-effects .hud-body {
   overflow-y: auto;
 }
 
+.hud-meter {
+  grid-area: meter;
+  align-self: start;
+  max-height: 100%;
+}
+.hud-meter .hud-toggle {
+  align-self: flex-start;
+}
+.hud-meter .hud-body {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-raised);
+}
+.hud-meter-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: none;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.hud-meter-category {
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: 600 13px var(--font-text);
+  cursor: pointer;
+}
+.hud-meter-modes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.hud-meter-seg button {
+  min-width: 40px;
+  min-height: 28px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+.hud-meter-span {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.hud-meter-empty {
+  margin: 0;
+  padding: 14px 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.hud-meter-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+}
+.hud-meter-rows > li {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+}
+.hud-meter-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 26px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 4px;
+  background: var(--bar-track);
+  color: var(--text);
+  font: 13px var(--font-text);
+  text-align: left;
+  cursor: pointer;
+}
+.hud-meter-row.on {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.hud-meter-row:focus-visible {
+  outline-offset: -2px;
+}
+.hud-meter-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--meter-color) var(--meter-fill-mix), transparent);
+}
+.hud-meter-name,
+.hud-meter-value {
+  position: relative;
+  white-space: nowrap;
+}
+.hud-meter-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 600;
+}
+.hud-meter-name > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hud-meter-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--meter-color);
+}
+.hud-meter-value {
+  font-size: 12px;
+}
+.hud-meter-rate {
+  margin-left: 4px;
+  color: var(--muted);
+}
+.hud-meter-breakdown {
+  display: flex;
+  flex-direction: column;
+  margin: 2px 0 6px;
+  padding: 0;
+  list-style: none;
+}
+.hud-meter-entry {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto 44px;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  padding: 0 8px 0 22px;
+  font-size: 12px;
+}
+.hud-meter-entry-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.hud-meter-entry-note {
+  margin-left: 6px;
+  color: var(--muted);
+}
+.hud-meter-share {
+  color: var(--muted);
+  text-align: right;
+}
+.hud-meter-breakdown .hud-meter-more {
+  min-height: 22px;
+  padding: 0 8px 0 46px;
+  font-size: 12px;
+}
+
 .hud-notes {
-  /* Room the wider caption toggle takes from each side; centred notes must clear both. */
-  --hud-caption-reserve: 184px;
+  /* Room the meter takes at the left, kept on both sides; centred notes must clear it. */
+  --hud-caption-reserve: 350px;
   position: absolute;
   top: 14px;
   left: 50%;
@@ -316,7 +502,7 @@
   max-width: calc(100% - 2 * var(--hud-caption-reserve));
   pointer-events: none;
 }
-@container (max-width: 560px) {
+@container (max-width: 900px) {
   .hud-notes {
     top: calc(14px + 24px + 6px);
     max-width: calc(100% - 28px);
@@ -340,22 +526,6 @@
   pointer-events: auto;
 }
 
-.hud-effects {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  width: min(270px, calc(50% - 21px));
-  max-height: calc(50% - 21px);
-}
-.replay-compact .hud-bosses {
-  width: min(280px, calc(50% - 21px));
-}
-.hud-effects .hud-toggle {
-  align-self: flex-start;
-}
-.hud-effects .hud-body {
-  overflow-y: auto;
-}
 .hud-effect-heal {
   --effect: var(--effect-heal);
 }
@@ -413,21 +583,33 @@
   color: var(--effect-missing);
 }
 
-/* Raid frames at the left, the unit frames centred in the room right of them; above them when that room runs out. */
+/* Raid frames at the left, the unit frames centred in the room right of them. */
 .hud-bottom {
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: 14px;
+  grid-area: bottom;
   display: flex;
-  flex-wrap: wrap;
   align-items: flex-end;
-  gap: 10px 14px;
+  gap: 10px var(--hud-column-gap);
+  min-height: 0;
   pointer-events: none;
 }
+.hud-bottom > .hud {
+  max-height: 100%;
+}
 .hud-unit {
+  flex: 1 1 0;
+  min-width: 0;
+  align-items: center;
+}
+/* With the raid frames collapsed the unit frames leave the flow, so the meter reaches down to the raid caption; they stay between the meter and the boss column. */
+.hud-layout:has(.hud-raid.collapsed) .hud-unit {
+  position: absolute;
+  bottom: 0;
+  left: calc(var(--hud-meter-width) + var(--hud-column-gap));
+  right: calc(var(--hud-side-width) + var(--hud-column-gap));
+}
+.hud-unit .hud-body {
   width: min(840px, 100%);
-  margin: 0 auto;
+  overflow-y: auto;
 }
 .hud-unit-row {
   display: flex;
@@ -437,11 +619,14 @@
   gap: 8px;
 }
 .hud-unit-frame {
-  width: 320px;
-  max-width: 100%;
+  box-sizing: border-box;
+  flex: 1 1 180px;
+  max-width: 320px;
 }
 .hud-unit-tot {
-  width: 170px;
+  box-sizing: border-box;
+  flex: 1 1 120px;
+  max-width: 170px;
   gap: 4px;
 }
 .hud-unit-tot .hud-hp {
@@ -487,9 +672,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 6px;
-  color: var(--text);
   font-size: 11px;
-  text-shadow: 0 0 3px var(--bg);
+  text-shadow: 0 0 3px var(--bar-text-halo);
   pointer-events: none;
 }
 .hud-unit .hud-toggle {
@@ -497,6 +681,38 @@
 }
 .hud-raid:not(.collapsed) {
   width: min(548px, 100%);
+}
+/* Wide enough: the unit frames sit at the stage's centre, out of the flow, and the open raid frames end left of them. */
+@container (min-width: 1820px) {
+  .hud-unit,
+  .hud-layout:has(.hud-raid.collapsed) .hud-unit {
+    position: absolute;
+    bottom: 0;
+    left: calc(50% - 420px);
+    right: calc(50% - 420px);
+  }
+  .hud-raid:not(.collapsed) {
+    width: min(548px, calc(50% - 434px));
+  }
+}
+/* Too narrow for the unit frames beside the raid frames or between the columns: they go above the raid frames. */
+@container (max-width: 1160px) {
+  .hud-bottom {
+    flex-direction: column-reverse;
+    align-items: flex-start;
+  }
+  .hud-bottom > .hud {
+    flex-shrink: 0;
+  }
+  .hud-unit,
+  .hud-layout:has(.hud-raid.collapsed) .hud-unit {
+    position: static;
+    flex-basis: auto;
+    align-self: stretch;
+  }
+  .hud-bottom > .hud-unit:not(.collapsed) {
+    flex-shrink: 1;
+  }
 }
 
 .hud-frame {
@@ -649,6 +865,7 @@
 }
 
 .hud-raid .hud-body {
+  overflow-y: auto;
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -726,6 +943,20 @@
     0 0 2px var(--bar-track),
     0 0 2px var(--bar-track),
     0 0 3px var(--bar-track);
+}
+/* Bar text in two colours split at --fill: --bar-text-fill over the fill, --text over the track. Dark modes cover it with opaque --bar-text and a halo. */
+.hud-bar-text,
+.hud-cast-name {
+  background: linear-gradient(to right, var(--bar-text-fill, var(--bar-text-on-fill)) var(--fill, 0%), var(--text) var(--fill, 0%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: var(--bar-text);
+}
+.hud-cast-name {
+  text-shadow:
+    0 0 2px var(--cast-text-halo),
+    0 0 2px var(--cast-text-halo),
+    0 0 3px var(--cast-text-halo);
 }
 .hud-raid-frame.dead .hud-raid-select span {
   color: var(--muted);

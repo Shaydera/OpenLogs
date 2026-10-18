@@ -107,4 +107,9 @@ describe('casts, auras and health', () => {
     expect(powerAt(hud, 1, 499)).toBeNull();
     expect(powerAt(hud, 1, 1000)).toEqual({ powerType: 0, current: 40, max: 100 });
   });
+
+  it('powerAt is null for an empty power pool', () => {
+    const hud = { power: new Map([[1, { actor: 1, powerType: 1, t: [0], current: [0], max: [0] }]]) } as unknown as HudIndex;
+    expect(powerAt(hud, 1, 500)).toBeNull();
+  });
 });

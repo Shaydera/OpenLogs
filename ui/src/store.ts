@@ -24,6 +24,7 @@ import type {
   HealingReport,
   Kpis,
   LogView,
+  MeterCategory,
   Metric,
   PlayerDetail,
   PullComparison,
@@ -74,10 +75,17 @@ export type ReplayState = {
   splitWidth: number;
   follow: boolean;
   rangeOpen: boolean;
+  meter: ReplayMeter;
 };
+export type MeterMode = 'cumulative' | 'window';
+export type MeterWindowMs = 5000 | 10000 | 30000;
+export type ReplayMeter = { category: MeterCategory; mode: MeterMode; windowMs: MeterWindowMs };
 
 const REPLAY_KEY = 'replay';
 const REPLAY_SPEEDS: ReplaySpeed[] = [0.5, 1, 2, 4];
+export const METER_CATEGORIES: MeterCategory[] = ['damageDone', 'healingDone', 'damageTaken', 'healingReceived', 'interrupts', 'dispels'];
+export const METER_WINDOWS: MeterWindowMs[] = [5000, 10000, 30000];
+const DEFAULT_REPLAY_METER: ReplayMeter = { category: 'damageDone', mode: 'cumulative', windowMs: 10000 };
 const DEFAULT_SPLIT_WIDTH = 480;
 const REPLAY_TICK_MS = 100;
 export type MetricTab = 'damage' | 'healing' | 'taken';
@@ -359,6 +367,7 @@ interface Actions {
   setReplaySplit(on: boolean): void;
   setReplaySplitWidth(width: number): void;
   setReplayRangeOpen(open: boolean): void;
+  setReplayMeter(meter: Partial<ReplayMeter>): void;
   setReplayFollow(on: boolean): void;
   openReplayAt(ms: number): void;
 }
@@ -387,6 +396,7 @@ function readReplayState(): ReplayState {
     splitWidth: DEFAULT_SPLIT_WIDTH,
     follow: false,
     rangeOpen: false,
+    meter: DEFAULT_REPLAY_METER,
   };
   const raw = readStored(REPLAY_KEY);
   if (raw === null) return state;
@@ -404,14 +414,24 @@ function readReplayState(): ReplayState {
       split: stored.split === true,
       splitWidth: typeof stored.splitWidth === 'number' && stored.splitWidth > 0 ? stored.splitWidth : DEFAULT_SPLIT_WIDTH,
       rangeOpen: stored.rangeOpen === true,
+      meter: readMeter(stored.meter),
     };
   } catch {
     return state;
   }
 }
 
-function writeReplayState({ layers, filters: { hidden: _hidden, ...filters }, speed, split, splitWidth, rangeOpen }: ReplayState) {
-  writeStored(REPLAY_KEY, JSON.stringify({ layers, filters, speed, split, splitWidth, rangeOpen }));
+function readMeter(value: unknown): ReplayMeter {
+  const stored = (typeof value === 'object' && value !== null ? value : {}) as Partial<Record<keyof ReplayMeter, unknown>>;
+  return {
+    category: METER_CATEGORIES.find((category) => category === stored.category) ?? DEFAULT_REPLAY_METER.category,
+    mode: stored.mode === 'window' ? 'window' : 'cumulative',
+    windowMs: METER_WINDOWS.find((windowMs) => windowMs === stored.windowMs) ?? DEFAULT_REPLAY_METER.windowMs,
+  };
+}
+
+function writeReplayState({ layers, filters: { hidden: _hidden, ...filters }, speed, split, splitWidth, rangeOpen, meter }: ReplayState) {
+  writeStored(REPLAY_KEY, JSON.stringify({ layers, filters, speed, split, splitWidth, rangeOpen, meter }));
 }
 
 export function initialState(): State {
@@ -1284,6 +1304,12 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
 
   setReplayRangeOpen(rangeOpen) {
     const replay = { ...get().replay, rangeOpen };
+    set({ replay });
+    writeReplayState(replay);
+  },
+
+  setReplayMeter(meter) {
+    const replay = { ...get().replay, meter: { ...get().replay.meter, ...meter } };
     set({ replay });
     writeReplayState(replay);
   },

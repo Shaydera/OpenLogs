@@ -13,7 +13,7 @@ import type { StageColors } from './stageColors';
 import { type MarkerLook, RAID_TARGET_MARKERS, WORLD_MARKERS, traceSymbol } from './worldMarkers';
 
 export const STAGE_PAD_PX = 40;
-/** The HUD captions along the stage top: 14 px in from the edge, 24 px high (`.hud-bosses`, `.hud-effects`, `.hud-toggle`). */
+/** The HUD captions along the stage top: 14 px in from the edge, 24 px high (the `.hud-toggle` of `.hud-meter` and `.hud-bosses`). */
 export const HUD_CAPTION_ROW_PX = 14 + 24;
 const HIT_PX = 14;
 const UNIT_PX: Record<ReplayUnit['kind'], number> = { player: 22, pet: 16, boss: 28, add: 22 };

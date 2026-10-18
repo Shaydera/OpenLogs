@@ -135,7 +135,7 @@ export function healthAt(track: ReplayHealthTrack, t: number): { current: number
 export function powerAt(hud: HudIndex, actor: number, t: number): { powerType: number; current: number; max: number } | null {
   const track = hud.power.get(actor);
   const i = track ? lastAtOrBefore(track.t, t) : -1;
-  return track && i >= 0 ? { powerType: track.powerType, current: track.current[i], max: track.max[i] } : null;
+  return track && i >= 0 && track.max[i] > 0 ? { powerType: track.powerType, current: track.current[i], max: track.max[i] } : null;
 }
 
 /** The unit `actor` targets at `t`: the latest change at or before it. */

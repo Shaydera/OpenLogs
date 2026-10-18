@@ -16,11 +16,9 @@ pub struct PowerTrack {
 
 pub(super) fn power(fight: &Fight, roster: &Roster) -> Vec<PowerTrack> {
     let samples = || {
-        fight
-            .power
-            .iter()
-            .chain(&fight.npc_power)
-            .filter(|sample| sample.primary && roster.kind(sample.actor).is_some())
+        fight.power.iter().chain(&fight.npc_power).filter(|sample| {
+            sample.primary && sample.max > 0 && roster.kind(sample.actor).is_some()
+        })
     };
     let primary = primary_types(samples());
     let mut by_actor: HashMap<ActorId, PowerTrack> = HashMap::new();

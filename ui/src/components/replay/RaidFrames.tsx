@@ -75,7 +75,7 @@ function RaidFrame({ hud, unit, time, selected, onSelect }: RaidFrameProps) {
   );
 }
 
-/** Bottom right: the players by role and name in five columns; a click selects one, a second click clears it. */
+/** Bottom left: the players by role and name in five columns; a click selects one, a second click clears it. */
 export function RaidFrames({ hud, defaultCollapsed = false }: { hud: HudIndex; defaultCollapsed?: boolean }) {
   const time = useReplayTime();
   const selected = useApp((s) => s.replay.selected);

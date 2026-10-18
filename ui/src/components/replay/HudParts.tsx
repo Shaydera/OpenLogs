@@ -1,5 +1,5 @@
 import { type ReactNode, useId, useState } from 'react';
-import { formatPercent } from '../../i18n/format';
+import { formatAmount, formatPercent } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 
 interface HudPanelProps {
@@ -30,6 +30,11 @@ export function HudPanel({ label, className, defaultCollapsed = false, hidden = 
       )}
     </section>
   );
+}
+
+export function healthText(health: { current: number; percent: number | null }): string {
+  const amount = formatAmount(health.current);
+  return health.percent === null ? amount : t('replay.healthValue', { amount, percent: formatPercent(health.percent) });
 }
 
 type HealthTone = 'boss' | 'add' | 'unit';

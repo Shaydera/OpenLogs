@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
+import { type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { EffectInstance, ReplayData } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { replaySplitShown, useApp } from '../../store';
@@ -6,6 +6,7 @@ import { rangeWindow } from '../views/zoomGeometry';
 import { BossFrames } from './BossFrames';
 import { EffectList } from './EffectList';
 import { indexHud } from './hudIndex';
+import { Meter } from './Meter';
 import { RaidFrames } from './RaidFrames';
 import { ReplayControls, replayNow } from './ReplayControls';
 import { ReplayLegend } from './ReplayLegend';
@@ -13,6 +14,12 @@ import { ReplayStage } from './ReplayStage';
 import { UnitFrames } from './UnitFrames';
 
 const JUMP_MS = 5_000;
+/** Below this stage height the raid frames start collapsed, so the meter keeps a usable height. */
+const SHORT_STAGE_PX = 560;
+/** The stage width below which the unit frames stack above the raid frames (the `.hud-bottom` container query). */
+const NARROW_STAGE_PX = 1160;
+
+type StageFit = { short: boolean; shortAndNarrow: boolean };
 
 /**
  * The pull's replay: legend, stage and controls; loads its bundle on first show. `compact` is the split pane: no legend, filters or layers.
@@ -62,8 +69,17 @@ function ReplayPanel({ data, compact }: { data: ReplayData; compact: boolean }) 
   const [highlight, setHighlight] = useState<number[] | null>(null);
   const [selectedEffect, setSelectedEffect] = useState<EffectInstance | null>(null);
   const hud = useMemo(() => indexHud(data), [data]);
+  const plot = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<StageFit | null>(null);
   const bounds = rangeWindow(range, data.durationMs);
   const { startMs, endMs } = bounds;
+
+  useLayoutEffect(() => {
+    const { width, height } = plot.current?.getBoundingClientRect() ?? { width: 0, height: 0 };
+    // A stage that is not laid out yet has no height to fit.
+    const short = height > 0 && height < SHORT_STAGE_PX;
+    setFit({ short, shortAndNarrow: short && width <= NARROW_STAGE_PX });
+  }, []);
 
   useEffect(() => {
     const { time } = useApp.getState().replay;
@@ -71,7 +87,7 @@ function ReplayPanel({ data, compact }: { data: ReplayData; compact: boolean }) 
   }, [startMs, endMs, setReplayTime]);
 
   function onKey(event: KeyboardEvent<HTMLElement>) {
-    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    if (event.ctrlKey || event.altKey || event.metaKey || event.target instanceof HTMLSelectElement) return;
     if (event.key === ' ') {
       // Space on a button inside the region presses that button.
       if (event.target instanceof HTMLButtonElement) return;
@@ -86,14 +102,21 @@ function ReplayPanel({ data, compact }: { data: ReplayData; compact: boolean }) 
   return (
     <section className={compact ? 'panel replay replay-compact' : 'panel replay'} aria-label={t('replay.region')} tabIndex={0} onKeyDown={onKey}>
       {!compact && <ReplayLegend data={data} highlight={highlight} onHighlight={setHighlight} />}
-      <div className="replay-plot">
+      <div className="replay-plot" ref={plot}>
         <ReplayStage data={data} highlight={highlight} selectedEffect={selectedEffect} />
-        <EffectList hud={hud} selected={selectedEffect} onSelect={setSelectedEffect} defaultCollapsed={compact} />
-        <BossFrames hud={hud} />
-        <div className="hud-bottom">
-          <RaidFrames hud={hud} defaultCollapsed={compact} />
-          <UnitFrames hud={hud} defaultCollapsed={compact} />
-        </div>
+        {fit && (
+          <div className="hud-layout">
+            <Meter hud={hud} bounds={bounds} defaultCollapsed={compact} />
+            <div className="hud-side">
+              <BossFrames hud={hud} />
+              <EffectList hud={hud} selected={selectedEffect} onSelect={setSelectedEffect} defaultCollapsed={compact} />
+            </div>
+            <div className="hud-bottom">
+              <RaidFrames hud={hud} defaultCollapsed={compact || fit.short} />
+              <UnitFrames hud={hud} defaultCollapsed={compact || fit.shortAndNarrow} />
+            </div>
+          </div>
+        )}
       </div>
       <ReplayControls data={data} bounds={bounds} compact={compact} />
     </section>
