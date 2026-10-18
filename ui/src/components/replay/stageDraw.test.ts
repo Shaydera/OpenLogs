@@ -62,7 +62,6 @@ const effectState = (anchor: EffectAnchor): EffectState => ({
   center: anchor.type === 'ground' ? { x: anchor.x, y: anchor.y, stale: false } : { x: 0, y: 0, stale: false },
   affected: [],
   missing: [],
-  pulse: false,
 });
 
 describe('effect labels', () => {

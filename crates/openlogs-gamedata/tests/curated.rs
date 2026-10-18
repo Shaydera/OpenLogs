@@ -240,7 +240,7 @@ fn effect_catalog_loads_with_defaults() {
             { "spell_ids": [1], "name": "Shout", "trigger": "cast", "anchor": "caster_at_cast",
               "radius_yd": 100, "duration": { "type": "fixed", "ms": 5000 },
               "evidence": { "aura_ids": [1], "hit_ids": [] },
-              "kind": "beneficial", "category": "raid_buff" },
+              "kind": "beneficial", "category": "heal" },
             { "spell_ids": [2], "name": "Totem", "trigger": "summon", "anchor": "summoned_unit",
               "radius_yd": 10, "duration": { "type": "until_unit_gone" },
               "evidence": { "aura_ids": [], "hit_ids": [3], "tick_window_ms": 1000 },
@@ -264,7 +264,7 @@ fn effect_catalog_loads_with_defaults() {
     assert_eq!(shout.anchor, EffectAnchor::CasterAtCast);
     assert_eq!(shout.duration, EffectDuration::Fixed { ms: 5000 });
     assert_eq!(shout.kind, EffectKind::Beneficial);
-    assert_eq!(shout.category, EffectCategory::RaidBuff);
+    assert_eq!(shout.category, EffectCategory::Heal);
     assert_eq!(shout.evidence.tick_window_ms, 3000);
     assert_eq!(totem.duration, EffectDuration::UntilUnitGone);
     assert_eq!(totem.evidence.tick_window_ms, 1000);

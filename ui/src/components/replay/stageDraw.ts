@@ -6,7 +6,7 @@ import { bossMonogram, initials } from '../../monogram';
 import type { ReplayFilters, ReplayLayers } from '../../store';
 import { shortName } from '../overview/players';
 import { type Bounds, type Camera, facingOnScreen, gridStep, toScreen, toWorld } from './camera';
-import { type EffectState, RAID_BUFF_PULSE_MS } from './effects';
+import type { EffectState } from './effects';
 import { type MapBoundsYd, type StageMap, stageMap } from './mapArt';
 import { UNKNOWN_MAP, deathAt, floorAt, goneAfterMs, groupBy, healthAt, placementAt } from './playback';
 import type { StageColors } from './stageColors';
@@ -346,26 +346,23 @@ export function effectLabelAt(sx: number, sy: number, r: number, labelW: number,
   return [clamp(sx, half, w - half), clamp(above, HUD_CAPTION_ROW_PX + EFFECT_LABEL_PAD_PX + EFFECT_LABEL_PX, h - EFFECT_LABEL_PAD_PX)];
 }
 
-/** A circle in the effect's colour with its name and radius above; a raid buff is an outline that spreads from its caster and fades. */
+/** A circle in the effect's colour with its name and radius above. */
 function drawEffectArea(ctx: CanvasRenderingContext2D, frame: StageFrame, state: EffectState) {
   const { effect, center } = state;
-  if (!center || (effect.category === 'raid_buff' && !state.pulse)) return;
+  if (!center) return;
   const { colors, cam, w, h } = frame;
   const [sx, sy] = toScreen(cam, center.x, center.y, w, h);
   const color = colors.effects[effect.category];
-  const progress = state.pulse ? (frame.t - effect.startMs) / RAID_BUFF_PULSE_MS : 1;
-  const r = effect.radiusYd * cam.scale * progress;
+  const r = effect.radiusYd * cam.scale;
   ctx.save();
-  ctx.globalAlpha = (center.stale ? 0.5 : 1) * (state.pulse ? 1 - progress : 1);
+  ctx.globalAlpha = center.stale ? 0.5 : 1;
   ctx.beginPath();
   ctx.arc(sx, sy, r, 0, 2 * Math.PI);
-  if (!state.pulse) {
-    ctx.save();
-    ctx.globalAlpha *= EFFECT_FILL_ALPHA;
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.restore();
-  }
+  ctx.save();
+  ctx.globalAlpha *= EFFECT_FILL_ALPHA;
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.restore();
   ctx.setLineDash(effect.estimated ? [6, 4] : []);
   ctx.strokeStyle = color;
   ctx.lineWidth = effect === frame.selectedEffect ? 4 : 2;

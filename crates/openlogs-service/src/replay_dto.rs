@@ -163,7 +163,6 @@ pub enum EffectKindDto {
 pub enum EffectCategoryDto {
     RaidCd,
     Heal,
-    RaidBuff,
     BossMechanic,
 }
 
@@ -401,7 +400,6 @@ fn effect_dto(fight: &Fight, refs: &mut Refs, effect: &EffectInstance) -> Effect
         category: match effect.category {
             EffectCategory::RaidCd => EffectCategoryDto::RaidCd,
             EffectCategory::Heal => EffectCategoryDto::Heal,
-            EffectCategory::RaidBuff => EffectCategoryDto::RaidBuff,
             EffectCategory::BossMechanic => EffectCategoryDto::BossMechanic,
         },
         tick_window_ms: effect.tick_window_ms,
@@ -468,7 +466,7 @@ mod tests {
             vec![
                 event(1_000, mage, NOBODY, 44425, EventKind::CastSuccess),
                 event(1_000, paladin, paladin, 31821, aura_mastery),
-                event(1_500, mage, NOBODY, 1459, EventKind::CastSuccess),
+                event(1_500, mage, NOBODY, 97462, EventKind::CastSuccess),
             ],
         );
         fight.spells.insert(
@@ -538,15 +536,15 @@ mod tests {
             json["effects"][0]["anchor"],
             json!({ "type": "unit", "actor": paladin })
         );
-        let intellect = &json["effects"][1];
+        let rallying = &json["effects"][1];
         let effects = serde_json::to_string(&dto.effects).unwrap();
         assert!(
             effects.contains(r#""anchor":{"type":"ground","x":417.55,"y":-12.34}"#),
             "{effects}"
         );
-        assert_eq!(intellect["spellId"], 1459);
-        assert_eq!(intellect["category"], "raid_buff");
-        assert_eq!(intellect["radiusYd"], 100.0);
-        assert_eq!(intellect["tickWindowMs"], 3000);
+        assert_eq!(rallying["spellId"], 97462);
+        assert_eq!(rallying["category"], "raid_cd");
+        assert_eq!(rallying["radiusYd"], 40.0);
+        assert_eq!(rallying["tickWindowMs"], 3000);
     }
 }

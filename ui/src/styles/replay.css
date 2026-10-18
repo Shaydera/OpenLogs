@@ -356,9 +356,6 @@
 .hud-effect-raid-cd {
   --effect: var(--effect-raid-cd);
 }
-.hud-effect-raid-buff {
-  --effect: var(--effect-raid-buff);
-}
 .hud-effect-boss-mechanic {
   --effect: var(--effect-boss);
 }

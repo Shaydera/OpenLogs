@@ -277,7 +277,6 @@ pub enum EffectKind {
 pub enum EffectCategory {
     RaidCd,
     Heal,
-    RaidBuff,
     BossMechanic,
 }
 

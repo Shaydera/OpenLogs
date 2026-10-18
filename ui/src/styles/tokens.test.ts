@@ -40,7 +40,7 @@ const FIXED_PAIRS: [foreground: string, background: string, minimum: number][] =
   ),
   ...['hp-fill', 'hp-boss', 'hp-add', 'cast-fill'].map((bar): [string, string, number] => [bar, 'bar-track', NON_TEXT]),
   ...['square', 'triangle', 'diamond', 'cross', 'star', 'circle', 'moon', 'skull'].map((symbol): [string, string, number] => [`marker-${symbol}`, 'plot', NON_TEXT]),
-  ...['heal', 'raid-cd', 'raid-buff', 'boss', 'missing'].map((category): [string, string, number] => [`effect-${category}`, 'plot', TEXT]),
+  ...['heal', 'raid-cd', 'boss', 'missing'].map((category): [string, string, number] => [`effect-${category}`, 'plot', TEXT]),
   ['effect-missing', 'panel-raised', TEXT],
 ];
 

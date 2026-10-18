@@ -31,7 +31,7 @@ const effect = (overrides: Partial<EffectInstance>): EffectInstance => ({
 describe('effects', () => {
   it('living players without evidence are missing', () => {
     const replay = data([effect({ affected: [{ actor: 1, startMs: 10_000, endMs: 14_000 }] })]);
-    expect(effectsAt(replay, 12_000)).toMatchObject([{ center: { x: 110, y: 0 }, affected: [1], missing: [2, 3], pulse: false }]);
+    expect(effectsAt(replay, 12_000)).toMatchObject([{ center: { x: 110, y: 0 }, affected: [1], missing: [2, 3] }]);
     expect(effectsAt(replay, 15_000)).toMatchObject([{ affected: [], missing: [1, 2, 3] }]);
     expect(effectsAt(replay, 20_000)).toEqual([]);
   });
@@ -40,13 +40,6 @@ describe('effects', () => {
     const replay = data([effect({})], [{ actor: 3, t: 11_000, until: 13_000 }]);
     expect(effectsAt(replay, 12_000)[0].missing).toEqual([1, 2]);
     expect(effectsAt(replay, 13_000)[0].missing).toEqual([1, 2, 3]);
-  });
-
-  it('raid buff missing uses the whole window and pulses for three seconds', () => {
-    const buff = effect({ category: 'raid_buff', radiusYd: 100, endMs: 15_000, affected: [{ actor: 1, startMs: 10_100, endMs: 10_200 }] });
-    const replay = data([buff]);
-    expect(effectsAt(replay, 12_999)).toMatchObject([{ affected: [1], missing: [2, 3], pulse: true }]);
-    expect(effectsAt(replay, 13_000)).toMatchObject([{ affected: [1], missing: [2, 3], pulse: false }]);
   });
 
   it('harmful effects have no missing players', () => {

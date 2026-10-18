@@ -1154,7 +1154,7 @@ export interface ReplayDeath {
 
 export type EffectKind = 'beneficial' | 'harmful';
 
-export type EffectCategory = 'raid_cd' | 'heal' | 'raid_buff' | 'boss_mechanic';
+export type EffectCategory = 'raid_cd' | 'heal' | 'boss_mechanic';
 
 /** A logged ground position, or the unit the effect moves with. */
 export type EffectAnchor = { type: 'ground'; x: number; y: number } | { type: 'unit'; actor: number };

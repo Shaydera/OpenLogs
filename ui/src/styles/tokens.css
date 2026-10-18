@@ -114,7 +114,6 @@
   /* Replay effects by category, their circles, labels and rings on --plot; --effect-missing marks a player without evidence. */
   --effect-heal: #4fbf9a;
   --effect-raid-cd: #7aa7f0;
-  --effect-raid-buff: #c9a24a;
   --effect-boss: #d77be0;
   --effect-missing: #f0877f;
 
@@ -222,7 +221,6 @@
   /* Replay effects. */
   --effect-heal: #1a7d5d;
   --effect-raid-cd: #2f5fb3;
-  --effect-raid-buff: #9a6a00;
   --effect-boss: #9b3aa8;
   --effect-missing: #c0392b;
 
