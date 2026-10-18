@@ -4,7 +4,7 @@ import { formatLocalDate } from '../i18n/format';
 import { type MessageKey, t } from '../i18n/i18n';
 import { useApp } from '../store';
 import { THEMES, type ThemeName } from '../theme';
-import { effectiveScale, UI_SIZES } from '../uiScale';
+import { effectiveScale, SCALE_AT_BASE, UI_SIZES } from '../uiScale';
 import { useAutoScale } from '../hooks/useAutoScale';
 
 const TABLES: { key: keyof Omit<GameDataManifest, 'fetchedUnixMs'>; name: MessageKey; entries: MessageKey }[] = [
@@ -19,6 +19,8 @@ const THEME_TEXT: Record<ThemeName, { name: MessageKey; hint: MessageKey }> = {
   slate: { name: 'theme.slate', hint: 'theme.slateHint' },
   bark: { name: 'theme.bark', hint: 'theme.barkHint' },
 };
+
+const percentOfBase = (scale: number) => Math.round((scale / SCALE_AT_BASE) * 100);
 
 /** The theme, the UI size and the shipped game data. */
 export function SettingsDialog() {
@@ -112,7 +114,7 @@ export function SettingsDialog() {
           </fieldset>
           <h3 className="cap settings-label">{t('uiSize.title')}</h3>
           <p className="settings-note">
-            {t('uiSize.readout', { auto: Math.round(auto * 100), now: Math.round(effectiveScale(auto, uiSize) * 100) })}
+            {t('uiSize.readout', { auto: percentOfBase(auto), now: percentOfBase(effectiveScale(auto, uiSize)) })}
           </p>
           <div className="ui-size">
             <label htmlFor={sliderId} className="ui-size-label">
