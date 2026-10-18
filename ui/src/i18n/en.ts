@@ -341,6 +341,7 @@ export const en = {
   'aug.popupTitle': 'Aug support',
   'report.unmatchedHits': 'Unmatched hits',
   'scope.lens': 'Whose view',
+  'toolbar.label': 'Report tools',
   'scope.viewAs': 'View as',
   'scope.perspective': 'Perspective',
   'scope.friendlies': 'Friendlies',

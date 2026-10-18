@@ -10,11 +10,11 @@ import { CastsTab } from './casts/CastsTab';
 import { FightHeader, FightHeading } from './chrome/FightHeader';
 import { headerTiles } from './chrome/headerTiles';
 import { FightTopBar } from './chrome/FightTopBar';
+import { ReportToolbar } from './chrome/ReportToolbar';
 import { PANEL_ID, TabBar, tabId } from './chrome/TabBar';
 import { PullComparisonView } from './compare/PullComparisonView';
 import { DeathsTab } from './deaths/DeathsTab';
 import { ErrorBoundary } from './ErrorBoundary';
-import { ViewLens } from './filters/ViewLens';
 import { InterruptsTab } from './interrupts/InterruptsTab';
 import { ConsumablesPanel } from './overview/ConsumablesPanel';
 import { CooldownsPanel } from './overview/CooldownsPanel';
@@ -113,8 +113,8 @@ export function FightView() {
       <main className={page}>
         <div className="fight-column">
           {!onReplay && <FightHeader row={row} tiles={tiles} titleRef={titleRef} />}
-          <ViewLens />
           <TabBar lead={onReplay && <FightHeading row={row} titleRef={titleRef} />} />
+          <ReportToolbar />
         </div>
         <div role="tabpanel" id={PANEL_ID} aria-labelledby={tabId(tab)} className="tabpanel">
           {/* Outside the tab-keyed error boundary: the replay pane keeps its state while the report changes tabs. */}

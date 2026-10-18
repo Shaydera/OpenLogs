@@ -14,7 +14,7 @@ export function ViewLens() {
   const own = isFilterTab(tab) ? SIDES[tab].own : null;
   const shown = overview ? 'friendly' : scope.perspective;
   return (
-    <div className="panel lens" role="group" aria-label={t('scope.lens')}>
+    <div className="lens" role="group" aria-label={t('scope.lens')}>
       <span className="cap">{t('scope.viewAs')}</span>
       <div className="seg" role="group" aria-label={t('scope.perspective')} title={overview ? t('scope.overviewFriendlies') : undefined}>
         {(['friendly', 'enemy'] as const).map((side) => (
