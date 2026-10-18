@@ -361,6 +361,14 @@ describe('TimelineView', () => {
     expect(screen.getByText('Health 0 / 1.00M (0.0%) at 2:12.000 · dead')).toBeInTheDocument();
   });
 
+  it('draws rage in game units', () => {
+    const [lane] = resourcesTimelineFixture.lanes;
+    const power = [{ powerType: 1, samples: [[118_000, 1300, 1300] as [number, number, number], [125_000, 500, 1300] as [number, number, number]] }];
+    useApp.setState({ tab: 'resources', timeline: { ...resourcesTimelineFixture, lanes: [{ ...lane, power }] } });
+    render(<TimelineView tab="resources" />);
+    expect(screen.getByRole('img', { name: 'Rage, lowest 50 / 130 (38.5%) at 2:05.000' })).toBeInTheDocument();
+  });
+
   describe('Resources lanes', () => {
     const [faelan] = resourcesTimelineFixture.lanes;
     const lane = (unit: UnitRef, name: string, number: number | null = null, boss = false): TimelineLane => ({

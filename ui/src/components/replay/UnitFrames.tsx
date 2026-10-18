@@ -4,7 +4,7 @@ import { formatAmount, formatPercent } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { classColor } from '../overview/players';
-import { powerName } from '../resources/powerNames';
+import { formatPower, powerInGameUnits, powerName } from '../resources/powerNames';
 import { AuraIcons } from './AuraIcons';
 import { type AuraHolder, ownPlayerOf, shownAuras } from './auraFilter';
 import { CastBar } from './CastBar';
@@ -25,6 +25,8 @@ function nameColor(hud: HudIndex, unit: ReplayUnit): string | undefined {
 const share = (current: number, max: number) => (max > 0 ? Math.min(100, Math.max(0, (current / max) * 100)) : 0);
 
 const valueOfMax = (current: number, max: number) => t('replay.valueOfMax', { current: formatAmount(current), max: formatAmount(max) });
+const powerValueOfMax = (powerType: number, current: number, max: number) =>
+  t('replay.valueOfMax', { current: formatPower(powerType, current), max: formatPower(powerType, max) });
 
 function UnitName({ hud, unit, dead, onSelect }: { hud: HudIndex; unit: ReplayUnit; dead: boolean; onSelect?: () => void }) {
   const color = dead ? undefined : nameColor(hud, unit);
@@ -81,14 +83,14 @@ function BigFrame({ hud, unit, time, label, ownPlayer, onSelect }: { hud: HudInd
             role="meter"
             aria-label={powerName(power.powerType)}
             aria-valuemin={0}
-            aria-valuemax={power.max}
-            aria-valuenow={power.current}
-            aria-valuetext={valueOfMax(power.current, power.max)}
+            aria-valuemax={powerInGameUnits(power.powerType, power.max)}
+            aria-valuenow={powerInGameUnits(power.powerType, power.current)}
+            aria-valuetext={powerValueOfMax(power.powerType, power.current, power.max)}
           >
             <span style={{ width: `${share(power.current, power.max)}%`, background: powerColorVar(power.powerType) }} />
           </div>
           <div className="hud-bar-text num">
-            <span>{valueOfMax(power.current, power.max)}</span>
+            <span>{powerValueOfMax(power.powerType, power.current, power.max)}</span>
             <span>{powerName(power.powerType)}</span>
           </div>
         </div>

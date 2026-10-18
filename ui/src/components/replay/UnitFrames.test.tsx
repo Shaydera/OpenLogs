@@ -61,6 +61,13 @@ describe('UnitFrames', () => {
     expect(mana).toHaveAttribute('aria-valuetext', t('replay.valueOfMax', { current: formatAmount(45_000), max: formatAmount(60_000) }));
   });
 
+  it('shows rage in game units', () => {
+    show({ power: [{ actor: 1, powerType: 1, t: [0], current: [807], max: [1300] }] });
+    const rage = within(screen.getByRole('group', { name: 'Talwyn' })).getByRole('meter', { name: powerName(1) });
+    expect(rage).toHaveAttribute('aria-valuetext', t('replay.valueOfMax', { current: '80', max: '130' }));
+    expect(rage).toHaveAttribute('aria-valuemax', '130');
+  });
+
   it('shows the target and its target from the target tracks', () => {
     show();
     const target = screen.getByRole('group', { name: t('replay.targetFrame') });
