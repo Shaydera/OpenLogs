@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import tokensCss from './tokens.css?raw';
+import { POWER_TOKENS } from '../components/replay/powerColors';
 import { themeTokens } from '../test/themeTokens';
 
 /** WCAG 2 relative luminance of `#rrggbb`. */
@@ -40,7 +41,7 @@ const FIXED_PAIRS: [foreground: string, background: string, minimum: number][] =
   ),
   ...['hp-fill', 'hp-boss', 'hp-add', 'cast-fill'].map((bar): [string, string, number] => [bar, 'bar-track', NON_TEXT]),
   ...['square', 'triangle', 'diamond', 'cross', 'star', 'circle', 'moon', 'skull'].map((symbol): [string, string, number] => [`marker-${symbol}`, 'plot', NON_TEXT]),
-  ...['heal', 'raid-cd', 'raid-buff', 'boss', 'missing'].map((category): [string, string, number] => [`effect-${category}`, 'plot', TEXT]),
+  ...['heal', 'raid-cd', 'boss', 'missing'].map((category): [string, string, number] => [`effect-${category}`, 'plot', TEXT]),
   ['effect-missing', 'panel-raised', TEXT],
 ];
 
@@ -57,6 +58,16 @@ describe('theme colours', () => {
     const failures = [...FIXED_PAIRS, ...classPairs]
       .map(([foreground, background, minimum]) => ({ pair: `${foreground} on ${background}`, ratio: contrast(tokens[foreground], tokens[background]), minimum }))
       .filter(({ ratio, minimum }) => !(ratio >= minimum));
+    expect(failures).toEqual([]);
+  });
+
+  it.each(combinations)('give bar text 4.5:1 on every fill and the track in %s, %s', (theme, mode) => {
+    const tokens = themeTokens(tokensCss, theme, mode);
+    const resolve = (value: string): string => (value.startsWith('var(--') ? resolve(tokens[value.slice(6, -1)]) : value);
+    const fills = ['hp-fill', 'cast-fill', ...[...Object.values(POWER_TOKENS), 'other'].map((power) => `power-${power}`)];
+    const failures = [...fills.map((fill) => [tokens[`${fill}-text`] ?? tokens['bar-text-on-fill'], tokens[fill], fill]), [tokens.text, tokens['bar-track'], 'bar-track']]
+      .map(([text, background, name]) => ({ name, ratio: contrast(resolve(text), resolve(background)) }))
+      .filter(({ ratio }) => !(ratio >= TEXT));
     expect(failures).toEqual([]);
   });
 });

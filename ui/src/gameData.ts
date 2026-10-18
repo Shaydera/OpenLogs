@@ -7,6 +7,8 @@ export interface GameDataManifest {
   spellIcons: number;
   /** Absent in an export made before channel spells were exported. */
   channelSpells?: number;
+  /** Absent in an export made before class spells were exported. */
+  spellClasses?: number;
   dungeons: number;
   bossPortraits: number;
   /** Absent in an export made before map art was exported. */
@@ -59,6 +61,9 @@ export const dungeonsJson = (): Promise<string | null> => tableText('dungeons.js
 
 /** The spells the game channels, for the engine. */
 export const channelSpellsJson = (): Promise<string | null> => tableText('channel-spells.json').catch(() => null);
+
+/** The class and crowd-control spells, for the engine. */
+export const spellClassesJson = (): Promise<string | null> => tableText('spell-classes.json').catch(() => null);
 
 /** Decodes the export's spell IDs, stored as differences to the previous ID. */
 export function decodeSpellIcons(table: { ids: number[]; icons: number[]; names: string[] }): SpellIcons {

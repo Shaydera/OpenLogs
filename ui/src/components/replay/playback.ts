@@ -1,4 +1,5 @@
 import type { ReplayAura, ReplayCast, ReplayDeath, ReplayHealthTrack, ReplayTrack, ReplayUnit } from '../../api/types';
+import type { HudIndex } from './hudIndex';
 
 export const STALE_MS = 2000;
 /** The uiMapID of a sample the log placed on no known map. */
@@ -130,12 +131,16 @@ export function healthAt(track: ReplayHealthTrack, t: number): { current: number
   return i < 0 ? null : { current: track.current[i], max: track.max[i] };
 }
 
-/** The target of the latest cast `caster` started at or before `t`. */
-export function lastTargetAt(casts: ReplayCast[], caster: number, t: number): number | null {
-  let latest: ReplayCast | null = null;
-  for (const cast of casts) {
-    if (cast.caster !== caster || cast.target === null || cast.startMs > t) continue;
-    if (latest === null || cast.startMs >= latest.startMs) latest = cast;
-  }
-  return latest?.target ?? null;
+/** The latest primary-power sample of `actor` at or before `t`; `null` before the first one or without any. */
+export function powerAt(hud: HudIndex, actor: number, t: number): { powerType: number; current: number; max: number } | null {
+  const track = hud.power.get(actor);
+  const i = track ? lastAtOrBefore(track.t, t) : -1;
+  return track && i >= 0 && track.max[i] > 0 ? { powerType: track.powerType, current: track.current[i], max: track.max[i] } : null;
+}
+
+/** The unit `actor` targets at `t`: the latest change at or before it. */
+export function targetAt(hud: HudIndex, actor: number, t: number): number | null {
+  const track = hud.targets.get(actor);
+  const i = track ? lastAtOrBefore(track.t, t) : -1;
+  return track && i >= 0 ? track.target[i] : null;
 }

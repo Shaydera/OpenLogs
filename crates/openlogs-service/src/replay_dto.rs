@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 
 use openlogs_analysis::{
-    ActorId, EffectAnchorAt, EffectInstance, Fight, HealthTrack, PhaseKind, Replay, ReplayAura,
-    ReplayCast, ReplayCastOutcome, ReplayDeath, ReplayUnit, SpellId, StackChange, Track, UnitKind,
+    ActorId, AuraCategory, EffectAnchorAt, EffectInstance, Fight, HealthTrack, PhaseKind, Replay,
+    ReplayAura, ReplayCast, ReplayCastOutcome, ReplayDeath, ReplayUnit, SpellId, StackChange,
+    Track, UnitKind,
 };
 use openlogs_gamedata::{ArenaFrame, EffectCategory, EffectKind};
 use openlogs_index::MapBounds;
@@ -22,6 +23,8 @@ pub struct ReplayDto {
     pub units: Vec<ReplayUnitDto>,
     pub tracks: Vec<TrackDto>,
     pub health: Vec<HealthTrackDto>,
+    pub power: Vec<PowerTrackDto>,
+    pub targets: Vec<TargetTrackDto>,
     pub casts: Vec<ReplayCastDto>,
     pub auras: Vec<ReplayAuraDto>,
     pub raid_markers: Vec<RaidMarkerDto>,
@@ -31,6 +34,24 @@ pub struct ReplayDto {
     pub deaths: Vec<ReplayDeathDto>,
     pub maps: Vec<MapBoundsDto>,
     pub arena_frame: Option<ArenaFrameDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PowerTrackDto {
+    pub actor: ActorId,
+    pub power_type: i32,
+    pub t: Vec<i32>,
+    pub current: Vec<i64>,
+    pub max: Vec<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TargetTrackDto {
+    pub actor: ActorId,
+    pub t: Vec<i32>,
+    pub target: Vec<ActorId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -119,6 +140,16 @@ pub struct StackChangeDto {
     pub stacks: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AuraCategoryDto {
+    Encounter,
+    CrowdControl,
+    Amp,
+    Cooldown,
+    Other,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplayAuraDto {
@@ -130,6 +161,8 @@ pub struct ReplayAuraDto {
     pub end_ms: i32,
     pub stacks: Vec<StackChangeDto>,
     pub raid_frame: Option<u8>,
+    pub category: AuraCategoryDto,
+    pub source_player: Option<ActorId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -163,7 +196,6 @@ pub enum EffectKindDto {
 pub enum EffectCategoryDto {
     RaidCd,
     Heal,
-    RaidBuff,
     BossMechanic,
 }
 
@@ -242,6 +274,26 @@ pub fn replay_dto(fight: &Fight, replay: &Replay, advanced_logging: bool) -> Rep
         units: replay.units.iter().map(unit_dto).collect(),
         tracks: replay.tracks.iter().map(track_dto).collect(),
         health: replay.health.iter().map(health_dto).collect(),
+        power: replay
+            .power
+            .iter()
+            .map(|track| PowerTrackDto {
+                actor: track.actor,
+                power_type: track.power_type,
+                t: track.t.clone(),
+                current: track.current.clone(),
+                max: track.max.clone(),
+            })
+            .collect(),
+        targets: replay
+            .targets
+            .iter()
+            .map(|track| TargetTrackDto {
+                actor: track.actor,
+                t: track.t.clone(),
+                target: track.target.clone(),
+            })
+            .collect(),
         casts,
         auras,
         raid_markers: replay
@@ -375,6 +427,14 @@ fn aura_dto(fight: &Fight, refs: &mut Refs, aura: &ReplayAura) -> ReplayAuraDto 
             })
             .collect(),
         raid_frame: aura.raid_frame,
+        category: match aura.category {
+            AuraCategory::Encounter => AuraCategoryDto::Encounter,
+            AuraCategory::CrowdControl => AuraCategoryDto::CrowdControl,
+            AuraCategory::Amp => AuraCategoryDto::Amp,
+            AuraCategory::Cooldown => AuraCategoryDto::Cooldown,
+            AuraCategory::Other => AuraCategoryDto::Other,
+        },
+        source_player: aura.source_player,
     }
 }
 
@@ -401,7 +461,6 @@ fn effect_dto(fight: &Fight, refs: &mut Refs, effect: &EffectInstance) -> Effect
         category: match effect.category {
             EffectCategory::RaidCd => EffectCategoryDto::RaidCd,
             EffectCategory::Heal => EffectCategoryDto::Heal,
-            EffectCategory::RaidBuff => EffectCategoryDto::RaidBuff,
             EffectCategory::BossMechanic => EffectCategoryDto::BossMechanic,
         },
         tick_window_ms: effect.tick_window_ms,
@@ -428,9 +487,10 @@ fn death_dto(death: &ReplayDeath) -> ReplayDeathDto {
 #[cfg(test)]
 mod tests {
     use openlogs_analysis::{
-        Actors, AuraAction, AuraType, Event, EventKind, NO_SPELL, NOBODY, PositionSample, SpellInfo,
+        Actors, AuraAction, AuraType, Event, EventKind, NO_SPELL, NOBODY, PositionSample,
+        PowerSample, SpellInfo,
     };
-    use openlogs_gamedata::{ArenaFrame, ChannelSpells, Curated};
+    use openlogs_gamedata::{ArenaFrame, ChannelSpells, Curated, SpellClasses};
     use openlogs_index::MapBounds;
     use serde_json::json;
 
@@ -466,9 +526,9 @@ mod tests {
         let mut fight = fight(
             actors,
             vec![
-                event(1_000, mage, NOBODY, 44425, EventKind::CastSuccess),
+                event(1_000, mage, paladin, 44425, EventKind::CastSuccess),
                 event(1_000, paladin, paladin, 31821, aura_mastery),
-                event(1_500, mage, NOBODY, 1459, EventKind::CastSuccess),
+                event(1_500, mage, NOBODY, 97462, EventKind::CastSuccess),
             ],
         );
         fight.spells.insert(
@@ -494,6 +554,14 @@ mod tests {
             facing: 0.0,
             ui_map_id: 2609,
         });
+        fight.power.push(PowerSample {
+            t: 1_000,
+            actor: mage,
+            power_type: 0,
+            current: 120,
+            max: 200,
+            primary: true,
+        });
         fight.map_bounds = vec![MapBounds {
             ui_map_id: 2608,
             min_x: 265.004,
@@ -510,7 +578,12 @@ mod tests {
             size_yd: 110.0,
         }];
 
-        let replay = openlogs_analysis::replay(&fight, &curated, &ChannelSpells::default());
+        let replay = openlogs_analysis::replay(
+            &fight,
+            &curated,
+            &ChannelSpells::default(),
+            &SpellClasses::default(),
+        );
         let dto = replay_dto(&fight, &replay, true);
         let json = serde_json::to_value(&dto).unwrap();
 
@@ -519,6 +592,14 @@ mod tests {
         assert_eq!(json["roster"][0]["name"], "Faelan-Emberfall-EU");
         assert_eq!(json["spells"]["44425"]["name"], "Arcane Barrage");
         assert_eq!(json["casts"][0]["spellId"], 44425);
+        assert_eq!(
+            json["power"],
+            json!([{ "actor": mage, "powerType": 0, "t": [1000], "current": [120], "max": [200] }])
+        );
+        assert_eq!(
+            json["targets"],
+            json!([{ "actor": mage, "t": [1000], "target": [paladin] }])
+        );
         let tracks = serde_json::to_string(&dto.tracks).unwrap();
         assert!(
             tracks.contains(r#""x":[417.55]"#) && tracks.contains(r#""y":[-12.34]"#),
@@ -538,15 +619,60 @@ mod tests {
             json["effects"][0]["anchor"],
             json!({ "type": "unit", "actor": paladin })
         );
-        let intellect = &json["effects"][1];
+        let rallying = &json["effects"][1];
         let effects = serde_json::to_string(&dto.effects).unwrap();
         assert!(
             effects.contains(r#""anchor":{"type":"ground","x":417.55,"y":-12.34}"#),
             "{effects}"
         );
-        assert_eq!(intellect["spellId"], 1459);
-        assert_eq!(intellect["category"], "raid_buff");
-        assert_eq!(intellect["radiusYd"], 100.0);
-        assert_eq!(intellect["tickWindowMs"], 3000);
+        assert_eq!(rallying["spellId"], 97462);
+        assert_eq!(rallying["category"], "raid_cd");
+        assert_eq!(rallying["radiusYd"], 40.0);
+        assert_eq!(rallying["tickWindowMs"], 3000);
+    }
+
+    #[test]
+    fn replay_auras_carry_their_category_and_crediting_player() {
+        let mut actors = Actors::new();
+        let rogue = unit(&mut actors, "Player-1", "Faelan-Emberfall-EU", PLAYER_FLAGS);
+        let paladin = unit(
+            &mut actors,
+            "Player-2",
+            "Brannoc-Emberfall-EU",
+            PLAYER_FLAGS,
+        );
+        let stun = 900_042;
+        let fight = fight(
+            actors,
+            vec![Event {
+                t: 1_000,
+                source: rogue,
+                target: paladin,
+                spell: stun,
+                kind: EventKind::Aura {
+                    action: AuraAction::Applied,
+                    aura_type: AuraType::Debuff,
+                    stacks: None,
+                    broken_by: NO_SPELL,
+                },
+                source_hostile: false,
+                target_hostile: false,
+                unit_hp: None,
+            }],
+        );
+        let spell_classes =
+            SpellClasses::from_json(r#"{ "classSpells": [900042], "crowdControl": [900042] }"#)
+                .unwrap();
+
+        let replay = openlogs_analysis::replay(
+            &fight,
+            &Curated::bundled(),
+            &ChannelSpells::default(),
+            &spell_classes,
+        );
+        let json = serde_json::to_value(replay_dto(&fight, &replay, false)).unwrap();
+
+        assert_eq!(json["auras"][0]["category"], "crowdControl");
+        assert_eq!(json["auras"][0]["sourcePlayer"], rogue);
     }
 }

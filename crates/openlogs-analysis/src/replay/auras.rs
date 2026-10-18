@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use openlogs_gamedata::{CooldownCategory, Curated};
+use openlogs_gamedata::{CooldownCategory, Curated, EnemyDebuffKind, SpellClasses};
 
 use crate::actors::ActorId;
 use crate::auras::AuraInterval;
@@ -18,6 +18,21 @@ pub struct StackChange {
     pub stacks: u32,
 }
 
+/// What an aura stands for in the replay; the unit frames filter by it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AuraCategory {
+    /// Applied by an enemy, curated as an encounter debuff, or a spell of no player class
+    /// (a mechanic a player passes on) that a player does not put on an enemy.
+    Encounter,
+    CrowdControl,
+    /// A curated debuff that raises the damage an enemy takes or lowers the damage it deals.
+    Amp,
+    /// A curated damage-window debuff, or a defensive, external, major cooldown, proc or
+    /// consumable buff.
+    Cooldown,
+    Other,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplayAura {
     pub target: ActorId,
@@ -30,6 +45,9 @@ pub struct ReplayAura {
     pub stacks: Vec<StackChange>,
     /// The aura's raid frame priority (lower first); `None`: not shown on a raid frame.
     pub raid_frame: Option<u8>,
+    pub category: AuraCategory,
+    /// The player credited with the source: itself, or the owner of a pet or guardian.
+    pub source_player: Option<ActorId>,
 }
 
 type Key = (ActorId, SpellId, ActorId);
@@ -44,6 +62,7 @@ struct AuraLine {
 pub(super) fn auras(
     fight: &Fight,
     curated: &Curated,
+    spell_classes: &SpellClasses,
     roster: &Roster,
     intervals: &[AuraInterval],
 ) -> Vec<ReplayAura> {
@@ -83,6 +102,8 @@ pub(super) fn auras(
                 end_ms: interval.end_ms,
                 stacks: stack_changes(interval, lines),
                 raid_frame: raid_frame(fight, curated, roster, interval),
+                category: category(fight, curated, spell_classes, roster, interval),
+                source_player: fight.actors.credited_player(interval.source),
             }
         })
         .collect()
@@ -150,4 +171,54 @@ fn raid_frame(
         .cooldown(spell, caster_spec)
         .filter(|cooldown| cooldown.category == CooldownCategory::RaidDefensive)
         .map(|_| RAID_DEFENSIVE)
+}
+
+fn category(
+    fight: &Fight,
+    curated: &Curated,
+    spell_classes: &SpellClasses,
+    roster: &Roster,
+    interval: &AuraInterval,
+) -> AuraCategory {
+    let spell = interval.spell;
+    let enemy_held = matches!(
+        roster.kind(interval.target),
+        Some(UnitKind::Boss | UnitKind::Add)
+    );
+    let player_on_enemy = enemy_held && fight.actors.credited_player(interval.source).is_some();
+    let no_class_spell = spell_classes.is_loaded() && !spell_classes.is_class_spell(spell);
+    if interval.source_hostile || (no_class_spell && !player_on_enemy && !curated.is_lockout(spell))
+    {
+        return AuraCategory::Encounter;
+    }
+    if interval.aura_type == AuraType::Debuff && spell_classes.is_crowd_control(spell) {
+        return AuraCategory::CrowdControl;
+    }
+    match curated.enemy_debuff_kind(spell) {
+        Some(EnemyDebuffKind::Amp) => AuraCategory::Amp,
+        Some(EnemyDebuffKind::Cooldown) => AuraCategory::Cooldown,
+        Some(EnemyDebuffKind::Encounter) => AuraCategory::Encounter,
+        None if interval.aura_type == AuraType::Buff && is_major_buff(fight, curated, interval) => {
+            AuraCategory::Cooldown
+        }
+        None => AuraCategory::Other,
+    }
+}
+
+fn is_major_buff(fight: &Fight, curated: &Curated, interval: &AuraInterval) -> bool {
+    let spell = interval.spell;
+    let name = fight.spells.get(&spell).map(|info| info.name.as_str());
+    let target_spec = fight.actors.get(interval.target).spec_id;
+    let caster_spec = fight
+        .actors
+        .credited_player(interval.source)
+        .and_then(|player| fight.actors.get(player).spec_id);
+    target_spec.is_some_and(|spec| curated.defensive(spell, spec).is_some())
+        || curated.raid_frame_priority(spell).is_some()
+        || curated.cooldown(spell, caster_spec).is_some()
+        || name.is_some_and(|name| curated.cooldown_named(name, caster_spec).is_some())
+        || curated.is_proc(spell)
+        || curated
+            .consumable_kind(spell, name.unwrap_or_default())
+            .is_some()
 }

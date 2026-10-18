@@ -9,6 +9,8 @@ export interface Engine {
   setDungeons(json: string): Promise<void>;
   /** The spells the game channels, which draw as channels where the log has no channel aura. */
   setChannelSpells(json: string): Promise<void>;
+  /** Which spells belong to a player class and which of those are crowd control. */
+  setSpellClasses(json: string): Promise<void>;
   beginIndex(): Promise<void>;
   /** Takes ownership of `bytes`; the caller must not use them afterwards. */
   feed(bytes: Uint8Array): Promise<void>;
@@ -66,6 +68,7 @@ export function workerEngine(): Engine {
     indexFormatVersion: () => send('index_format_version'),
     setDungeons: (json) => send('set_dungeons', [json]),
     setChannelSpells: (json) => send('set_channel_spells', [json]),
+    setSpellClasses: (json) => send('set_spell_classes', [json]),
     beginIndex: () => send('begin_index'),
     feed: (bytes) => send('index_feed', [bytes], [bytes.buffer]),
     finishIndex: async (logId, fileName, sizeBytes) => JSON.parse(await send<string>('finish_index', [logId, fileName, sizeBytes])),

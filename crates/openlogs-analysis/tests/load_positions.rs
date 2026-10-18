@@ -195,3 +195,29 @@ fn map_bounds_reach_the_fight_from_the_summary_and_the_slice() {
         ]
     );
 }
+
+#[test]
+fn a_boss_block_samples_npc_power_and_a_players_first_listed_power_is_primary() {
+    let boss_block = "636358512,636367600,0,0,1470,0,0,0,3,75,100,0,439.95,-295.55,2608,4.7124";
+    let player_block =
+        "783469,850360,981,3238,2628,1416,0,0,3|4,60|2,100|5,0|0,417.55,-297.97,2608,2.0554,315";
+    let fight = pull(&[
+        hit_on_boss(2, "0x80000000", boss_block),
+        cast(3, player_block),
+    ]);
+    let boss = fight.actors.id(BOSS).unwrap();
+    let player = fight.actors.id(PLAYER).unwrap();
+
+    let npc: Vec<_> = fight
+        .npc_power
+        .iter()
+        .map(|p| (p.actor, p.power_type, p.current, p.primary))
+        .collect();
+    let players: Vec<_> = fight
+        .power
+        .iter()
+        .map(|p| (p.actor, p.power_type, p.primary))
+        .collect();
+    assert_eq!(npc, vec![(boss, 3, 75, true)]);
+    assert_eq!(players, vec![(player, 3, true), (player, 4, false)]);
+}

@@ -48,7 +48,7 @@ export function readStageColors(root: HTMLElement): StageColors {
     fontLabel: token('font-label'),
     classes,
     markers,
-    effects: { heal: token('effect-heal'), raid_cd: token('effect-raid-cd'), raid_buff: token('effect-raid-buff'), boss_mechanic: token('effect-boss') },
+    effects: { heal: token('effect-heal'), raid_cd: token('effect-raid-cd'), boss_mechanic: token('effect-boss') },
     effectMissing: token('effect-missing'),
     mapDim: token('map-dim'),
   };

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initialState, useApp } from '../../store';
 import { overviewFixture } from '../../test/overviewFixture';
 import { RangePanel } from './RangePanel';
+import { rangeLabel } from './rangeGeometry';
 
 vi.mock('../../api/client', () => ({ api: {} }));
 
@@ -34,6 +35,17 @@ describe('RangePanel', () => {
     expect(screen.getByRole('button', { name: 'Boss submerged 2' })).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(screen.getByRole('button', { name: 'Full fight' }));
     expect(setRange).toHaveBeenLastCalledWith(null);
+  });
+
+  it('collapsed shows the current span and expands on click', async () => {
+    const intermission = { startMs: 120_000, endMs: 240_000 };
+    useApp.setState({ range: intermission });
+    const onToggle = vi.fn();
+    render(<RangePanel overview={overviewFixture} rangeKey="3180:15" collapsible={{ open: false, onToggle }} />);
+    const expand = screen.getByRole('button', { expanded: false });
+    expect(expand).toHaveTextContent(rangeLabel(intermission));
+    await userEvent.click(expand);
+    expect(onToggle).toHaveBeenCalledWith(true);
   });
 
   it('saves the selected range under a name, then applies and deletes it', async () => {

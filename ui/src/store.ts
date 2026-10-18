@@ -24,6 +24,7 @@ import type {
   HealingReport,
   Kpis,
   LogView,
+  MeterCategory,
   Metric,
   PlayerDetail,
   PullComparison,
@@ -73,10 +74,19 @@ export type ReplayState = {
   split: boolean;
   splitWidth: number;
   follow: boolean;
+  rangeOpen: boolean;
+  allAuras: boolean;
+  meter: ReplayMeter;
 };
+export type MeterMode = 'cumulative' | 'window';
+export type MeterWindowMs = 5000 | 10000 | 30000;
+export type ReplayMeter = { category: MeterCategory; mode: MeterMode; windowMs: MeterWindowMs };
 
 const REPLAY_KEY = 'replay';
 const REPLAY_SPEEDS: ReplaySpeed[] = [0.5, 1, 2, 4];
+export const METER_CATEGORIES: MeterCategory[] = ['damageDone', 'healingDone', 'damageTaken', 'healingReceived', 'interrupts', 'dispels'];
+export const METER_WINDOWS: MeterWindowMs[] = [5000, 10000, 30000];
+const DEFAULT_REPLAY_METER: ReplayMeter = { category: 'damageDone', mode: 'cumulative', windowMs: 10000 };
 const DEFAULT_SPLIT_WIDTH = 480;
 const REPLAY_TICK_MS = 100;
 export type MetricTab = 'damage' | 'healing' | 'taken';
@@ -357,6 +367,9 @@ interface Actions {
   setReplayFilter(filters: Partial<ReplayFilters>): void;
   setReplaySplit(on: boolean): void;
   setReplaySplitWidth(width: number): void;
+  setReplayRangeOpen(open: boolean): void;
+  setReplayAllAuras(all: boolean): void;
+  setReplayMeter(meter: Partial<ReplayMeter>): void;
   setReplayFollow(on: boolean): void;
   openReplayAt(ms: number): void;
 }
@@ -384,6 +397,9 @@ function readReplayState(): ReplayState {
     split: false,
     splitWidth: DEFAULT_SPLIT_WIDTH,
     follow: false,
+    rangeOpen: false,
+    allAuras: false,
+    meter: DEFAULT_REPLAY_METER,
   };
   const raw = readStored(REPLAY_KEY);
   if (raw === null) return state;
@@ -400,14 +416,26 @@ function readReplayState(): ReplayState {
       speed: REPLAY_SPEEDS.find((speed) => speed === stored.speed) ?? 1,
       split: stored.split === true,
       splitWidth: typeof stored.splitWidth === 'number' && stored.splitWidth > 0 ? stored.splitWidth : DEFAULT_SPLIT_WIDTH,
+      rangeOpen: stored.rangeOpen === true,
+      allAuras: stored.allAuras === true,
+      meter: readMeter(stored.meter),
     };
   } catch {
     return state;
   }
 }
 
-function writeReplayState({ layers, filters: { hidden: _hidden, ...filters }, speed, split, splitWidth }: ReplayState) {
-  writeStored(REPLAY_KEY, JSON.stringify({ layers, filters, speed, split, splitWidth }));
+function readMeter(value: unknown): ReplayMeter {
+  const stored = (typeof value === 'object' && value !== null ? value : {}) as Partial<Record<keyof ReplayMeter, unknown>>;
+  return {
+    category: METER_CATEGORIES.find((category) => category === stored.category) ?? DEFAULT_REPLAY_METER.category,
+    mode: stored.mode === 'window' ? 'window' : 'cumulative',
+    windowMs: METER_WINDOWS.find((windowMs) => windowMs === stored.windowMs) ?? DEFAULT_REPLAY_METER.windowMs,
+  };
+}
+
+function writeReplayState({ layers, filters: { hidden: _hidden, ...filters }, speed, split, splitWidth, rangeOpen, allAuras, meter }: ReplayState) {
+  writeStored(REPLAY_KEY, JSON.stringify({ layers, filters, speed, split, splitWidth, rangeOpen, allAuras, meter }));
 }
 
 export function initialState(): State {
@@ -642,21 +670,8 @@ async function loadReport(get: () => State & Actions, set: SetState) {
   const viewToken = ++viewRequest;
   viewQuery += 1;
   lastPage = undefined;
-  if (tab === 'replay' && range !== null) {
-    // The replay bundle loads through `loadReplay`; its header shows the Overview's figures for the range.
-    set({ report: null, breakdown: null, reportError: null, reportLoading: true, viewError: null, viewLoading: false, rangeKpis: null });
-    try {
-      const { kpis } = await api.quickOverview(log.id, view.fightIndex, reportFilter(get()));
-      if (request === reportRequest) set({ rangeKpis: kpis });
-    } catch {
-      // The header stays at "…".
-    } finally {
-      if (request === reportRequest) set({ reportLoading: false });
-    }
-    return;
-  }
   if ((tab === 'overview' && range === null) || tab === 'replay') {
-    // The whole-pull overview is already in `state.overview`.
+    // The whole-pull overview is already in `state.overview`; the replay bundle loads through `loadReplay`.
     set({ report: null, breakdown: null, reportError: null, reportLoading: false, viewError: null, viewLoading: false });
     return;
   }
@@ -1274,6 +1289,24 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
 
   setReplaySplitWidth(splitWidth) {
     const replay = { ...get().replay, splitWidth };
+    set({ replay });
+    writeReplayState(replay);
+  },
+
+  setReplayRangeOpen(rangeOpen) {
+    const replay = { ...get().replay, rangeOpen };
+    set({ replay });
+    writeReplayState(replay);
+  },
+
+  setReplayAllAuras(allAuras) {
+    const replay = { ...get().replay, allAuras };
+    set({ replay });
+    writeReplayState(replay);
+  },
+
+  setReplayMeter(meter) {
+    const replay = { ...get().replay, meter: { ...get().replay.meter, ...meter } };
     set({ replay });
     writeReplayState(replay);
   },

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Area effects of player spells the replay draws as circles. Spell, aura and hit IDs were checked against real 12.1 logs. radius_yd is SpellEffect.EffectRadiusIndex (index 0, else 1) -> SpellRadius from wago.tools DB2 build 12.1.0.69933; Divine Hymn takes its radius from its heal 64844, Blessing of the Bronze from its auras, Aura Mastery from the paladin auras it empowers (Devotion, Concentration, Crusader). Fixed durations come from SpellMisc.DurationIndex -> SpellDuration (Anti-Magic Zone 51052, Rallying Cry 97463); raid buffs and Restoral are instant and stay 5000 ms. Healing Tide Totem, Power Word: Barrier and Revival are not in the logs, Darkness has no SpellRadius (an area trigger); add them through an override raid_effects.json.",
+  "note": "Area effects of player spells the replay draws as circles. Spell, aura and hit IDs were checked against real 12.1 logs. radius_yd is SpellEffect.EffectRadiusIndex (index 0, else 1) -> SpellRadius from wago.tools DB2 build 12.1.0.69933; Divine Hymn takes its radius from its heal 64844, Aura Mastery from the paladin auras it empowers (Devotion, Concentration, Crusader). Fixed durations come from SpellMisc.DurationIndex -> SpellDuration (Anti-Magic Zone 51052, Rallying Cry 97463); Restoral is instant and stays 5000 ms. Healing Tide Totem, Power Word: Barrier and Revival are not in the logs, Darkness has no SpellRadius (an area trigger); add them through an override raid_effects.json.",
   "effects": [
     {
       "spell_ids": [98008], "name": "Spirit Link Totem", "trigger": "summon", "anchor": "summoned_unit",
@@ -43,45 +43,6 @@
       "radius_yd": 40, "duration": { "type": "fixed", "ms": 5000 },
       "evidence": { "aura_ids": [], "hit_ids": [388615] },
       "kind": "beneficial", "category": "heal"
-    },
-    {
-      "spell_ids": [6673], "name": "Battle Shout", "trigger": "cast", "anchor": "caster_at_cast",
-      "radius_yd": 100, "duration": { "type": "fixed", "ms": 5000 },
-      "evidence": { "aura_ids": [6673], "hit_ids": [] },
-      "kind": "beneficial", "category": "raid_buff"
-    },
-    {
-      "spell_ids": [21562], "name": "Power Word: Fortitude", "trigger": "cast", "anchor": "caster_at_cast",
-      "radius_yd": 100, "duration": { "type": "fixed", "ms": 5000 },
-      "evidence": { "aura_ids": [21562], "hit_ids": [] },
-      "kind": "beneficial", "category": "raid_buff"
-    },
-    {
-      "spell_ids": [1126], "name": "Mark of the Wild", "trigger": "cast", "anchor": "caster_at_cast",
-      "radius_yd": 100, "duration": { "type": "fixed", "ms": 5000 },
-      "evidence": { "aura_ids": [1126], "hit_ids": [] },
-      "kind": "beneficial", "category": "raid_buff"
-    },
-    {
-      "spell_ids": [1459], "name": "Arcane Intellect", "trigger": "cast", "anchor": "caster_at_cast",
-      "radius_yd": 100, "duration": { "type": "fixed", "ms": 5000 },
-      "evidence": { "aura_ids": [1459], "hit_ids": [] },
-      "kind": "beneficial", "category": "raid_buff"
-    },
-    {
-      "spell_ids": [364342], "name": "Blessing of the Bronze", "trigger": "cast", "anchor": "caster_at_cast",
-      "radius_yd": 100, "duration": { "type": "fixed", "ms": 5000 },
-      "evidence": {
-        "aura_ids": [381732, 381741, 381746, 381748, 381749, 381750, 381751, 381752, 381753, 381754, 381756, 381757, 381758],
-        "hit_ids": []
-      },
-      "kind": "beneficial", "category": "raid_buff"
-    },
-    {
-      "spell_ids": [462854], "name": "Skyfury", "trigger": "cast", "anchor": "caster_at_cast",
-      "radius_yd": 100, "duration": { "type": "fixed", "ms": 5000 },
-      "evidence": { "aura_ids": [462854], "hit_ids": [] },
-      "kind": "beneficial", "category": "raid_buff"
     }
   ]
 }

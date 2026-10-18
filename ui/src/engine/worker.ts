@@ -8,7 +8,7 @@ const scope = self as unknown as {
 
 const ready = init();
 let session: Session | undefined;
-const GAME_DATA = ['set_dungeons', 'set_channel_spells'] as const;
+const GAME_DATA = ['set_dungeons', 'set_channel_spells', 'set_spell_classes'] as const;
 type GameDataMethod = (typeof GAME_DATA)[number];
 /** Given again to a session that replaces one that trapped. */
 const gameData = new Map<GameDataMethod, string>();

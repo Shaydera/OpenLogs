@@ -1,15 +1,12 @@
 import type { EffectInstance, ReplayData, ReplayDeath, ReplayTrack } from '../../api/types';
 import { deathAt, groupBy, placementAt } from './playback';
 
-export const RAID_BUFF_PULSE_MS = 3000;
-
 /** `center.stale`: the anchor unit's position is held, so the effect fades like the unit. */
 export type EffectState = {
   effect: EffectInstance;
   center: { x: number; y: number; stale: boolean } | null;
   affected: number[];
   missing: number[];
-  pulse: boolean;
 };
 
 interface Positioned {
@@ -69,8 +66,7 @@ function center(index: EffectIndex, effect: EffectInstance, t: number): EffectSt
 }
 
 function stateAt(index: EffectIndex, effect: EffectInstance, t: number): EffectState {
-  const wholeWindow = effect.category === 'raid_buff';
-  const reached = new Set(effect.affected.filter((span) => wholeWindow || (span.startMs <= t && t < span.endMs)).map((span) => span.actor));
+  const reached = new Set(effect.affected.filter((span) => span.startMs <= t && t < span.endMs).map((span) => span.actor));
   const missing =
     effect.kind === 'beneficial'
       ? index.players.filter((actor) => {
@@ -79,12 +75,12 @@ function stateAt(index: EffectIndex, effect: EffectInstance, t: number): EffectS
           return at !== null && !at.dead;
         })
       : [];
-  return { effect, center: center(index, effect, t), affected: [...reached], missing, pulse: wholeWindow && t < effect.startMs + RAID_BUFF_PULSE_MS };
+  return { effect, center: center(index, effect, t), affected: [...reached], missing };
 }
 
 /**
- * The effects up at `t`, by start. A raid buff counts everyone it reached during its window; any other effect only those
- * whose evidence covers `t`. Missing are the positioned, living players without that evidence, for beneficial effects only.
+ * The effects up at `t`, by start. Each counts only the players whose
+ * evidence covers `t`. Missing are the positioned, living players without that evidence, for beneficial effects only.
  */
 export function effectsAt(data: ReplayData, t: number): EffectState[] {
   const index = indexEffects(data);

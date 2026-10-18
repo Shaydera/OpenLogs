@@ -6,7 +6,7 @@ use openlogs_analysis::{
 };
 use openlogs_gamedata::{
     BossEffects, ChannelSpells, Curated, EffectAnchor, EffectCategory, EffectDef, EffectDuration,
-    EffectKind, EffectTrigger, Evidence,
+    EffectKind, EffectTrigger, Evidence, SpellClasses,
 };
 use support::{FightBuilder, HOSTILE_FLAGS, PET_FLAGS, damage, heal};
 
@@ -26,7 +26,13 @@ const FESTERING_MARK: SpellId = 900_200;
 const FESTERING_BURST: SpellId = 900_201;
 
 fn effects_of(fight: &Fight, curated: &Curated) -> Vec<EffectInstance> {
-    replay(fight, curated, &ChannelSpells::default()).effects
+    replay(
+        fight,
+        curated,
+        &ChannelSpells::default(),
+        &SpellClasses::default(),
+    )
+    .effects
 }
 
 fn bundled_effects(fight: &Fight) -> Vec<EffectInstance> {

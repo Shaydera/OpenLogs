@@ -10,6 +10,8 @@ use crate::specs::spec;
 pub const CONSUMABLES_FILE: &str = "consumables.json";
 pub const MAJOR_CDS_FILE: &str = "major_cds.json";
 pub const DEFENSIVES_FILE: &str = "personal_defensives.json";
+pub const ENEMY_DEBUFFS_FILE: &str = "enemy_debuffs.json";
+pub const LOCKOUT_DEBUFFS_FILE: &str = "lockout_debuffs.json";
 pub const PROCS_FILE: &str = "procs.json";
 pub const PHASE_NAMES_FILE: &str = "phase_names.json";
 pub const PLAYER_COOLDOWNS_FILE: &str = "player_cooldowns.json";
@@ -175,6 +177,42 @@ pub struct RaidFrameAuras {
     pub exclude: Vec<u32>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EnemyDebuffKind {
+    /// Raises the damage the enemy takes or lowers the damage it deals.
+    Amp,
+    /// Marks a big damage window.
+    Cooldown,
+    /// A boss mechanic a player triggers, shown like a hostile debuff.
+    Encounter,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct EnemyDebuff {
+    pub spell_id: u32,
+    pub name: String,
+    pub kind: EnemyDebuffKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct EnemyDebuffList {
+    pub version: u32,
+    pub debuffs: Vec<EnemyDebuff>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct LockoutDebuff {
+    pub spell_id: u32,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct LockoutDebuffList {
+    pub version: u32,
+    pub debuffs: Vec<LockoutDebuff>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PhaseTrigger {
@@ -277,7 +315,6 @@ pub enum EffectKind {
 pub enum EffectCategory {
     RaidCd,
     Heal,
-    RaidBuff,
     BossMechanic,
 }
 
@@ -474,6 +511,10 @@ pub struct Curated {
     pub player_cooldowns: PlayerCooldownList,
     /// Externals and other auras the replay's raid frames show (bundled, overridable).
     pub raid_frame_auras: RaidFrameAuras,
+    /// Player debuffs on enemies the replay's enemy frames show (bundled, overridable).
+    pub enemy_debuffs: EnemyDebuffList,
+    /// Friendly debuffs that only lock out a repeat of a buff (bundled, overridable).
+    pub lockout_debuffs: LockoutDebuffList,
     /// Names for auto-detected phases (bundled, overridable).
     pub phase_names: PhaseNameList,
     /// The user's phase configs; none are bundled.
@@ -531,6 +572,18 @@ impl Curated {
             include_str!("../data/raid_frame_auras.json"),
             &mut warnings,
         );
+        let enemy_debuffs = load_list(
+            override_dir,
+            ENEMY_DEBUFFS_FILE,
+            include_str!("../data/enemy_debuffs.json"),
+            &mut warnings,
+        );
+        let lockout_debuffs = load_list(
+            override_dir,
+            LOCKOUT_DEBUFFS_FILE,
+            include_str!("../data/lockout_debuffs.json"),
+            &mut warnings,
+        );
         let phase_names = load_list(
             override_dir,
             PHASE_NAMES_FILE,
@@ -558,6 +611,8 @@ impl Curated {
             procs,
             player_cooldowns,
             raid_frame_auras,
+            enemy_debuffs,
+            lockout_debuffs,
             phase_names,
             phases,
             effects,
@@ -594,6 +649,21 @@ impl Curated {
 
     pub fn raid_frame_excluded(&self, spell_id: u32) -> bool {
         self.raid_frame_auras.exclude.contains(&spell_id)
+    }
+
+    pub fn enemy_debuff_kind(&self, spell_id: u32) -> Option<EnemyDebuffKind> {
+        self.enemy_debuffs
+            .debuffs
+            .iter()
+            .find(|debuff| debuff.spell_id == spell_id)
+            .map(|debuff| debuff.kind)
+    }
+
+    pub fn is_lockout(&self, spell_id: u32) -> bool {
+        self.lockout_debuffs
+            .debuffs
+            .iter()
+            .any(|debuff| debuff.spell_id == spell_id)
     }
 
     /// The user's phase config for an encounter, if any.

@@ -12,6 +12,13 @@ beforeEach(() => {
 });
 
 describe('tab bar', () => {
+  it('puts the Replay tab last, with its icon', () => {
+    render(<TabBar />);
+    const replay = screen.getAllByRole('tab').at(-1);
+    expect(replay).toHaveAccessibleName('Replay');
+    expect(replay?.querySelector('svg')).not.toBeNull();
+  });
+
   it('offers Hide procs in the Options menu on Casts and remembers the choice', async () => {
     useApp.setState({ tab: 'casts', hideProcs: true });
     render(<TabBar />);

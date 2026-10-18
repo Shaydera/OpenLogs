@@ -1,5 +1,5 @@
 import { type ReactNode, useId, useState } from 'react';
-import { formatPercent } from '../../i18n/format';
+import { formatAmount, formatPercent } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 
 interface HudPanelProps {
@@ -8,28 +8,45 @@ interface HudPanelProps {
   defaultCollapsed?: boolean;
   /** Hides the panel but keeps it mounted, so it comes back as collapsed or expanded as it was. */
   hidden?: boolean;
+  /** Puts the caption under the body, in one row with `captionAside` while expanded. */
+  captionBelow?: boolean;
+  captionAside?: ReactNode;
   children: ReactNode;
 }
 
 /** A HUD overlay whose caption collapses it to just the caption. */
-export function HudPanel({ label, className, defaultCollapsed = false, hidden = false, children }: HudPanelProps) {
+export function HudPanel({ label, className, defaultCollapsed = false, hidden = false, captionBelow = false, captionAside, children }: HudPanelProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const bodyId = useId();
+  const toggle = (
+    <button type="button" className="hud-toggle" aria-expanded={!collapsed} aria-controls={collapsed ? undefined : bodyId} onClick={() => setCollapsed(!collapsed)}>
+      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+        <path d="M3 4.5 L6 7.5 L9 4.5" />
+      </svg>
+      {label}
+    </button>
+  );
   return (
     <section className={collapsed ? `hud ${className} collapsed` : `hud ${className}`} aria-label={label} hidden={hidden}>
-      <button type="button" className="hud-toggle" aria-expanded={!collapsed} aria-controls={collapsed ? undefined : bodyId} onClick={() => setCollapsed(!collapsed)}>
-        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-          <path d="M3 4.5 L6 7.5 L9 4.5" />
-        </svg>
-        {label}
-      </button>
+      {!captionBelow && toggle}
       {!collapsed && (
         <div id={bodyId} className="hud-body">
           {children}
         </div>
       )}
+      {captionBelow && (
+        <div className="hud-caption-row">
+          {toggle}
+          {!collapsed && captionAside}
+        </div>
+      )}
     </section>
   );
+}
+
+export function healthText(health: { current: number; percent: number | null }): string {
+  const amount = formatAmount(health.current);
+  return health.percent === null ? amount : t('replay.healthValue', { amount, percent: formatPercent(health.percent) });
 }
 
 type HealthTone = 'boss' | 'add' | 'unit';

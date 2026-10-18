@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react';
 import type { ReplayUnit } from '../../api/types';
 import { type MessageKey, t } from '../../i18n/i18n';
 import { useApp } from '../../store';
@@ -53,6 +54,9 @@ function RaidFrame({ hud, unit, time, selected, onSelect }: RaidFrameProps) {
   const status = [dead ? t('replay.dead') : null, hud.positioned.has(unit.actor) ? null : t('replay.noPosition')].filter((text) => text !== null);
   const color = dead ? undefined : classColor(hud.roster.get(unit.actor)?.classToken ?? null);
   const classes = ['hud-raid-frame', selected ? 'on' : '', dead ? 'dead' : ''].filter(Boolean).join(' ');
+  const selectOnMouseClick = (event: MouseEvent) => {
+    if ((event.nativeEvent as PointerEvent).pointerType !== 'touch') onSelect();
+  };
   return (
     <div role="group" aria-label={name} className={classes}>
       <span className="hud-raid-fill" style={{ width: `${fill}%` }} aria-hidden="true" />
@@ -63,7 +67,8 @@ function RaidFrame({ hud, unit, time, selected, onSelect }: RaidFrameProps) {
         {marker !== null && <RaidMarker marker={marker} />}
       </div>
       {status.length > 0 && <span className="hud-raid-status">{status.join(t('replay.separator'))}</span>}
-      <div className="hud-raid-auras">
+      {/* The icons take the pointer for their tooltips, so a mouse click on one is forwarded; a tap opens its tooltip. */}
+      <div className="hud-raid-auras" onClick={selectOnMouseClick}>
         <div>
           <AuraIcons hud={hud} auras={debuffs} time={time} label={t('replay.debuffs')} size={AURA_PX} />
         </div>
@@ -75,7 +80,7 @@ function RaidFrame({ hud, unit, time, selected, onSelect }: RaidFrameProps) {
   );
 }
 
-/** Bottom right: the players by role and name in five columns; a click selects one, a second click clears it. */
+/** Bottom left: the players by role and name in five columns; a click selects one, a second click clears it. */
 export function RaidFrames({ hud, defaultCollapsed = false }: { hud: HudIndex; defaultCollapsed?: boolean }) {
   const time = useReplayTime();
   const selected = useApp((s) => s.replay.selected);

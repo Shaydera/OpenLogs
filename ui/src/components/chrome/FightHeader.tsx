@@ -1,8 +1,8 @@
 import { Fragment, type RefObject } from 'react';
 import type { FightRow } from '../../api/types';
-import { formatKeystoneLevel } from '../../i18n/format';
+import { formatDuration, formatKeystoneLevel } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import { RUN_CHIP, pullStatus, runStatus } from '../../pulls/groupPulls';
+import { RUN_CHIP, difficultyName, pullStatus, runStatus } from '../../pulls/groupPulls';
 import { BossTile } from '../BossTile';
 import { Kpi, KpiStrip } from '../Kpi';
 import { fightMeta } from './fightMeta';
@@ -13,13 +13,19 @@ import type { HeaderTile } from './headerTiles';
  * tab's key figures to the right. Without `tiles` (detail pages) it is one compact line, and the detail
  * page's own title stays the page's heading.
  */
-export function FightHeader({ row, tiles, titleRef }: { row: FightRow; tiles: HeaderTile[] | null; titleRef: RefObject<HTMLHeadingElement | null> }) {
+function fightIdentity(row: FightRow): { title: string; chip: { className: string; label: string } } {
   const run = row.run;
   const status = pullStatus(row);
   const title = run ? t('runs.heading', { dungeon: row.name, level: formatKeystoneLevel(run.keystoneLevel) }) : row.name;
   const chip = run
     ? { className: RUN_CHIP[runStatus(row)], label: t(`runs.status.${runStatus(row)}`) }
     : { className: status === 'kill' ? 'kill' : status === 'aborted' ? 'abort' : 'wipe', label: t(`status.${status}`) };
+  return { title, chip };
+}
+
+export function FightHeader({ row, tiles, titleRef }: { row: FightRow; tiles: HeaderTile[] | null; titleRef: RefObject<HTMLHeadingElement | null> }) {
+  const run = row.run;
+  const { title, chip } = fightIdentity(row);
   const meta = fightMeta(row);
   const compact = tiles === null;
   return (
@@ -53,5 +59,24 @@ export function FightHeader({ row, tiles, titleRef }: { row: FightRow; tiles: He
         </KpiStrip>
       )}
     </section>
+  );
+}
+
+/** The replay's pull line at the start of the tab row: small portrait, name, result chip, difficulty and duration. */
+export function FightHeading({ row, titleRef }: { row: FightRow; titleRef: RefObject<HTMLHeadingElement | null> }) {
+  const { title, chip } = fightIdentity(row);
+  return (
+    <div className="fight-heading">
+      <BossTile encounterId={row.run ? 0 : row.encounterId} name={row.name} />
+      <h1 id="fight-title" ref={titleRef} tabIndex={-1} className="fight-heading-name">
+        {title}
+      </h1>
+      <span className={`chip ${chip.className}`}>{chip.label}</span>
+      <span className="fight-heading-facts">
+        {difficultyName(row)}
+        <span aria-hidden="true"> · </span>
+        <span className="num">{formatDuration(row.durationMs)}</span>
+      </span>
+    </div>
   );
 }

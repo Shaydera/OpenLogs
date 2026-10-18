@@ -3,9 +3,10 @@ use std::fs;
 
 use openlogs_gamedata::{
     ARENA_FRAMES_DIR, ArenaFrame, BOSS_EFFECTS_DIR, CONSUMABLES_FILE, ConsumableKind,
-    CooldownCategory, Curated, EffectAnchor, EffectCategory, EffectDuration, EffectKind,
-    EffectTrigger, MAJOR_CDS_FILE, PHASES_DIR, PROCS_FILE, PhaseTrigger, PlayerCooldownKind,
-    RAID_EFFECTS_FILE, RAID_FRAME_AURAS_FILE, class, spec,
+    CooldownCategory, Curated, ENEMY_DEBUFFS_FILE, EffectAnchor, EffectCategory, EffectDuration,
+    EffectKind, EffectTrigger, EnemyDebuffKind, LOCKOUT_DEBUFFS_FILE, MAJOR_CDS_FILE, PHASES_DIR,
+    PROCS_FILE, PhaseTrigger, PlayerCooldownKind, RAID_EFFECTS_FILE, RAID_FRAME_AURAS_FILE, class,
+    spec,
 };
 
 fn boss_effects_json(encounter_id: u32, name: &str) -> String {
@@ -225,6 +226,51 @@ fn raid_frame_auras_load_and_an_override_replaces_them() {
 }
 
 #[test]
+fn lockout_debuffs_load_and_an_override_replaces_them() {
+    let bundled = Curated::bundled();
+    assert!(bundled.is_lockout(57724), "Sated");
+    assert!(!bundled.is_lockout(1490));
+
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join(LOCKOUT_DEBUFFS_FILE),
+        r#"{ "version": 1, "debuffs": [ { "spell_id": 1, "name": "X" } ] }"#,
+    )
+    .unwrap();
+
+    let curated = Curated::load(Some(dir.path()));
+    assert!(curated.is_lockout(1));
+    assert!(!curated.is_lockout(57724));
+    assert!(curated.warnings.is_empty(), "{:?}", curated.warnings);
+}
+
+#[test]
+fn enemy_debuffs_load_and_an_override_replaces_them() {
+    let bundled = Curated::bundled();
+    assert_eq!(bundled.enemy_debuff_kind(1490), Some(EnemyDebuffKind::Amp));
+    assert_eq!(
+        bundled.enemy_debuff_kind(210824),
+        Some(EnemyDebuffKind::Cooldown)
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join(ENEMY_DEBUFFS_FILE),
+        r#"{ "version": 1,
+             "debuffs": [ { "spell_id": 1, "name": "X", "kind": "cooldown" } ] }"#,
+    )
+    .unwrap();
+
+    let curated = Curated::load(Some(dir.path()));
+    assert_eq!(
+        curated.enemy_debuff_kind(1),
+        Some(EnemyDebuffKind::Cooldown)
+    );
+    assert_eq!(curated.enemy_debuff_kind(1490), None);
+    assert!(curated.warnings.is_empty(), "{:?}", curated.warnings);
+}
+
+#[test]
 fn effect_catalog_loads_with_defaults() {
     let bundled = Curated::bundled();
     assert!(!bundled.effects.is_empty());
@@ -240,7 +286,7 @@ fn effect_catalog_loads_with_defaults() {
             { "spell_ids": [1], "name": "Shout", "trigger": "cast", "anchor": "caster_at_cast",
               "radius_yd": 100, "duration": { "type": "fixed", "ms": 5000 },
               "evidence": { "aura_ids": [1], "hit_ids": [] },
-              "kind": "beneficial", "category": "raid_buff" },
+              "kind": "beneficial", "category": "heal" },
             { "spell_ids": [2], "name": "Totem", "trigger": "summon", "anchor": "summoned_unit",
               "radius_yd": 10, "duration": { "type": "until_unit_gone" },
               "evidence": { "aura_ids": [], "hit_ids": [3], "tick_window_ms": 1000 },
@@ -264,7 +310,7 @@ fn effect_catalog_loads_with_defaults() {
     assert_eq!(shout.anchor, EffectAnchor::CasterAtCast);
     assert_eq!(shout.duration, EffectDuration::Fixed { ms: 5000 });
     assert_eq!(shout.kind, EffectKind::Beneficial);
-    assert_eq!(shout.category, EffectCategory::RaidBuff);
+    assert_eq!(shout.category, EffectCategory::Heal);
     assert_eq!(shout.evidence.tick_window_ms, 3000);
     assert_eq!(totem.duration, EffectDuration::UntilUnitGone);
     assert_eq!(totem.evidence.tick_window_ms, 1000);

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { ReplayData, ReplayUnitKind } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { type ReplayFilters, useApp } from '../../store';
@@ -38,11 +39,29 @@ function legendEntries(data: ReplayData, filters: ReplayFilters): LegendEntry[] 
   return [...players, ...others].filter((entry) => filters[KIND_FILTER[entry.kind]]);
 }
 
-/** The units above the stage: a click hides or shows them, hovering or focusing one highlights it. */
+/** The wheel scrolls an overflowing row sideways. */
+function useWheelScrollsSideways() {
+  const row = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = row.current;
+    if (!element) return;
+    const wheel = (event: WheelEvent) => {
+      if (event.deltaX !== 0 || event.deltaY === 0 || element.scrollWidth <= element.clientWidth) return;
+      event.preventDefault();
+      element.scrollLeft += event.deltaY;
+    };
+    element.addEventListener('wheel', wheel, { passive: false });
+    return () => element.removeEventListener('wheel', wheel);
+  }, []);
+  return row;
+}
+
+/** The units above the stage in one row: a click hides or shows them, hovering or focusing one highlights it. */
 export function ReplayLegend({ data, highlight, onHighlight }: { data: ReplayData; highlight: number[] | null; onHighlight: (actors: number[] | null) => void }) {
   const filters = useApp((s) => s.replay.filters);
   const setReplayFilter = useApp((s) => s.setReplayFilter);
   const hidden = new Set(filters.hidden);
+  const row = useWheelScrollsSideways();
 
   function toggle(entry: LegendEntry) {
     const shown = entry.actors.some((actor) => !hidden.has(actor));
@@ -51,7 +70,7 @@ export function ReplayLegend({ data, highlight, onHighlight }: { data: ReplayDat
   }
 
   return (
-    <div className="replay-legend" role="group" aria-label={t('replay.legend')}>
+    <div ref={row} className="replay-legend" role="group" aria-label={t('replay.legend')}>
       {legendEntries(data, filters).map((entry) => {
         const shown = entry.actors.some((actor) => !hidden.has(actor));
         const dimmed = highlight !== null && !entry.actors.some((actor) => highlight.includes(actor));

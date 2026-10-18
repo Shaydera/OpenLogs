@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { formatSeconds } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { spellIcon } from '../../icons';
@@ -27,6 +28,7 @@ export function CastBar({ hud, actor, time, hideIdle = false }: { hud: HudIndex;
       <GameIcon icon={spellIcon(cast.spellId)} size={ICON_PX} name={name} />
       <div
         className="hud-cast-bar"
+        style={{ '--fill': `${progress * 100}%` } as CSSProperties}
         role="progressbar"
         aria-label={name}
         aria-valuemin={0}

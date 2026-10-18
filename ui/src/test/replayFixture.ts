@@ -25,6 +25,8 @@ export const replayFixture: ReplayData = {
     { actor: 10, t: [0, 1_000], x: [105, 105], y: [205, 205], facing: [0, 0], map: [2001, 2001] },
   ],
   health: [],
+  power: [],
+  targets: [],
   casts: [],
   auras: [],
   raidMarkers: [],

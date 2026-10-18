@@ -1,11 +1,22 @@
-import { type KeyboardEvent, type PointerEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { ReplayTab } from './ReplayTab';
 
 const MIN_PANE_PX = 420;
-const DIVIDER_PX = 14;
+const DIVIDER_PX = 16;
 const KEY_STEP_PX = 24;
 
 /** The replay pane's width kept between both panes' minimum; an unmeasured split only keeps the replay's minimum. */
@@ -29,12 +40,29 @@ function useSplitWidth() {
   return [element, width] as const;
 }
 
+/** The split's distance from the top of the page: the replay pane is as tall as the window below it at scroll 0. */
+function usePageTop(element: RefObject<HTMLElement | null>) {
+  const [top, setTop] = useState(0);
+  useLayoutEffect(() => {
+    const split = element.current;
+    if (!split || typeof ResizeObserver === 'undefined') return;
+    // The header above grows when its figures load: any page resize can move the split.
+    const measure = () => setTop(Math.round(split.getBoundingClientRect().top + window.scrollY));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(document.body);
+    return () => observer.disconnect();
+  }, [element]);
+  return top;
+}
+
 /** The report beside the compact replay, split by a divider that a drag or the arrow keys move. */
 export function ReplaySplit({ children }: { children: ReactNode }) {
   const storedWidth = useApp((s) => s.replay.splitWidth);
   const setReplaySplitWidth = useApp((s) => s.setReplaySplitWidth);
   const setReplaySplit = useApp((s) => s.setReplaySplit);
   const [split, splitPx] = useSplitWidth();
+  const pageTop = usePageTop(split);
   const [dragWidth, setDragWidth] = useState<number | null>(null);
   const drag = useRef<{ pointerId: number; startX: number; startWidth: number; width: number } | null>(null);
   const paneId = useId();
@@ -68,7 +96,11 @@ export function ReplaySplit({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div ref={split} className="replay-split" style={{ gridTemplateColumns: `minmax(0, 1fr) ${DIVIDER_PX}px ${width}px` }}>
+    <div
+      ref={split}
+      className="replay-split"
+      style={{ gridTemplateColumns: `minmax(0, 1fr) ${DIVIDER_PX}px ${width}px`, '--replay-split-top': `${pageTop}px` } as CSSProperties}
+    >
       <div className="replay-split-report">{children}</div>
       <div
         role="separator"
@@ -87,7 +119,12 @@ export function ReplaySplit({ children }: { children: ReactNode }) {
         onLostPointerCapture={release}
         onKeyDown={key}
       >
-        <span aria-hidden="true" />
+        <span className="replay-divider-line" aria-hidden="true" />
+        <span className="replay-divider-grip" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </span>
       </div>
       <div id={paneId} className="replay-split-pane">
         <ErrorBoundary onReset={() => setReplaySplit(false)}>

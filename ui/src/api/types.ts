@@ -1100,6 +1100,20 @@ export interface ReplayHealthTrack {
   max: number[];
 }
 
+export interface ReplayPowerTrack {
+  actor: number;
+  powerType: number;
+  t: number[];
+  current: number[];
+  max: number[];
+}
+
+export interface ReplayTargetTrack {
+  actor: number;
+  t: number[];
+  target: number[];
+}
+
 export type ReplayCastOutcome = 'completed' | 'interrupted' | 'failed';
 
 export interface ReplayCast {
@@ -1117,6 +1131,9 @@ export interface ReplayStackChange {
   stacks: number;
 }
 
+/** What an aura stands for in the replay; the unit frames filter by it. */
+export type AuraCategory = 'encounter' | 'crowdControl' | 'amp' | 'cooldown' | 'other';
+
 export interface ReplayAura {
   target: number;
   source: number;
@@ -1127,6 +1144,9 @@ export interface ReplayAura {
   stacks: ReplayStackChange[];
   /** Raid frame priority (lower first); `null`: not shown on a raid frame. */
   raidFrame: number | null;
+  category: AuraCategory;
+  /** The player credited with the source (a pet's or guardian's owner); `null`: no player. */
+  sourcePlayer: number | null;
 }
 
 export interface ReplayRaidMarker {
@@ -1154,7 +1174,7 @@ export interface ReplayDeath {
 
 export type EffectKind = 'beneficial' | 'harmful';
 
-export type EffectCategory = 'raid_cd' | 'heal' | 'raid_buff' | 'boss_mechanic';
+export type EffectCategory = 'raid_cd' | 'heal' | 'boss_mechanic';
 
 /** A logged ground position, or the unit the effect moves with. */
 export type EffectAnchor = { type: 'ground'; x: number; y: number } | { type: 'unit'; actor: number };
@@ -1193,6 +1213,8 @@ export interface ReplayData {
   units: ReplayUnit[];
   tracks: ReplayTrack[];
   health: ReplayHealthTrack[];
+  power: ReplayPowerTrack[];
+  targets: ReplayTargetTrack[];
   casts: ReplayCast[];
   auras: ReplayAura[];
   raidMarkers: ReplayRaidMarker[];
@@ -1203,6 +1225,32 @@ export interface ReplayData {
   /** Bounds of the maps the tracks are on; maps the log wrote no bounds for are left out. */
   maps: ReplayMapBounds[];
   arenaFrame: ReplayArenaFrame | null;
+}
+
+export type MeterCategory = 'damageDone' | 'healingDone' | 'damageTaken' | 'healingReceived' | 'interrupts' | 'dispels';
+
+export interface MeterRow {
+  player: number;
+  amount: number;
+  /** 0 for interrupts and dispels. */
+  perSecond: number;
+}
+
+export type MeterEntry =
+  | { kind: 'ability'; spellId: number; actorId: number; rowKind: RowKind; amount: number }
+  /** `environmental`: world damage, kept apart from melee (both spell 0). */
+  | { kind: 'spell'; spellId: number; environmental: boolean; amount: number }
+  | { kind: 'unit'; actorId: number; amount: number };
+
+export interface MeterData {
+  durationMs: number;
+  /** Players with an amount, largest first. */
+  rows: MeterRow[];
+  /** The expanded player's split, largest first; empty without one. */
+  breakdown: MeterEntry[];
+  spells: Record<string, { name: string }>;
+  /** Names of the units in `breakdown`. */
+  units: Record<string, string>;
 }
 
 export interface MapArtEntry {

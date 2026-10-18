@@ -1,0 +1,5 @@
+ID,SpellID,ModalNextSpell,SpellClassSet,SpellClassMask_0,SpellClassMask_1,SpellClassMask_2,SpellClassMask_3
+17,118,0,3,16777216,0,0,0
+24,133,0,3,9,0,8,0
+37,408,0,8,2097152,0,0,0
+44,441,0,13,0,0,0,0

@@ -165,6 +165,10 @@ export function formatSignedScaled(value: number): string {
   return value > 0 ? `+${formatScaled(value)}` : formatScaled(value);
 }
 
+export function formatOneDecimal(value: number): string {
+  return oneDecimal.format(value);
+}
+
 /** Casts per minute with one decimal and no grouping: `59.0`, `1006.8`. */
 export function formatCpm(value: number): string {
   return oneDecimalUngrouped.format(value);

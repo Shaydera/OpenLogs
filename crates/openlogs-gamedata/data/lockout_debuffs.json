@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "note": "Friendly debuffs that only lock out a repeat of a buff (Bloodlust, Time Warp, Primal Rage, Ancient Hysteria); the replay never shows them on a player frame. Every ID was checked against SPELL_AURA_APPLIED DEBUFF lines from friendly sources in two real 12.1 raid logs. Exhaustion 390435 (Evoker Primal Rage) appears in neither log and is not listed.",
+  "debuffs": [
+    { "spell_id": 57724, "name": "Sated" },
+    { "spell_id": 57723, "name": "Exhaustion" },
+    { "spell_id": 80354, "name": "Temporal Displacement" },
+    { "spell_id": 264689, "name": "Fatigued" }
+  ]
+}

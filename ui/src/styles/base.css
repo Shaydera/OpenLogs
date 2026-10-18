@@ -17,6 +17,10 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--neutral-fill);
 }
+/* Pages with and without a scrollbar keep the same width, so switching tabs never shifts the header. */
+html {
+  scrollbar-gutter: stable;
+}
 @supports not selector(::-webkit-scrollbar) {
   * {
     scrollbar-width: thin;

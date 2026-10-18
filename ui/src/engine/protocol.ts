@@ -3,6 +3,7 @@ export type EngineMethod =
   | 'index_format_version'
   | 'set_dungeons'
   | 'set_channel_spells'
+  | 'set_spell_classes'
   | 'begin_index'
   | 'index_feed'
   | 'finish_index'

@@ -25,6 +25,8 @@ pub struct Fight {
     pub events: Vec<Event>,
     /// Players' power samples, sorted by `t`.
     pub power: Vec<PowerSample>,
+    /// Power samples of the other units (bosses, adds), sorted by `t`.
+    pub npc_power: Vec<PowerSample>,
     pub actors: Actors,
     /// Every spell referenced by `events`, with the name the log used.
     pub spells: BTreeMap<SpellId, SpellInfo>,
@@ -78,10 +80,10 @@ pub struct RunEncounter {
     pub outcome: Outcome,
 }
 
-/// Players' power is kept at most this often per power type.
+/// A unit's power is kept at most this often per power type.
 pub const POWER_SAMPLE_MS: i32 = 500;
 
-/// A player's power from an advanced block.
+/// A unit's power from an advanced block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PowerSample {
     pub t: i32,
@@ -90,6 +92,8 @@ pub struct PowerSample {
     pub power_type: i32,
     pub current: i64,
     pub max: i64,
+    /// First entry of the advanced block's power list.
+    pub primary: bool,
 }
 
 /// A unit's position from an advanced block, in log coordinates.

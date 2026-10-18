@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../../i18n/i18n';
@@ -14,6 +14,8 @@ beforeEach(() => {
   useApp.setState({ ...initialState(), tab: 'replay', replayData: replayFixture });
 });
 
+afterEach(() => vi.restoreAllMocks());
+
 describe('ReplayTab', () => {
   it('space toggles play and arrows jump five seconds', async () => {
     useApp.setState({ replay: { ...initialState().replay, time: 60_000 } });
@@ -27,6 +29,14 @@ describe('ReplayTab', () => {
     expect(replay().playing).toBe(true);
     await userEvent.keyboard(' ');
     expect(replay().playing).toBe(false);
+  });
+
+  it('arrow keys and space in the meter category stay with the menu', async () => {
+    useApp.setState({ replay: { ...initialState().replay, time: 60_000 } });
+    render(<ReplayTab />);
+    screen.getByRole('combobox', { name: t('replay.meterCategory') }).focus();
+    await userEvent.keyboard('{ArrowRight}{ArrowLeft} ');
+    expect(replay()).toMatchObject({ time: 60_000, playing: false });
   });
 
   it('a held space toggles play only once', () => {
@@ -86,14 +96,62 @@ describe('ReplayTab', () => {
     useApp.getState().toggleReplayPlay();
   });
 
-  it('the compact pane starts the unit frame collapsed and expands it on click', async () => {
+  it('the compact pane starts the meter and the unit frame collapsed and expands on click', async () => {
     useApp.setState({ replay: { ...initialState().replay, selected: 1 } });
     render(<ReplayTab compact />);
-    const caption = screen.getByRole('button', { name: t('replay.unitFrame') });
+    const caption = screen.getByRole('button', { name: t('replay.unitFrames') });
     expect(caption).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: t('replay.meter') })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('group', { name: 'Talwyn' })).toBeNull();
     await userEvent.click(caption);
     expect(screen.getByRole('group', { name: 'Talwyn' })).toBeInTheDocument();
+  });
+
+  it('a short stage starts the raid frames collapsed and they still expand', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ width: 1500, height: 400 }));
+    render(<ReplayTab />);
+    const caption = screen.getByRole('button', { name: t('replay.raidFrames') });
+    expect(caption).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: t('replay.meter') })).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.click(caption);
+    expect(caption).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('turns the HUD dense while the measured stage is shorter than 800 px and keeps the open panels open', () => {
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ width: 1500, height: 900 }));
+    const resized: ResizeObserverCallback[] = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resized.push(callback);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    try {
+      render(<ReplayTab />);
+      const region = screen.getByRole('region', { name: 'Replay' });
+      expect(region).not.toHaveAttribute('data-dense');
+
+      const short = DOMRect.fromRect({ width: 1500, height: 700 });
+      rect.mockReturnValue(short);
+      act(() => resized.forEach((callback) => callback([{ contentRect: short } as ResizeObserverEntry], {} as ResizeObserver)));
+      expect(region).toHaveAttribute('data-dense');
+      expect(screen.getByRole('button', { name: t('replay.raidFrames') })).toHaveAttribute('aria-expanded', 'true');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('the wheel scrolls an overflowing legend sideways', () => {
+    render(<ReplayTab />);
+    const legend = screen.getByRole('group', { name: 'Legend' });
+    Object.defineProperties(legend, { scrollWidth: { value: 900 }, clientWidth: { value: 300 } });
+    expect(fireEvent.wheel(legend, { deltaY: 120 })).toBe(false);
+    expect(legend.scrollLeft).toBe(120);
   });
 
   it('shows a notice without advanced logging', () => {

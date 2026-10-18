@@ -44,6 +44,7 @@ function fakeEngine() {
     indexFormatVersion: async () => 5,
     setDungeons: async () => {},
     setChannelSpells: async () => {},
+    setSpellClasses: async () => {},
     beginIndex: async () => void fed.splice(0),
     feed: async (bytes) => void fed.push(bytes.length),
     finishIndex: async (logId) => view(logId),
@@ -65,7 +66,14 @@ function source(id: string, size: number, lastModified = 1): LogSource & { read:
 function client() {
   const fake = fakeEngine();
   let clock = 0;
-  const api = createClient({ engine: () => fake.engine, dungeons: async () => null, channelSpells: async () => null, db: memoryDatabase(), now: () => ++clock });
+  const api = createClient({
+    engine: () => fake.engine,
+    dungeons: async () => null,
+    channelSpells: async () => null,
+    spellClasses: async () => null,
+    db: memoryDatabase(),
+    now: () => ++clock,
+  });
   return { api, ...fake };
 }
 
@@ -94,13 +102,22 @@ describe('opening logs', () => {
     const given: string[] = [];
     fake.engine.setDungeons = async (json) => void given.push(json);
     fake.engine.setChannelSpells = async (json) => void given.push(json);
+    fake.engine.setSpellClasses = async (json) => void given.push(json);
     let channels: string | null = null;
-    const api = createClient({ engine: () => fake.engine, dungeons: async () => 'keys', channelSpells: async () => channels, db: memoryDatabase(), now: () => 1 });
+    const classes = '{"classSpells":[408],"crowdControl":[408]}';
+    const api = createClient({
+      engine: () => fake.engine,
+      dungeons: async () => 'keys',
+      channelSpells: async () => channels,
+      spellClasses: async () => classes,
+      db: memoryDatabase(),
+      now: () => 1,
+    });
     await api.openLog(source('a.txt', 10));
     channels = '{"ids":[5143]}';
     await api.openLog(source('b.txt', 10));
     await api.openLog(source('c.txt', 10));
-    expect(given).toEqual(['keys', '{"ids":[5143]}']);
+    expect(given).toEqual(['keys', classes, '{"ids":[5143]}']);
   });
 
   it('opens a log without a game table the engine rejects', async () => {
@@ -108,7 +125,14 @@ describe('opening logs', () => {
     fake.engine.setChannelSpells = async () => {
       throw new Error('invalid channel table');
     };
-    const api = createClient({ engine: () => fake.engine, dungeons: async () => null, channelSpells: async () => '{}', db: memoryDatabase(), now: () => 1 });
+    const api = createClient({
+      engine: () => fake.engine,
+      dungeons: async () => null,
+      channelSpells: async () => '{}',
+      spellClasses: async () => null,
+      db: memoryDatabase(),
+      now: () => 1,
+    });
     expect((await api.openLog(source('a.txt', 10))).cacheHit).toBe(false);
   });
 

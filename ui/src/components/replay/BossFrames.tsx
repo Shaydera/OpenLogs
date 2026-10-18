@@ -1,15 +1,9 @@
 import type { ReplayUnit } from '../../api/types';
-import { formatAmount, formatPercent } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { CastBar } from './CastBar';
 import { type HudIndex, bossFrameUnits, healthShareAt, unitLabel } from './hudIndex';
-import { HealthBar, HudPanel } from './HudParts';
+import { HealthBar, HudPanel, healthText } from './HudParts';
 import { useReplayTime } from './useReplayTime';
-
-function healthText(health: { current: number; percent: number | null }): string {
-  const amount = formatAmount(health.current);
-  return health.percent === null ? amount : t('replay.healthValue', { amount, percent: formatPercent(health.percent) });
-}
 
 function EnemyFrame({ hud, unit, time }: { hud: HudIndex; unit: ReplayUnit; time: number }) {
   const boss = unit.kind === 'boss';

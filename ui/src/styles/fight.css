@@ -70,6 +70,53 @@
   padding: 22px 28px 40px;
   gap: 20px;
 }
+.fight-column {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.fight-page-overview .fight-column {
+  gap: 20px;
+}
+/* Replay tab and split view span the window; header, tabs and the range line keep the report column. */
+.fight-page.fight-page-full,
+.fight-page.fight-page-wide {
+  max-width: none;
+  padding-inline: 0;
+}
+.fight-page-full .fight-column,
+.fight-page-wide .fight-column {
+  width: 100%;
+  max-width: 1440px;
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+.fight-page-wide .tabpanel {
+  padding: 0 14px;
+}
+.fight-view-full {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.fight-page.fight-page-full {
+  flex: 1 1 auto;
+  gap: 0;
+  padding-top: 6px;
+  padding-bottom: 0;
+}
+.fight-view-full .appbar {
+  padding-block: 6px;
+}
+.fight-page-full .tabpanel {
+  flex: 1 1 auto;
+  gap: 4px;
+}
+/* Loading, failure and the no-positions notice line up with the report column. */
+.fight-page-full .tabpanel > :not(.replay-strip, .replay) {
+  margin-inline: max(28px, calc((100% - 1384px) / 2));
+}
 /* The pull header above the tabs: portrait, name and facts, the tab's key figures. */
 .fight-header {
   display: flex;
@@ -115,9 +162,37 @@
 .fight-header-compact .fight-meta {
   font-size: 13px;
 }
+/* The replay: the pull in one line at the start of the tab row. */
+.fight-heading {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: 10px;
+  min-width: 0;
+  margin-right: 18px;
+}
+.fight-heading .boss-icon,
+.fight-heading .mono {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+.fight-heading-name {
+  margin: 0;
+  font: 700 22px var(--font-label);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.fight-heading-facts {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
 
 .tabs {
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
 }
 /* A 44px target plus the 2px underline. */
@@ -139,6 +214,10 @@
 .tab.on {
   color: var(--text);
   border-bottom-color: var(--accent);
+}
+.tab.tab-replay {
+  gap: 7px;
+  margin-left: auto;
 }
 /* KPI strip: one panel, figures divided by a line. */
 .kpi-strip {

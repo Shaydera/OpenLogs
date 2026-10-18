@@ -1011,6 +1011,8 @@ describe('replay', () => {
     units: [],
     tracks: [],
     health: [],
+    power: [],
+    targets: [],
     casts: [],
     auras: [],
     raidMarkers: [],
@@ -1122,7 +1124,7 @@ describe('replay', () => {
     }
   });
 
-  it('records a failed load, clears it on retry and loads the range figures for the Replay tab', async () => {
+  it('records a failed load and clears it on retry', async () => {
     await openPull();
     vi.mocked(api.replay).mockRejectedValueOnce('boom');
     await useApp.getState().loadReplay();
@@ -1131,12 +1133,6 @@ describe('replay', () => {
     await useApp.getState().loadReplay();
     expect(useApp.getState()).toMatchObject({ replayError: null });
     expect(useApp.getState().replayData).not.toBeNull();
-
-    await useApp.getState().setTab('replay');
-    vi.mocked(api.quickOverview).mockClear();
-    await useApp.getState().setRange({ startMs: 0, endMs: 1_000 });
-    expect(api.quickOverview).toHaveBeenCalledTimes(1);
-    expect(useApp.getState()).toMatchObject({ rangeKpis: overviewFixture.kpis, reportLoading: false });
   });
 
   it('persists layers, filters and speed but not the hidden units', () => {
@@ -1147,6 +1143,28 @@ describe('replay', () => {
     expect(restored.layers.facing).toBe(true);
     expect(restored.filters).toMatchObject({ pets: true, hidden: [] });
     expect(restored.speed).toBe(4);
+  });
+
+  it("remembers whether the replay's range panel is open", () => {
+    expect(useApp.getState().replay.rangeOpen).toBe(false);
+    useApp.getState().setReplayRangeOpen(true);
+    expect(initialState().replay.rangeOpen).toBe(true);
+  });
+
+  it('remembers the all auras switch', () => {
+    expect(useApp.getState().replay.allAuras).toBe(false);
+    useApp.getState().setReplayAllAuras(true);
+    expect(initialState().replay.allAuras).toBe(true);
+  });
+
+  it('remembers the meter settings and ignores invalid stored values', () => {
+    expect(useApp.getState().replay.meter).toEqual({ category: 'damageDone', mode: 'cumulative', windowMs: 10_000 });
+    useApp.getState().setReplayMeter({ category: 'healingDone', mode: 'window' });
+    useApp.getState().setReplayMeter({ windowMs: 30_000 });
+    expect(initialState().replay.meter).toEqual({ category: 'healingDone', mode: 'window', windowMs: 30_000 });
+
+    localStorage.setItem('openlogs.replay', JSON.stringify({ meter: { category: 'overhealing', mode: 'window', windowMs: 7_000 } }));
+    expect(initialState().replay.meter).toEqual({ category: 'damageDone', mode: 'window', windowMs: 10_000 });
   });
 
   it('new layers get their defaults for stored replay settings', () => {

@@ -6,6 +6,7 @@ import type { LogView } from '../api/types';
 import { initialState, useApp } from '../store';
 import { compareLogFixture, comparisonFixture } from '../test/compareFixture';
 import { overviewFixture } from '../test/overviewFixture';
+import { replayFixture } from '../test/replayFixture';
 import { runLogFixture } from '../test/runFixture';
 import { breakdownFixture, damageReportFixture, resourcesReportFixture } from '../test/reportFixtures';
 import { FightView } from './FightView';
@@ -49,7 +50,7 @@ describe('FightView', () => {
   it('moves between tabs with the arrow keys and wraps around', async () => {
     vi.mocked(api.damageDoneReport).mockResolvedValue(damageReportFixture);
     vi.mocked(api.resourcesReport).mockResolvedValue(resourcesReportFixture);
-    useApp.setState({ overview: overviewFixture });
+    useApp.setState({ overview: overviewFixture, replayData: replayFixture });
     render(<FightView />);
     const overviewTab = screen.getByRole('tab', { name: 'Overview' });
     const panel = screen.getByRole('tabpanel', { name: 'Overview' });
@@ -68,10 +69,13 @@ describe('FightView', () => {
     await userEvent.keyboard('{Home}');
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveFocus();
     await userEvent.keyboard('{ArrowLeft}');
+    expect(screen.getByRole('tab', { name: 'Replay' })).toHaveFocus();
+    expect(useApp.getState().tab).toBe('replay');
+    await userEvent.keyboard('{ArrowLeft}');
     expect(screen.getByRole('tab', { name: 'Resources' })).toHaveFocus();
     expect(useApp.getState().tab).toBe('resources');
     await userEvent.keyboard('{End}');
-    expect(screen.getByRole('tab', { name: 'Resources' })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: 'Replay' })).toHaveFocus();
   });
 
   it('switches to Damage Done and reloads it with the Aug attribution', async () => {
@@ -118,6 +122,19 @@ describe('FightView', () => {
     useApp.setState({ view: { kind: 'fight', fightIndex: 2 } });
     rerender(<FightView />);
     expect(screen.getByRole('tab', { name: 'Replay' })).toBeInTheDocument();
+  });
+
+  it('folds the pull header into the tab row on the replay tab and brings the key figures back on the others', async () => {
+    useApp.setState({ overview: overviewFixture, tab: 'replay', replayData: replayFixture });
+    render(<FightView />);
+    const tabRow = screen.getByRole('tablist').parentElement as HTMLElement;
+    expect(within(tabRow).getByRole('heading', { level: 1, name: "Ula'tek" })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Key figures' })).toBeNull();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    expect(screen.getByRole('region', { name: 'Key figures' })).toBeInTheDocument();
+    expect(within(tabRow).queryByRole('heading')).toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: "Ula'tek" })).toBeInTheDocument();
   });
 
   it('offers a way back when a detail page fails', async () => {
