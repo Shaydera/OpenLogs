@@ -70,6 +70,48 @@
   padding: 22px 28px 40px;
   gap: 20px;
 }
+.fight-column {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.fight-page-overview .fight-column {
+  gap: 20px;
+}
+/* Replay tab and split view span the window; header, tabs and the range line keep the report column. */
+.fight-page.fight-page-full,
+.fight-page.fight-page-wide {
+  max-width: none;
+  padding-inline: 0;
+}
+.fight-page-full .fight-column,
+.fight-page-wide .fight-column {
+  width: 100%;
+  max-width: 1440px;
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+.fight-page-wide .tabpanel {
+  padding: 0 14px;
+}
+.fight-view-full {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.fight-page.fight-page-full {
+  flex: 1 1 auto;
+  padding-bottom: 0;
+}
+.fight-page-full .tabpanel {
+  flex: 1 1 auto;
+  gap: 12px;
+}
+/* Loading, failure and the no-positions notice line up with the report column. */
+.fight-page-full .tabpanel > :not(.fight-column, .replay) {
+  margin-inline: max(28px, calc((100% - 1384px) / 2));
+}
 /* The pull header above the tabs: portrait, name and facts, the tab's key figures. */
 .fight-header {
   display: flex;

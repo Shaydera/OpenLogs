@@ -53,6 +53,8 @@ export function FightView() {
   const breakdown = useApp((s) => s.breakdown);
   const scope = useApp((s) => s.scope);
   const splitOn = useApp(replaySplitShown);
+  const rangeOpen = useApp((s) => s.replay.rangeOpen);
+  const setReplayRangeOpen = useApp((s) => s.setReplayRangeOpen);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const crumbRef = useRef<HTMLSpanElement>(null);
   // The pull title; on detail pages (compact header) the current breadcrumb.
@@ -69,6 +71,7 @@ export function FightView() {
     );
 
   const onOverview = tab === 'overview';
+  const onReplay = tab === 'replay';
   const tiles =
     details.length > 0 ? null : headerTiles({ tab, row, overview, range, report, reportLoading, reportFailed, rangeKpis, breakdown, scope });
 
@@ -85,21 +88,31 @@ export function FightView() {
   ) : (
     <>
       {/* Detail pages have no range panel. */}
-      {details.length === 0 && <RangePanel overview={overview} rangeKey={rangeKey(row)} run={row.run !== null} />}
+      {details.length === 0 &&
+        (onReplay ? (
+          <div className="fight-column">
+            <RangePanel overview={overview} rangeKey={rangeKey(row)} run={row.run !== null} collapsible={{ open: rangeOpen, onToggle: setReplayRangeOpen }} />
+          </div>
+        ) : (
+          <RangePanel overview={overview} rangeKey={rangeKey(row)} run={row.run !== null} />
+        ))}
       <ErrorBoundary key={`${tab}-${details.length}`} onReset={() => void closeDetail()}>
-        {tab === 'replay' ? <ReplayTab /> : <ReportView />}
+        {onReplay ? <ReplayTab /> : <ReportView />}
       </ErrorBoundary>
     </>
   );
-  const alongside = splitOn && tab !== 'replay' && !failed && !loading && overview !== null;
+  const alongside = splitOn && !onReplay && !failed && !loading && overview !== null;
+  const page = ['fight-page', onOverview && 'fight-page-overview', onReplay && 'fight-page-full', alongside && 'fight-page-wide'].filter(Boolean).join(' ');
 
   return (
-    <div className="fight-view">
+    <div className={onReplay ? 'fight-view fight-view-full' : 'fight-view'}>
       <FightTopBar row={row} currentRef={crumbRef} />
-      <main className={onOverview ? 'fight-page fight-page-overview' : 'fight-page'}>
-        <FightHeader row={row} tiles={tiles} titleRef={titleRef} />
-        <ViewLens />
-        <TabBar />
+      <main className={page}>
+        <div className="fight-column">
+          <FightHeader row={row} tiles={tiles} titleRef={titleRef} />
+          <ViewLens />
+          <TabBar />
+        </div>
         <div role="tabpanel" id={PANEL_ID} aria-labelledby={tabId(tab)} className="tabpanel">
           {/* Outside the tab-keyed error boundary: the replay pane keeps its state while the report changes tabs. */}
           {alongside ? <ReplaySplit>{body}</ReplaySplit> : body}

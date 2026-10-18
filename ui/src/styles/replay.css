@@ -75,15 +75,21 @@
   text-decoration: line-through;
 }
 
+.fight-page-full .replay {
+  flex: 1 1 auto;
+  border-width: 1px 0 0;
+  border-radius: 0;
+}
 .replay-plot {
   position: relative;
   container-type: inline-size;
-  height: clamp(360px, 64vh, 660px);
+  flex: 1 1 0;
+  min-height: 360px;
   overflow: hidden;
   background: var(--plot);
 }
 .replay-compact .replay-plot {
-  height: clamp(280px, 48vh, 480px);
+  min-height: 200px;
 }
 .replay-stage {
   position: absolute;
@@ -715,6 +721,8 @@
 }
 
 .replay-split {
+  /* --replay-split-top: the split's page offset, measured; the pane fills the window below it at scroll 0. */
+  --replay-pane-height: max(360px, calc(100vh - var(--replay-split-top, 0px) - 14px));
   display: grid;
   align-items: start;
 }
@@ -727,29 +735,76 @@
 .replay-split-pane {
   position: sticky;
   top: 12px;
+  display: flex;
+  flex-direction: column;
+  height: var(--replay-pane-height);
   min-width: 0;
 }
+.replay-split-pane > .replay {
+  flex: 1 1 auto;
+  min-height: 0;
+}
 .replay-divider {
+  position: relative;
   align-self: stretch;
   display: flex;
   justify-content: center;
+  align-items: flex-start;
   cursor: col-resize;
   touch-action: none;
   user-select: none;
 }
-.replay-divider > span {
-  position: sticky;
-  top: calc(24vh + 43px);
-  width: 4px;
-  height: 48px;
-  margin-top: calc(24vh + 31px);
-  border-radius: 2px;
-  background: var(--line);
+.replay-divider:focus-visible {
+  outline: none;
 }
-.replay-divider:hover > span,
-.replay-divider.dragging > span,
-.replay-divider:focus-visible > span {
+.replay-divider-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 1px);
+  width: 2px;
+  border-radius: 1px;
+  background: var(--line-strong);
+}
+/* The grip rides at the middle of the sticky pane. */
+.replay-divider-grip {
+  --grip-offset: calc(var(--replay-pane-height) / 2 - 28px);
+  position: sticky;
+  top: calc(12px + var(--grip-offset));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 12px;
+  height: 56px;
+  margin-top: var(--grip-offset);
+  box-sizing: border-box;
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  background: var(--panel-raised);
+  color: var(--muted);
+}
+.replay-divider-grip > span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.replay-divider:hover .replay-divider-line,
+.replay-divider.dragging .replay-divider-line,
+.replay-divider:focus-visible .replay-divider-line {
   background: var(--accent);
+}
+.replay-divider:hover .replay-divider-grip,
+.replay-divider.dragging .replay-divider-grip,
+.replay-divider:focus-visible .replay-divider-grip {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+.replay-divider:focus-visible .replay-divider-grip {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 33%, transparent);
 }
 .replay-compact .replay-bar {
   gap: 10px 14px;

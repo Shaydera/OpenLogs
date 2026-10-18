@@ -69,6 +69,59 @@
 .range-cap {
   margin-right: 6px;
 }
+.range-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+.range-collapse:hover,
+.range-toggle:hover {
+  border-color: var(--accent-tint-line);
+  color: var(--text);
+}
+/* The collapsed panel: one button with the selection. */
+.range-line {
+  display: flex;
+  align-items: center;
+}
+.range-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: 13px var(--font-text);
+  cursor: pointer;
+}
+.range-toggle .range-cap {
+  margin-right: 0;
+}
+.range-line-pull {
+  color: var(--muted);
+}
+.range-collapse svg,
+.range-toggle svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.range-toggle svg {
+  transform: rotate(-90deg);
+}
 /* A saved range: its name and the × inside one pill. */
 .pill-saved {
   display: inline-flex;

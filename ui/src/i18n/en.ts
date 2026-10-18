@@ -291,6 +291,8 @@ export const en = {
   'range.savedOutside': '{range} — outside this pull',
   'range.chip': 'Range {span}',
   'range.clear': 'Clear time range',
+  'range.expand': 'Expand time range',
+  'range.collapse': 'Collapse time range',
   'range.cancel': 'Cancel',
   'range.selection': 'Selection',
   'range.duration': 'Duration',

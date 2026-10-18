@@ -15,8 +15,19 @@ import { useRangeKeys } from './useRangeKeys';
 /**
  * The report tabs' "Time range" panel: pills for the full pull, its phases and the saved ranges,
  * "+ Save range", a plot with the selection as an accent brush, and the selection with its duration.
+ * With `collapsible`, it folds into one line with the selection that opens it again.
  */
-export function RangePanel({ overview, rangeKey, run = false }: { overview: QuickOverview; rangeKey: string; run?: boolean }) {
+export function RangePanel({
+  overview,
+  rangeKey,
+  run = false,
+  collapsible,
+}: {
+  overview: QuickOverview;
+  rangeKey: string;
+  run?: boolean;
+  collapsible?: { open: boolean; onToggle(open: boolean): void };
+}) {
   const range = useApp((s) => s.range);
   const setRange = useApp((s) => s.setRange);
   const zoom = useApp((s) => s.zoom);
@@ -32,8 +43,17 @@ export function RangePanel({ overview, rangeKey, run = false }: { overview: Quic
   const popoverId = useId();
   const [saved, setSaved] = useState<SavedRange[]>(() => loadSavedRanges(rangeKey));
   const [saving, setSaving] = useState(false);
+  const expandRef = useRef<HTMLButtonElement>(null);
+  const collapseRef = useRef<HTMLButtonElement>(null);
+  const toggled = useRef(false);
+  const collapsed = collapsible !== undefined && !collapsible.open;
 
   useEffect(() => setSaved(loadSavedRanges(rangeKey)), [rangeKey]);
+  useEffect(() => {
+    if (!toggled.current) return;
+    toggled.current = false;
+    (collapsed ? expandRef : collapseRef).current?.focus();
+  }, [collapsed]);
 
   const change = (next: TimeRange | null) => {
     if (!sameRange(next, range)) void setRange(next);
@@ -74,6 +94,11 @@ export function RangePanel({ overview, rangeKey, run = false }: { overview: Quic
     document.addEventListener('mouseup', up);
   }
 
+  function toggle(open: boolean) {
+    toggled.current = true;
+    collapsible?.onToggle(open);
+  }
+
   function closeSave(returnFocus: boolean) {
     setSaving(false);
     if (returnFocus) saveRef.current?.focus();
@@ -90,9 +115,40 @@ export function RangePanel({ overview, rangeKey, run = false }: { overview: Quic
     if (!event.currentTarget.contains(event.relatedTarget)) setSaving(false);
   }
 
+  const chevron = (
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+      <path d="M3 4.5 L6 7.5 L9 4.5" />
+    </svg>
+  );
+
+  if (collapsed)
+    return (
+      <section className="range-line" aria-label={t('range.title')}>
+        <button ref={expandRef} type="button" className="range-toggle" aria-expanded={false} title={t('range.expand')} onClick={() => toggle(true)}>
+          {chevron}
+          <span className="cap range-cap">{t('range.title')}</span>
+          {range === null ? <span>{t(run ? 'range.wholeRun' : 'range.whole')}</span> : <span className="num">{rangeLabel(range)}</span>}
+          <span className="num range-line-pull">{t('range.bounds', { start: formatEventTime(0), end: formatEventTime(duration) })}</span>
+        </button>
+      </section>
+    );
+
   return (
     <section className="panel range-panel" aria-label={t('range.title')}>
       <div className="range-pills">
+        {collapsible && (
+          <button
+            ref={collapseRef}
+            type="button"
+            className="range-collapse"
+            aria-expanded={true}
+            aria-label={t('range.collapse')}
+            title={t('range.collapse')}
+            onClick={() => toggle(false)}
+          >
+            {chevron}
+          </button>
+        )}
         <span className="cap range-cap" aria-hidden="true">
           {t('range.title')}
         </span>

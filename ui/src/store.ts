@@ -73,6 +73,7 @@ export type ReplayState = {
   split: boolean;
   splitWidth: number;
   follow: boolean;
+  rangeOpen: boolean;
 };
 
 const REPLAY_KEY = 'replay';
@@ -357,6 +358,7 @@ interface Actions {
   setReplayFilter(filters: Partial<ReplayFilters>): void;
   setReplaySplit(on: boolean): void;
   setReplaySplitWidth(width: number): void;
+  setReplayRangeOpen(open: boolean): void;
   setReplayFollow(on: boolean): void;
   openReplayAt(ms: number): void;
 }
@@ -384,6 +386,7 @@ function readReplayState(): ReplayState {
     split: false,
     splitWidth: DEFAULT_SPLIT_WIDTH,
     follow: false,
+    rangeOpen: false,
   };
   const raw = readStored(REPLAY_KEY);
   if (raw === null) return state;
@@ -400,14 +403,15 @@ function readReplayState(): ReplayState {
       speed: REPLAY_SPEEDS.find((speed) => speed === stored.speed) ?? 1,
       split: stored.split === true,
       splitWidth: typeof stored.splitWidth === 'number' && stored.splitWidth > 0 ? stored.splitWidth : DEFAULT_SPLIT_WIDTH,
+      rangeOpen: stored.rangeOpen === true,
     };
   } catch {
     return state;
   }
 }
 
-function writeReplayState({ layers, filters: { hidden: _hidden, ...filters }, speed, split, splitWidth }: ReplayState) {
-  writeStored(REPLAY_KEY, JSON.stringify({ layers, filters, speed, split, splitWidth }));
+function writeReplayState({ layers, filters: { hidden: _hidden, ...filters }, speed, split, splitWidth, rangeOpen }: ReplayState) {
+  writeStored(REPLAY_KEY, JSON.stringify({ layers, filters, speed, split, splitWidth, rangeOpen }));
 }
 
 export function initialState(): State {
@@ -1274,6 +1278,12 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
 
   setReplaySplitWidth(splitWidth) {
     const replay = { ...get().replay, splitWidth };
+    set({ replay });
+    writeReplayState(replay);
+  },
+
+  setReplayRangeOpen(rangeOpen) {
+    const replay = { ...get().replay, rangeOpen };
     set({ replay });
     writeReplayState(replay);
   },

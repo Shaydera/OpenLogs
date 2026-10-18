@@ -1151,6 +1151,12 @@ describe('replay', () => {
     expect(restored.speed).toBe(4);
   });
 
+  it("remembers whether the replay's range panel is open", () => {
+    expect(useApp.getState().replay.rangeOpen).toBe(false);
+    useApp.getState().setReplayRangeOpen(true);
+    expect(initialState().replay.rangeOpen).toBe(true);
+  });
+
   it('new layers get their defaults for stored replay settings', () => {
     localStorage.setItem('openlogs.replay', JSON.stringify({ layers: { effects: false, worldMarkers: true, facing: true, names: true } }));
     expect(initialState().replay.layers).toEqual({ map: true, grid: false, effects: false, worldMarkers: true, facing: true, names: true });
