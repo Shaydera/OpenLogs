@@ -1204,3 +1204,25 @@ export interface ReplayData {
   maps: ReplayMapBounds[];
   arenaFrame: ReplayArenaFrame | null;
 }
+
+export interface MapArtEntry {
+  zone: number;
+  /** `null` when the map has no floor number. */
+  floor: number | null;
+  raid: boolean;
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+export interface BossPin {
+  uiMapId: number;
+  u: number;
+  v: number;
+}
+
+export interface MapArtTable {
+  maps: Record<string, MapArtEntry>;
+  pins: Record<string, BossPin>;
+}

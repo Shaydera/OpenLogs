@@ -1,6 +1,8 @@
 import type { ReplayAura, ReplayCast, ReplayDeath, ReplayHealthTrack, ReplayTrack, ReplayUnit } from '../../api/types';
 
 export const STALE_MS = 2000;
+/** The uiMapID of a sample the log placed on no known map. */
+export const UNKNOWN_MAP = 0;
 /** An enemy or pet with neither position nor health logged for longer than this has left: despawned, or a corpse the pull moved on from. */
 const NPC_GONE_MS = 5_000;
 /** A jump to a death starts this long before it, so the replay shows the run-up. */
@@ -72,11 +74,22 @@ export function deathAt(deaths: ReplayDeath[], t: number): ReplayDeath | undefin
   return death;
 }
 
+/** Whether `death` (from `deathAt`) holds the unit dead at `t`: from the death until it was brought back. */
+export function isDeadAt(death: ReplayDeath | undefined, t: number): death is ReplayDeath {
+  return death !== undefined && t >= death.t && (death.until === null || t < death.until);
+}
+
 /** Where a unit is at `t`; `null` before its first sample. A dead unit stays where it died. */
 export function placementAt(track: ReplayTrack, t: number, death?: ReplayDeath): Placement {
-  const dead = death !== undefined && t >= death.t && (death.until === null || t < death.until);
+  const dead = isDeadAt(death, t);
   const placed = placementOn(track, dead ? death.t : t);
   return placed && { ...placed, stale: dead ? false : placed.stale, dead };
+}
+
+/** The uiMapID of the sample `placementAt` places the unit by at `t` (where it died while dead); `UNKNOWN_MAP` before its first sample. */
+export function floorAt(track: ReplayTrack, t: number, death?: ReplayDeath): number {
+  const i = lastAtOrBefore(track.t, isDeadAt(death, t) ? death.t : t);
+  return i < 0 ? UNKNOWN_MAP : track.map[i];
 }
 
 /** From when a unit counts as gone: never for a player, else `NPC_GONE_MS` after its last logged position or health. */

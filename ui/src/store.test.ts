@@ -1148,4 +1148,9 @@ describe('replay', () => {
     expect(restored.filters).toMatchObject({ pets: true, hidden: [] });
     expect(restored.speed).toBe(4);
   });
+
+  it('new layers get their defaults for stored replay settings', () => {
+    localStorage.setItem('openlogs.replay', JSON.stringify({ layers: { effects: false, worldMarkers: true, facing: true, names: true } }));
+    expect(initialState().replay.layers).toEqual({ map: true, grid: false, effects: false, worldMarkers: true, facing: true, names: true });
+  });
 });

@@ -26,6 +26,8 @@ const UNIT_FILTERS: { filter: keyof Omit<ReplayFilters, 'hidden'>; key: MessageK
   { filter: 'adds', key: 'replay.adds' },
 ];
 const LAYERS: { layer: keyof ReplayLayers; key: MessageKey }[] = [
+  { layer: 'map', key: 'replay.map' },
+  { layer: 'grid', key: 'replay.grid' },
   { layer: 'effects', key: 'replay.effects' },
   { layer: 'worldMarkers', key: 'replay.worldMarkers' },
   { layer: 'facing', key: 'replay.facing' },

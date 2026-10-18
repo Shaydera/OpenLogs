@@ -61,7 +61,7 @@ export type FightTab =
   | 'resources'
   | 'replay';
 export type ReplaySpeed = 0.5 | 1 | 2 | 4;
-export type ReplayLayers = { effects: boolean; worldMarkers: boolean; facing: boolean; names: boolean };
+export type ReplayLayers = { map: boolean; grid: boolean; effects: boolean; worldMarkers: boolean; facing: boolean; names: boolean };
 export type ReplayFilters = { players: boolean; pets: boolean; bosses: boolean; adds: boolean; hidden: number[] };
 export type ReplayState = {
   time: number;
@@ -370,7 +370,7 @@ function writeFlag(key: string, value: boolean) {
   writeStored(key, String(value));
 }
 
-const DEFAULT_REPLAY_LAYERS: ReplayLayers = { effects: true, worldMarkers: true, facing: false, names: true };
+const DEFAULT_REPLAY_LAYERS: ReplayLayers = { map: true, grid: false, effects: true, worldMarkers: true, facing: false, names: true };
 const DEFAULT_REPLAY_FILTERS: ReplayFilters = { players: true, pets: false, bosses: true, adds: true, hidden: [] };
 
 function readReplayState(): ReplayState {
