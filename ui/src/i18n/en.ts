@@ -727,6 +727,7 @@ export const en = {
   'report.sharePct': '%',
   'report.supportTag': 'Support',
   'report.playerDetails': 'Player details →',
+  'report.openPlayer': 'Open player details',
   'rows.caption': 'Rows',
   'rows.filtered': 'filtered to one',
   'rows.done.source': 'Done by Source',

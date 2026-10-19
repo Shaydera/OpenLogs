@@ -12,7 +12,7 @@ import { RowsMenu } from '../filters/RowsMenu';
 import { captionOf } from '../filters/sides';
 import { classColor } from '../overview/players';
 import { PlayerIcon } from './PlayerName';
-import { RankedHead } from './ReportParts';
+import { RankedHead, SideActions } from './ReportParts';
 import { barWidth, rosterIndex } from './reportData';
 
 interface Props {
@@ -56,6 +56,7 @@ const GRID = ['rrow rrow-nodelta', 'rrow', 'rrow rrow-extra2', 'rrow rrow-extra3
 const NOTHING_LOGGED: Record<MetricTab, MessageKey> = { damage: 'report.noDamage', healing: 'report.noHealing', taken: 'report.noDamageTaken' };
 
 const keyOf = (row: BreakdownRow) => JSON.stringify(row.key);
+const playerIdOf = (row: BreakdownRow) => (row.key.kind === 'unit' && row.key.unit.kind === 'player' ? row.key.unit.actorId : null);
 
 export function BreakdownPanel(props: Props) {
   const { tab, breakdown, title, unit, hint, sideExtras, extraColumns = [], fill, total, onPreview, describedBy, legend, panelRef, popup } = props;
@@ -69,11 +70,15 @@ export function BreakdownPanel(props: Props) {
   const selected = breakdown.rows.find((r) => keyOf(r) === selectedKey) ?? breakdown.rows[0];
   const splits = selected?.splits.filter((s) => breakdown.side.includes(s.dimension)) ?? [];
   const split = splits.find((s) => s.dimension === splitDimension) ?? splits[0];
-  const selectedUnit = selected?.key.kind === 'unit' ? selected.key.unit : null;
-  const selectedPlayer = selectedUnit?.kind === 'player' ? selectedUnit.actorId : null;
+  const selectedPlayer = selected ? playerIdOf(selected) : null;
   const grid = GRID[extraColumns.length];
   const narrowable = (row: BreakdownRow) => scope[breakdown.group].length === 0 && !(row.key.kind === 'ability' && row.key.rowKind === 'unmatched');
   const narrowTo = (row: BreakdownRow) => void showOnly(breakdown.group, row);
+  const nameAction = (row: BreakdownRow) => {
+    const player = playerIdOf(row);
+    if (player !== null) return () => void openPlayer(player);
+    return narrowable(row) ? () => narrowTo(row) : undefined;
+  };
 
   const playerOf = (row: BreakdownRow) => {
     const unitRef = row.key.kind === 'unit' ? row.key.unit : null;
@@ -142,7 +147,8 @@ export function BreakdownPanel(props: Props) {
                 const barPct = top > 0 ? (row.amount / top) * 100 : 0;
                 const amount = formatScaled(row.amount);
                 const preview = onPreview?.(row);
-                const narrowsHere = narrowable(row);
+                const onName = nameAction(row);
+                const opensPlayer = playerIdOf(row) !== null;
                 return (
                   <button
                     key={keyOf(row)}
@@ -159,14 +165,14 @@ export function BreakdownPanel(props: Props) {
                     onKeyDown={preview && ((event) => event.key === 'Escape' && preview(null, null))}
                   >
                     <span className="num rrow-rank">{index + 1}</span>
-                    {/* A mouse shortcut for the side panel's "Show only": a control inside the row button would be nested interactive content. */}
+                    {/* A mouse shortcut for the side panel's buttons: a control inside the row button would be nested interactive content. */}
                     <span
-                      className={narrowsHere ? 'rrow-name rrow-name-narrow' : 'rrow-name'}
+                      className={onName ? (opensPlayer ? 'rrow-name rrow-name-link opens-player' : 'rrow-name rrow-name-link') : 'rrow-name'}
                       onClick={
-                        narrowsHere
+                        onName
                           ? (event) => {
                               event.stopPropagation();
-                              narrowTo(row);
+                              onName();
                             }
                           : undefined
                       }
@@ -217,17 +223,12 @@ export function BreakdownPanel(props: Props) {
                 </span>
               </span>
             </div>
-            {selectedPlayer !== null && (
-              <button type="button" className="link-accent" onClick={() => void openPlayer(selectedPlayer)}>
-                {t('report.playerDetails')}
-              </button>
-            )}
-            {narrowable(selected) && (
-              <button type="button" className="link-accent" onClick={() => narrowTo(selected)}>
-                {showOnlyLabel(selected)}
-              </button>
-            )}
           </div>
+          <SideActions
+            showOnlyLabel={showOnlyLabel(selected)}
+            onOpenPlayer={selectedPlayer !== null ? () => void openPlayer(selectedPlayer) : undefined}
+            onShowOnly={narrowable(selected) ? () => narrowTo(selected) : undefined}
+          />
           {splits.length > 1 && (
             <div className="seg side-tabs" role="group" aria-label={t('breakdown.splitBy')}>
               {splits.map((s) => (

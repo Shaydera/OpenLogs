@@ -36,10 +36,13 @@ describe('CastsTab', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Rejuvenation' }));
     expect(openAbilityOf).toHaveBeenCalledWith(2, 774, 'healing');
     expect(screen.queryByRole('button', { name: 'Regrowth' })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Player details →' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Open player details' }));
     expect(openPlayer).toHaveBeenCalledWith(2);
     await userEvent.click(screen.getByRole('button', { name: 'Show only Pyrrin' }));
     expect(select).toHaveBeenCalledWith('source', { kind: 'player', actorId: 2 });
+    await userEvent.click(within(list()).getByText('Faelan'));
+    expect(openPlayer).toHaveBeenLastCalledWith(4);
+    expect(within(list()).getByRole('button', { name: /Pyrrin/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('sorts spells with missing uptimes last in both directions', async () => {

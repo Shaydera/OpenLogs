@@ -30,6 +30,25 @@ export function RankedHead({ grid, columns }: { grid?: string; columns: RankedCo
   );
 }
 
+/** The side panel's actions under its head: open the player page, show only the selected row. */
+export function SideActions({ onOpenPlayer, onShowOnly, showOnlyLabel }: { onOpenPlayer?: () => void; onShowOnly?: () => void; showOnlyLabel: string }) {
+  if (!onOpenPlayer && !onShowOnly) return null;
+  return (
+    <div className="side-actions">
+      {onOpenPlayer && (
+        <button type="button" className="btn btn-accent side-open-player" onClick={onOpenPlayer}>
+          {t('report.openPlayer')}
+        </button>
+      )}
+      {onShowOnly && (
+        <button type="button" className="btn" onClick={onShowOnly}>
+          {showOnlyLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** How many buffed players "Support by recipient" lists; the player page has them all. */
 const TOP_RECIPIENTS = 8;
 

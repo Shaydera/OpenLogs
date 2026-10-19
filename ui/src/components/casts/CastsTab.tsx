@@ -11,6 +11,7 @@ import { ReportHead } from '../filters/ReportHead';
 import { classColor, playerIndex, shortName } from '../overview/players';
 import { PlayerIcon } from '../reports/PlayerName';
 import { barWidth, rosterIndex } from '../reports/reportData';
+import { SideActions } from '../reports/ReportParts';
 
 /** One spell row of one caster: its casts with what is known of the pair. */
 interface SpellLine {
@@ -109,6 +110,7 @@ export function CastsTab({ report }: { report: CastsReport }) {
         rows={breakdown.rows}
         selected={selected}
         onSelect={selectable ? selectRow : undefined}
+        onOpenPlayer={(player) => void openPlayer(player)}
         roster={roster}
         cpm={cpm}
         caption={caption}
@@ -126,7 +128,7 @@ export function CastsTab({ report }: { report: CastsReport }) {
           sub={t('casts.spellCount', { count: lines.length })}
           suffix={t('casts.spellCasts')}
           cpm={cpm}
-          onPlayerDetails={player !== null ? () => void openPlayer(player) : undefined}
+          onOpenPlayer={player !== null ? () => void openPlayer(player) : undefined}
           onShowOnly={() => void select('source', rowValue(selected.key))}
         >
           <SpellTable lines={lines} player={player} label={t('casts.tableLabel', { name: rowLabel(selected) })} cpm={cpm} roster={roster} />
@@ -140,7 +142,14 @@ export function CastsTab({ report }: { report: CastsReport }) {
     if (selected && casters?.length) {
       side = (
         <SidePanel row={selected} roster={roster} sub="" cpm={cpm} onShowOnly={() => void select('ability', rowValue(selected.key))}>
-          <CasterList rows={casters} roster={roster} cpm={cpm} caption={caption} label={t('casts.castersOf', { name: rowLabel(selected) })} />
+          <CasterList
+            rows={casters}
+            onOpenPlayer={(player) => void openPlayer(player)}
+            roster={roster}
+            cpm={cpm}
+            caption={caption}
+            label={t('casts.castersOf', { name: rowLabel(selected) })}
+          />
         </SidePanel>
       );
     }
@@ -201,12 +210,13 @@ function CasterList(props: {
   rows: (BreakdownRow | GroupedRow)[];
   selected?: GroupedRow;
   onSelect?: (key: string) => void;
+  onOpenPlayer?: (player: number) => void;
   roster: Map<number, PlayerRef>;
   cpm: (casts: number) => string;
   caption: string;
   label: string;
 }) {
-  const { rows, selected, onSelect, roster, cpm, caption, label } = props;
+  const { rows, selected, onSelect, onOpenPlayer, roster, cpm, caption, label } = props;
   const top = Math.max(1, ...rows.map((r) => r.amount));
   return (
     <div className="scroll-x">
@@ -224,11 +234,24 @@ function CasterList(props: {
           const info = player !== null ? roster.get(player) : undefined;
           const colour = rowColor(row, roster);
           const spells = 'splits' in row ? row.splits.find((s) => s.dimension === 'ability')?.rows.length : undefined;
+          const openOnName = onOpenPlayer && player !== null ? () => onOpenPlayer(player) : undefined;
           const cells = (
             <>
               {rowIcon(row, roster)}
-              <span className="cast-name" style={colour ? { color: colour } : undefined}>
-                {rowLabel(row)}
+              {/* Mouse only: a control inside the row button would be nested interactive content. */}
+              <span
+                className={openOnName ? 'cast-name rrow-name-link opens-player' : 'cast-name'}
+                style={colour ? { color: colour } : undefined}
+                onClick={
+                  openOnName
+                    ? (event) => {
+                        event.stopPropagation();
+                        openOnName();
+                      }
+                    : undefined
+                }
+              >
+                <span className="name-label">{rowLabel(row)}</span>
               </span>
               {info?.role ? <span className="role-pill">{t(`role.short.${info.role}`)}</span> : <span />}
               <span className="cast-bar">
@@ -321,11 +344,11 @@ function SidePanel(props: {
   sub: string;
   suffix?: string;
   cpm: (casts: number) => string;
-  onPlayerDetails?: () => void;
+  onOpenPlayer?: () => void;
   onShowOnly: () => void;
   children: ReactNode;
 }) {
-  const { row, roster, sub, suffix, cpm, onPlayerDetails, onShowOnly, children } = props;
+  const { row, roster, sub, suffix, cpm, onOpenPlayer, onShowOnly, children } = props;
   const player = playerOf(row);
   const spec = player !== null ? roster.get(player)?.specName : null;
   const colour = rowColor(row, roster);
@@ -351,15 +374,8 @@ function SidePanel(props: {
             {sub && <>{' · '}{sub}</>}
           </span>
         </div>
-        {onPlayerDetails && (
-          <button type="button" className="link-accent" onClick={onPlayerDetails}>
-            {t('report.playerDetails')}
-          </button>
-        )}
-        <button type="button" className="link-accent" onClick={onShowOnly}>
-          {t('breakdown.showOnly', { name: rowLabel(row) })}
-        </button>
       </div>
+      <SideActions showOnlyLabel={t('breakdown.showOnly', { name: rowLabel(row) })} onOpenPlayer={onOpenPlayer} onShowOnly={onShowOnly} />
       {children}
     </section>
   );
