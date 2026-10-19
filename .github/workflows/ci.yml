@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - development
+  push:
+    branches:
+      - development
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # Saved only on development: tag-triggered release runs can restore nothing else.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rust-tests
+          save-if: ${{ github.ref == 'refs/heads/development' }}
+      # The desktop crate has no tests and would need WebKitGTK to build on Linux.
+      - name: Test Rust crates
+        run: cargo test --workspace --exclude openlogs --locked
+
+  ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Read pinned wasm-bindgen version
+        id: wasm-bindgen
+        run: python3 .github/scripts/wasm-bindgen-version.py
+      - name: Install Rust WASM target
+        run: rustup target add wasm32-unknown-unknown
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@${{ steps.wasm-bindgen.outputs.version }}
+          fallback: none
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ui-build
+          save-if: ${{ github.ref == 'refs/heads/development' }}
+      - name: Install UI dependencies
+        working-directory: ui
+        run: npm ci
+      - name: Build WASM, type-check and bundle
+        working-directory: ui
+        run: npm run build
+      - name: Test frontend
+        working-directory: ui
+        run: npm test

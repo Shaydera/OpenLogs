@@ -1,0 +1,225 @@
+name: OpenLogs unified release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# One Git tag produces both release artifacts; neither is published alone.
+permissions:
+  contents: read
+
+concurrency:
+  group: openlogs-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.semver.outputs.tag }}
+      prerelease: ${{ steps.semver.outputs.prerelease }}
+      wasm_bindgen: ${{ steps.wasm-bindgen.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Validate tag and both application versions
+        id: semver
+        run: python .github/scripts/validate-release.py
+      - name: Read pinned wasm-bindgen version
+        id: wasm-bindgen
+        run: python .github/scripts/wasm-bindgen-version.py
+
+  # Web and desktop must ship identical game data, and wago.tools may change between two downloads.
+  game-data:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Export game data from wago.tools
+        run: cargo run --locked --release -p openlogs-cli -- export-game-data ui/public/game-data
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openlogs-game-data
+          path: ui/public/game-data/
+          if-no-files-found: error
+          retention-days: 1
+
+  rust-tests:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rust-tests
+          save-if: false
+      # The desktop crate has no tests and would need WebKitGTK to build on Linux.
+      - name: Test Rust crates
+        run: cargo test --workspace --exclude openlogs --locked
+
+  web:
+    needs: [validate, game-data]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Install Rust WASM target
+        run: rustup target add wasm32-unknown-unknown
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@${{ needs.validate.outputs.wasm_bindgen }}
+          fallback: none
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ui-build
+          save-if: false
+      - name: Install UI dependencies
+        working-directory: ui
+        run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: openlogs-game-data
+          path: ui/public/game-data
+      - name: Test frontend
+        working-directory: ui
+        run: npm test
+      - name: Build WASM and React
+        working-directory: ui
+        run: npm run build
+      - name: Create verifiable web release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s ui/dist/index.html
+          mkdir -p release-assets
+          tar -czf release-assets/openlogs-web.tar.gz -C ui/dist .
+          (cd release-assets && sha256sum openlogs-web.tar.gz > openlogs-web.tar.gz.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openlogs-release-web
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 7
+
+  desktop-windows:
+    needs: [validate, game-data]
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            ui/package-lock.json
+      - name: Install Rust WASM target
+        run: rustup target add wasm32-unknown-unknown
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@${{ needs.validate.outputs.wasm_bindgen }}
+          fallback: none
+      - name: Install root Tauri dependencies
+        run: npm ci
+      - name: Install UI dependencies
+        working-directory: ui
+        run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: openlogs-game-data
+          path: ui/public/game-data
+      - name: Build Windows desktop installer (Tauri v2, NSIS)
+        run: npm run tauri -- build --bundles nsis
+      - name: Collect exactly one NSIS installer
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $found = @()
+          foreach ($dir in @('target', 'src-tauri/target')) {
+            if (Test-Path $dir) {
+              $found += @(Get-ChildItem -Path $dir -Filter '*.exe' -Recurse -File |
+                Where-Object { $_.FullName -match '[\\/]bundle[\\/]nsis[\\/]' })
+            }
+          }
+          if ($found.Count -ne 1) {
+            throw "Expected exactly one Windows NSIS installer, found $($found.Count): $($found.FullName -join ', ')"
+          }
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          Copy-Item $found[0].FullName (Join-Path 'release-assets' "OpenLogs-${env:RELEASE_TAG}-windows-x64-setup.exe")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openlogs-release-windows
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: [validate, rust-tests, web, desktop-windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: openlogs-release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify all required artifacts before publishing
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          set -euo pipefail
+          test -s release-assets/openlogs-web.tar.gz
+          test -s release-assets/openlogs-web.tar.gz.sha256
+          test -s "release-assets/OpenLogs-${RELEASE_TAG}-windows-x64-setup.exe"
+          (cd release-assets && sha256sum -c openlogs-web.tar.gz.sha256)
+      - name: Create draft, attach assets, then publish atomically
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+          PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo "::error::Release already exists. Inspect its draft/assets; never silently replace a published release."
+            exit 1
+          fi
+          create_flags=(--draft --verify-tag --generate-notes)
+          publish_flags=(--draft=false)
+          if [[ "$PRERELEASE" == 'true' ]]; then
+            create_flags+=(--prerelease)
+          else
+            publish_flags+=(--latest)
+          fi
+          gh release create "$RELEASE_TAG" --repo "$GH_REPO" "${create_flags[@]}"
+          gh release upload "$RELEASE_TAG" --repo "$GH_REPO" release-assets/*
+          gh release edit "$RELEASE_TAG" --repo "$GH_REPO" "${publish_flags[@]}"
+          echo "Published unified OpenLogs release $RELEASE_TAG"
