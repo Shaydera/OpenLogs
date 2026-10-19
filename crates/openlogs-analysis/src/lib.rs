@@ -55,7 +55,7 @@ pub use interrupts::{
     DispelEntry, InterruptEntry, InterruptsReport, KickRow, MissedCast, interrupts_report,
 };
 pub use links::AbilityLink;
-pub use load::{load_fight, load_fight_file, load_fight_slice};
+pub use load::{LANDED_TAIL_BYTES, load_fight, load_fight_file, load_fight_slice};
 pub use meter::{Meter, MeterCategory, MeterEntry, MeterKey, MeterRow, meter};
 pub use options::{FilterOption, OptionValue, SpellVariant, filter_options};
 pub use overview::{
@@ -91,7 +91,7 @@ pub use targets::{
 };
 pub use timeline::{
     ABORTED_PULL_MS, MIN_INTERMISSION_MS, Phase, PhaseKind, boss_hp_series, boss_units,
-    counts_as_damage_done, damage_done_amount, detect_phases, hits_hostile_npc, is_aborted,
+    damage_done_amount, detect_phases, hits_hostile_npc, is_aborted, is_distinct_hit,
     name_detected_phases, raid_dps_series,
 };
 pub use usage::{

@@ -1,6 +1,6 @@
 use crate::actors::{ActorId, ActorKind, NOBODY};
 use crate::cells::{CellKind, ScopeMetric};
-use crate::fight::{DamageVia, Event, EventKind, Fight, NO_SPELL, SpellId};
+use crate::fight::{DamageVia, Event, EventKind, Fight, LANDED_MATCH_MS, NO_SPELL, SpellId};
 use crate::filter::Overkill;
 use crate::reports::taken::taken_amount;
 use crate::reports::{Share, buffed_hit, damage_share, healing_share};
@@ -146,9 +146,6 @@ fn own_side(
         _ => {}
     }
 }
-
-/// A melee hit's landed copy follows its swing at most this long after.
-const LANDED_MATCH_MS: i32 = 1_000;
 
 /// The listed row of the hit at `index`. Melee support is logged after the hit's
 /// SWING_DAMAGE_LANDED copy, which is never listed: its row is the swing it repeats.

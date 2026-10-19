@@ -4,7 +4,7 @@ use openlogs_parser::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// Bumped whenever the index layout or its rules change; invalidates cached indexes.
-pub const INDEX_FORMAT_VERSION: u32 = 8;
+pub const INDEX_FORMAT_VERSION: u32 = 9;
 /// The combat log format this tool is built and tested against.
 pub const SUPPORTED_LOG_VERSION: u32 = 22;
 /// Lookback before `ENCOUNTER_START` that belongs to a fight (pre-pots, pre-casts).
@@ -74,7 +74,8 @@ pub struct FightSummary {
     pub outcome: Outcome,
     pub start: Timestamp,
     pub end: Timestamp,
-    /// From `ENCOUNTER_END`, or end − start for incomplete fights and for every run.
+    /// From the start line to the `ENCOUNTER_END` line (its duration field can be a millisecond
+    /// shorter), or end − start for incomplete fights and for every run.
     pub duration_ms: u64,
     /// First line within [`PRELUDE_MICROS`] before the start line.
     pub prelude_offset: u64,

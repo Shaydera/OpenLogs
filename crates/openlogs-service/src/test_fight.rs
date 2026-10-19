@@ -71,6 +71,7 @@ pub fn damage_event(
             absorbed: 0,
             critical: false,
             supporter,
+            lands_after_end: false,
         }),
         source_hostile: false,
         target_hostile: true,

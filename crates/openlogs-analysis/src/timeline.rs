@@ -9,10 +9,17 @@ use openlogs_index::Outcome;
 /// Gaps in the boss HP data at least this long are intermissions.
 pub const MIN_INTERMISSION_MS: u32 = 15_000;
 
-/// Whether a damage event counts as damage done: support shares repeat the buffed
-/// player's hit, the landed melee copy repeats the swing, and splits move damage around.
-pub fn counts_as_damage_done(damage: &Damage) -> bool {
+/// Whether a damage event is a hit of its own: support shares repeat the buffed player's
+/// hit, the landed melee copy repeats the swing, and splits move damage around. Damage Done
+/// counts through [`credited_as_damage_done`].
+pub fn is_distinct_hit(damage: &Damage) -> bool {
     damage.supporter == NOBODY && !matches!(damage.via, DamageVia::SwingLanded | DamageVia::Split)
+}
+
+/// Whether a hit is in the Damage Done numbers. They leave out a swing whose landed copy is
+/// logged after the pull's end, mostly the boss's killing blow.
+pub(crate) fn credited_as_damage_done(damage: &Damage) -> bool {
+    is_distinct_hit(damage) && !damage.lands_after_end
 }
 
 /// Damage done counts absorbed damage as well.
@@ -59,7 +66,7 @@ pub fn boss_units(fight: &Fight) -> Vec<ActorId> {
     let mut max_hp: HashMap<ActorId, u64> = HashMap::new();
     for event in &fight.events {
         if let EventKind::Damage(damage) = event.kind
-            && counts_as_damage_done(&damage)
+            && is_distinct_hit(&damage)
             && hits_hostile_npc(fight, event)
         {
             *taken.entry(event.target).or_default() += damage.amount;
@@ -144,7 +151,7 @@ pub fn raid_dps_series(fight: &Fight, step_ms: u32, overkill: Overkill) -> Vec<f
         let EventKind::Damage(damage) = event.kind else {
             continue;
         };
-        if event.t < 0 || !counts_as_damage_done(&damage) || !hits_hostile_npc(fight, event) {
+        if event.t < 0 || !credited_as_damage_done(&damage) || !hits_hostile_npc(fight, event) {
             continue;
         }
         if fight.actors.credited_player(event.source).is_none() {

@@ -344,9 +344,10 @@ fn the_pull_keeps_its_kill_when_its_end_comes_within_the_grace_after_the_run_end
             "{case}"
         );
         let (run, pull) = (&index.fights[0], &index.fights[1]);
+        let pull_time = ts(kill_ts).millis_since(ts("10/8/2026 20:01:00.0000")) as u64;
         assert_eq!(
             (pull.end, pull.duration_ms, pull.end_offset),
-            (ts(kill_ts), 60_000, data.len() as u64),
+            (ts(kill_ts), pull_time, data.len() as u64),
             "{case}"
         );
         assert_eq!(

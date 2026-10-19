@@ -123,7 +123,7 @@ impl IndexBuilder {
                 build,
             } => self.on_version(*version, *advanced, build),
             Event::EncounterStart(start) => self.open_fight(span, line.timestamp, start),
-            Event::EncounterEnd(end) => self.end_fight(end),
+            Event::EncounterEnd(end) => self.end_fight(end, line.timestamp),
             Event::ChallengeModeStart(start) if !resumes_run => {
                 self.open_run(span, line.timestamp, start)
             }
@@ -405,12 +405,13 @@ impl IndexBuilder {
         });
     }
 
-    fn end_fight(&mut self, end: &EncounterEnd<'_>) {
+    fn end_fight(&mut self, end: &EncounterEnd<'_>, timestamp: Timestamp) {
         let Some(fight) = &mut self.open else { return };
         if fight.summary.encounter_id != end.encounter_id {
             return;
         }
-        fight.summary.duration_ms = u64::from(end.duration_ms);
+        fight.summary.duration_ms =
+            u64::try_from(timestamp.millis_since(fight.summary.start)).unwrap_or(0);
         self.close_open(if end.success {
             Outcome::Kill
         } else {

@@ -235,7 +235,12 @@ pub struct Damage {
     pub critical: bool,
     /// Augmentation Evoker for `*_SUPPORT` events, else `NOBODY`.
     pub supporter: ActorId,
+    /// A swing whose `SWING_DAMAGE_LANDED` copy is logged after the pull's end.
+    pub lands_after_end: bool,
 }
+
+/// A melee hit's landed copy follows its swing at most this long after.
+pub const LANDED_MATCH_MS: i32 = 1_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Missed {

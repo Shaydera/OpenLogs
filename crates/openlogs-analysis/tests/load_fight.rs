@@ -1,6 +1,6 @@
 use openlogs_analysis::{
-    ActorKind, Damage, DamageVia, EventKind, FailReason, NO_SPELL, UnitHp, load_fight,
-    load_fight_slice,
+    ActorKind, Attribution, Damage, DamageVia, EventKind, FailReason, LANDED_TAIL_BYTES, NO_SPELL,
+    ReportFilter, UnitHp, damage_done, load_fight, load_fight_slice,
 };
 use openlogs_index::{Outcome, index_bytes};
 
@@ -183,11 +183,43 @@ fn a_fight_loads_the_same_from_its_part_of_the_log() {
         let index = index_bytes(log);
         for summary in &index.fights {
             let start = summary.prelude_offset as usize;
-            let end = (summary.end_offset as usize).min(log.len());
+            let end = ((summary.end_offset + LANDED_TAIL_BYTES) as usize).min(log.len());
             assert_eq!(
                 load_fight_slice(&log[start..end], summary.prelude_offset, summary),
                 load_fight(log, summary)
             );
         }
     }
+}
+
+const KILLING_SWING_LOG: &str = concat!(
+    "10/7/2026 19:03:02.0762  ENCOUNTER_START,3492,\"Ula'tek\",15,23,3004\n",
+    "10/7/2026 19:03:05.0000  SWING_DAMAGE,Pet-0-4246-0-846-17252-01044B0E32,\"ShaaNash\",0x1114,0x80000000,Vehicle-0-3892-3004-1387-257758-00004679D4,\"Ula'tek\",0x10a48,0x80000000,Pet-0-4246-0-846-17252-01044B0E32,Player-4101-0A1AA093,821186,821186,7070,10791,5420,0,0,164192,3,75,200,0,1576.64,5.07,2610,6.0174,333,6234,6234,-1,1,0,0,0,nil,nil,nil\n",
+    "10/7/2026 19:04:02.0500  SWING_DAMAGE,Pet-0-4246-0-846-17252-01044B0E32,\"ShaaNash\",0x1114,0x80000000,Vehicle-0-3892-3004-1387-257758-00004679D4,\"Ula'tek\",0x10a48,0x80000000,Pet-0-4246-0-846-17252-01044B0E32,Player-4101-0A1AA093,821186,821186,7070,10791,5420,0,0,164192,3,75,200,0,1576.64,5.07,2610,6.0174,333,5000,5000,1200,1,0,0,0,nil,nil,nil\n",
+    "10/7/2026 19:04:02.0762  ENCOUNTER_END,3492,\"Ula'tek\",15,23,1,60000\n",
+    "10/7/2026 19:04:02.0800  SWING_DAMAGE_LANDED,Pet-0-4246-0-846-17252-01044B0E32,\"ShaaNash\",0x1114,0x80000000,Vehicle-0-3892-3004-1387-257758-00004679D4,\"Ula'tek\",0x10a48,0x80000000,Pet-0-4246-0-846-17252-01044B0E32,Player-4101-0A1AA093,821186,821186,7070,10791,5420,0,0,164192,3,75,200,0,1576.64,5.07,2610,6.0174,333,5000,5000,1200,1,0,0,0,nil,nil,nil\n",
+);
+
+#[test]
+fn a_swing_whose_landed_copy_follows_the_end_stays_out_of_damage_done() {
+    let index = index_bytes(KILLING_SWING_LOG.as_bytes());
+    let fight = load_fight(KILLING_SWING_LOG.as_bytes(), &index.fights[0]);
+    let report = damage_done(&fight, &ReportFilter::whole(Attribution::Augmented));
+    assert_eq!(
+        report.total, 6_234,
+        "a swing without any landed copy still counts"
+    );
+    let swings: Vec<bool> = fight
+        .events
+        .iter()
+        .filter_map(|e| match e.kind {
+            EventKind::Damage(d) if d.via == DamageVia::Swing => Some(d.lands_after_end),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        swings,
+        [false, true],
+        "the killing swing stays an event of the pull"
+    );
 }

@@ -4,7 +4,7 @@ use crate::actors::{ActorId, NOBODY};
 use crate::fight::{DamageVia, Event, EventKind, Fight, NO_SPELL, SpellId};
 use crate::filter::Overkill;
 use crate::scope::{Scope, UnitRef, unit_of};
-use crate::timeline::{counts_as_damage_done, damage_done_amount, hits_hostile_npc};
+use crate::timeline::{credited_as_damage_done, damage_done_amount, hits_hostile_npc};
 
 pub mod damage;
 pub mod healing;
@@ -768,7 +768,7 @@ pub(crate) fn damage_share(fight: &Fight, event: &Event, overkill: Overkill) -> 
     }
     let player = fight.actors.credited_player(event.source)?;
     if damage.supporter == NOBODY {
-        return counts_as_damage_done(&damage).then_some(Share::Own {
+        return credited_as_damage_done(&damage).then_some(Share::Own {
             player,
             actor: event.source,
             spell: event.spell,

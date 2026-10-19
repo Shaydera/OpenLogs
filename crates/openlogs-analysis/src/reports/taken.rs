@@ -5,7 +5,7 @@ use crate::fight::{DamageVia, Event, EventKind, Fight, MissType, SpellId};
 use crate::filter::{Overkill, ReportFilter};
 use crate::links::{SpellKey, spell_key};
 use crate::reports::per_second;
-use crate::timeline::{counts_as_damage_done, damage_done_amount};
+use crate::timeline::{damage_done_amount, is_distinct_hit};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TakenAbility {
@@ -179,7 +179,7 @@ fn ability_rows(map: HashMap<AbilityKey<'_>, AbilityAcc>) -> Vec<TakenAbility> {
 /// swallowed completely are logged as ABSORB misses; they still hit.
 pub(crate) fn taken_amount(event: &Event, overkill: Overkill) -> Option<(u64, u64)> {
     match event.kind {
-        EventKind::Damage(damage) if counts_as_damage_done(&damage) => {
+        EventKind::Damage(damage) if is_distinct_hit(&damage) => {
             Some((damage_done_amount(&damage, overkill), damage.absorbed))
         }
         EventKind::Missed(missed)
