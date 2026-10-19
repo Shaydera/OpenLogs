@@ -142,6 +142,16 @@
 .side-rate {
   white-space: nowrap;
 }
+.side-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+.side-open-player {
+  flex: 1 1 auto;
+  max-width: 320px;
+}
 .link-accent {
   margin-left: auto;
   display: inline-flex;

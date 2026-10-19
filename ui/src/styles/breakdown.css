@@ -58,9 +58,15 @@
   gap: 3px;
   min-width: 0;
 }
-.rrow-name-narrow:hover .name-label {
+.rrow-name-link:hover .name-label {
   text-decoration: underline;
   text-decoration-color: var(--accent);
+}
+.opens-player:hover::after {
+  content: '→' / '';
+  flex: none;
+  margin-left: 4px;
+  color: var(--accent);
 }
 .rpop {
   position: absolute;

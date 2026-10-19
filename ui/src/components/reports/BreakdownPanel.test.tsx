@@ -28,7 +28,7 @@ describe('BreakdownPanel', () => {
     expect(within(side).getByRole('button', { name: 'Abilities' })).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(within(side).getByRole('button', { name: 'Show only Wendel' }));
     expect(useApp.getState().showOnly).toHaveBeenCalledWith('source', expect.objectContaining({ name: 'Wendel' }));
-    await userEvent.click(within(side).getByRole('button', { name: /Player details/ }));
+    await userEvent.click(within(side).getByRole('button', { name: 'Open player details' }));
     expect(useApp.getState().openPlayer).toHaveBeenCalledWith(3);
   });
 
@@ -89,16 +89,16 @@ describe('BreakdownPanel', () => {
     expect(onPreview).toHaveBeenLastCalledWith(null, null);
   });
 
-  it('narrows to a row by its name and selects the row anywhere else', async () => {
+  it("opens the player page from a player's name and selects the row anywhere else", async () => {
     render(<BreakdownPanel tab="damage" breakdown={breakdownFixture} title="Damage Done" unit="DPS" />);
     const [wendel, speronis] = within(screen.getByRole('group', { name: 'Damage Done rows' })).getAllByRole('button');
     await userEvent.click(within(speronis).getByText('Speronis'));
-    expect(useApp.getState().showOnly).toHaveBeenCalledWith('source', expect.objectContaining({ name: 'Speronis' }));
+    expect(useApp.getState().openPlayer).toHaveBeenCalledWith(5);
+    expect(useApp.getState().showOnly).not.toHaveBeenCalled();
     expect(wendel).toHaveAttribute('aria-pressed', 'true');
-    vi.mocked(useApp.getState().showOnly).mockClear();
     await userEvent.click(within(speronis).getByText('100.00k'));
     expect(speronis).toHaveAttribute('aria-pressed', 'true');
-    expect(useApp.getState().showOnly).not.toHaveBeenCalled();
+    expect(useApp.getState().openPlayer).toHaveBeenCalledTimes(1);
   });
 
   it('names the pets behind a pet ability row and narrows to the ability and those pets', async () => {
@@ -126,12 +126,18 @@ describe('BreakdownPanel', () => {
     expect(useApp.getState().showOnly).toHaveBeenCalledWith('ability', expect.objectContaining({ pets: wolves }));
   });
 
-  it('hides "Show only" and selects on a name click when the row dimension is already narrowed', async () => {
-    useApp.setState({ filters: { ...initialState().filters, own: [{ kind: 'player', actorId: 3 }] } });
-    render(<BreakdownPanel tab="damage" breakdown={breakdownFixture} title="Damage Done" unit="DPS" />);
+  it('narrows to an ability by its name, and only selects it once abilities are narrowed', async () => {
+    const byAbility = { ...breakdownFixture, group: 'ability' as const, side: [], rows: breakdownFixture.rows.map((row) => ({ ...row.splits[0].rows[0], perSecond: 0, splits: [] })) };
+    const { unmount } = render(<BreakdownPanel tab="damage" breakdown={byAbility} title="Damage Done" unit="DPS" />);
+    await userEvent.click(screen.getByText('Ebon Might'));
+    expect(useApp.getState().showOnly).toHaveBeenCalledWith('ability', expect.objectContaining({ name: 'Ebon Might' }));
+    unmount();
+    vi.mocked(useApp.getState().showOnly).mockClear();
+    useApp.setState({ filters: { ...initialState().filters, ability: [{ kind: 'name', name: 'Mortal Strike' }] } });
+    render(<BreakdownPanel tab="damage" breakdown={byAbility} title="Damage Done" unit="DPS" />);
     expect(screen.queryByRole('button', { name: /Show only/ })).toBeNull();
-    await userEvent.click(screen.getByText('Speronis'));
-    expect(screen.getByRole('button', { name: /Speronis/ })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(screen.getByText('Ebon Might'));
+    expect(screen.getByRole('button', { name: /Ebon Might/ })).toHaveAttribute('aria-pressed', 'true');
     expect(useApp.getState().showOnly).not.toHaveBeenCalled();
   });
 });
