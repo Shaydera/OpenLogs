@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::actors::{ActorId, NOBODY};
 use crate::fight::{DamageVia, Event, EventKind, Fight, NO_SPELL, SpellId};
+use crate::filter::Overkill;
 use crate::scope::{Scope, UnitRef, unit_of};
 use crate::timeline::{counts_as_damage_done, damage_done_amount, hits_hostile_npc};
 
@@ -758,7 +759,7 @@ pub(crate) struct Support {
 
 /// Damage done: hits on units that were hostile at the hit, credited through pets.
 /// Support from an unknown Evoker is not a share.
-pub(crate) fn damage_share(fight: &Fight, event: &Event) -> Option<Share> {
+pub(crate) fn damage_share(fight: &Fight, event: &Event, overkill: Overkill) -> Option<Share> {
     let EventKind::Damage(damage) = event.kind else {
         return None;
     };
@@ -766,13 +767,12 @@ pub(crate) fn damage_share(fight: &Fight, event: &Event) -> Option<Share> {
         return None;
     }
     let player = fight.actors.credited_player(event.source)?;
-    let amount = damage_done_amount(&damage);
     if damage.supporter == NOBODY {
         return counts_as_damage_done(&damage).then_some(Share::Own {
             player,
             actor: event.source,
             spell: event.spell,
-            amount,
+            amount: damage_done_amount(&damage, overkill),
             overheal: 0,
             critical: damage.critical,
             periodic: damage.via == DamageVia::Periodic,
@@ -786,7 +786,8 @@ pub(crate) fn damage_share(fight: &Fight, event: &Event) -> Option<Share> {
         doer: event.source,
         buff: event.spell,
         target: event.target,
-        amount,
+        // The Evoker's share is logged on its own; the hit's overkill is not part of it.
+        amount: damage_done_amount(&damage, Overkill::Included),
     }))
 }
 

@@ -1,7 +1,7 @@
 mod support;
 
 use openlogs_analysis::{
-    EventKind, MIN_INTERMISSION_MS, PhaseKind, boss_hp_series, boss_units, detect_phases,
+    EventKind, MIN_INTERMISSION_MS, Overkill, PhaseKind, boss_hp_series, boss_units, detect_phases,
     raid_dps_series,
 };
 use support::{FightBuilder, HOSTILE_FLAGS};
@@ -60,7 +60,10 @@ fn damage_counts_when_the_target_was_hostile_at_the_hit() {
     b.hit(100, player, add, 1, 1_000, (1_000, 2_000));
     b.unit("Creature-0-1-1-1-261874-01", "Blightscale Rawling", 0xa28); // turns neutral later
     let fight = b.build();
-    assert_eq!(raid_dps_series(&fight, 1_000)[0], 1_000.0);
+    assert_eq!(
+        raid_dps_series(&fight, 1_000, Overkill::Excluded)[0],
+        1_000.0
+    );
     assert_eq!(boss_units(&fight), vec![add]);
 }
 

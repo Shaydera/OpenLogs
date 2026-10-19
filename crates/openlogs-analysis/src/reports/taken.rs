@@ -2,10 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use crate::actors::{ActorId, ActorKind, NOBODY};
 use crate::fight::{DamageVia, Event, EventKind, Fight, MissType, SpellId};
-use crate::filter::ReportFilter;
+use crate::filter::{Overkill, ReportFilter};
 use crate::links::{SpellKey, spell_key};
 use crate::reports::per_second;
-use crate::timeline::counts_as_damage_done;
+use crate::timeline::{counts_as_damage_done, damage_done_amount};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TakenAbility {
@@ -86,7 +86,7 @@ pub fn damage_taken(fight: &Fight, filter: &ReportFilter) -> DamageTakenReport {
     let mut abilities: HashMap<AbilityKey<'_>, AbilityAcc> = HashMap::new();
     let mut players: HashMap<ActorId, PlayerAcc<'_>> = HashMap::new();
     for event in fight.events.iter().filter(|e| filter.contains(e.t)) {
-        let Some((amount, absorbed)) = taken_amount(event) else {
+        let Some((amount, absorbed)) = taken_amount(event, filter.overkill) else {
             continue;
         };
         if fight.actors.get(event.target).kind != ActorKind::Player {
@@ -177,10 +177,10 @@ fn ability_rows(map: HashMap<AbilityKey<'_>, AbilityAcc>) -> Vec<TakenAbility> {
 
 /// Damage an event deals to its target as `(amount + absorbed, absorbed)`. Hits a shield
 /// swallowed completely are logged as ABSORB misses; they still hit.
-pub(crate) fn taken_amount(event: &Event) -> Option<(u64, u64)> {
+pub(crate) fn taken_amount(event: &Event, overkill: Overkill) -> Option<(u64, u64)> {
     match event.kind {
         EventKind::Damage(damage) if counts_as_damage_done(&damage) => {
-            Some((damage.amount + damage.absorbed, damage.absorbed))
+            Some((damage_done_amount(&damage, overkill), damage.absorbed))
         }
         EventKind::Missed(missed)
             if missed.miss_type == MissType::Absorb

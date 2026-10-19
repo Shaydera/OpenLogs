@@ -7,8 +7,8 @@ use openlogs_gamedata::Curated;
 use crate::ability::unit_name;
 use crate::actors::ActorId;
 use crate::fight::Fight;
-use crate::filter::{Attribution, ReportFilter};
-use crate::overview::{QuickOverview, quick_overview};
+use crate::filter::{Attribution, Overkill, ReportFilter};
+use crate::overview::{QuickOverview, quick_overview_in};
 use crate::reports::damage::damage_done;
 use crate::reports::healing::healing;
 
@@ -54,11 +54,17 @@ pub fn compare_pulls(
     b: &Fight,
     curated: &Curated,
     attribution: Attribution,
+    overkill: Overkill,
 ) -> PullComparison {
-    let overview_a = quick_overview(a, curated);
-    let overview_b = quick_overview(b, curated);
-    let mut only_a = player_sides(a, &overview_a, attribution);
-    let mut rows: Vec<(String, ComparedPlayer)> = player_sides(b, &overview_b, attribution)
+    let whole = |attribution| ReportFilter {
+        overkill,
+        ..ReportFilter::whole(attribution)
+    };
+    let overview_a = quick_overview_in(a, curated, &whole(Attribution::Augmented));
+    let overview_b = quick_overview_in(b, curated, &whole(Attribution::Augmented));
+    let filter = whole(attribution);
+    let mut only_a = player_sides(a, &overview_a, &filter);
+    let mut rows: Vec<(String, ComparedPlayer)> = player_sides(b, &overview_b, &filter)
         .into_iter()
         .map(|(guid, side_b)| {
             let row = ComparedPlayer {
@@ -103,17 +109,16 @@ fn sort_key(row: &ComparedPlayer) -> (u8, f64) {
 fn player_sides(
     fight: &Fight,
     overview: &QuickOverview,
-    attribution: Attribution,
+    filter: &ReportFilter,
 ) -> HashMap<String, PlayerSide> {
-    let filter = ReportFilter::whole(attribution);
     let mut sides: HashMap<ActorId, PlayerSide> = HashMap::new();
     for player in fight.actors.players().filter(|p| p.spec_id.is_some()) {
         side(&mut sides, player.id);
     }
-    for player in damage_done(fight, &filter).players {
+    for player in damage_done(fight, filter).players {
         side(&mut sides, player.player).dps = player.per_second;
     }
-    for player in healing(fight, &filter).players {
+    for player in healing(fight, filter).players {
         side(&mut sides, player.player).hps = player.per_second;
     }
     for report in &overview.deaths {

@@ -59,40 +59,51 @@ pub(crate) fn marks(
     let mut drawn_hits: Vec<(usize, usize, TimelineItem)> = Vec::new();
     for index in in_range(fight, filter) {
         let t = fight.events[index].t;
-        timeline_parts(fight, facts, index, reattributed, &mut |part, booked| {
-            if part.hit {
-                hits.entry((part.target, spell_key(fight, part.spell)))
-                    .or_default()
-                    .push((t, part.amount, index));
-            } else if part.kind != CellKind::Support
-                && let Some(row) = part.row
-            {
-                *support_in.entry(row).or_default() -= part.amount;
-            }
-            let Some(known) = part_lanes.known(lanes, &part) else {
-                return;
-            };
-            if booked {
-                let lane = known.lane(lanes);
-                lanes.count_at(lane, part.amount);
-            }
-            if options.hits && part.hit && part.kind == CellKind::Own && overlaps(window, t, None) {
-                let mut item = TimelineItem::new(ItemKind::Hit, t, None);
-                item.source = part.source;
-                item.spell = part.spell;
-                item.target = part.target;
-                item.amount = Some(ItemAmount {
-                    rule: AmountRule::Hit,
-                    amount: part.amount,
-                    hits: 1,
-                    targets: 1,
-                    support: 0,
-                    healing: false,
-                });
-                (item.log, item.log_more) = log_lines(fight, &[index]);
-                drawn_hits.push((known.lane(lanes), index, item));
-            }
-        });
+        timeline_parts(
+            fight,
+            facts,
+            index,
+            reattributed,
+            filter.overkill,
+            &mut |part, booked| {
+                if part.hit {
+                    hits.entry((part.target, spell_key(fight, part.spell)))
+                        .or_default()
+                        .push((t, part.amount, index));
+                } else if part.kind != CellKind::Support
+                    && let Some(row) = part.row
+                {
+                    *support_in.entry(row).or_default() -= part.amount;
+                }
+                let Some(known) = part_lanes.known(lanes, &part) else {
+                    return;
+                };
+                if booked {
+                    let lane = known.lane(lanes);
+                    lanes.count_at(lane, part.amount);
+                }
+                if options.hits
+                    && part.hit
+                    && part.kind == CellKind::Own
+                    && overlaps(window, t, None)
+                {
+                    let mut item = TimelineItem::new(ItemKind::Hit, t, None);
+                    item.source = part.source;
+                    item.spell = part.spell;
+                    item.target = part.target;
+                    item.amount = Some(ItemAmount {
+                        rule: AmountRule::Hit,
+                        amount: part.amount,
+                        hits: 1,
+                        targets: 1,
+                        support: 0,
+                        healing: false,
+                    });
+                    (item.log, item.log_more) = log_lines(fight, &[index]);
+                    drawn_hits.push((known.lane(lanes), index, item));
+                }
+            },
+        );
     }
     for (lane, row, mut item) in drawn_hits {
         if let Some(amount) = item.amount.as_mut() {

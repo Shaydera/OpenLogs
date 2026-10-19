@@ -770,6 +770,7 @@ mod tests {
             start_ms: None,
             end_ms: None,
             attribution: AttributionDto::Augmented,
+            include_overkill: false,
         }
     }
 

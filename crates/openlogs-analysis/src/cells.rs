@@ -215,7 +215,7 @@ pub fn cells(
 fn book_amounts(fight: &Fight, filter: &ReportFilter, facts: AmountFacts, map: &mut Facts) {
     let reattributed = filter.attribution == Attribution::Reattributed;
     for index in in_range(fight, filter) {
-        facts.parts(fight, index, reattributed, &mut |part| {
+        facts.parts(fight, index, reattributed, filter.overkill, &mut |part| {
             book(
                 map,
                 (

@@ -50,7 +50,7 @@ pub use fight::{
     Fight, FightKind, Heal, MarkerInterval, MissType, Missed, NO_SPELL, POWER_SAMPLE_MS,
     PositionSample, PowerSample, RunEncounter, SpellId, SpellInfo, UnitHp, WorldMarkerInterval,
 };
-pub use filter::{Attribution, ReportFilter};
+pub use filter::{Attribution, Overkill, ReportFilter};
 pub use interrupts::{
     DispelEntry, InterruptEntry, InterruptsReport, KickRow, MissedCast, interrupts_report,
 };

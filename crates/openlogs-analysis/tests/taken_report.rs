@@ -1,7 +1,7 @@
 mod support;
 
 use openlogs_analysis::{
-    Attribution, Damage, DamageVia, EventKind, NOBODY, ReportFilter, damage_taken,
+    Attribution, Damage, DamageVia, EventKind, NOBODY, Overkill, ReportFilter, damage_taken,
 };
 use support::{FightBuilder, HOSTILE_FLAGS, MELEE, damage};
 
@@ -175,4 +175,37 @@ fn world_damage_stays_apart_from_melee() {
         .map(|a| (a.spell, a.environmental, a.amount))
         .collect();
     assert_eq!(tank_rows, [(MELEE, true, 900), (MELEE, false, 300)]);
+}
+
+#[test]
+fn a_lethal_hit_counts_up_to_the_player_hp_unless_overkill_is_included() {
+    let mut b = FightBuilder::new(10_000);
+    let tank = b.player("Player-1", "Edrin-Emberfall-EU", 581);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    b.spell(5, "Virulent Spit");
+    b.push(
+        1_000,
+        boss,
+        tank,
+        5,
+        EventKind::Damage(Damage {
+            absorbed: 100,
+            ..damage(DamageVia::Spell, 1_000, 300)
+        }),
+    );
+    let fight = b.build();
+    let total_with = |overkill| {
+        let filter = ReportFilter {
+            overkill,
+            ..ReportFilter::whole(Attribution::Augmented)
+        };
+        damage_taken(&fight, &filter).total
+    };
+    assert_eq!(
+        (
+            total_with(Overkill::Excluded),
+            total_with(Overkill::Included)
+        ),
+        (800, 1_100)
+    );
 }

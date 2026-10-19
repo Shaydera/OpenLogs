@@ -53,7 +53,7 @@ impl AbilityIndex {
                 spell,
                 amount,
                 ..
-            }) = damage_share(fight, event)
+            }) = damage_share(fight, event, filter.overkill)
                 && wanted(player, actor)
             {
                 amounts.entry((player, spell)).or_default().0 += amount;

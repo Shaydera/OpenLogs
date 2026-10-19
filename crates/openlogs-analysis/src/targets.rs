@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::ability::unit_name;
 use crate::actors::{ActorId, ActorKind};
 use crate::fight::{EventKind, Fight};
-use crate::filter::ReportFilter;
+use crate::filter::{Overkill, ReportFilter};
 use crate::reports::damage::damage_done_in;
 use crate::reports::{Share, damage_share, keeps_own};
 use crate::scope::{Scope, UnitRef};
@@ -70,6 +70,7 @@ pub struct TargetDetail {
 pub(crate) fn hits_by_unit(
     fight: &Fight,
     keep: impl Fn(i32) -> bool,
+    overkill: Overkill,
     scope: &Scope,
 ) -> HashMap<ActorId, (u64, i32, i32)> {
     let mut units: HashMap<ActorId, (u64, i32, i32)> = HashMap::new();
@@ -79,7 +80,7 @@ pub(crate) fn hits_by_unit(
             actor,
             spell,
             ..
-        }) = damage_share(fight, event)
+        }) = damage_share(fight, event, overkill)
             && keeps_own(fight, scope, actor, spell, event.target)
         {
             let entry = units.entry(event.target).or_insert((0, event.t, event.t));
@@ -140,7 +141,12 @@ fn group_max_hp(units: impl Iterator<Item = ActorId>, hp: &HashMap<ActorId, u64>
 }
 
 pub fn enemy_groups(fight: &Fight, filter: &ReportFilter) -> Vec<EnemyGroup> {
-    let hits = hits_by_unit(fight, |t| filter.contains(t), &Scope::default());
+    let hits = hits_by_unit(
+        fight,
+        |t| filter.contains(t),
+        filter.overkill,
+        &Scope::default(),
+    );
     let hp = max_hp_by_unit(fight);
     let bosses = bosses(fight, &hp);
     let mut groups: HashMap<String, (Vec<ActorId>, u64)> = HashMap::new();
@@ -228,8 +234,8 @@ pub fn target_detail(
         target: Vec::new(),
         ..scope.clone()
     };
-    let in_range = hits_by_unit(fight, |t| filter.contains(t), &rest);
-    let whole = hits_by_unit(fight, |t| t >= 0, &Scope::default());
+    let in_range = hits_by_unit(fight, |t| filter.contains(t), filter.overkill, &rest);
+    let whole = hits_by_unit(fight, |t| t >= 0, filter.overkill, &Scope::default());
 
     let mut deaths: HashMap<ActorId, i32> = HashMap::new();
     for event in &fight.events {

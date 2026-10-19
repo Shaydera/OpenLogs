@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::actors::{ActorId, ActorKind, NOBODY};
 use crate::fight::{Damage, DamageVia, Event, EventKind, Fight, FightKind};
+use crate::filter::Overkill;
 use openlogs_gamedata::Curated;
 use openlogs_index::Outcome;
 
@@ -15,8 +16,12 @@ pub fn counts_as_damage_done(damage: &Damage) -> bool {
 }
 
 /// Damage done counts absorbed damage as well.
-pub fn damage_done_amount(damage: &Damage) -> u64 {
-    damage.amount + damage.absorbed
+pub fn damage_done_amount(damage: &Damage, overkill: Overkill) -> u64 {
+    let landed = match overkill {
+        Overkill::Included => damage.amount,
+        Overkill::Excluded => damage.amount.saturating_sub(damage.overkill),
+    };
+    landed + damage.absorbed
 }
 
 fn is_npc(fight: &Fight, actor: ActorId) -> bool {
@@ -133,7 +138,7 @@ pub fn boss_hp_series(fight: &Fight, bosses: &[ActorId], step_ms: u32) -> Vec<Op
 }
 
 /// Damage per second credited to players (including their pets) against hostile units.
-pub fn raid_dps_series(fight: &Fight, step_ms: u32) -> Vec<f64> {
+pub fn raid_dps_series(fight: &Fight, step_ms: u32, overkill: Overkill) -> Vec<f64> {
     let mut totals = vec![0u64; step_count(fight.duration_ms, step_ms)];
     for event in &fight.events {
         let EventKind::Damage(damage) = event.kind else {
@@ -147,7 +152,7 @@ pub fn raid_dps_series(fight: &Fight, step_ms: u32) -> Vec<f64> {
         }
         let index = (event.t as u64 / u64::from(step_ms)) as usize;
         if let Some(total) = totals.get_mut(index) {
-            *total += damage_done_amount(&damage);
+            *total += damage_done_amount(&damage, overkill);
         }
     }
     // The last bucket is only as long as what is left of the pull.

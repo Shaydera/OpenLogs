@@ -120,7 +120,7 @@ describe('start page', () => {
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: /^WoWCombatLog/ }));
     await userEvent.click(await screen.findByRole('button', { name: "Open pull 1 of Ula'tek" }));
-    expect(api.quickOverview).toHaveBeenCalledWith(LOG_ID, 1, null);
+    expect(api.quickOverview).toHaveBeenCalledWith(LOG_ID, 1, { startMs: null, endMs: null, attribution: 'reattributed', includeOverkill: false });
   });
 });
 
@@ -140,9 +140,9 @@ describe('Mythic+ runs', () => {
       'Open Prioress Murrpray, pull 5 of the run',
     ]);
     await userEvent.click(within(run).getByRole('button', { name: 'Open Baron Braunpyke, pull 4 of the run' }));
-    expect(api.quickOverview).toHaveBeenLastCalledWith(runLogFixture.id, 5, null);
+    expect(api.quickOverview).toHaveBeenLastCalledWith(runLogFixture.id, 5, { startMs: null, endMs: null, attribution: 'reattributed', includeOverkill: false });
     useApp.setState({ view: { kind: 'start' } });
     await userEvent.click(await screen.findByRole('button', { name: 'Open run Priory of the Sacred Flame +12' }));
-    expect(api.quickOverview).toHaveBeenLastCalledWith(runLogFixture.id, 1, null);
+    expect(api.quickOverview).toHaveBeenLastCalledWith(runLogFixture.id, 1, { startMs: null, endMs: null, attribution: 'reattributed', includeOverkill: false });
   });
 });

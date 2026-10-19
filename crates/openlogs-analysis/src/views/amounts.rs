@@ -7,7 +7,7 @@ use crate::auras::merged;
 use crate::breakdown::Dimension;
 use crate::cells::{Cell, CellKind, in_range, in_scope};
 use crate::fight::{DamageVia, Event, EventKind, Fight, MissType};
-use crate::filter::{Attribution, ReportFilter};
+use crate::filter::{Attribution, Overkill, ReportFilter};
 use crate::reports::{Share, buffed_hit, damage_share, healing_share};
 use crate::scope::{Scope, Side};
 use crate::views::casts::{CastItem, side_casts, side_items, timeline_item};
@@ -37,9 +37,12 @@ pub(crate) fn parts_at(
     facts: AmountFacts,
     index: usize,
     reattributed: bool,
+    overkill: Overkill,
 ) -> Vec<Part> {
     let mut parts = Vec::new();
-    facts.parts(fight, index, reattributed, &mut |part| parts.push(part));
+    facts.parts(fight, index, reattributed, overkill, &mut |part| {
+        parts.push(part)
+    });
     parts
 }
 
@@ -53,10 +56,15 @@ fn is_support(event: &Event) -> bool {
 }
 
 /// The support share an event is, for the facts that have Aug support.
-fn support_of(fight: &Fight, facts: AmountFacts, index: usize) -> Option<SharePart> {
+fn support_of(
+    fight: &Fight,
+    facts: AmountFacts,
+    index: usize,
+    overkill: Overkill,
+) -> Option<SharePart> {
     let event = &fight.events[index];
     let share = match facts {
-        AmountFacts::DamageDone => damage_share(fight, event),
+        AmountFacts::DamageDone => damage_share(fight, event, overkill),
         AmountFacts::Healing => healing_share(fight, event),
         AmountFacts::Taken { .. } | AmountFacts::EnemyHealing => None,
     };
@@ -94,10 +102,10 @@ pub(crate) fn rows(
         if !is_support(&fight.events[index]) {
             continue;
         }
-        let Some(mut share) = support_of(fight, facts, index) else {
+        let Some(mut share) = support_of(fight, facts, index, filter.overkill) else {
             continue;
         };
-        let parts = parts_at(fight, facts, index, reattributed);
+        let parts = parts_at(fight, facts, index, reattributed, filter.overkill);
         share.selected = names_credit
             && parts
                 .iter()
@@ -121,7 +129,7 @@ pub(crate) fn rows(
             continue;
         }
         let mut own = None;
-        facts.parts(fight, index, reattributed, &mut |part| {
+        facts.parts(fight, index, reattributed, filter.overkill, &mut |part| {
             if part.hit && part.row == Some(index) {
                 own = Some(part);
             }
@@ -195,6 +203,7 @@ fn amount_row(fight: &Fight, index: usize, own: &Part) -> EventRow {
         .map(|hp| (hp.current, hp.max));
     match event.kind {
         EventKind::Damage(damage) => {
+            row.amount = Some(damage.amount + damage.absorbed);
             row.overkill = damage.overkill;
             row.absorbed = damage.absorbed;
             row.blocked = damage.blocked;
@@ -366,9 +375,10 @@ pub(crate) fn timeline_parts(
     facts: AmountFacts,
     index: usize,
     reattributed: bool,
+    overkill: Overkill,
     each: &mut impl FnMut(Part, bool),
 ) {
-    facts.parts(fight, index, true, &mut |part| {
+    facts.parts(fight, index, true, overkill, &mut |part| {
         let credit = part.kind == CellKind::Support;
         if reattributed || part.hit {
             each(part, true);
@@ -430,19 +440,26 @@ pub(crate) fn until_next_cast(
         std::iter::repeat_with(|| None).take(items.len()).collect();
     for i in stretches.flatten() {
         let t = fight.events[i].t;
-        timeline_parts(fight, facts, i, reattributed, &mut |part, _| {
-            if scope.is_some_and(|scope| {
-                !scope.selects_all() && !in_scope(scope, fight, &part_cell(fight, &part))
-            }) {
-                return;
-            }
-            let caster = caster_of(fight, facts, part.source);
-            if let Some(item) = index.find(caster, &part, t)
-                && wanted[item]
-            {
-                accs[item].get_or_insert_with(ItemAcc::default).add(&part);
-            }
-        });
+        timeline_parts(
+            fight,
+            facts,
+            i,
+            reattributed,
+            filter.overkill,
+            &mut |part, _| {
+                if scope.is_some_and(|scope| {
+                    !scope.selects_all() && !in_scope(scope, fight, &part_cell(fight, &part))
+                }) {
+                    return;
+                }
+                let caster = caster_of(fight, facts, part.source);
+                if let Some(item) = index.find(caster, &part, t)
+                    && wanted[item]
+                {
+                    accs[item].get_or_insert_with(ItemAcc::default).add(&part);
+                }
+            },
+        );
     }
     accs.into_iter()
         .enumerate()
@@ -502,19 +519,26 @@ pub(crate) fn marks(
     let mut accs: HashMap<usize, ItemAcc> = HashMap::new();
     for i in in_range(fight, filter) {
         let t = fight.events[i].t;
-        timeline_parts(fight, facts, i, reattributed, &mut |part, booked| {
-            let Some(known) = part_lanes.known(lanes, &part) else {
-                return;
-            };
-            if booked {
-                let lane = known.lane(lanes);
-                lanes.count_at(lane, part.amount);
-            }
-            let caster = caster_of(fight, facts, part.source);
-            if let Some(item) = index.find(caster, &part, t) {
-                accs.entry(item).or_default().add(&part);
-            }
-        });
+        timeline_parts(
+            fight,
+            facts,
+            i,
+            reattributed,
+            filter.overkill,
+            &mut |part, booked| {
+                let Some(known) = part_lanes.known(lanes, &part) else {
+                    return;
+                };
+                if booked {
+                    let lane = known.lane(lanes);
+                    lanes.count_at(lane, part.amount);
+                }
+                let caster = caster_of(fight, facts, part.source);
+                if let Some(item) = index.find(caster, &part, t) {
+                    accs.entry(item).or_default().add(&part);
+                }
+            },
+        );
     }
     let by_target = lanes.axis() == Some(Dimension::Target);
     let healing = healing_facts(facts);

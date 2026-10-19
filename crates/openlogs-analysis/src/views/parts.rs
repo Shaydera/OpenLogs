@@ -1,6 +1,7 @@
 use crate::actors::{ActorId, ActorKind, NOBODY};
 use crate::cells::{CellKind, ScopeMetric};
 use crate::fight::{DamageVia, Event, EventKind, Fight, NO_SPELL, SpellId};
+use crate::filter::Overkill;
 use crate::reports::taken::taken_amount;
 use crate::reports::{Share, buffed_hit, damage_share, healing_share};
 use crate::scope::Side;
@@ -58,13 +59,18 @@ impl AmountFacts {
         fight: &Fight,
         index: usize,
         reattributed: bool,
+        overkill: Overkill,
         book: &mut impl FnMut(Part),
     ) {
         let event = &fight.events[index];
         match self {
-            Self::DamageDone => {
-                own_side(fight, index, damage_share(fight, event), reattributed, book)
-            }
+            Self::DamageDone => own_side(
+                fight,
+                index,
+                damage_share(fight, event, overkill),
+                reattributed,
+                book,
+            ),
             Self::Healing => own_side(
                 fight,
                 index,
@@ -74,7 +80,7 @@ impl AmountFacts {
             ),
             Self::Taken {
                 hostile_sources_only,
-            } => taken(fight, index, hostile_sources_only, book),
+            } => taken(fight, index, hostile_sources_only, overkill, book),
             Self::EnemyHealing => enemy_healing(index, event, book),
         }
     }
@@ -175,9 +181,15 @@ fn logged_absorbed(event: &Event) -> i64 {
     }
 }
 
-fn taken(fight: &Fight, index: usize, hostile_sources_only: bool, book: &mut impl FnMut(Part)) {
+fn taken(
+    fight: &Fight,
+    index: usize,
+    hostile_sources_only: bool,
+    overkill: Overkill,
+    book: &mut impl FnMut(Part),
+) {
     let event = &fight.events[index];
-    let Some((amount, absorbed)) = taken_amount(event) else {
+    let Some((amount, absorbed)) = taken_amount(event, overkill) else {
         return;
     };
     if fight.actors.get(event.target).kind != ActorKind::Player {

@@ -8,7 +8,8 @@ vi.mock('../../api/client', () => ({ api: {} }));
 
 beforeEach(() => {
   const setAttribution = vi.fn(async (attribution) => useApp.setState({ attribution }));
-  useApp.setState({ ...initialState(), tab: 'damage', attribution: 'reattributed', setAttribution });
+  const setIncludeOverkill = vi.fn(async (includeOverkill) => useApp.setState({ includeOverkill }));
+  useApp.setState({ ...initialState(), tab: 'damage', attribution: 'reattributed', setAttribution, setIncludeOverkill });
 });
 
 describe('OptionsMenu', () => {
@@ -18,6 +19,14 @@ describe('OptionsMenu', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: /Credit Aug support to the Evoker/ }));
     expect(useApp.getState().setAttribution).toHaveBeenCalledWith('augmented');
     expect(screen.getByRole('button', { name: /Options · Aug support stays with the buffed player/ })).toBeInTheDocument();
+  });
+
+  it('includes overkill and marks the button', async () => {
+    render(<OptionsMenu />);
+    await userEvent.click(screen.getByRole('button', { name: 'Options' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: /Include overkill/ }));
+    expect(useApp.getState().setIncludeOverkill).toHaveBeenCalledWith(true);
+    expect(screen.getByRole('button', { name: 'Options · Overkill included' })).toBeInTheDocument();
   });
 
   it('disables Aug credit where the view does not depend on it', async () => {

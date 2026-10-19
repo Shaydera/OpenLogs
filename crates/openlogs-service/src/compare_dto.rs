@@ -105,7 +105,7 @@ pub fn pull_comparison_dto(
 
 #[cfg(test)]
 mod tests {
-    use openlogs_analysis::{Actors, Attribution, NOBODY, compare_pulls};
+    use openlogs_analysis::{Actors, Attribution, NOBODY, Overkill, compare_pulls};
     use openlogs_gamedata::Curated;
 
     use super::*;
@@ -150,7 +150,13 @@ mod tests {
             vec![damage_event(1_000, faelan_b, boss_b, 44425, 40_000, NOBODY)],
         );
         let curated = Curated::bundled();
-        let comparison = compare_pulls(&pull_a, &pull_b, &curated, Attribution::Augmented);
+        let comparison = compare_pulls(
+            &pull_a,
+            &pull_b,
+            &curated,
+            Attribution::Augmented,
+            Overkill::Excluded,
+        );
 
         let dto = pull_comparison_dto(&curated, (1, &pull_a), (3, &pull_b), &comparison);
         assert_eq!((dto.a.fight_index, dto.b.fight_index), (1, 3));

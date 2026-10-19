@@ -12,6 +12,12 @@ function augCreditApplies(tab: FightTab, perspective: Side, inDetail: boolean): 
   return tab === 'taken' && perspective === 'enemy';
 }
 
+function optionsTitle(augOff: boolean, includeOverkill: boolean): string {
+  if (augOff) return t('options.titleAugOff');
+  if (includeOverkill) return t('options.titleOverkill');
+  return t('options.title');
+}
+
 interface Option {
   label: string;
   checked: boolean;
@@ -25,6 +31,8 @@ export function OptionsMenu() {
   const inDetail = useApp((s) => s.details.length > 0);
   const attribution = useApp((s) => s.attribution);
   const setAttribution = useApp((s) => s.setAttribution);
+  const includeOverkill = useApp((s) => s.includeOverkill);
+  const setIncludeOverkill = useApp((s) => s.setIncludeOverkill);
   const showAugDelta = useApp((s) => s.showAugDelta);
   const setShowAugDelta = useApp((s) => s.setShowAugDelta);
   const colorByTarget = useApp((s) => s.colorByTarget);
@@ -38,8 +46,9 @@ export function OptionsMenu() {
   const menuId = useId();
   const augApplies = augCreditApplies(tab, perspective, inDetail);
   const metricTab = tab === 'damage' || tab === 'healing';
-  const changed = attribution !== 'reattributed';
-  const title = changed ? t('options.titleAugOff') : t('options.title');
+  const augOff = attribution !== 'reattributed';
+  const changed = augOff || includeOverkill;
+  const title = optionsTitle(augOff, includeOverkill);
   const table: Option[] = [];
   if (metricTab && view === 'table') {
     table.push({ label: t('options.augDelta'), checked: showAugDelta, toggle: () => setShowAugDelta(!showAugDelta) });
@@ -77,6 +86,14 @@ export function OptionsMenu() {
             <span>
               {t('options.augCredit')}
               <span className="options-hint">{t('options.augCreditHint')}</span>
+            </span>
+          </label>
+          <h3 className="cap options-head options-split">{t('options.allLogs')}</h3>
+          <label className="options-row">
+            <input type="checkbox" checked={includeOverkill} onChange={() => void setIncludeOverkill(!includeOverkill)} />
+            <span>
+              {t('options.overkill')}
+              <span className="options-hint">{t('options.overkillHint')}</span>
             </span>
           </label>
           {sections.map((section) => (

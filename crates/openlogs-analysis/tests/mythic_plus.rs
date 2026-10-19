@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use openlogs_analysis::{
-    Attribution, Fight, FightKind, Phase, PhaseKind, ReportFilter, damage_done, healing,
+    Attribution, Fight, FightKind, Overkill, Phase, PhaseKind, ReportFilter, damage_done, healing,
     load_fight_file, quick_overview, quick_overview_in,
 };
 use openlogs_gamedata::Curated;
@@ -36,6 +36,7 @@ fn range(phase: &Phase, attribution: Attribution) -> ReportFilter {
         start_ms: phase.start_ms as i32,
         end_ms: phase.end_ms as i32,
         attribution,
+        overkill: Overkill::Excluded,
     }
 }
 
@@ -151,6 +152,7 @@ fn a_released_player_is_not_dead_to_the_end_of_the_run() {
         start_ms: 300_000,
         end_ms: 600_000,
         attribution: Attribution::Augmented,
+        overkill: Overkill::Excluded,
     };
     let later = openlogs_analysis::player_detail(
         &run,

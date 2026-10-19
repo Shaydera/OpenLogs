@@ -89,7 +89,7 @@ describe('FightView', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Options' }));
     await userEvent.click(screen.getByRole('checkbox', { name: /Credit Aug support to the Evoker/ }));
     expect(screen.getByRole('button', { name: /Aug support stays with the buffed player/ })).toBeInTheDocument();
-    const augmented = { startMs: null, endMs: null, attribution: 'augmented' };
+    const augmented = { startMs: null, endMs: null, attribution: 'augmented', includeOverkill: false };
     expect(api.damageDoneReport).toHaveBeenLastCalledWith('WoWCombatLog-100726_185823.txt', 1, augmented);
     expect(api.breakdownReport).toHaveBeenLastCalledWith(
       'WoWCombatLog-100726_185823.txt',
@@ -173,7 +173,7 @@ describe('compare with…', () => {
       'Pull #4 · Wipe · 4:07 · 33.8%',
     ]);
     await userEvent.click(within(list).getByRole('button', { name: 'Pull #1 · Wipe · 2:22 · 60.4%' }));
-    expect(api.comparePulls).toHaveBeenLastCalledWith(PULLS.id, 1, 3, 'reattributed');
+    expect(api.comparePulls).toHaveBeenLastCalledWith(PULLS.id, 1, 3, 'reattributed', false);
     expect(await screen.findByRole('table', { name: 'Key figures' })).toBeInTheDocument();
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
 

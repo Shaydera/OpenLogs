@@ -2,9 +2,9 @@ mod support;
 
 use openlogs_analysis::{
     AbilityRef, ActorId, Attribution, AuraAction, AuraType, CastOutcome, Damage, DamageVia,
-    Dimension, EventKind, EventsPage, FailReason, Fight, MissType, Missed, NO_SPELL, NOBODY, Page,
-    ReportFilter, RowType, Scope, ScopeMetric, Side, UnitHp, UnitRef, ViewOptions, breakdown,
-    casts_report, events,
+    Dimension, EventKind, EventsPage, FailReason, Fight, MissType, Missed, NO_SPELL, NOBODY,
+    Overkill, Page, ReportFilter, RowType, Scope, ScopeMetric, Side, UnitHp, UnitRef, ViewOptions,
+    breakdown, casts_report, events,
 };
 use openlogs_gamedata::Curated;
 use openlogs_index::Outcome;
@@ -682,6 +682,7 @@ fn kills_keep_the_boss_that_dies_at_the_pull_end() {
         start_ms: 10_000,
         end_ms: 20_000,
         attribution: Attribution::Augmented,
+        overkill: Overkill::Excluded,
     };
     let page = page_of(&fight, &last_phase, &enemies, ScopeMetric::Deaths);
     let rows: Vec<_> = page.rows.iter().map(|r| (r.t, r.target, r.event)).collect();

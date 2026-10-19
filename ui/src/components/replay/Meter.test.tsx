@@ -123,11 +123,11 @@ describe('Meter', () => {
     render(<Meter hud={hud} bounds={BOUNDS} />);
     await waitFor(() => expect(meter).toHaveBeenCalled());
     await userEvent.selectOptions(screen.getByRole('combobox', { name: t('replay.meterCategory') }), t('replay.meterHealingDone'));
-    await waitFor(() => expect(meter).toHaveBeenLastCalledWith(compareLogFixture.id, 3, { startMs: 0, endMs: 60_000, attribution: 'reattributed' }, 'healingDone', null));
+    await waitFor(() => expect(meter).toHaveBeenLastCalledWith(compareLogFixture.id, 3, { startMs: 0, endMs: 60_000, attribution: 'reattributed', includeOverkill: false }, 'healingDone', null));
 
     await userEvent.click(screen.getByRole('button', { name: t('replay.meterWindow') }));
     await userEvent.click(screen.getByRole('button', { name: t('replay.meterSeconds', { value: 30 }) }));
-    await waitFor(() => expect(meter).toHaveBeenLastCalledWith(compareLogFixture.id, 3, { startMs: 30_000, endMs: 60_000, attribution: 'reattributed' }, 'healingDone', null));
+    await waitFor(() => expect(meter).toHaveBeenLastCalledWith(compareLogFixture.id, 3, { startMs: 30_000, endMs: 60_000, attribution: 'reattributed', includeOverkill: false }, 'healingDone', null));
   });
 
   it('drops an answer for an older request', async () => {

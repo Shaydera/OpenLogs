@@ -79,7 +79,7 @@ pub(crate) fn damage_done_in(fight: &Fight, filter: &ReportFilter, scope: &Scope
         .enumerate()
         .filter(|(_, e)| filter.contains(e.t))
     {
-        match damage_share(fight, event) {
+        match damage_share(fight, event, filter.overkill) {
             Some(Share::Own { actor, spell, .. })
                 if !keeps_own(fight, scope, actor, spell, event.target) => {}
             Some(Share::Own {
