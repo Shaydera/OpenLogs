@@ -129,7 +129,7 @@ pub fn ability_detail(
             continue;
         }
         let share = match metric {
-            Metric::Damage => damage_share(fight, event),
+            Metric::Damage => damage_share(fight, event, filter.overkill),
             Metric::Healing => healing_share(fight, event),
         };
         if let Some(Share::Own {

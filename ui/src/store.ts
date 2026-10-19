@@ -53,6 +53,7 @@ const HIDE_ABORTED_KEY = 'hideAborted';
 const AUG_DELTA_KEY = 'showAugDelta';
 const COLOR_BY_TARGET_KEY = 'colorByTarget';
 const HIDE_PROCS_KEY = 'hideProcs';
+const INCLUDE_OVERKILL_KEY = 'includeOverkill';
 export type FightTab =
   | 'overview'
   | 'damage'
@@ -151,11 +152,11 @@ function derivedScope(state: State): Scope {
   return same ? scope : next;
 }
 /** The range a request sends; one that reaches the pull's end stays open, so the pull's last events count as they do for the whole pull. */
-function reportFilter(s: Pick<State, 'range' | 'attribution' | 'overview'>): ReportFilter {
+function reportFilter(s: Pick<State, 'range' | 'attribution' | 'includeOverkill' | 'overview'>): ReportFilter {
   const { range } = s;
   const pullEnd = s.overview?.timeline.durationMs;
   const endMs = range === null || (pullEnd !== undefined && range.endMs >= pullEnd) ? null : range.endMs;
-  return { startMs: range?.startMs ?? null, endMs, attribution: s.attribution };
+  return { startMs: range?.startMs ?? null, endMs, attribution: s.attribution, includeOverkill: s.includeOverkill };
 }
 export interface TimeRange {
   startMs: number;
@@ -209,8 +210,9 @@ export interface ComparisonState {
   data: PullComparison | null;
   loading: boolean;
   error: string | null;
-  /** Aug mode the pull's report was calculated with; Back recalculates it after a change. */
+  /** Aug mode and overkill rule the pull's report was calculated with; Back recalculates it after a change. */
   reportAttribution: Attribution;
+  reportIncludeOverkill: boolean;
 }
 
 /** The log being opened; `totalBytes` is `null` until its size is known. */
@@ -243,6 +245,8 @@ interface State {
   fightError: string | null;
   tab: FightTab;
   attribution: Attribution;
+  /** Damage counts the overkill of killing hits; remembered for every log. */
+  includeOverkill: boolean;
   /** `null` = the whole pull. */
   range: TimeRange | null;
   report: ReportData | null;
@@ -326,6 +330,7 @@ interface Actions {
   /** `focus`: where focus goes once the tab shows (the pull breadcrumb: the Overview title). */
   setTab(tab: FightTab, focus?: FocusTarget | null): Promise<void>;
   setAttribution(attribution: Attribution): Promise<void>;
+  setIncludeOverkill(include: boolean): Promise<void>;
   setRange(range: TimeRange | null): Promise<void>;
   setShowAugDelta(show: boolean): void;
   setColorByTarget(on: boolean): void;
@@ -462,6 +467,7 @@ export function initialState(): State {
     fightError: null,
     tab: 'overview',
     attribution: 'reattributed',
+    includeOverkill: readFlag(INCLUDE_OVERKILL_KEY, false),
     range: null,
     report: null,
     reportLoading: false,
@@ -733,9 +739,22 @@ async function loadReport(get: () => State & Actions, set: SetState) {
   }
 }
 
+/** The open pull's whole-pull overview, which the brush timeline draws; only the pull it was asked for may write. */
+async function reloadOverview(get: () => State & Actions, set: SetState) {
+  const { log, view } = get();
+  if (!log || view.kind !== 'fight') return;
+  const request = fightRequest;
+  try {
+    const overview = await api.quickOverview(log.id, view.fightIndex, reportFilter({ ...get(), range: null }));
+    if (request === fightRequest) set({ overview });
+  } catch (err) {
+    if (request === fightRequest) set({ error: t('error.loadFailed', { reason: String(err) }) });
+  }
+}
+
 /** Loads the open comparison in the current Aug mode; only the newest request may write. */
 async function loadComparison(get: () => State & Actions, set: SetState) {
-  const { log, comparison, attribution } = get();
+  const { log, comparison, attribution, includeOverkill } = get();
   if (!log || !comparison) return;
   const request = ++comparisonRequest;
   // The shown comparison stays until the new Aug mode is calculated.
@@ -745,7 +764,7 @@ async function loadComparison(get: () => State & Actions, set: SetState) {
     if (request === comparisonRequest && current) set({ comparison: { ...current, ...partial } });
   };
   try {
-    update({ data: await api.comparePulls(log.id, comparison.a, comparison.b, attribution) });
+    update({ data: await api.comparePulls(log.id, comparison.a, comparison.b, attribution, includeOverkill) });
   } catch (err) {
     update({ data: null, error: String(err) });
   } finally {
@@ -910,7 +929,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
       timeline: null,
     });
     try {
-      const overview = await api.quickOverview(log.id, fightIndex, null);
+      const overview = await api.quickOverview(log.id, fightIndex, reportFilter(get()));
       if (request === fightRequest) set({ overview });
     } catch (err) {
       if (request === fightRequest) set({ error: t('error.loadFailed', { reason: String(err) }), fightError: String(err) });
@@ -1073,10 +1092,13 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   },
 
   async openComparison(other) {
-    const { view, attribution } = get();
+    const { view, attribution, includeOverkill } = get();
     if (view.kind !== 'fight' || other === view.fightIndex) return;
     const [a, b] = other < view.fightIndex ? [other, view.fightIndex] : [view.fightIndex, other];
-    set({ comparison: { a, b, data: null, loading: true, error: null, reportAttribution: attribution }, focusRequest: 'compare' });
+    set({
+      comparison: { a, b, data: null, loading: true, error: null, reportAttribution: attribution, reportIncludeOverkill: includeOverkill },
+      focusRequest: 'compare',
+    });
     await loadComparison(get, set);
   },
 
@@ -1085,13 +1107,22 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     if (!comparison) return;
     dropPendingComparison();
     set({ comparison: null, focusRequest: 'fight' });
-    if (comparison.reportAttribution !== get().attribution) await loadReport(get, set);
+    const { attribution, includeOverkill } = get();
+    if (comparison.reportAttribution !== attribution || comparison.reportIncludeOverkill !== includeOverkill) await loadReport(get, set);
   },
 
   async setAttribution(attribution) {
     // Filter changes never move focus; drop a request that no heading has taken (also in setRange and setAuraKind).
     set({ attribution, eventsOffset: {}, focusRequest: null });
     // The Aug toggle on the comparison recalculates the comparison; Back recalculates the pull.
+    if (get().comparison) await loadComparison(get, set);
+    else await loadReport(get, set);
+  },
+
+  async setIncludeOverkill(include) {
+    writeFlag(INCLUDE_OVERKILL_KEY, include);
+    set({ includeOverkill: include, eventsOffset: {}, focusRequest: null });
+    await reloadOverview(get, set);
     if (get().comparison) await loadComparison(get, set);
     else await loadReport(get, set);
   },

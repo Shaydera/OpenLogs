@@ -64,7 +64,7 @@ const LOG: LogView = {
   fights: [],
 };
 
-const WHOLE_PULL = { startMs: null, endMs: null, attribution: 'reattributed' };
+const WHOLE_PULL = { startMs: null, endMs: null, attribution: 'reattributed', includeOverkill: false };
 const OPEN = { perspective: 'friendly', source: [], target: [], ability: [] };
 
 function sourceOf(log: LogView): LogSource {
@@ -120,7 +120,7 @@ describe('logs and pulls', () => {
     expect(api.recentLogs).toHaveBeenCalled();
 
     await useApp.getState().openFight(1);
-    expect(api.quickOverview).toHaveBeenCalledWith(LOG.id, 1, null);
+    expect(api.quickOverview).toHaveBeenCalledWith(LOG.id, 1, WHOLE_PULL);
     expect(useApp.getState()).toMatchObject({ view: { kind: 'fight', fightIndex: 1 }, overview: overviewFixture });
     useApp.getState().backToPulls();
     expect(useApp.getState().view).toEqual({ kind: 'start' });
@@ -210,7 +210,17 @@ describe('reports', () => {
     expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { ...WHOLE_PULL, attribution: 'augmented' });
 
     await useApp.getState().setRange({ startMs: 158_000, endMs: 273_000 });
-    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 158_000, endMs: 273_000, attribution: 'augmented' });
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 158_000, endMs: 273_000, attribution: 'augmented', includeOverkill: false });
+  });
+
+  it('counts overkill in the report and the pull overview once included, and remembers it for every log', async () => {
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().setIncludeOverkill(true);
+    const included = { ...WHOLE_PULL, includeOverkill: true };
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, included);
+    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.id, 1, included);
+    expect(initialState().includeOverkill).toBe(true);
   });
 
   it('loads a range overview, also when coming back to the tab, and falls back to the pull overview', async () => {
@@ -218,14 +228,14 @@ describe('reports', () => {
     const ranged = { ...overviewFixture, deaths: [] };
     vi.mocked(api.quickOverview).mockResolvedValue(ranged);
     await useApp.getState().setRange({ startMs: 40_000, endMs: 60_000 });
-    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed' });
+    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed', includeOverkill: false });
     expect(useApp.getState().report).toEqual({ tab: 'overview', data: ranged });
     expect(useApp.getState().overview).toBe(overviewFixture);
 
     await useApp.getState().setTab('damage');
     await useApp.getState().setRange({ startMs: 0, endMs: 30_000 });
     await useApp.getState().setTab('overview');
-    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 30_000, attribution: 'reattributed' });
+    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 30_000, attribution: 'reattributed', includeOverkill: false });
 
     await useApp.getState().setRange(null);
     expect(useApp.getState().report).toBeNull();
@@ -243,7 +253,7 @@ describe('reports', () => {
     // The whole-pull overview arrives with the pull; only a range makes Overview request a report.
     useApp.setState({ range: { startMs: 40_000, endMs: 60_000 } });
     await useApp.getState().setTab(tab);
-    expect(load).toHaveBeenLastCalledWith(LOG.id, 1, ...scope, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed' });
+    expect(load).toHaveBeenLastCalledWith(LOG.id, 1, ...scope, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed', includeOverkill: false });
     expect(useApp.getState().report).toEqual({ tab, data });
   });
 });
@@ -254,15 +264,15 @@ describe('detail stack', () => {
     await useApp.getState().setTab('healing');
     await useApp.getState().setRange({ startMs: 0, endMs: 60_000 });
     await useApp.getState().openPlayer(2);
-    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'reattributed' }, OPEN);
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'reattributed', includeOverkill: false }, OPEN);
     expect(useApp.getState().report).toEqual({ tab: 'player', data: playerDetailFixture });
 
     await useApp.getState().setAttribution('augmented');
-    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'augmented' }, OPEN);
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'augmented', includeOverkill: false }, OPEN);
 
     await useApp.getState().closeDetail();
     expect(useApp.getState().details).toEqual([]);
-    expect(api.healingReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 60_000, attribution: 'augmented' });
+    expect(api.healingReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 60_000, attribution: 'augmented', includeOverkill: false });
   });
 
   it('opens players from Damage Taken in the damage view and forgets that origin on a tab change', async () => {
@@ -317,7 +327,7 @@ describe('detail stack', () => {
     expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.id, 1, '', WHOLE_PULL, OPEN);
     expect(useApp.getState().details).toEqual([{ kind: 'target', name: "Ula'tek" }]);
     await useApp.getState().setRange({ startMs: 120_000, endMs: 140_000 });
-    expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.id, 1, "Ula'tek", { startMs: 120_000, endMs: 140_000, attribution: 'reattributed' }, OPEN);
+    expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.id, 1, "Ula'tek", { startMs: 120_000, endMs: 140_000, attribution: 'reattributed', includeOverkill: false }, OPEN);
 
     await useApp.getState().openTarget(ENEMY);
     expect(useApp.getState().details).toEqual([{ kind: 'target', name: ENEMY }]);
@@ -514,17 +524,29 @@ describe('pull comparison', () => {
 
     await useApp.getState().openFight(3);
     await useApp.getState().openComparison(1);
-    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.id, 1, 3, 'reattributed');
-    expect(useApp.getState().comparison).toEqual({ a: 1, b: 3, data: comparisonFixture, loading: false, error: null, reportAttribution: 'reattributed' });
+    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.id, 1, 3, 'reattributed', false);
+    expect(useApp.getState().comparison).toEqual({ a: 1, b: 3, data: comparisonFixture, loading: false, error: null, reportAttribution: 'reattributed', reportIncludeOverkill: false });
     expect(useApp.getState().focusRequest).toBe('compare');
     expect(useApp.getState().view).toEqual({ kind: 'fight', fightIndex: 3 });
 
     await useApp.getState().setAttribution('augmented');
-    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.id, 1, 3, 'augmented');
+    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.id, 1, 3, 'augmented', false);
 
     vi.mocked(api.comparePulls).mockRejectedValueOnce('Pull 9 does not exist in this log.');
     await useApp.getState().openComparison(9);
     expect(useApp.getState().comparison).toMatchObject({ a: 3, b: 9, data: null, loading: false, error: 'Pull 9 does not exist in this log.' });
+  });
+
+  it('recalculates the comparison for overkill and the pull once back', async () => {
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().openComparison(3);
+    const pullLoads = vi.mocked(api.damageDoneReport).mock.calls.length;
+    await useApp.getState().setIncludeOverkill(true);
+    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.id, 1, 3, 'reattributed', true);
+    expect(api.damageDoneReport).toHaveBeenCalledTimes(pullLoads);
+    await useApp.getState().closeComparison();
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { ...WHOLE_PULL, includeOverkill: true });
   });
 
   it('returns to the pull as it was left and recalculates it only for a new Aug mode', async () => {
@@ -549,7 +571,7 @@ describe('pull comparison', () => {
     expect(api.damageDoneReport).toHaveBeenCalledTimes(2);
     await useApp.getState().closeComparison();
     expect(api.damageDoneReport).toHaveBeenCalledTimes(3);
-    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 60_000, attribution: 'augmented' });
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 60_000, attribution: 'augmented', includeOverkill: false });
   });
 });
 
@@ -689,7 +711,7 @@ describe('view filters', () => {
     useApp.setState({ range: { startMs: 40_000, endMs: 60_000 } });
     await useApp.getState().setTab('resources');
     const scope = { perspective: 'friendly', source: [{ kind: 'player', actorId: 3 }], target: [], ability: [] };
-    expect(api.resourcesReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed' }, scope);
+    expect(api.resourcesReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed', includeOverkill: false }, scope);
   });
 
   it('hands the page filter to a detail page by side, also from an Enemies view', async () => {
@@ -1015,9 +1037,9 @@ describe('timeline and events views', () => {
     await openPull();
     await useApp.getState().setTab('damage');
     await useApp.getState().setRange({ startMs: 300_000, endMs: 478_610 });
-    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 300_000, endMs: null, attribution: 'reattributed' });
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 300_000, endMs: null, attribution: 'reattributed', includeOverkill: false });
     await useApp.getState().setRange({ startMs: 300_000, endMs: 400_000 });
-    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 300_000, endMs: 400_000, attribution: 'reattributed' });
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 300_000, endMs: 400_000, attribution: 'reattributed', includeOverkill: false });
   });
 });
 

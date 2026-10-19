@@ -8,7 +8,7 @@ import { PullComparisonView } from './PullComparisonView';
 
 vi.mock('../../api/client', () => ({ api: { comparePulls: vi.fn() } }));
 
-const OPEN: ComparisonState = { a: 1, b: 3, data: comparisonFixture, loading: false, error: null, reportAttribution: 'augmented' };
+const OPEN: ComparisonState = { a: 1, b: 3, data: comparisonFixture, loading: false, error: null, reportAttribution: 'augmented', reportIncludeOverkill: false };
 const KILL = compareLogFixture.fights[2];
 
 const cells = (row: HTMLElement) => [...row.children].map((cell) => cell.textContent);
@@ -38,7 +38,7 @@ describe('PullComparisonView', () => {
     vi.mocked(api.comparePulls).mockReset().mockResolvedValue(comparisonFixture);
     render(<PullComparisonView row={KILL} />);
     await userEvent.click(within(screen.getByRole('group', { name: 'Aug support' })).getByRole('button', { name: 'Reattributed' }));
-    expect(api.comparePulls).toHaveBeenLastCalledWith(compareLogFixture.id, 1, 3, 'reattributed');
+    expect(api.comparePulls).toHaveBeenLastCalledWith(compareLogFixture.id, 1, 3, 'reattributed', false);
     await userEvent.click(screen.getByRole('button', { name: '← Back to pull #3' }));
     expect(useApp.getState().comparison).toBeNull();
   });

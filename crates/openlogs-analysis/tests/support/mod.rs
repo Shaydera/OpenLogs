@@ -224,6 +224,7 @@ pub fn damage(via: DamageVia, amount: u64, overkill: u64) -> Damage {
         absorbed: 0,
         critical: false,
         supporter: NOBODY,
+        lands_after_end: false,
     }
 }
 

@@ -1,4 +1,4 @@
-use openlogs_analysis::{Fight, load_fight_slice};
+use openlogs_analysis::{Fight, LANDED_TAIL_BYTES, load_fight_slice};
 use openlogs_gamedata::{ChannelSpells, Curated, DungeonTable, SpellClasses};
 use openlogs_index::{FightSummary, Indexer, LogIndex};
 use openlogs_service::auras_dto::AuraKindDto;
@@ -92,10 +92,13 @@ impl Engine {
         Ok(self.view_json(log_id, file_name, size_bytes, true))
     }
 
-    /// The byte range `[prelude, end)` the pull needs from the log.
+    /// The byte range `[prelude, end)` the pull needs from the log; `end` may lie past the file.
     pub fn fight_range(&self, fight_index: u32) -> Result<(u64, u64), String> {
         let summary = self.summary(fight_index)?;
-        Ok((summary.prelude_offset, summary.end_offset))
+        Ok((
+            summary.prelude_offset,
+            summary.end_offset + LANDED_TAIL_BYTES,
+        ))
     }
 
     /// Marks a loaded pull as the most recently used one; `false` when it is not loaded.
@@ -270,6 +273,7 @@ impl Engine {
                     (args.fight_a, self.fight(args.fight_a)?),
                     (args.fight_b, self.fight(args.fight_b)?),
                     args.attribution,
+                    args.include_overkill,
                 ))
             }
             "events" => {
@@ -492,6 +496,7 @@ struct CompareArgs {
     fight_a: u32,
     fight_b: u32,
     attribution: AttributionDto,
+    include_overkill: bool,
 }
 
 #[derive(Deserialize)]

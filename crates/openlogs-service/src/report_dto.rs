@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use openlogs_analysis::{
     AbilityRow, ActorId, Attribution, BuffShare, DamageReport, DamageTakenReport, Fight,
-    GroupAbilities, HealingReport, NO_SPELL, ReportFilter, RowKind, SpellId, TakenAbility,
-    TargetKey, TargetShare,
+    GroupAbilities, HealingReport, NO_SPELL, Overkill, ReportFilter, RowKind, SpellId,
+    TakenAbility, TargetKey, TargetShare,
 };
 use serde::{Deserialize, Serialize};
 
@@ -25,13 +25,15 @@ impl AttributionDto {
     }
 }
 
-/// Time range (ms since the pull started; `null` = open end) and Aug mode from the UI.
+/// Time range (ms since the pull started; `null` = open end), Aug mode and overkill rule from
+/// the UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FilterDto {
     pub start_ms: Option<i32>,
     pub end_ms: Option<i32>,
     pub attribution: AttributionDto,
+    pub include_overkill: bool,
 }
 
 impl FilterDto {
@@ -40,6 +42,7 @@ impl FilterDto {
             start_ms: self.start_ms.unwrap_or(0),
             end_ms: self.end_ms.unwrap_or(i32::MAX),
             attribution: self.attribution.to_attribution(),
+            overkill: Overkill::included_if(self.include_overkill),
         }
     }
 }

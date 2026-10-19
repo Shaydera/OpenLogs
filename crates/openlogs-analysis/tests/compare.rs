@@ -1,7 +1,7 @@
 mod support;
 
 use openlogs_analysis::{
-    Attribution, Damage, DamageVia, EventKind, Fight, NOBODY, PlayerSide, PullComparison,
+    Attribution, Damage, DamageVia, EventKind, Fight, NOBODY, Overkill, PlayerSide, PullComparison,
     compare_pulls,
 };
 use openlogs_gamedata::Curated;
@@ -122,6 +122,7 @@ fn players_are_matched_by_guid_and_sorted_by_the_dps_difference() {
         &kill_pull,
         &Curated::bundled(),
         Attribution::Augmented,
+        Overkill::Excluded,
     );
     assert_eq!(
         rows(&wipe_pull, &kill_pull, &comparison),
@@ -162,8 +163,20 @@ fn players_are_matched_by_guid_and_sorted_by_the_dps_difference() {
 fn the_aug_mode_moves_support_to_the_evoker() {
     let (wipe_pull, kill_pull) = (wipe(), kill());
     let curated = Curated::bundled();
-    let augmented = compare_pulls(&wipe_pull, &kill_pull, &curated, Attribution::Augmented);
-    let reattributed = compare_pulls(&wipe_pull, &kill_pull, &curated, Attribution::Reattributed);
+    let augmented = compare_pulls(
+        &wipe_pull,
+        &kill_pull,
+        &curated,
+        Attribution::Augmented,
+        Overkill::Excluded,
+    );
+    let reattributed = compare_pulls(
+        &wipe_pull,
+        &kill_pull,
+        &curated,
+        Attribution::Reattributed,
+        Overkill::Excluded,
+    );
     assert_eq!(
         kill_dps(&kill_pull, &augmented, "Faelan-Emberfall-EU"),
         5_000.0

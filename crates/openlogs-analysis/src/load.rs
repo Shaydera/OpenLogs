@@ -11,9 +11,9 @@ use openlogs_parser::{
 
 use crate::actors::{ActorId, ActorKind, Actors, NOBODY};
 use crate::fight::{
-    Absorbed, Damage, Energize, Event, EventKind, FailReason, Fight, FightKind, Heal,
-    MarkerInterval, MissType, Missed, NO_SPELL, POWER_SAMPLE_MS, PositionSample, PowerSample,
-    RunEncounter, SpellId, SpellInfo, UnitHp, WorldMarkerInterval,
+    Absorbed, Damage, DamageVia, Energize, Event, EventKind, FailReason, Fight, FightKind, Heal,
+    LANDED_MATCH_MS, MarkerInterval, MissType, Missed, NO_SPELL, POWER_SAMPLE_MS, PositionSample,
+    PowerSample, RunEncounter, SpellId, SpellInfo, UnitHp, WorldMarkerInterval,
 };
 
 /// Loads one fight, including its prelude, from the complete log bytes.
@@ -21,8 +21,12 @@ pub fn load_fight(data: &[u8], summary: &FightSummary) -> Fight {
     load_fight_slice(data, 0, summary)
 }
 
+/// How far past a fight's end a part of the log should reach, so that the landed copies of
+/// its last swings are in it.
+pub const LANDED_TAIL_BYTES: u64 = 2 * 1024 * 1024;
+
 /// Loads one fight from a part of the log that starts at byte `base_offset` and covers the
-/// fight from its prelude to its end.
+/// fight from its prelude to its end, plus up to [`LANDED_TAIL_BYTES`] after it.
 pub fn load_fight_slice(data: &[u8], base_offset: u64, summary: &FightSummary) -> Fight {
     let clamp = |offset: u64| {
         usize::try_from(offset.saturating_sub(base_offset))
@@ -41,7 +45,67 @@ pub fn load_fight_slice(data: &[u8], base_offset: u64, summary: &FightSummary) -
             Err(_) => builder.fight.broken_lines += 1,
         }
     }
-    builder.finish()
+    let late = builder.landed_after_end(&data[end..], &mut fields);
+    let mut fight = builder.finish();
+    mark_swings_landing_after_end(&mut fight, &late);
+    fight
+}
+
+/// A `SWING_DAMAGE_LANDED` logged after the fight's end, of units the fight knows.
+struct LateLanded {
+    t: i32,
+    source: ActorId,
+    target: ActorId,
+    amount: u64,
+}
+
+/// Flags the swings near the end whose landed copy is one of `late` rather than a line of
+/// the fight; each landed copy belongs to the earliest swing it matches.
+fn mark_swings_landing_after_end(fight: &mut Fight, late: &[LateLanded]) {
+    if late.is_empty() {
+        return;
+    }
+    let end = i32::try_from(fight.duration_ms).unwrap_or(i32::MAX);
+    // A landed copy late in the pull may belong to a swing before the last window.
+    let first = fight
+        .events
+        .partition_point(|e| e.t < end.saturating_sub(2 * LANDED_MATCH_MS));
+    let melee = |event: &Event, via: DamageVia| match event.kind {
+        EventKind::Damage(d) if d.via == via && d.supporter == NOBODY => Some(d.amount),
+        _ => None,
+    };
+    let mut unlanded: Vec<usize> = Vec::new();
+    for index in first..fight.events.len() {
+        let event = &fight.events[index];
+        if melee(event, DamageVia::Swing).is_some() {
+            unlanded.push(index);
+        } else if let Some(amount) = melee(event, DamageVia::SwingLanded) {
+            let copy_of = |&swing: &usize| {
+                let s = &fight.events[swing];
+                s.source == event.source
+                    && s.target == event.target
+                    && melee(s, DamageVia::Swing) == Some(amount)
+            };
+            if let Some(position) = unlanded.iter().position(copy_of) {
+                unlanded.remove(position);
+            }
+        }
+    }
+    for landed in late {
+        let copy_of = |&swing: &usize| {
+            let s = &fight.events[swing];
+            s.source == landed.source
+                && s.target == landed.target
+                && landed.t - s.t <= LANDED_MATCH_MS
+                && melee(s, DamageVia::Swing) == Some(landed.amount)
+        };
+        if let Some(position) = unlanded.iter().position(copy_of) {
+            let swing = unlanded.remove(position);
+            if let EventKind::Damage(damage) = &mut fight.events[swing].kind {
+                damage.lands_after_end = true;
+            }
+        }
+    }
 }
 
 /// Memory-maps `path` and loads one fight from it.
@@ -328,6 +392,43 @@ impl FightBuilder {
         FailReason::Other(u16::try_from(index).unwrap_or(u16::MAX))
     }
 
+    /// The landed copies in `tail`, the lines after the fight, until they could no longer
+    /// belong to one of its swings.
+    fn landed_after_end<'a>(&self, tail: &'a [u8], fields: &mut Vec<&'a str>) -> Vec<LateLanded> {
+        let end = i32::try_from(self.fight.duration_ms).unwrap_or(i32::MAX);
+        let actors = &self.fight.actors;
+        let mut late = Vec::new();
+        for raw in Lines::new(tail) {
+            let Ok(line) = raw.text().and_then(|text| parse_line(text, fields)) else {
+                continue;
+            };
+            let t = self.relative_ms(line.timestamp);
+            if t > end.saturating_add(LANDED_MATCH_MS) {
+                break;
+            }
+            let LogEvent::Combat(event) = &line.event else {
+                continue;
+            };
+            let CombatKind::Damage(damage) = event.kind else {
+                continue;
+            };
+            if damage.via != DamageVia::SwingLanded || damage.supporter.is_some() {
+                continue;
+            }
+            if let (Some(source), Some(target)) =
+                (actors.id(event.source.guid), actors.id(event.target.guid))
+            {
+                late.push(LateLanded {
+                    t,
+                    source,
+                    target,
+                    amount: damage.amount,
+                });
+            }
+        }
+        late
+    }
+
     fn relative_ms(&self, timestamp: Timestamp) -> i32 {
         ((timestamp.0 - self.start.0) / 1_000).clamp(i64::from(i32::MIN), i64::from(i32::MAX))
             as i32
@@ -452,6 +553,7 @@ impl FightBuilder {
                 absorbed: d.absorbed,
                 critical: d.critical,
                 supporter: self.actor(d.supporter),
+                lands_after_end: false,
             }),
             CombatKind::Missed(m) => EventKind::Missed(Missed {
                 via: m.via,

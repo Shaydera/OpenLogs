@@ -1,8 +1,8 @@
 mod support;
 
 use openlogs_analysis::{
-    AbilityRef, Attribution, AuraType, Dimension, EventKind, NOBODY, ReportFilter, RowKey, Scope,
-    Side, UnitRef, interrupts_report,
+    AbilityRef, Attribution, AuraType, Dimension, EventKind, NOBODY, Overkill, ReportFilter,
+    RowKey, Scope, Side, UnitRef, interrupts_report,
 };
 use support::{FightBuilder, HOSTILE_FLAGS, PET_FLAGS};
 
@@ -161,6 +161,7 @@ fn missed_casts_need_a_start_without_interrupt() {
         start_ms: 8_000,
         end_ms: 30_000,
         attribution: Attribution::Augmented,
+        overkill: Overkill::Excluded,
     };
     let report = interrupts_report(&fight, &late, &Scope::default(), Dimension::Source);
     assert!(report.missed.is_empty() && report.interrupts.is_empty());

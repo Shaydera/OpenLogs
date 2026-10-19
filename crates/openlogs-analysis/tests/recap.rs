@@ -2,7 +2,7 @@ mod support;
 
 use openlogs_analysis::{
     Absorbed, Attribution, AuraAction, AuraType, DamageVia, EventKind, MissType, Missed, NO_SPELL,
-    NOBODY, RecapKind, ReportFilter, death_recaps,
+    NOBODY, Overkill, RecapKind, ReportFilter, death_recaps,
 };
 use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS, damage, heal};
@@ -123,6 +123,7 @@ fn recaps_follow_the_range_and_number_deaths_in_the_pull() {
         start_ms: 20_000,
         end_ms: 60_000,
         attribution: Attribution::Augmented,
+        overkill: Overkill::Excluded,
     };
     let recaps = death_recaps(&s.b.build(), &Curated::bundled(), &filter);
     assert_eq!(

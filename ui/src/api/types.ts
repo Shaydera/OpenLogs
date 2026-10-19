@@ -238,6 +238,8 @@ export interface ReportFilter {
   startMs: number | null;
   endMs: number | null;
   attribution: Attribution;
+  /** Damage counts the overkill of killing hits. */
+  includeOverkill: boolean;
 }
 
 export type Side = 'friendly' | 'enemy';

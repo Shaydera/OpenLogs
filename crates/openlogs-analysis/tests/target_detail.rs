@@ -1,8 +1,8 @@
 mod support;
 
 use openlogs_analysis::{
-    AbilityRef, Attribution, Damage, DamageVia, EventKind, NOBODY, ReportFilter, Scope, UnitLife,
-    UnitRef, Wave, enemy_groups, target_detail,
+    AbilityRef, Attribution, Damage, DamageVia, EventKind, NOBODY, Overkill, ReportFilter, Scope,
+    UnitLife, UnitRef, Wave, enemy_groups, target_detail,
 };
 use support::{FightBuilder, HOSTILE_FLAGS, damage};
 
@@ -139,6 +139,7 @@ fn target_detail_lifetimes_waves_and_players() {
         start_ms: 10_000,
         end_ms: 60_000,
         attribution: AUG,
+        overkill: Overkill::Excluded,
     };
     let detail = target_detail(&fight, "Blightscale Rawling", &late, &Scope::default()).unwrap();
     assert_eq!(

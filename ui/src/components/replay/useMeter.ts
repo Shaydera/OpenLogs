@@ -80,6 +80,7 @@ export function useMeter(fightIndex: number | null, bounds: Span, expand: number
   const logId = useApp((s) => s.log?.id ?? null);
   const durationMs = useApp((s) => s.replayData?.durationMs ?? Infinity);
   const attribution = useApp((s) => s.attribution);
+  const includeOverkill = useApp((s) => s.includeOverkill);
   const time = useApp((s) => s.replay.time);
   const playing = useApp((s) => s.replay.playing);
   const { category, mode, windowMs } = useApp((s) => s.replay.meter);
@@ -94,7 +95,7 @@ export function useMeter(fightIndex: number | null, bounds: Span, expand: number
   useEffect(() => {
     const meterQueue = queue.current;
     if (!meterQueue) return;
-    const key = JSON.stringify([logId, fightIndex, attribution, category, mode, windowMs, expand, bounds.startMs, bounds.endMs]);
+    const key = JSON.stringify([logId, fightIndex, attribution, includeOverkill, category, mode, windowMs, expand, bounds.startMs, bounds.endMs]);
     const previous = asked.current;
     asked.current = { key, endMs };
     if (logId === null || fightIndex === null || endMs <= startMs) {
@@ -105,14 +106,14 @@ export function useMeter(fightIndex: number | null, bounds: Span, expand: number
     const step = previous?.key === key ? endMs - previous.endMs : -1;
     const playback = playing && step >= 0 && step <= PLAYBACK_STEP_MS;
     // A span reaching the pull's end stays open, as the reports send it, so the pull's last events count.
-    const filter = { startMs, endMs: endMs >= durationMs ? null : endMs, attribution };
+    const filter = { startMs, endMs: endMs >= durationMs ? null : endMs, attribution, includeOverkill };
     setAnswer((current) => (current.loading ? current : { ...current, loading: true }));
     meterQueue.request(
       () => api.replayMeter(logId, fightIndex, filter, category, expand),
       playback,
       (data) => setAnswer((current) => (data ? { data, expanded: expand, loading: false } : { ...current, loading: false })),
     );
-  }, [logId, fightIndex, durationMs, attribution, category, mode, windowMs, expand, bounds.startMs, bounds.endMs, startMs, endMs, playing]);
+  }, [logId, fightIndex, durationMs, attribution, includeOverkill, category, mode, windowMs, expand, bounds.startMs, bounds.endMs, startMs, endMs, playing]);
 
   const { data, expanded, loading } = answer;
   // Until the answer for a newly expanded player arrives, the last breakdown belongs to someone else.

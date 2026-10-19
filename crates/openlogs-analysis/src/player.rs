@@ -7,7 +7,7 @@ use crate::auras::{aura_intervals, merged, union_ms};
 use crate::casts::non_press_casts;
 use crate::deaths::{Death, deaths};
 use crate::fight::{AuraType, DamageVia, Event, EventKind, Fight, SpellId};
-use crate::filter::{Attribution, ReportFilter};
+use crate::filter::{Attribution, Overkill, ReportFilter};
 use crate::links::{AbilityIndex, AbilityLink, SpellKey, spell_key};
 use crate::reports::damage::damage_done_in;
 use crate::reports::healing::healing_in;
@@ -258,6 +258,7 @@ fn standing(
 
 struct SeriesSpan {
     reattributed: bool,
+    overkill: Overkill,
     start: i32,
     end: i32,
 }
@@ -271,6 +272,7 @@ fn series(
 ) -> Vec<f64> {
     let SeriesSpan {
         reattributed,
+        overkill,
         start,
         end,
     } = span;
@@ -286,7 +288,7 @@ fn series(
         .filter(|(_, e)| e.t >= start && e.t < end)
     {
         let share = match metric {
-            Metric::Damage => damage_share(fight, event),
+            Metric::Damage => damage_share(fight, event, overkill),
             Metric::Healing => healing_share(fight, event),
         };
         let delta = match share {
@@ -739,7 +741,7 @@ fn augmentation(
     // Same events as the reports, so the sums match the Evoker's support rows.
     for event in fight.events.iter().filter(|e| filter.contains(e.t)) {
         let share = match metric {
-            Metric::Damage => damage_share(fight, event),
+            Metric::Damage => damage_share(fight, event, filter.overkill),
             Metric::Healing => healing_share(fight, event),
         };
         if let Some(Share::Support(Support {
@@ -934,7 +936,7 @@ pub fn player_detail(
             _ if event.target == player => {
                 if let Some(amount) = received_healing(event, player) {
                     healing_received += amount;
-                } else if let Some((amount, _)) = taken_amount(event) {
+                } else if let Some((amount, _)) = taken_amount(event, filter.overkill) {
                     let environmental = matches!(event.kind, EventKind::Damage(d) if d.via == DamageVia::Environmental);
                     *taken.entry((event.spell, environmental)).or_default() += amount;
                 }
@@ -1060,6 +1062,7 @@ pub fn player_detail(
             metric,
             SeriesSpan {
                 reattributed: filter.attribution == Attribution::Reattributed,
+                overkill: filter.overkill,
                 start: start_ms,
                 end: end_ms,
             },

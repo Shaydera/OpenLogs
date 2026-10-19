@@ -9,13 +9,32 @@ pub enum Attribution {
     Reattributed,
 }
 
-/// Time range (ms since `ENCOUNTER_START`, half-open `[start, end)`) and attribution mode
-/// for every report.
+/// Whether damage counts the overkill of a killing hit, the part beyond the target's HP.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Overkill {
+    #[default]
+    Excluded,
+    Included,
+}
+
+impl Overkill {
+    pub fn included_if(include: bool) -> Self {
+        if include {
+            Self::Included
+        } else {
+            Self::Excluded
+        }
+    }
+}
+
+/// Time range (ms since `ENCOUNTER_START`, half-open `[start, end)`), attribution mode and
+/// overkill rule for every report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReportFilter {
     pub start_ms: i32,
     pub end_ms: i32,
     pub attribution: Attribution,
+    pub overkill: Overkill,
 }
 
 impl ReportFilter {
@@ -25,6 +44,7 @@ impl ReportFilter {
             start_ms: 0,
             end_ms: i32::MAX,
             attribution,
+            overkill: Overkill::default(),
         }
     }
 

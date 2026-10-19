@@ -9,7 +9,7 @@ const MYTHIC_PLUS: &str = include_str!("../../openlogs-index/tests/fixtures/myth
 const FAELAN: &str = "Faelan-Emberfall-EU";
 
 fn whole_pull() -> Value {
-    json!({ "startMs": null, "endMs": null, "attribution": "augmented" })
+    json!({ "startMs": null, "endMs": null, "attribution": "augmented", "includeOverkill": false })
 }
 
 fn open(log: &str) -> (Engine, Value) {
@@ -104,7 +104,7 @@ fn opening_a_log_lists_its_pulls_and_a_stored_index_reopens_it() {
             "damage_done_report",
             json!({ "fightIndex": 1, "filter": whole_pull() })
         )["total"],
-        377_019_940
+        367_019_940
     );
 }
 
@@ -136,7 +136,7 @@ fn unusable_input_fails_with_a_message() {
         call_err(
             &engine,
             "compare_pulls",
-            json!({ "fightA": 1, "fightB": 9, "attribution": "augmented" })
+            json!({ "fightA": 1, "fightB": 9, "attribution": "augmented", "includeOverkill": false })
         ),
         "Pull 9 does not exist in this log."
     );
@@ -167,9 +167,21 @@ fn every_report_reaches_the_ui_with_camel_case_keys() {
     };
 
     let damage = call(&engine, "damage_done_report", pull(json!({})));
-    assert_eq!(damage["total"], 377_019_940, "Faelan's two Arcane Barrages");
+    assert_eq!(
+        damage["total"], 367_019_940,
+        "Faelan's two Arcane Barrages without the killing blow's 10M overkill"
+    );
+    let with_overkill = json!({ "startMs": null, "endMs": null, "attribution": "augmented", "includeOverkill": true });
+    assert_eq!(
+        call(
+            &engine,
+            "damage_done_report",
+            pull(json!({ "filter": with_overkill }))
+        )["total"],
+        377_019_940
+    );
     let faelan = damage["players"][0]["player"].clone();
-    let reattributed = json!({ "startMs": null, "endMs": null, "attribution": "reattributed" });
+    let reattributed = json!({ "startMs": null, "endMs": null, "attribution": "reattributed", "includeOverkill": false });
     let player = call(
         &engine,
         "player_detail",
@@ -293,7 +305,7 @@ fn every_report_reaches_the_ui_with_camel_case_keys() {
             call(
                 &engine,
                 "compare_pulls",
-                json!({ "fightA": 1, "fightB": 3, "attribution": "augmented" }),
+                json!({ "fightA": 1, "fightB": 3, "attribution": "augmented", "includeOverkill": false }),
             ),
         ),
         ("replay", call(&engine, "replay", pull(json!({})))),
@@ -315,7 +327,7 @@ fn a_range_overview_keeps_the_whole_pull_markers_and_names_their_players() {
         .collect();
     let (mut engine, _) = open(&log);
     load(&mut engine, &log, 1);
-    let first_second = json!({ "startMs": 0, "endMs": 1000, "attribution": "augmented" });
+    let first_second = json!({ "startMs": 0, "endMs": 1000, "attribution": "augmented", "includeOverkill": false });
     let overview = call(
         &engine,
         "quick_overview",
@@ -345,7 +357,8 @@ fn comparing_pulls_lists_every_player_of_either_pull_while_both_stay_loaded() {
     let (mut engine, _) = open(FIXTURE);
     load(&mut engine, FIXTURE, 1);
     load(&mut engine, FIXTURE, 3);
-    let compare = json!({ "fightA": 1, "fightB": 3, "attribution": "augmented" });
+    let compare =
+        json!({ "fightA": 1, "fightB": 3, "attribution": "augmented", "includeOverkill": false });
     let comparison = call(&engine, "compare_pulls", compare.clone());
     assert_eq!(
         (
@@ -373,7 +386,7 @@ fn comparing_pulls_lists_every_player_of_either_pull_while_both_stay_loaded() {
             .clone()
     };
     let faelan = row(FAELAN);
-    assert!((faelan["a"]["dps"].as_f64().unwrap() - 377_019_940.0 / 60.0).abs() < 1e-6);
+    assert!((faelan["a"]["dps"].as_f64().unwrap() - 367_019_940.0 / 60.0).abs() < 1e-6);
     assert_eq!(faelan["a"]["deaths"], 1);
     assert!(
         faelan["b"]["dps"].as_f64().unwrap() > 0.0,
@@ -557,7 +570,7 @@ fn a_run_opens_like_a_pull_with_boss_phases_and_no_boss_hp() {
         610_000_000,
         "trash and boss damage of the whole run"
     );
-    let second_baron = json!({ "startMs": 360000, "endMs": 420000, "attribution": "augmented" });
+    let second_baron = json!({ "startMs": 360000, "endMs": 420000, "attribution": "augmented", "includeOverkill": false });
     assert_eq!(damage(second_baron), 400_000_000);
 
     load(&mut engine, MYTHIC_PLUS, 2);

@@ -1,4 +1,4 @@
-use openlogs_analysis::{ActorId, Attribution, Fight, ReportFilter};
+use openlogs_analysis::{ActorId, Attribution, Fight, Overkill, ReportFilter};
 use openlogs_gamedata::{ChannelSpells, Curated, SpellClasses};
 
 use crate::auras_dto::{AuraKindDto, AurasReportDto, auras_report_dto};
@@ -241,9 +241,15 @@ pub fn compare_pulls(
     a: (u32, &Fight),
     b: (u32, &Fight),
     attribution: AttributionDto,
+    include_overkill: bool,
 ) -> PullComparisonDto {
-    let comparison =
-        openlogs_analysis::compare_pulls(a.1, b.1, curated, attribution.to_attribution());
+    let comparison = openlogs_analysis::compare_pulls(
+        a.1,
+        b.1,
+        curated,
+        attribution.to_attribution(),
+        Overkill::included_if(include_overkill),
+    );
     pull_comparison_dto(curated, a, b, &comparison)
 }
 

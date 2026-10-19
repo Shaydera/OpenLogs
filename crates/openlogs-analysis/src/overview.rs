@@ -5,11 +5,11 @@ use openlogs_gamedata::{ConsumableKind, CooldownCategory, Curated};
 use crate::actors::ActorId;
 use crate::deaths::{Death, deaths};
 use crate::fight::{EventKind, Fight, SpellId};
-use crate::filter::{Attribution, ReportFilter};
+use crate::filter::{Attribution, Overkill, ReportFilter};
 use crate::phases::fight_phases;
 use crate::timeline::{
-    Phase, boss_hp_series, boss_units, counts_as_damage_done, damage_done_amount, hits_hostile_npc,
-    raid_dps_series,
+    Phase, boss_hp_series, boss_units, credited_as_damage_done, damage_done_amount,
+    hits_hostile_npc, raid_dps_series,
 };
 use crate::usage::{
     ConsumableUse, CooldownUse, DeathContext, consumable_uses, cooldown_uses, death_context,
@@ -118,7 +118,7 @@ pub fn quick_overview_in(fight: &Fight, curated: &Curated, filter: &ReportFilter
         boss_hp_step_ms: BOSS_HP_STEP_MS,
         boss_hp,
         dps_step_ms: DPS_STEP_MS,
-        raid_dps: raid_dps_series(fight, DPS_STEP_MS),
+        raid_dps: raid_dps_series(fight, DPS_STEP_MS, filter.overkill),
         phases,
         markers,
     };
@@ -142,7 +142,7 @@ pub fn quick_overview_in(fight: &Fight, curated: &Curated, filter: &ReportFilter
         .filter(|u| u.kind == ConsumableKind::CombatPotion)
         .map(|u| u.player)
         .collect();
-    let raid_damage = raid_damage(fight, |t| whole || filter.contains(t));
+    let raid_damage = raid_damage(fight, |t| whole || filter.contains(t), filter.overkill);
     let duration_ms = filter.duration_ms(fight);
     let seconds = duration_ms as f64 / 1000.0;
     let kpis = Kpis {
@@ -171,19 +171,19 @@ pub fn quick_overview_in(fight: &Fight, curated: &Curated, filter: &ReportFilter
     }
 }
 
-fn raid_damage(fight: &Fight, in_range: impl Fn(i32) -> bool) -> u64 {
+fn raid_damage(fight: &Fight, in_range: impl Fn(i32) -> bool, overkill: Overkill) -> u64 {
     let end = fight.duration_ms as i64;
     fight
         .events
         .iter()
         .filter(|event| event.t >= 0 && i64::from(event.t) <= end && in_range(event.t))
         .filter_map(|event| match event.kind {
-            EventKind::Damage(damage) if counts_as_damage_done(&damage) => Some((event, damage)),
+            EventKind::Damage(damage) if credited_as_damage_done(&damage) => Some((event, damage)),
             _ => None,
         })
         .filter(|(event, _)| {
             hits_hostile_npc(fight, event) && fight.actors.credited_player(event.source).is_some()
         })
-        .map(|(_, damage)| damage_done_amount(&damage))
+        .map(|(_, damage)| damage_done_amount(&damage, overkill))
         .sum()
 }

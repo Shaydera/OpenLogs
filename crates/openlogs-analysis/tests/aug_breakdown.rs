@@ -2,8 +2,8 @@ mod support;
 
 use openlogs_analysis::{
     AbilityRow, Absorbed, ActorId, Attribution, BuffedAbility, Damage, DamageReport, DamageVia,
-    EventKind, Fight, Heal, Metric, NO_SPELL, NOBODY, ReportFilter, RowKind, Scope, SupportShare,
-    damage_done, healing, player_detail,
+    EventKind, Fight, Heal, Metric, NO_SPELL, NOBODY, Overkill, ReportFilter, RowKind, Scope,
+    SupportShare, damage_done, healing, player_detail,
 };
 use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS, damage, heal};
@@ -137,6 +137,7 @@ fn a_hit_just_before_the_range_still_owns_its_support() {
         start_ms: 5_000,
         end_ms: 10_000,
         attribution: Attribution::Reattributed,
+        overkill: Overkill::Excluded,
     };
     let report = damage_done(&fight, &range);
     assert_eq!(

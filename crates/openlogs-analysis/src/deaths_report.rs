@@ -59,10 +59,11 @@ pub(crate) fn parts(
 /// Enemy deaths in the range, first death per unit. A boss killed on a kill pull has no death in
 /// the slice (its UNIT_DIED is logged after ENCOUNTER_END), so it dies at the pull's end.
 pub(crate) fn enemy_kills(fight: &Fight, filter: &ReportFilter) -> Vec<Kill> {
-    let first_hit: HashMap<ActorId, i32> = hits_by_unit(fight, |t| t >= 0, &Scope::default())
-        .into_iter()
-        .map(|(unit, (_, first, _))| (unit, first))
-        .collect();
+    let first_hit: HashMap<ActorId, i32> =
+        hits_by_unit(fight, |t| t >= 0, filter.overkill, &Scope::default())
+            .into_iter()
+            .map(|(unit, (_, first, _))| (unit, first))
+            .collect();
     let kill_at = |unit: ActorId, t: i32| {
         let first = first_hit.get(&unit).copied();
         Kill {

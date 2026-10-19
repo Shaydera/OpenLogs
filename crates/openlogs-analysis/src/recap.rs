@@ -6,7 +6,7 @@ use crate::actors::{ActorId, NOBODY};
 use crate::auras::aura_intervals;
 use crate::deaths::{Death, deaths, hp_pct};
 use crate::fight::{AuraType, DamageVia, Event, EventKind, Fight, SpellId};
-use crate::filter::ReportFilter;
+use crate::filter::{Overkill, ReportFilter};
 use crate::reports::taken::taken_amount;
 use crate::usage::{
     ContextItem, ContextState, DeathContext, consumable_uses, death_context, defensive_uses,
@@ -199,7 +199,7 @@ pub(crate) fn recap_event(fight: &Fight, event: &Event, player: ActorId) -> Opti
             periodic: false,
             source_owner: owner_of(absorbed.absorber),
         }),
-        _ => taken_amount(event).map(|(amount, absorbed)| RecapEvent {
+        _ => taken_amount(event, Overkill::Included).map(|(amount, absorbed)| RecapEvent {
             t: event.t,
             spell: event.spell,
             source: event.source,

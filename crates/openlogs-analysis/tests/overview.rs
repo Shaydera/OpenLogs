@@ -1,7 +1,8 @@
 mod support;
 
 use openlogs_analysis::{
-    Attribution, DamageVia, EventKind, NOBODY, ReportFilter, quick_overview, quick_overview_in,
+    Attribution, DamageVia, EventKind, NOBODY, Overkill, ReportFilter, quick_overview,
+    quick_overview_in,
 };
 use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS, MELEE, damage};
@@ -86,6 +87,7 @@ fn overview_range_filters_lists_but_keeps_the_timeline() {
             start_ms: 10_000,
             end_ms: 35_000,
             attribution: Attribution::Augmented,
+            overkill: Overkill::Excluded,
         },
     );
     assert_eq!(
@@ -115,6 +117,7 @@ fn overview_range_filters_lists_but_keeps_the_timeline() {
             start_ms: 55_000,
             end_ms: 58_000,
             attribution: Attribution::Augmented,
+            overkill: Overkill::Excluded,
         },
     );
     assert_eq!(

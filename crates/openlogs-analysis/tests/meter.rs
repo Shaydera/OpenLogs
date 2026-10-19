@@ -2,8 +2,8 @@ mod support;
 
 use openlogs_analysis::{
     Absorbed, ActorId, Attribution, AuraType, Damage, DamageVia, Dimension, EventKind, Fight, Heal,
-    MeterCategory, MeterEntry, MeterKey, Metric, NOBODY, ReportFilter, RowKind, Scope, damage_done,
-    damage_taken, healing, interrupts_report, meter, player_detail,
+    MeterCategory, MeterEntry, MeterKey, Metric, NOBODY, Overkill, ReportFilter, RowKind, Scope,
+    damage_done, damage_taken, healing, interrupts_report, meter, player_detail,
 };
 use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS, MELEE, PET_FLAGS, damage, heal};
@@ -177,6 +177,7 @@ fn span(attribution: Attribution) -> ReportFilter {
         start_ms: 2_000,
         end_ms: 7_000,
         attribution,
+        overkill: Overkill::Excluded,
     }
 }
 
@@ -380,6 +381,7 @@ fn an_empty_span_has_no_rows() {
         start_ms: 5_000,
         end_ms: 5_000,
         attribution: Attribution::Reattributed,
+        overkill: Overkill::Excluded,
     };
     for category in [
         MeterCategory::DamageDone,

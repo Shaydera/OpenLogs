@@ -2,8 +2,8 @@ mod support;
 
 use openlogs_analysis::{
     AbilityRef, Attribution, AuraAction, AuraType, BuffKind, BuffShare, CastKind, Damage,
-    DamageVia, Dimension, EventKind, Metric, NO_SPELL, NOBODY, ReportFilter, RowKind, Scope,
-    ScopeMetric, UnitRef, breakdown, player_detail,
+    DamageVia, Dimension, EventKind, Metric, NO_SPELL, NOBODY, Overkill, ReportFilter, RowKind,
+    Scope, ScopeMetric, UnitRef, breakdown, player_detail,
 };
 use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS, damage, heal};
@@ -263,6 +263,7 @@ fn a_player_dead_for_the_whole_range_is_shown_dead() {
         start_ms: 5_000,
         end_ms: 9_000,
         attribution: AUG,
+        overkill: Overkill::Excluded,
     };
     let detail = player_detail(
         &fight,

@@ -1,7 +1,7 @@
 mod support;
 
 use openlogs_analysis::{
-    Attribution, Damage, DamageVia, EventKind, ReportFilter, RowKind, damage_done,
+    Attribution, Damage, DamageVia, EventKind, Overkill, ReportFilter, RowKind, damage_done,
 };
 use support::{FightBuilder, HOSTILE_FLAGS, PET_FLAGS, damage};
 
@@ -256,5 +256,32 @@ fn own_buff_share_moves_from_the_evokers_ability_to_his_support_row() {
     assert!(
         evoker.abilities.iter().all(|a| a.kind == RowKind::Own),
         "no support rows in augmented mode"
+    );
+}
+
+#[test]
+fn a_killing_blow_counts_up_to_the_target_hp_unless_overkill_is_included() {
+    let mut r = raid();
+    r.b.push(
+        1_000,
+        r.warrior,
+        r.boss,
+        1,
+        EventKind::Damage(damage(DamageVia::Spell, 1_000, 400)),
+    );
+    let fight = r.b.build();
+    let total_with = |overkill| {
+        let filter = ReportFilter {
+            overkill,
+            ..ReportFilter::whole(AUG)
+        };
+        damage_done(&fight, &filter).total
+    };
+    assert_eq!(
+        (
+            total_with(Overkill::Excluded),
+            total_with(Overkill::Included)
+        ),
+        (600, 1_000)
     );
 }

@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::actors::{ActorId, ActorKind};
 use crate::fight::{DamageVia, Event, EventKind, Fight, FightKind, SpellId, UnitHp};
 use crate::phases::run_phases;
-use crate::timeline::counts_as_damage_done;
+use crate::timeline::is_distinct_hit;
 
 /// Look-back window of the death context.
 pub const DEATH_WINDOW_MS: i32 = 5_000;
@@ -189,7 +189,7 @@ pub(crate) fn death_at(fight: &Fight, player: ActorId, t: i32, life_start: i32) 
             continue;
         }
         match event.kind {
-            EventKind::Damage(damage) if counts_as_damage_done(&damage) => {
+            EventKind::Damage(damage) if is_distinct_hit(&damage) => {
                 *by_spell
                     .entry((event.spell, damage.via == DamageVia::Environmental))
                     .or_default() += damage.amount;
