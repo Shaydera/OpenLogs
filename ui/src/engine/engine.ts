@@ -23,6 +23,12 @@ export interface Engine {
   touchFight(fight: number): Promise<boolean>;
   /** Takes ownership of `bytes`, the pull's part of the log starting at `baseOffset`. */
   loadFight(bytes: Uint8Array, baseOffset: number, fight: number): Promise<void>;
+  /** Starts reading `fights` as one set; `commandsJson` lists the commands to run over it. */
+  setBegin(fights: number[], commandsJson: string): Promise<void>;
+  /** Takes ownership of `bytes`, one pull's part of the log; pulls arrive in set order. */
+  setFeed(bytes: Uint8Array, baseOffset: number, fight: number): Promise<void>;
+  /** One result per command, as a JSON array. */
+  setFinish(): Promise<string>;
   call<T>(command: string, args: object): Promise<T>;
   /** Counts restarts after a crash; each restart forgets the open log. */
   restarts(): number;
@@ -81,6 +87,9 @@ export function workerEngine(): Engine {
     },
     touchFight: (fight) => send('touch_fight', [fight]),
     loadFight: (bytes, baseOffset, fight) => send('load_fight', [bytes, baseOffset, fight], [bytes.buffer]),
+    setBegin: (fights, commandsJson) => send('set_begin', [Uint32Array.from(fights), commandsJson]),
+    setFeed: (bytes, baseOffset, fight) => send('set_feed', [bytes, baseOffset, fight], [bytes.buffer]),
+    setFinish: () => send('set_finish'),
     call: async (command, args) => JSON.parse(await send<string>('call', [command, JSON.stringify(args)])),
     restarts: () => restarts,
   };

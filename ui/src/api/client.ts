@@ -28,6 +28,8 @@ import type {
   PlayerDetail,
   PullComparison,
   QuickOverview,
+  SetCommand,
+  SetProgress,
   RecentLog,
   TargetDetail,
   ReportFilter,
@@ -69,6 +71,8 @@ async function quietly<T>(task: () => Promise<T>): Promise<T | undefined> {
     return undefined;
   }
 }
+
+export class SetCancelled extends Error {}
 
 export function createClient({ engine: getEngine, dungeons, channelSpells, spellClasses, db, now }: ClientDeps) {
   let current: { source: LogSource; engineRestarts: number } | null = null;
@@ -168,12 +172,43 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
     });
   }
 
+  /** Reads the pulls one by one in set order, so the engine never holds more than one at a time; progress starts at 0 once the pass gets its turn. */
+  function pullSet(
+    logId: string,
+    fights: number[],
+    commands: SetCommand[],
+    { onProgress, isStale }: { onProgress?: (progress: SetProgress) => void; isStale?: () => boolean } = {},
+  ): Promise<unknown[]> {
+    return serial(async () => {
+      const engine = getEngine();
+      if (current && current.engineRestarts !== engine.restarts()) current = null;
+      if (current?.source.id !== logId) throw 'This log is no longer open. Open it again.';
+      const source = current.source;
+      if (isStale?.()) throw new SetCancelled();
+      onProgress?.({ done: 0, total: fights.length });
+      try {
+        await engine.setBegin(fights, JSON.stringify(commands));
+        for (const [done, fight] of fights.entries()) {
+          if (isStale?.()) throw new SetCancelled();
+          const [start, end] = await engine.fightRange(fight);
+          const bytes = await source.read(start, Math.max(0, Math.min(end, source.size) - start));
+          await engine.setFeed(bytes, start, fight);
+          onProgress?.({ done: done + 1, total: fights.length });
+        }
+        return JSON.parse(await engine.setFinish());
+      } finally {
+        if (current && current.engineRestarts !== engine.restarts()) current = null;
+      }
+    });
+  }
+
   const pull =
     <T>(command: string) =>
     (logId: string, fightIndex: number, filter: ReportFilter) =>
       report<T>(logId, [fightIndex], command, { fightIndex, filter });
 
   return {
+    pullSet,
     /** A later call supersedes an open that is still reading; it fails without reading on. */
     openLog: (source: LogSource, onProgress: (bytesRead: number, totalBytes: number) => void = () => {}) => {
       const open = ++latestOpen;
