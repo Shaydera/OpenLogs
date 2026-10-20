@@ -1,13 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use crate::actors::ActorId;
-use crate::fight::Fight;
+use crate::fight::{Fight, SpellId};
 use crate::filter::{Attribution, ReportFilter};
 use crate::reports::{
     AbilityRow, AbilityTargets, BuffShare, GroupAbilities, PetNames, RowKind, Share, SupportAcc,
-    SupportLedger, SupportShare, TargetShare, UnitCounts, color_groups, credit_support,
-    damage_share, damage_target, group_abilities, keeps_own, keeps_support, per_second,
-    sorted_by_amount, support_entry,
+    SupportLedger, SupportShare, TOP_ABILITIES_PER_GROUP, TargetKey, TargetShare, UnitCounts,
+    color_groups, credit_support, damage_share, damage_target, group_abilities, keeps_own,
+    keeps_support, per_second, sorted_by_amount, support_entry,
 };
 use crate::scope::Scope;
 
@@ -62,12 +62,37 @@ struct Acc {
     support: SupportAcc,
 }
 
+enum AbilityGroups {
+    TopOfColorGroups,
+    AllOfEveryEnemy,
+}
+
 pub fn damage_done(fight: &Fight, filter: &ReportFilter) -> DamageReport {
     damage_done_in(fight, filter, &Scope::default())
 }
 
+/// One pull of a set of pulls: group abilities cover every enemy name, untruncated, so the
+/// set's own colour groups can be built from the merged pulls.
+pub fn damage_done_set_part(fight: &Fight, filter: &ReportFilter) -> DamageReport {
+    damage_done_grouped(
+        fight,
+        filter,
+        &Scope::default(),
+        AbilityGroups::AllOfEveryEnemy,
+    )
+}
+
 /// The report of the shares `scope` keeps; ranks and totals are the scope's.
 pub(crate) fn damage_done_in(fight: &Fight, filter: &ReportFilter, scope: &Scope) -> DamageReport {
+    damage_done_grouped(fight, filter, scope, AbilityGroups::TopOfColorGroups)
+}
+
+fn damage_done_grouped(
+    fight: &Fight,
+    filter: &ReportFilter,
+    scope: &Scope,
+    groups: AbilityGroups,
+) -> DamageReport {
     let reattributed = filter.attribution == Attribution::Reattributed;
     let mut acc: HashMap<ActorId, Acc> = HashMap::new();
     let mut pets = PetNames::default();
@@ -174,8 +199,16 @@ pub(crate) fn damage_done_in(fight: &Fight, filter: &ReportFilter, scope: &Scope
     }
     players.sort_by(|a, b| b.total.cmp(&a.total).then(a.player.cmp(&b.player)));
     let color_groups = color_groups(players.iter().flat_map(|p| &p.targets));
+    let every_enemy;
+    let (groups, limit): (&[String], _) = match groups {
+        AbilityGroups::TopOfColorGroups => (&color_groups, Some(TOP_ABILITIES_PER_GROUP)),
+        AbilityGroups::AllOfEveryEnemy => {
+            every_enemy = enemy_names(target_spells.values().flatten());
+            (&every_enemy, None)
+        }
+    };
     for p in &mut players {
-        p.group_abilities = group_abilities(&target_spells[&p.player], &color_groups);
+        p.group_abilities = group_abilities(&target_spells[&p.player], groups, limit);
     }
     DamageReport {
         duration_ms,
@@ -185,4 +218,16 @@ pub(crate) fn damage_done_in(fight: &Fight, filter: &ReportFilter, scope: &Scope
         units: units.into_sorted(fight),
         color_groups,
     }
+}
+
+fn enemy_names<'a>(
+    target_spells: impl Iterator<Item = &'a (TargetKey, SpellId, i64)>,
+) -> Vec<String> {
+    let names: BTreeSet<&str> = target_spells
+        .filter_map(|(target, _, _)| match target {
+            TargetKey::Unit(name) => Some(name.as_str()),
+            _ => None,
+        })
+        .collect();
+    names.into_iter().map(str::to_string).collect()
 }

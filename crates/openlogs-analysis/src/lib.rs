@@ -55,7 +55,9 @@ pub use interrupts::{
     DispelEntry, InterruptEntry, InterruptsReport, KickRow, MissedCast, interrupts_report,
 };
 pub use links::AbilityLink;
-pub use load::{LANDED_TAIL_BYTES, load_fight, load_fight_file, load_fight_slice};
+pub use load::{
+    LANDED_TAIL_BYTES, load_fight, load_fight_file, load_fight_slice, load_fight_slice_with,
+};
 pub use meter::{Meter, MeterCategory, MeterEntry, MeterKey, MeterRow, meter};
 pub use options::{FilterOption, OptionValue, SpellVariant, filter_options};
 pub use overview::{
@@ -74,12 +76,12 @@ pub use replay::{
     PowerTrack as ReplayPowerTrack, Replay, ReplayAura, ReplayCast, ReplayCastOutcome, ReplayDeath,
     ReplayUnit, StackChange, TargetTrack, Track, UnitKind, replay,
 };
-pub use reports::damage::{DamageReport, PlayerDamage, damage_done};
+pub use reports::damage::{DamageReport, PlayerDamage, damage_done, damage_done_set_part};
 pub use reports::healing::{HealingReport, PlayerHealing, healing};
 pub use reports::taken::{DamageTakenReport, TakenAbility, TakenPlayer, damage_taken};
 pub use reports::{
     AbilityRow, AbilityTargets, BuffShare, BuffedAbility, COLOR_GROUPS, GroupAbilities, RowKind,
-    SupportShare, TOP_ABILITIES_PER_GROUP, TargetKey, TargetShare,
+    SupportShare, TOP_ABILITIES_PER_GROUP, TargetKey, TargetShare, per_second,
 };
 pub use resources::{
     HEALTH, PowerTrack, RESOURCE_STEP_MS, ResourcesReport, UnitResources, resources_report,

@@ -13,7 +13,7 @@ use crate::recap_dto::{DeathsReportDto, deaths_report_dto};
 use crate::replay_dto::{ReplayDto, replay_dto};
 use crate::report_dto::{
     AttributionDto, DamageReportDto, DamageTakenReportDto, FilterDto, HealingReportDto,
-    damage_report_dto, healing_report_dto, taken_report_dto,
+    damage_report_dto, healing_report_dto, taken_report_dto, taken_set_part_dto,
 };
 use crate::resources_dto::{ResourcesReportDto, resources_report_dto};
 use crate::scope_dto::{
@@ -45,10 +45,26 @@ pub fn damage_done(fight: &Fight, filter: FilterDto) -> DamageReportDto {
     )
 }
 
+/// One pull's part of a set's damage report, to be merged with [`crate::Merge`].
+pub fn damage_done_set_part(fight: &Fight, filter: FilterDto) -> DamageReportDto {
+    damage_report_dto(
+        fight,
+        &openlogs_analysis::damage_done_set_part(fight, &filter.to_filter()),
+    )
+}
+
 pub fn healing(fight: &Fight, filter: FilterDto) -> HealingReportDto {
     healing_report_dto(
         fight,
         &openlogs_analysis::healing(fight, &filter.to_filter()),
+    )
+}
+
+/// One pull's part of a set's damage-taken report, to be merged with [`crate::Merge`].
+pub fn damage_taken_set_part(fight: &Fight, filter: FilterDto) -> DamageTakenReportDto {
+    taken_set_part_dto(
+        fight,
+        &openlogs_analysis::damage_taken(fight, &filter.to_filter()),
     )
 }
 

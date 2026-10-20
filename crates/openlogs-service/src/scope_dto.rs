@@ -118,6 +118,8 @@ pub struct BreakdownRowDto {
     /// The 1-based number of one instance among the units of its name.
     pub number: Option<u32>,
     pub spell_id: SpellId,
+    #[serde(skip)]
+    pub spell_amounts: Vec<(SpellId, i64)>,
     pub amount: i64,
     pub share: f64,
     pub absorbed: i64,
@@ -195,6 +197,8 @@ pub struct FilterOptionDto {
     pub pets: Vec<String>,
     pub primary_spell: Option<SpellId>,
     pub variants: Vec<VariantDto>,
+    #[serde(skip)]
+    pub amount: i64,
 }
 
 impl ScopeDto {
@@ -212,7 +216,7 @@ impl ScopeDto {
 }
 
 impl UnitRefDto {
-    fn to_unit(&self) -> UnitRef {
+    pub(crate) fn to_unit(&self) -> UnitRef {
         match self {
             Self::Player { actor_id } => UnitRef::Player(*actor_id),
             Self::Pet { owner, name } => UnitRef::Pet {
@@ -251,6 +255,41 @@ impl AbilityRefDto {
         match ability {
             AbilityRef::Name(name) => Self::Name { name: name.clone() },
             AbilityRef::Id(id) => Self::Id { spell_id: *id },
+        }
+    }
+}
+
+impl OptionValueDto {
+    /// The analysis value, whose ordering ranks options of equal amount.
+    pub(crate) fn to_value(&self) -> OptionValue {
+        match self {
+            Self::Unit { unit } => OptionValue::Unit(unit.to_unit()),
+            Self::Ability { ability } => OptionValue::Ability(ability.to_ability()),
+        }
+    }
+}
+
+impl RowKeyDto {
+    /// The analysis key, whose ordering ranks equal rows.
+    pub(crate) fn to_key(&self) -> RowKey {
+        match self {
+            Self::Unit { unit } => RowKey::Unit(unit.to_unit()),
+            Self::Ability {
+                ability,
+                row_kind,
+                pet,
+            } => RowKey::Ability {
+                ability: ability.to_ability(),
+                kind: match row_kind {
+                    RowKindDto::Own => CellKind::Own,
+                    RowKindDto::Support => CellKind::Support,
+                    RowKindDto::Unmatched => CellKind::Unmatched,
+                    RowKindDto::Proc => CellKind::Proc,
+                    RowKindDto::Unattributed => CellKind::Unattributed,
+                    RowKindDto::State => CellKind::State,
+                },
+                pet: pet.clone(),
+            },
         }
     }
 }
@@ -375,11 +414,19 @@ fn ability_name(ability: &AbilityRef) -> String {
     }
 }
 
-fn per_second(amount: i64, duration_ms: u64) -> f64 {
+pub(crate) fn per_second(amount: i64, duration_ms: u64) -> f64 {
     if duration_ms == 0 {
         0.0
     } else {
         amount as f64 * 1000.0 / duration_ms as f64
+    }
+}
+
+pub(crate) fn share_of(amount: i64, total: i64) -> f64 {
+    if total != 0 {
+        amount as f64 / total as f64
+    } else {
+        0.0
     }
 }
 
@@ -401,12 +448,9 @@ impl RowDtos<'_> {
             name,
             number,
             spell_id: row.spell,
+            spell_amounts: row.by_spell.clone(),
             amount: row.amount,
-            share: if total != 0 {
-                row.amount as f64 / total as f64
-            } else {
-                0.0
-            },
+            share: share_of(row.amount, total),
             absorbed: row.absorbed,
             hits: row.hits,
             crits: row.crits,
@@ -500,6 +544,7 @@ pub(crate) fn option_dto(fight: &Fight, option: &FilterOption) -> FilterOptionDt
                 auras: v.auras,
             })
             .collect(),
+        amount: option.amount,
     }
 }
 

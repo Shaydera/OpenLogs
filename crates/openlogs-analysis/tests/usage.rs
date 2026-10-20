@@ -160,3 +160,17 @@ fn a_defensive_not_used_although_ready_again_is_never_used() {
         all[3]
     );
 }
+
+#[test]
+fn a_warlock_from_an_earlier_pull_does_not_count() {
+    let curated = Curated::bundled();
+    let mut earlier = FightBuilder::new(60_000);
+    earlier.player("Player-2", "Årvel-Emberfall-EU", 266);
+
+    let mut b = FightBuilder::new(60_000);
+    b.fight.actors = earlier.fight.actors.carried_over();
+    let dk = b.player("Player-1", "Rothgar-Emberfall-EU", 251);
+    die(&mut b, 30_000, dk);
+    let context = &contexts(&b.build(), &curated)[0];
+    assert!(context.iter().all(|c| c.item != ContextItem::Healthstone));
+}
