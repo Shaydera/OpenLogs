@@ -23,8 +23,9 @@ export function effectiveView(tab: FightTab, inDetail: boolean, chosen: ReportVi
 }
 
 /** Why a view is not offered, or `undefined` when it is. */
-export function unavailableReason(tab: FightTab, inDetail: boolean, view: ReportView): string | undefined {
+export function unavailableReason(tab: FightTab, inDetail: boolean, inSet: boolean, view: ReportView): string | undefined {
   if (inDetail) return view === 'table' ? undefined : t('view.detailOnly');
+  if (inSet && view !== 'table') return t('view.singlePullOnly');
   if (VIEWS[tab].includes(view)) return undefined;
   return t(tab === 'overview' ? 'view.overviewOnly' : 'view.resourcesNoEvents');
 }

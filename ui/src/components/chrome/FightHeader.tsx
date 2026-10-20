@@ -1,11 +1,11 @@
 import { Fragment, type RefObject } from 'react';
-import type { FightRow } from '../../api/types';
+import type { FightRow, LogView, PullSet } from '../../api/types';
 import { formatDuration, formatKeystoneLevel } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { RUN_CHIP, difficultyName, pullStatus, runStatus } from '../../pulls/groupPulls';
 import { BossTile } from '../BossTile';
 import { Kpi, KpiStrip } from '../Kpi';
-import { fightMeta } from './fightMeta';
+import { type MetaItem, fightMeta, setIdentity, setMeta } from './fightMeta';
 import type { HeaderTile } from './headerTiles';
 
 /**
@@ -23,14 +23,48 @@ function fightIdentity(row: FightRow): { title: string; chip: { className: strin
   return { title, chip };
 }
 
-export function FightHeader({ row, tiles, titleRef }: { row: FightRow; tiles: HeaderTile[] | null; titleRef: RefObject<HTMLHeadingElement | null> }) {
-  const run = row.run;
-  const { title, chip } = fightIdentity(row);
-  const meta = fightMeta(row);
-  const compact = tiles === null;
+/** What the header shows of a pull or a pull set. */
+export interface Heading {
+  title: string;
+  chip: { className: string; label: string };
+  meta: MetaItem[];
+  portrait: { encounterId: number; name: string };
+  /** A pull set: its facts line is longer than a pull's. */
+  set: boolean;
+}
+
+export function pullHeading(row: FightRow): Heading {
+  return { ...fightIdentity(row), meta: fightMeta(row), portrait: { encounterId: row.run ? 0 : row.encounterId, name: row.name }, set: false };
+}
+
+/** `players` is `null` until the set's overview is read. */
+export function setHeading(log: LogView, set: PullSet, players: number | null): Heading {
+  const identity = setIdentity(log, set);
+  return {
+    title: identity.name,
+    chip: { className: 'chip-set', label: t('fight.setChip', { set: t(`pulls.set.${set.kind}`), count: set.fights.length }) },
+    meta: setMeta(identity, players),
+    portrait: { encounterId: set.encounterId, name: identity.name },
+    set: true,
+  };
+}
+
+function MetaText({ item }: { item: MetaItem }) {
+  if (!item.suffix) return <span className={item.mono ? 'num' : undefined}>{item.text}</span>;
   return (
-    <section className={compact ? 'fight-header fight-header-compact' : 'fight-header'} aria-labelledby="fight-title">
-      <BossTile encounterId={run ? 0 : row.encounterId} name={row.name} large={!compact} />
+    <span>
+      <span className={item.mono ? 'num' : undefined}>{item.text}</span> {item.suffix}
+    </span>
+  );
+}
+
+export function FightHeader({ heading, tiles, titleRef }: { heading: Heading; tiles: HeaderTile[] | null; titleRef: RefObject<HTMLHeadingElement | null> }) {
+  const { title, chip, meta, portrait } = heading;
+  const compact = tiles === null;
+  const className = ['fight-header', compact && 'fight-header-compact', heading.set && 'fight-header-set'].filter(Boolean).join(' ');
+  return (
+    <section className={className} aria-labelledby="fight-title">
+      <BossTile encounterId={portrait.encounterId} name={portrait.name} large={!compact} />
       <div className="fight-id">
         {compact ? (
           <p id="fight-title" className="fight-name">
@@ -46,7 +80,7 @@ export function FightHeader({ row, tiles, titleRef }: { row: FightRow; tiles: He
           {meta.map((item, i) => (
             <Fragment key={`${i}-${item.text}`}>
               {i > 0 && <span aria-hidden="true">·</span>}
-              <span className={item.mono ? 'num' : undefined}>{item.text}</span>
+              <MetaText item={item} />
             </Fragment>
           ))}
         </div>

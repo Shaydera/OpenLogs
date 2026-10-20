@@ -1,11 +1,12 @@
-import type { Breakdown, FightRow, Kpis, PowerTrack, QuickOverview, Scope, Side } from '../../api/types';
-import { formatAmount, formatCpm, formatDuration, formatEventTime, formatInteger, formatScaled, formatShare } from '../../i18n/format';
+import type { Breakdown, Kpis, PowerTrack, QuickOverview, Scope, Side } from '../../api/types';
+import { formatAmount, formatCpm, formatDuration, formatEventTime, formatEventTimeTenths, formatInteger, formatOneDecimal, formatPercent, formatScaled, formatShare } from '../../i18n/format';
 import { type MessageKey, t } from '../../i18n/i18n';
 import { SIDES } from '../../scopeSides';
 import type { FightTab, MetricTab, ReportData, TimeRange } from '../../store';
 import { rowLabel, valueLabel } from '../filters/labels';
 import type { KpiTone } from '../Kpi';
 import { shortName } from '../overview/players';
+import { type SetRow, averageFirstDeath, bestPull, earliestFirstDeath } from '../overview/setOverviewModel';
 import { formatCapTime, powerName } from '../resources/powerNames';
 import { hitName, reportSpellName } from '../reports/reportData';
 
@@ -20,7 +21,9 @@ export interface HeaderTile {
 export interface HeaderInput {
   /** The replay's header has no key figures. */
   tab: Exclude<FightTab, 'replay'>;
-  row: FightRow;
+  playerCount: number;
+  /** The pulls of a pull set, empty while its overview loads; `null` for a single pull. */
+  setRows: SetRow[] | null;
   /** The whole pull; `null` while it loads. */
   overview: QuickOverview | null;
   range: TimeRange | null;
@@ -53,6 +56,7 @@ export function headerTiles(input: HeaderInput): HeaderTile[] {
   const ready = <K extends keyof ReportOf>(want: K) => readyData(input, want);
   switch (tab) {
     case 'overview':
+      if (input.setRows) return setTiles(input.overview?.kpis ?? null, input.setRows);
       return overviewTiles(input.range === null ? (input.overview?.kpis ?? null) : (ready('overview')?.kpis ?? null), input.range !== null);
     case 'resources': {
       const data = ready('resources');
@@ -112,6 +116,33 @@ function overviewTiles(kpis: Kpis | null, inRange: boolean): HeaderTile[] {
       sub: t('kpi.overDuration', { duration: formatDuration(kpis.durationMs) }),
     },
   ];
+}
+
+function setTiles(kpis: Kpis | null, rows: SetRow[]): HeaderTile[] {
+  const best = bestPull(rows);
+  const labels = [t('kpi.raidDps'), t(best?.kind === 'kill' ? 'kpi.bestKill' : 'kpi.bestWipe'), t('kpi.deaths'), t('kpi.firstDeathLabel')];
+  if (!kpis) return labels.map(pendingTile);
+  const earliest = earliestFirstDeath(rows);
+  const bestValue = best ? (best.kind === 'kill' ? formatDuration(best.row.view.durationMs) : formatPercent(best.row.view.bossHpPercent ?? 0)) : '—';
+  return [
+    { label: labels[0], value: formatAmount(kpis.raidDps), sub: t('kpi.damageOver', { damage: formatAmount(kpis.raidDamage), duration: formatDuration(kpis.durationMs) }) },
+    { label: labels[1], value: bestValue, sub: best ? t('kpi.pullNumber', { n: best.row.view.n }) : '' },
+    setDeathsTile(kpis, rows),
+    {
+      label: labels[3],
+      value: averageFirstDeath(rows),
+      sub: earliest ? t('kpi.earliestFirstDeath', { time: formatEventTimeTenths(earliest.ms), n: earliest.n }) : t('kpi.noDeaths'),
+    },
+  ];
+}
+
+function setDeathsTile(kpis: Kpis, rows: SetRow[]): HeaderTile {
+  return {
+    label: t('kpi.deaths'),
+    value: formatInteger(kpis.deaths),
+    tone: kpis.deaths > 0 ? 'death' : undefined,
+    sub: t('kpi.deathsPerPull', { count: formatOneDecimal(rows.length > 0 ? kpis.deaths / rows.length : 0) }),
+  };
 }
 
 const perSecond = (total: number, durationMs: number) => (durationMs > 0 ? (total * 1000) / durationMs : 0);
@@ -192,7 +223,11 @@ function takenTiles(report: ReportOf['taken'] | null, input: HeaderInput): Heade
     { label: labels[0], value: formatScaled(report.total), sub: t('kpi.dtps', { amount: formatScaled(perSecond(report.total, report.durationMs)) }) },
     { label: labels[1], value: ability ? formatScaled(ability.amount) : '—', sub: ability ? hitName(ability, (id) => reportSpellName(report.spells, id)) : '' },
     { label: labels[2], value: player ? formatScaled(player.amount) : '—', sub: player ? playerName(report.roster, player.player) : '' },
-    input.overview ? deathsTile(input.overview.timeline.markers.deaths.map((d) => d.t).filter((at) => inRange(input.range, at, input.overview!.timeline.durationMs))) : pendingTile(labels[3]),
+    !input.overview
+      ? pendingTile(labels[3])
+      : input.setRows
+        ? setDeathsTile(input.overview.kpis, input.setRows)
+        : deathsTile(input.overview.timeline.markers.deaths.map((d) => d.t).filter((at) => inRange(input.range, at, input.overview!.timeline.durationMs))),
   ];
 }
 
@@ -231,7 +266,7 @@ function deathsTiles(report: ReportOf['deaths'] | null, input: HeaderInput): Hea
     { label: labels[2], value: formatInteger(report.rezzed), sub: t('kpi.ofDeaths', { count }) },
     onePlayer
       ? { label: labels[3], value: formatDuration(report.deadMs), sub: t('kpi.ofDeaths', { count }) }
-      : { label: labels[3], value: formatInteger(Math.max(0, input.row.playerCount - report.deadUnits)), sub: t('kpi.ofPlayers', { count: input.row.playerCount }) },
+      : { label: labels[3], value: formatInteger(Math.max(0, input.playerCount - report.deadUnits)), sub: t('kpi.ofPlayers', { count: input.playerCount }) },
   ];
 }
 

@@ -29,8 +29,10 @@ export function FilterPicker({ dimension, caption, allLabel, value, playersByRol
   const breakdownRoster = useApp((s) => s.breakdown?.roster);
   const boss = useApp((s) => {
     const view = s.view;
+    if (view.kind === 'set') return s.log?.fights.find((f) => f.encounterId === view.set.encounterId)?.name ?? '';
     return view.kind === 'fight' ? (s.log?.fights.find((f) => f.index === view.fightIndex)?.name ?? '') : '';
   });
+  const inSet = useApp((s) => s.view.kind === 'set');
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<FilterOption[]>([]);
   const [query, setQuery] = useState('');
@@ -46,13 +48,14 @@ export function FilterPicker({ dimension, caption, allLabel, value, playersByRol
   );
 
   useEffect(() => {
-    if (!open && !value) return;
+    // A closed set picker keeps the list it was picked from for its label: a new one reads every pull.
+    if (!open && (!value || inSet)) return;
     let live = true;
-    void loadOptions(dimension).then((list) => live && setOptions(list));
+    void loadOptions(dimension, () => live).then((list) => live && setOptions(list));
     return () => {
       live = false;
     };
-  }, [open, value, dimension, loadOptions]);
+  }, [open, value, inSet, dimension, loadOptions]);
 
   useEffect(() => {
     if (open) search.current?.focus();

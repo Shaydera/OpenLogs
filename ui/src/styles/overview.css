@@ -566,3 +566,72 @@
 .vline-lust {
   border-left: 1px dashed var(--lust-line);
 }
+
+/* Pull set overview: one grid row per pull, the boss HP curve on a track as long as the pull. */
+.set-scroll {
+  overflow-x: auto;
+}
+.set-table {
+  min-width: 1040px;
+}
+.set-row {
+  display: grid;
+  grid-template-columns: 44px 76px 72px minmax(180px, 1fr) 72px 64px 88px 88px 150px 24px;
+  align-items: center;
+  gap: 14px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 18px;
+  text-align: left;
+}
+.set-pull {
+  font: inherit;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+}
+.set-pull:hover {
+  background: var(--panel-raised);
+}
+.set-head {
+  padding-block: 4px;
+}
+.set-row .num-col {
+  text-align: right;
+  white-space: nowrap;
+}
+.set-track {
+  display: block;
+  height: 34px;
+  background: var(--plot);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.set-curve {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.set-curve-area {
+  fill: var(--dps-area);
+}
+.set-curve-line {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+}
+.set-total {
+  background: var(--panel-raised);
+  border-top: 1px solid var(--line-strong);
+  font-weight: 600;
+}
+.set-total-label {
+  grid-column: span 2;
+  white-space: nowrap;
+}
+.set-best {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}

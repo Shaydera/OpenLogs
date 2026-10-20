@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { api } from './api/client';
 import { replayClock } from './components/replay/replayClock';
 import type { ChosenLog, LogSource } from './api/logSource';
-import type { BreakdownRow, DamageReport, LogView, PullComparison, QuickOverview, ReplayData, RecentLog, Scope, Timeline, UnitRef } from './api/types';
+import type { BreakdownRow, DamageReport, LogView, PullComparison, PullSet, QuickOverview, ReplayData, RecentLog, Scope, SetOverview, Timeline, UnitRef } from './api/types';
 import { comparisonFixture } from './test/compareFixture';
 import { overviewFixture } from './test/overviewFixture';
 import {
@@ -46,6 +46,7 @@ vi.mock('./api/client', () => ({
     filterOptions: vi.fn(),
     events: vi.fn(),
     timeline: vi.fn(),
+    pullSet: vi.fn(),
   },
 }));
 
@@ -513,6 +514,238 @@ describe('request races', () => {
     settle();
     await pending;
     expect(useApp.getState()).toMatchObject(expected);
+  });
+});
+
+describe('pull sets', () => {
+  const SET: PullSet = { kind: 'wipes', encounterId: 3492, difficulty: 15, fights: [1, 3] };
+  const SET_OVERVIEW: SetOverview = {
+    overview: overviewFixture,
+    pulls: [1, 3].map((fightIndex) => ({ fightIndex, kpis: overviewFixture.kpis, bossHpStepMs: 1000, bossHp: [100, 62] })),
+  };
+
+  async function openSet() {
+    await useApp.getState().openLog(chosen(LOG));
+    vi.mocked(api.pullSet).mockResolvedValueOnce([SET_OVERVIEW]);
+    await useApp.getState().openSet(SET);
+  }
+
+  function capturedPass() {
+    const pass = deferred<unknown[]>();
+    const captured: NonNullable<Parameters<typeof api.pullSet>[3]> = {};
+    vi.mocked(api.pullSet).mockImplementationOnce((_logId, _fights, _commands, options) => {
+      Object.assign(captured, options);
+      return pass.promise;
+    });
+    return { pass, captured };
+  }
+
+  async function onDamageTab() {
+    await openSet();
+    vi.mocked(api.pullSet).mockResolvedValueOnce([damageReportFixture, breakdownFixture]);
+    await useApp.getState().setTab('damage');
+  }
+
+  it('opening_a_set_reads_its_overview_over_every_pull', async () => {
+    await useApp.getState().openLog(chosen(LOG));
+    const { pass, captured } = capturedPass();
+    const pending = useApp.getState().openSet(SET);
+    captured.onProgress?.({ done: 1, total: 2 });
+    expect(useApp.getState()).toMatchObject({ view: { kind: 'set', set: SET }, fightLoading: true, setProgress: { done: 1, total: 2 } });
+    pass.resolve([SET_OVERVIEW]);
+    await pending;
+    expect(api.pullSet).toHaveBeenCalledWith(LOG.id, [1, 3], [{ command: 'quick_overview', args: { filter: WHOLE_PULL } }], expect.anything());
+    expect(api.quickOverview).not.toHaveBeenCalled();
+    expect(useApp.getState()).toMatchObject({ overview: overviewFixture, setPulls: SET_OVERVIEW.pulls, fightLoading: false, setProgress: null });
+  });
+
+  it('a_queued_pass_shows_its_progress_once_it_starts_reading', async () => {
+    await useApp.getState().openLog(chosen(LOG));
+    const overviewPass = capturedPass();
+    const opening = useApp.getState().openSet(SET);
+    overviewPass.captured.onProgress?.({ done: 1, total: 2 });
+    const reportPass = capturedPass();
+    const switching = useApp.getState().setTab('damage');
+    expect(useApp.getState().setProgress).toEqual({ done: 1, total: 2 });
+    overviewPass.captured.onProgress?.({ done: 2, total: 2 });
+    expect(useApp.getState().setProgress).toEqual({ done: 2, total: 2 });
+    overviewPass.pass.resolve([SET_OVERVIEW]);
+    await opening;
+    expect(useApp.getState().setProgress).toBeNull();
+    reportPass.captured.onProgress?.({ done: 0, total: 2 });
+    expect(useApp.getState().setProgress).toEqual({ done: 0, total: 2 });
+    reportPass.pass.resolve([damageReportFixture, breakdownFixture]);
+    await switching;
+    expect(useApp.getState().setProgress).toBeNull();
+  });
+
+  it('a_damage_tab_in_a_set_reads_report_and_breakdown_in_one_pass', async () => {
+    await openSet();
+    vi.mocked(api.pullSet).mockResolvedValueOnce([damageReportFixture, breakdownFixture]);
+    await useApp.getState().setTab('damage');
+    expect(api.pullSet).toHaveBeenLastCalledWith(
+      LOG.id,
+      [1, 3],
+      [
+        { command: 'damage_done_report', args: { filter: WHOLE_PULL } },
+        { command: 'breakdown_report', args: { filter: WHOLE_PULL, scope: OPEN, metric: 'damageDone', group: 'source' } },
+      ],
+      expect.anything(),
+    );
+    expect(api.damageDoneReport).not.toHaveBeenCalled();
+    expect(useApp.getState()).toMatchObject({ report: { tab: 'damage', data: damageReportFixture }, breakdown: breakdownFixture, reportLoading: false, setProgress: null });
+  });
+
+  it('a_filter_picker_in_a_set_lists_the_options_of_every_pull', async () => {
+    await onDamageTab();
+    const options = [{ kind: 'unit', unit: { kind: 'player', actorId: 2 } }];
+    vi.mocked(api.pullSet).mockResolvedValueOnce([options]);
+    expect(await useApp.getState().filterOptions('target')).toBe(options);
+    expect(api.pullSet).toHaveBeenLastCalledWith(
+      LOG.id,
+      [1, 3],
+      [{ command: 'filter_options', args: { filter: WHOLE_PULL, scope: OPEN, metric: 'damageDone', dimension: 'target' } }],
+      expect.anything(),
+    );
+    expect(api.filterOptions).not.toHaveBeenCalled();
+  });
+
+  it('a_filter_menu_pass_stops_once_the_set_is_left_or_the_menu_no_longer_needs_it', async () => {
+    await onDamageTab();
+    let wanted = true;
+    const left = capturedPass();
+    const leaving = useApp.getState().filterOptions('target', () => wanted);
+    const closed = capturedPass();
+    const closing = useApp.getState().filterOptions('source', () => wanted);
+    expect(closed.captured.isStale?.()).toBe(false);
+    wanted = false;
+    expect(closed.captured.isStale?.()).toBe(true);
+    wanted = true;
+    useApp.getState().backToPulls();
+    expect(left.captured.isStale?.()).toBe(true);
+    left.pass.reject(new Error('cancelled'));
+    closed.pass.reject(new Error('cancelled'));
+    await expect(leaving).resolves.toEqual([]);
+    await expect(closing).resolves.toEqual([]);
+  });
+
+  it('reopening_a_filter_menu_with_the_same_filters_reuses_the_options_of_the_set', async () => {
+    await onDamageTab();
+    const options = [{ kind: 'unit', unit: { kind: 'player', actorId: 2 } }];
+    vi.mocked(api.pullSet).mockResolvedValueOnce([options]);
+    expect(await useApp.getState().filterOptions('target')).toBe(options);
+    expect(await useApp.getState().filterOptions('target')).toBe(options);
+    expect(api.pullSet).toHaveBeenCalledTimes(3);
+
+    vi.mocked(api.pullSet).mockResolvedValueOnce([damageReportFixture, breakdownFixture]);
+    await useApp.getState().select('source', { kind: 'player', actorId: 2 });
+    vi.mocked(api.pullSet).mockResolvedValueOnce([[]]);
+    expect(await useApp.getState().filterOptions('target')).toEqual([]);
+    expect(api.pullSet).toHaveBeenCalledTimes(5);
+  });
+
+  it('two_filter_menus_asking_for_the_same_list_share_one_pass', async () => {
+    await onDamageTab();
+    const options = [{ kind: 'unit', unit: { kind: 'player', actorId: 2 } }];
+    let firstWanted = true;
+    const { pass, captured } = capturedPass();
+    const first = useApp.getState().filterOptions('target', () => firstWanted);
+    const second = useApp.getState().filterOptions('target');
+    expect(api.pullSet).toHaveBeenCalledTimes(3);
+    firstWanted = false;
+    expect(captured.isStale?.()).toBe(false);
+    pass.resolve([options]);
+    await expect(first).resolves.toBe(options);
+    await expect(second).resolves.toBe(options);
+  });
+
+  it('going_back_to_a_tab_the_set_already_read_shows_it_without_reading_the_pulls_again', async () => {
+    await onDamageTab();
+    vi.mocked(api.pullSet).mockResolvedValueOnce([damageReportFixture, breakdownFixture]);
+    await useApp.getState().setTab('healing');
+    await useApp.getState().setTab('damage');
+    expect(api.pullSet).toHaveBeenCalledTimes(3);
+    expect(useApp.getState()).toMatchObject({ report: { tab: 'damage', data: damageReportFixture }, breakdown: breakdownFixture, reportLoading: false });
+  });
+
+  it('cancelling_the_first_pass_of_a_set_returns_to_the_pull_list', async () => {
+    await useApp.getState().openLog(chosen(LOG));
+    const { pass, captured } = capturedPass();
+    const pending = useApp.getState().openSet(SET);
+    useApp.getState().cancelSet();
+    expect(captured.isStale?.()).toBe(true);
+    pass.reject(new Error('cancelled'));
+    await pending;
+    expect(useApp.getState()).toMatchObject({ view: { kind: 'start' }, overview: null, error: null });
+  });
+
+  it('cancelling_a_tab_pass_stops_it_and_returns_to_the_set_overview', async () => {
+    await openSet();
+    const { pass, captured } = capturedPass();
+    const switching = useApp.getState().setTab('damage');
+    useApp.getState().cancelSet();
+    expect(captured.isStale?.()).toBe(true);
+    pass.reject(new Error('cancelled'));
+    await switching;
+    expect(useApp.getState()).toMatchObject({ view: { kind: 'set', set: SET }, tab: 'overview', overview: overviewFixture, report: null, reportLoading: false, reportError: null });
+  });
+
+  it('cancelling_an_overkill_refresh_of_a_set_puts_the_toggle_back_with_the_overview_shown', async () => {
+    await onDamageTab();
+    const { pass, captured } = capturedPass();
+    const toggling = useApp.getState().setIncludeOverkill(true);
+    useApp.getState().cancelSet();
+    expect(captured.isStale?.()).toBe(true);
+    pass.reject(new Error('cancelled'));
+    await toggling;
+    expect(useApp.getState()).toMatchObject({ includeOverkill: false, tab: 'overview', overview: overviewFixture, error: null });
+  });
+
+  it('the_overkill_toggle_in_a_set_reads_the_overview_and_the_tab_in_one_pass', async () => {
+    await onDamageTab();
+    const withOverkill = { ...WHOLE_PULL, includeOverkill: true };
+    const overview = { ...overviewFixture, kpis: { ...overviewFixture.kpis, raidDamage: 1 } };
+    vi.mocked(api.pullSet).mockResolvedValueOnce([{ ...SET_OVERVIEW, overview }, damageReportFixture, breakdownFixture]);
+    await useApp.getState().setIncludeOverkill(true);
+    expect(api.pullSet).toHaveBeenCalledTimes(3);
+    expect(api.pullSet).toHaveBeenLastCalledWith(
+      LOG.id,
+      [1, 3],
+      [
+        { command: 'quick_overview', args: { filter: withOverkill } },
+        { command: 'damage_done_report', args: { filter: withOverkill } },
+        { command: 'breakdown_report', args: { filter: withOverkill, scope: OPEN, metric: 'damageDone', group: 'source' } },
+      ],
+      expect.anything(),
+    );
+    expect(useApp.getState()).toMatchObject({ overview, report: { tab: 'damage', data: damageReportFixture }, reportLoading: false });
+  });
+
+  it.each([
+    ['finishes', (pass: ReturnType<typeof deferred<unknown[]>>) => pass.resolve([SET_OVERVIEW])],
+    ['is cancelled', (pass: ReturnType<typeof deferred<unknown[]>>) => pass.reject(new Error('cancelled'))],
+  ])('leaving_a_set_stops_its_pass (the pass %s late)', async (_, settle) => {
+    await useApp.getState().openLog(chosen(LOG));
+    const { pass, captured } = capturedPass();
+    const pending = useApp.getState().openSet(SET);
+    useApp.getState().backToPulls();
+    expect(captured.isStale?.()).toBe(true);
+    settle(pass);
+    await pending;
+    expect(useApp.getState()).toMatchObject({ view: { kind: 'start' }, overview: null, setPulls: null, setProgress: null, error: null, fightError: null });
+  });
+
+  it('hiding_aborted_pulls_later_keeps_the_open_set', async () => {
+    await openSet();
+    useApp.getState().setHideAborted(false);
+    expect(useApp.getState().view).toEqual({ kind: 'set', set: SET });
+  });
+
+  it('tabs_without_set_support_cannot_be_opened_in_a_set', async () => {
+    await openSet();
+    await useApp.getState().setTab('deaths');
+    expect(useApp.getState()).toMatchObject({ tab: 'overview', overview: overviewFixture });
+    expect(api.deathsReport).not.toHaveBeenCalled();
   });
 });
 

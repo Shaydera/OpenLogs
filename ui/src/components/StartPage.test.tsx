@@ -11,7 +11,7 @@ import { overviewFixture } from '../test/overviewFixture';
 import { runLogFixture } from '../test/runFixture';
 
 vi.mock('../api/client', () => ({
-  api: { openLog: vi.fn(), recentLogs: vi.fn(), reopenRecent: vi.fn(), removeRecent: vi.fn(), quickOverview: vi.fn() },
+  api: { openLog: vi.fn(), recentLogs: vi.fn(), reopenRecent: vi.fn(), removeRecent: vi.fn(), quickOverview: vi.fn(), pullSet: vi.fn() },
 }));
 vi.mock('../api/logSource', () => ({ chooseLog: vi.fn() }));
 
@@ -74,6 +74,7 @@ beforeEach(() => {
   vi.mocked(api.openLog).mockReset().mockResolvedValue(LOG);
   vi.mocked(api.reopenRecent).mockReset().mockResolvedValue(SOURCE);
   vi.mocked(api.quickOverview).mockReset().mockResolvedValue(overviewFixture);
+  vi.mocked(api.pullSet).mockReset().mockResolvedValue([{ overview: overviewFixture, pulls: [] }]);
   vi.mocked(chooseLog).mockReset();
   localStorage.clear();
   useApp.setState(initialState());
@@ -121,6 +122,18 @@ describe('start page', () => {
     await userEvent.click(await screen.findByRole('button', { name: /^WoWCombatLog/ }));
     await userEvent.click(await screen.findByRole('button', { name: "Open pull 1 of Ula'tek" }));
     expect(api.quickOverview).toHaveBeenCalledWith(LOG_ID, 1, { startMs: null, endMs: null, attribution: 'reattributed', includeOverkill: false });
+  });
+
+  it('opens a pull set of a boss', async () => {
+    vi.mocked(api.openLog).mockResolvedValue({
+      ...LOG,
+      fights: [row(1, "Ula'tek", 3492, 'wipe', 201_000), row(2, "Ula'tek", 3492, 'wipe', 254_000), row(3, "Ula'tek", 3492, 'kill', 478_610)],
+    });
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /^WoWCombatLog/ }));
+    await userEvent.click(await screen.findByRole('button', { name: "Open All wipes of Ula'tek (2 pulls)" }));
+    expect(useApp.getState().view).toMatchObject({ kind: 'set', set: { kind: 'wipes', fights: [1, 2] } });
+    expect(api.pullSet).toHaveBeenCalledWith(LOG_ID, [1, 2], expect.anything(), expect.anything());
   });
 });
 

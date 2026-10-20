@@ -213,6 +213,32 @@
   gap: 2px;
   flex: 1 1 200px;
 }
+.set-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.set-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.set-button:hover {
+  background: var(--hover);
+  border-color: var(--accent-tint-line);
+}
+.set-count {
+  color: var(--muted);
+}
 .boss-name {
   margin: 0;
   font: 600 22px var(--font-label);

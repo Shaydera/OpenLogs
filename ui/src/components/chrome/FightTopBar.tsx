@@ -1,19 +1,23 @@
 import { Fragment, type RefObject, useRef } from 'react';
-import type { FightRow } from '../../api/types';
+import type { FightRow, PullSet } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { AppWordmark } from '../AppLogo';
 import { CompareMenu } from '../compare/CompareMenu';
-import { type CrumbAction, fightCrumbs } from './crumbs';
+import { type CrumbAction, fightCrumbs, setCrumbs } from './crumbs';
 import { RangeChip } from './RangeChip';
 import { ThemeSwitch } from './ThemeSwitch';
 
+type TopBarProps = ({ row: FightRow } | { set: PullSet }) & { currentRef?: RefObject<HTMLSpanElement | null> };
+
 /**
  * The top bar of every fight screen: the logo back to the pull list, the breadcrumb, the range pill
- * on a ranged detail page and "Compare with…". `currentRef` gets the last level: the focus target of
- * a page without a title.
+ * on a ranged detail page and "Compare with…" (a pull set has neither). `currentRef` gets the last
+ * level: the focus target of a page without a title.
  */
-export function FightTopBar({ row, currentRef }: { row: FightRow; currentRef?: RefObject<HTMLSpanElement | null> }) {
+export function FightTopBar(props: TopBarProps) {
+  const { currentRef } = props;
+  const row = 'row' in props ? props.row : null;
   const log = useApp((s) => s.log);
   const tab = useApp((s) => s.tab);
   const details = useApp((s) => s.details);
@@ -29,7 +33,7 @@ export function FightTopBar({ row, currentRef }: { row: FightRow; currentRef?: R
   const setRange = useApp((s) => s.setRange);
   const current = useRef<HTMLSpanElement | null>(null);
   if (!log) return null;
-  const crumbs = fightCrumbs({ log, row, tab, details, overview, report, comparing });
+  const crumbs = 'row' in props ? fightCrumbs({ log, row: props.row, tab, details, overview, report, comparing }) : setCrumbs({ log, set: props.set, tab });
 
   function follow(action: CrumbAction) {
     switch (action.kind) {
@@ -88,8 +92,8 @@ export function FightTopBar({ row, currentRef }: { row: FightRow; currentRef?: R
         })}
       </nav>
       <div className="appbar-end">
-        {!comparing && details.length > 0 && range !== null && <RangeChip range={range} onClear={clearRange} />}
-        {!comparing && <CompareMenu row={row} />}
+        {row && !comparing && details.length > 0 && range !== null && <RangeChip range={range} onClear={clearRange} />}
+        {row && !comparing && <CompareMenu row={row} />}
         <ThemeSwitch />
       </div>
     </header>

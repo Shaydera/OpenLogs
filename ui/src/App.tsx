@@ -48,7 +48,7 @@ export function App() {
           </button>
         </div>
       )}
-      {view.kind === 'fight' ? <FightView /> : <StartPage dragOver={dragOver} />}
+      {view.kind === 'start' ? <StartPage dragOver={dragOver} /> : <FightView />}
       {settingsOpen && <SettingsDialog />}
     </>
   );

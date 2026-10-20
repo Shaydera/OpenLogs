@@ -1,3 +1,4 @@
+import type { PullSet } from '../api/types';
 import { formatClock, formatDuration, formatInteger, formatKeystoneLevel, formatPercent, formatSeconds } from '../i18n/format';
 import { t } from '../i18n/i18n';
 import { type BossGroup, type PullStatus, type PullView, RUN_CHIP, type RunView, runChipLabel, runSubtitle, runTimeMs } from '../pulls/groupPulls';
@@ -6,6 +7,7 @@ import { BossTile } from './BossTile';
 interface Props {
   groups: BossGroup[];
   onOpen: (fightIndex: number) => void;
+  onOpenSet: (set: PullSet) => void;
 }
 
 const CHIP: Record<PullStatus, string> = { kill: 'kill', wipe: 'wipe', incomplete: 'wipe', aborted: 'abort' };
@@ -47,6 +49,14 @@ function Chevron() {
   );
 }
 
+function SetIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M2 4h12M2 8h12M2 12h12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** Column captions of a pull grid; each row names itself, so the captions are hidden from assistive tech. */
 function PullHead() {
   return (
@@ -63,7 +73,7 @@ function PullHead() {
 }
 
 /** One boss card per boss and difficulty. */
-export function PullList({ groups, onOpen }: Props) {
+export function PullList({ groups, onOpen, onOpenSet }: Props) {
   return (
     <>
       {groups.map((group) => {
@@ -82,6 +92,26 @@ export function PullList({ groups, onOpen }: Props) {
                 <h2 className="boss-name">{group.name}</h2>
                 <div className="boss-sub">{subtitle}</div>
               </div>
+              {group.sets.length > 0 && (
+                <nav className="set-buttons" aria-label={t('pulls.sets', { boss: group.name })}>
+                  {group.sets.map(({ set }) => {
+                    const label = t(`pulls.set.${set.kind}`);
+                    return (
+                      <button
+                        key={set.kind}
+                        type="button"
+                        className="set-button"
+                        aria-label={t('pulls.openSet', { set: label, boss: group.name, count: set.fights.length })}
+                        onClick={() => onOpenSet(set)}
+                      >
+                        <SetIcon />
+                        <span>{label}</span>
+                        <span className="num set-count">{formatInteger(set.fights.length)}</span>
+                      </button>
+                    );
+                  })}
+                </nav>
+              )}
               <span className={group.killPull !== null ? 'chip kill' : 'chip wipe'}>{bestLabel(group)}</span>
             </div>
             <PullHead />

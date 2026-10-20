@@ -1,4 +1,4 @@
-import type { BossProgress, FightRow, KeyTimer, RunInfo } from '../api/types';
+import type { BossProgress, FightRow, KeyTimer, PullSet, PullSetKind, RunInfo } from '../api/types';
 import { formatDuration, formatInteger } from '../i18n/format';
 import { t } from '../i18n/i18n';
 
@@ -37,6 +37,13 @@ export interface BossGroup {
   killDurationMs: number | null;
   bestWipePercent: number | null;
   pulls: PullView[];
+  /** `all`, `wipes` and `kills` of the visible pulls, each only with at least two pulls. */
+  sets: PullSetView[];
+}
+
+export interface PullSetView {
+  set: PullSet;
+  durationMs: number;
 }
 
 /** A boss pull inside a Mythic+ run; `n` counts within the run, hidden pulls included. */
@@ -118,9 +125,24 @@ export function groupPulls(fights: FightRow[], hideAborted: boolean): BossGroup[
       killDurationMs: kill?.durationMs ?? null,
       bestWipePercent: measured.length > 0 ? Math.min(...measured.map((view) => view.bossHpPercent!)) : null,
       pulls,
+      sets: pullSets(list[0], pulls),
     });
   }
   return result;
+}
+
+function pullSets(boss: Pick<FightRow, 'encounterId' | 'difficulty'>, pulls: PullView[]): PullSetView[] {
+  const kinds: Record<PullSetKind, PullView[]> = {
+    all: pulls,
+    wipes: pulls.filter((pull) => pull.status !== 'kill'),
+    kills: pulls.filter((pull) => pull.status === 'kill'),
+  };
+  return (Object.keys(kinds) as PullSetKind[])
+    .filter((kind) => kinds[kind].length >= 2)
+    .map((kind) => ({
+      set: { kind, encounterId: boss.encounterId, difficulty: boss.difficulty, fights: kinds[kind].map((pull) => pull.index) },
+      durationMs: kinds[kind].reduce((sum, pull) => sum + pull.durationMs, 0),
+    }));
 }
 
 /** Mythic+ runs in log order, each with its boss pulls numbered within the run. */

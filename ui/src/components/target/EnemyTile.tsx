@@ -10,6 +10,7 @@ import { useApp } from '../../store';
 export function EnemyTile({ name, primary, large = false }: { name: string; primary: boolean; large?: boolean }) {
   const encounterId = useApp((s) => {
     const view = s.view;
+    if (view.kind === 'set') return view.set.encounterId;
     if (view.kind !== 'fight') return 0;
     return s.log?.fights.find((f) => f.index === view.fightIndex)?.encounterId ?? 0;
   });
