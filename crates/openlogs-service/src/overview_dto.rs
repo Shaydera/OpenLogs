@@ -587,6 +587,8 @@ mod tests {
         Death {
             player,
             t,
+            life_start_ms: 0,
+            last_full_hp_ms: None,
             killing_blow: None,
             damage_last_5s: Vec::new(),
             damage_taken_5s: 0,

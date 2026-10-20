@@ -106,6 +106,15 @@ impl Scope {
         self.source.is_empty() && self.target.is_empty() && self.ability.is_empty()
     }
 
+    /// The selection of the units that died: source and ability belong to the killing blow.
+    pub fn dead_side(&self) -> Scope {
+        Scope {
+            source: Vec::new(),
+            ability: Vec::new(),
+            ..self.clone()
+        }
+    }
+
     pub fn wants(&self, fight: &Fight, source: &UnitRef, spell: SpellId, target: &UnitRef) -> bool {
         self.accepts(fight, Some(source), Some(spell), Some(target))
     }

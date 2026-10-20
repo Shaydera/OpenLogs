@@ -6,6 +6,7 @@ use openlogs_analysis::{
 use openlogs_gamedata::{ChannelSpells, Curated, DungeonTable, SpellClasses};
 use openlogs_index::{FightSummary, Indexer, LogIndex};
 use openlogs_service::auras_dto::AuraKindDto;
+use openlogs_service::casts_dto::CastsReportDto;
 use openlogs_service::log_dto::log_view;
 use openlogs_service::meter_dto::MeterCategoryDto;
 use openlogs_service::player_dto::MetricDto;
@@ -14,7 +15,9 @@ use openlogs_service::report_dto::{
 };
 use openlogs_service::scope_dto::{BreakdownDto, DimensionDto, ScopeDto, ScopeMetricDto};
 use openlogs_service::views_dto::{PageDto, ViewOptionsDto, WindowDto};
-use openlogs_service::{FilterOptionsDto, Merge, SetOverviewAcc};
+use openlogs_service::{
+    FilterOptionsDto, Merge, SetAurasDto, SetDeathsDto, SetInterruptsDto, SetOverviewAcc,
+};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -495,6 +498,40 @@ enum SetCommand {
         #[serde(skip)]
         set: Option<FilterOptionsDto>,
     },
+    DeathsReport {
+        filter: FilterDto,
+        #[serde(default)]
+        scope: ScopeDto,
+        #[serde(skip)]
+        set: Option<SetDeathsDto>,
+    },
+    CastsReport {
+        filter: FilterDto,
+        #[serde(default)]
+        scope: ScopeDto,
+        group: DimensionDto,
+        #[serde(default)]
+        hide_procs: bool,
+        #[serde(skip)]
+        set: Option<CastsReportDto>,
+    },
+    AurasReport {
+        filter: FilterDto,
+        #[serde(default)]
+        scope: ScopeDto,
+        kind: AuraKindDto,
+        group: DimensionDto,
+        #[serde(skip)]
+        set: Option<SetAurasDto>,
+    },
+    InterruptsReport {
+        filter: FilterDto,
+        #[serde(default)]
+        scope: ScopeDto,
+        group: DimensionDto,
+        #[serde(skip)]
+        set: Option<SetInterruptsDto>,
+    },
 }
 
 impl SetCommand {
@@ -547,6 +584,65 @@ impl SetCommand {
                     *dimension,
                 )),
             ),
+            Self::DeathsReport { filter, scope, set } => fold(
+                set,
+                openlogs_service::deaths_set_part(
+                    fight_index,
+                    fight,
+                    curated,
+                    *filter,
+                    scope.clone(),
+                ),
+            ),
+            Self::CastsReport {
+                filter,
+                scope,
+                group,
+                hide_procs,
+                set,
+            } => fold(
+                set,
+                openlogs_service::casts(
+                    fight,
+                    curated,
+                    *filter,
+                    scope.clone(),
+                    *group,
+                    *hide_procs,
+                ),
+            ),
+            Self::AurasReport {
+                filter,
+                scope,
+                kind,
+                group,
+                set,
+            } => fold(
+                set,
+                openlogs_service::auras_set_part(
+                    fight_index,
+                    fight,
+                    *filter,
+                    scope.clone(),
+                    *kind,
+                    *group,
+                ),
+            ),
+            Self::InterruptsReport {
+                filter,
+                scope,
+                group,
+                set,
+            } => fold(
+                set,
+                openlogs_service::interrupts_set_part(
+                    fight_index,
+                    fight,
+                    *filter,
+                    scope.clone(),
+                    *group,
+                ),
+            ),
         }
     }
 
@@ -558,6 +654,10 @@ impl SetCommand {
             Self::DamageTakenReport { set, .. } => set_value(finished(set)),
             Self::BreakdownReport { set, .. } => set_value(finished(set)),
             Self::FilterOptions { set, .. } => set_value(finished(set)),
+            Self::DeathsReport { set, .. } => set_value(finished(set)),
+            Self::CastsReport { set, .. } => set_value(finished(set)),
+            Self::AurasReport { set, .. } => set_value(finished(set)),
+            Self::InterruptsReport { set, .. } => set_value(finished(set)),
         }
     }
 }

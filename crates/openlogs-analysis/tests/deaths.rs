@@ -439,3 +439,51 @@ fn a_released_player_is_dead_until_alive_again() {
         "alive at the first own HP snapshot above 0; the next death counts"
     );
 }
+
+#[test]
+fn the_death_window_starts_at_the_last_full_hp_sample() {
+    let mut b = FightBuilder::new(60_000);
+    let player = b.player("Player-1", "Faelan-Emberfall-EU", 62);
+    own_hp(&mut b, 1_000, player, 1_000);
+    own_hp(&mut b, 4_000, player, 1_000);
+    own_hp(&mut b, 6_000, player, 600);
+    b.push(
+        9_000,
+        NOBODY,
+        player,
+        MELEE,
+        EventKind::Died { unconscious: false },
+    );
+    let deaths = deaths(&b.build());
+    assert_eq!(
+        (deaths[0].life_start_ms, deaths[0].last_full_hp_ms),
+        (0, Some(4_000))
+    );
+}
+
+#[test]
+fn a_death_after_a_battle_res_starts_its_life_at_the_return() {
+    let mut b = FightBuilder::new(60_000);
+    let player = b.player("Player-1", "Wendel-Emberfall-EU", 71);
+    own_hp(&mut b, 2_000, player, 1_000);
+    b.push(
+        5_000,
+        NOBODY,
+        player,
+        MELEE,
+        EventKind::Died { unconscious: false },
+    );
+    own_hp(&mut b, 20_000, player, 500);
+    b.push(
+        30_000,
+        NOBODY,
+        player,
+        MELEE,
+        EventKind::Died { unconscious: false },
+    );
+    let deaths = deaths(&b.build());
+    assert_eq!(
+        (deaths[1].life_start_ms, deaths[1].last_full_hp_ms),
+        (20_000, None)
+    );
+}

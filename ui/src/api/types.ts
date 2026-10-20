@@ -684,6 +684,9 @@ export interface DeathRecap extends DeathEntry {
   /** The killing blow's spell hitting in a row before the death. */
   lethalBurst: PlayerDeath['lethalBurst'];
   maxHp: number | null;
+  /** The last full-HP sample of the life, else the life's start. */
+  windowStartMs: number;
+  windowFromFullHp: boolean;
   /** The last 8 s, oldest first. */
   events: RecapEvent[];
   hp: { t: number; pct: number }[];

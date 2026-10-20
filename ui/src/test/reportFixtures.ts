@@ -454,6 +454,8 @@ const faelanRecap: DeathRecap = {
   number: 4,
   specName: 'Arcane Mage',
   maxHp: 959_133,
+  windowStartMs: 236_000,
+  windowFromFullHp: true,
   resurrectedBy: { spellId: 20484, source: 6 },
   lethalBurst: { spellId: 1302982, count: 2, windowMs: 1_010 },
   events: [

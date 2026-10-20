@@ -347,9 +347,13 @@ fn every_report_reaches_the_ui_with_camel_case_keys() {
             { "command": "damage_taken_report", "args": { "filter": whole_pull() } },
             { "command": "breakdown_report", "args": { "filter": whole_pull(), "scope": scope, "metric": "damageDone", "group": "source" } },
             { "command": "filter_options", "args": { "filter": whole_pull(), "metric": "damageDone", "dimension": "ability" } },
+            { "command": "deaths_report", "args": { "filter": whole_pull() } },
+            { "command": "casts_report", "args": { "filter": whole_pull(), "scope": scope, "group": "source", "hideProcs": true } },
+            { "command": "auras_report", "args": { "filter": whole_pull(), "scope": { "perspective": "enemy" }, "kind": "debuffs", "group": "ability" } },
+            { "command": "interrupts_report", "args": { "filter": whole_pull(), "scope": scope, "group": "source" } },
         ]),
     );
-    assert_eq!(set.len(), 6);
+    assert_eq!(set.len(), 10);
     assert_eq!(set[0]["pulls"].as_array().unwrap().len(), 2);
     assert_camel_case_keys(&Value::Array(set), "set");
 }
@@ -404,6 +408,25 @@ fn a_set_pass_sums_damage_over_its_pulls() {
         total_of(&third, FAELAN) > 0,
         "Faelan hits Ula'tek in pull 3"
     );
+}
+
+#[test]
+fn a_set_pass_lists_deaths_per_pull() {
+    let (mut engine, _) = open(FIXTURE);
+    let commands = json!([{ "command": "deaths_report", "args": { "filter": whole_pull() } }]);
+    let set = feed_set(&mut engine, FIXTURE, &[1, 3], commands).remove(0);
+    let pulls = set["pulls"].as_array().unwrap();
+    assert_eq!(pulls.len(), 2);
+    for (pull, fight) in pulls.iter().zip([1, 3]) {
+        let (mut single, _) = open(FIXTURE);
+        load(&mut single, FIXTURE, fight);
+        let report = call(
+            &single,
+            "deaths_report",
+            json!({ "fightIndex": fight, "filter": whole_pull() }),
+        );
+        assert_eq!(pull["deaths"], report["deaths"]);
+    }
 }
 
 #[test]

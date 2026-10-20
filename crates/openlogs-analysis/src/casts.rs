@@ -19,6 +19,8 @@ pub struct CastExtra {
     pub kind: CellKind,
     /// The row's cast ID with the most casts; other IDs of the same name are counted in.
     pub spell: SpellId,
+    /// Casts per cast ID, most casts first, the lowest ID on a tie.
+    pub casts_by_spell: Vec<(SpellId, u32)>,
     pub casts: u32,
     /// The first cast in the range; equal counts are ordered by it.
     pub first_cast_ms: i32,
@@ -242,6 +244,7 @@ pub fn casts_report(
                 link: ids
                     .iter()
                     .find_map(|&(spell, _)| index.link(fight, player, spell)),
+                casts_by_spell: ids,
                 player,
                 ability,
                 kind,

@@ -42,6 +42,8 @@ pub struct KickRow {
     pub key: RowKey,
     /// Ability rows: the stopped spell ID counted most often (for the icon); 0 for unit rows.
     pub spell: SpellId,
+    /// Ability rows: how often each stopped spell ID was counted, by ID.
+    pub spell_counts: Vec<(SpellId, u32)>,
     pub interrupts: u32,
     pub dispels: u32,
 }
@@ -184,6 +186,7 @@ pub fn interrupts_report(
                 KickRow {
                     key,
                     spell: 0,
+                    spell_counts: Vec::new(),
                     interrupts: 0,
                     dispels: 0,
                 },
@@ -220,9 +223,11 @@ pub fn interrupts_report(
         .map(|(mut row, spells)| {
             if let RowKey::Ability { .. } = row.key {
                 row.spell = spells
-                    .into_iter()
-                    .max_by(|a, b| a.1.cmp(&b.1).then(b.0.cmp(&a.0)))
-                    .map_or(0, |(spell, _)| spell);
+                    .iter()
+                    .max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0)))
+                    .map_or(0, |(&spell, _)| spell);
+                row.spell_counts = spells.into_iter().collect();
+                row.spell_counts.sort_by_key(|&(spell, _)| spell);
             }
             row
         })
