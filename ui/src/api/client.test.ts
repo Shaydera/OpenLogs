@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Engine } from '../engine/engine';
-import { createClient } from './client';
+import { createClient, SetCancelled } from './client';
 import type { Database, StoreName } from './db';
 import type { LogSource } from './logSource';
 import type { LogView } from './types';
@@ -39,6 +39,7 @@ function view(id: string, logVersion: number | null = 22): LogView {
 function fakeEngine() {
   const loaded: number[] = [];
   const fed: number[] = [];
+  const setFeeds: number[] = [];
   const state = { restarts: 0 };
   const engine: Engine = {
     indexFormatVersion: async () => 5,
@@ -53,10 +54,13 @@ function fakeEngine() {
     fightRange: async (fight) => [fight * 100, fight * 100 + 100],
     touchFight: async (fight) => loaded.includes(fight),
     loadFight: async (_, __, fight) => void loaded.push(fight),
+    setBegin: async () => void setFeeds.splice(0),
+    setFeed: async (_, __, fight) => void setFeeds.push(fight),
+    setFinish: async () => JSON.stringify([{ pulls: setFeeds.length }]),
     call: async <T>(command: string, args: object) => ({ command, args }) as T,
     restarts: () => state.restarts,
   };
-  return { engine, loaded, fed, state };
+  return { engine, loaded, fed, setFeeds, state };
 }
 
 function source(id: string, size: number, lastModified = 1): LogSource & { read: ReturnType<typeof vi.fn> } {
@@ -168,6 +172,41 @@ describe('reports', () => {
 
     await api.openLog(source('other.txt', 1000));
     await expect(api.damageDoneReport('raid.txt', 1, filter)).rejects.toBe('This log is no longer open. Open it again.');
+  });
+});
+
+describe('pull sets', () => {
+  const commands = [{ command: 'quick_overview' as const, args: { filter: null } }];
+
+  it('a_pull_set_feeds_every_pull_in_order_and_reports_progress', async () => {
+    const { api, setFeeds } = client();
+    await api.openLog(source('raid.txt', 1000));
+    const progress: { done: number; total: number }[] = [];
+
+    const results = await api.pullSet('raid.txt', [1, 3, 4], commands, { onProgress: (p) => progress.push(p) });
+
+    expect(setFeeds).toEqual([1, 3, 4]);
+    expect(progress).toEqual([{ done: 0, total: 3 }, { done: 1, total: 3 }, { done: 2, total: 3 }, { done: 3, total: 3 }]);
+    expect(results).toEqual([{ pulls: 3 }]);
+  });
+
+  it('a_stale_pull_set_stops_before_the_next_pull', async () => {
+    const { api, setFeeds } = client();
+    await api.openLog(source('raid.txt', 1000));
+
+    const run = api.pullSet('raid.txt', [1, 2, 3], commands, { isStale: () => setFeeds.length >= 1 });
+
+    await expect(run).rejects.toBeInstanceOf(SetCancelled);
+    expect(setFeeds).toEqual([1]);
+  });
+
+  it('a_pull_set_that_went_stale_while_queued_leaves_the_engine_alone', async () => {
+    const { api, setFeeds } = client();
+    await api.openLog(source('raid.txt', 1000));
+    await api.pullSet('raid.txt', [1, 2], commands);
+
+    await expect(api.pullSet('raid.txt', [3], commands, { isStale: () => true })).rejects.toBeInstanceOf(SetCancelled);
+    expect(setFeeds).toEqual([1, 2]);
   });
 });
 

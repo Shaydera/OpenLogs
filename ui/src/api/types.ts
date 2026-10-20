@@ -231,6 +231,33 @@ export interface PullComparison {
   players: ComparedPlayer[];
 }
 
+export type PullSetKind = 'all' | 'wipes' | 'kills';
+export interface PullSet {
+  kind: PullSetKind;
+  encounterId: number;
+  difficulty: number;
+  fights: number[];
+}
+export type SetCommand =
+  | { command: 'quick_overview'; args: { filter: ReportFilter | null } }
+  | { command: 'damage_done_report' | 'healing_report' | 'damage_taken_report'; args: { filter: ReportFilter } }
+  | { command: 'breakdown_report'; args: { filter: ReportFilter; scope: Scope; metric: ScopeMetric; group: Dimension } }
+  | { command: 'filter_options'; args: { filter: ReportFilter; scope: Scope; metric: ScopeMetric; dimension: Dimension } };
+export interface SetPull {
+  fightIndex: number;
+  kpis: Kpis;
+  bossHpStepMs: number;
+  bossHp: (number | null)[];
+}
+export interface SetOverview {
+  overview: QuickOverview;
+  pulls: SetPull[];
+}
+export interface SetProgress {
+  done: number;
+  total: number;
+}
+
 export type Attribution = 'augmented' | 'reattributed';
 
 export interface ReportFilter {

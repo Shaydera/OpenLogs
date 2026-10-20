@@ -1,8 +1,10 @@
 use openlogs_analysis::{
-    ActorKind, Attribution, Damage, DamageVia, EventKind, FailReason, LANDED_TAIL_BYTES, NO_SPELL,
-    ReportFilter, UnitHp, damage_done, load_fight, load_fight_slice,
+    ActorKind, Actors, Attribution, Damage, DamageVia, EventKind, FailReason, LANDED_TAIL_BYTES,
+    NO_SPELL, ReportFilter, UnitHp, damage_done, load_fight, load_fight_slice,
+    load_fight_slice_with,
 };
 use openlogs_index::{Outcome, index_bytes};
+use openlogs_parser::Unit;
 
 const FIXTURE: &str = include_str!("../../openlogs-index/tests/fixtures/mini_raid.txt");
 
@@ -222,4 +224,55 @@ fn a_swing_whose_landed_copy_follows_the_end_stays_out_of_damage_done() {
         [false, true],
         "the killing swing stays an event of the pull"
     );
+}
+
+#[test]
+fn a_guid_keeps_its_id_in_the_next_pull_of_a_set() {
+    let index = index_bytes(FIXTURE.as_bytes());
+    let first = load_fight(FIXTURE.as_bytes(), &index.fights[0]);
+    let third = load_fight_slice_with(
+        FIXTURE.as_bytes(),
+        0,
+        &index.fights[2],
+        first.actors.carried_over(),
+    );
+    let shared: Vec<_> = third
+        .actors
+        .players()
+        .filter_map(|p| Some((first.actors.id(&p.guid)?, p.id)))
+        .collect();
+    assert!(!shared.is_empty());
+    assert!(
+        shared
+            .iter()
+            .all(|(in_first, in_third)| in_first == in_third)
+    );
+}
+
+#[test]
+fn carried_over_actors_forget_per_pull_facts() {
+    let mut actors = Actors::new();
+    let player = actors.intern(&Unit {
+        guid: "Player-1",
+        name: Some("Faelan-Emberfall-EU"),
+        flags: 0x514,
+        raid_flags: 0x8000_0000,
+    });
+    let pet = actors.intern_guid("Pet-1");
+    actors.set_spec(player, 62);
+    actors.set_owner(pet, player);
+    actors.note_advanced(player, 700, 1_000_000);
+
+    let carried = actors.carried_over();
+    let kept = carried.get(player);
+    assert_eq!(
+        (kept.guid.as_str(), kept.name.as_deref(), kept.kind),
+        ("Player-1", Some("Faelan-Emberfall-EU"), ActorKind::Player)
+    );
+    assert_eq!(carried.id("Pet-1"), Some(pet));
+    assert_eq!(
+        (kept.flags, kept.spec_id, kept.item_level, kept.max_hp),
+        (0, None, None, None)
+    );
+    assert_eq!(carried.get(pet).owner, None);
 }

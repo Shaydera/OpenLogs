@@ -12,6 +12,9 @@ export type EngineMethod =
   | 'fight_range'
   | 'touch_fight'
   | 'load_fight'
+  | 'set_begin'
+  | 'set_feed'
+  | 'set_finish'
   | 'call';
 
 export interface EngineRequest {

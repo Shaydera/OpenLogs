@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use openlogs_gamedata::Curated;
 
@@ -31,6 +31,8 @@ pub struct BreakdownRow {
     pub key: RowKey,
     /// Ability rows: the ID with the largest amount (for the icon); 0 for unit rows.
     pub spell: SpellId,
+    /// Ability rows: the amount of every ID in the row, for choosing `spell` over several pulls.
+    pub by_spell: Vec<(SpellId, i64)>,
     /// Pet ability rows: the pets the amounts come from, one per owner.
     pub pets: Vec<UnitRef>,
     pub amount: i64,
@@ -125,7 +127,7 @@ struct Acc {
     absorbed: i64,
     hits: u32,
     crits: u32,
-    by_spell: HashMap<SpellId, i64>,
+    by_spell: BTreeMap<SpellId, i64>,
     pets: Vec<UnitRef>,
 }
 
@@ -142,6 +144,10 @@ impl Acc {
     }
 
     fn into_row(mut self, key: RowKey) -> BreakdownRow {
+        let by_spell = match key {
+            RowKey::Ability { .. } => self.by_spell.iter().map(|(&s, &a)| (s, a)).collect(),
+            RowKey::Unit(_) => Vec::new(),
+        };
         let pets = match key {
             RowKey::Ability { pet: Some(_), .. } => {
                 self.pets.sort();
@@ -150,6 +156,7 @@ impl Acc {
             _ => Vec::new(),
         };
         BreakdownRow {
+            by_spell,
             spell: match key {
                 RowKey::Ability { .. } => self
                     .by_spell

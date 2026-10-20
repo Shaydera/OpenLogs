@@ -28,13 +28,34 @@ pub const LANDED_TAIL_BYTES: u64 = 2 * 1024 * 1024;
 /// Loads one fight from a part of the log that starts at byte `base_offset` and covers the
 /// fight from its prelude to its end, plus up to [`LANDED_TAIL_BYTES`] after it.
 pub fn load_fight_slice(data: &[u8], base_offset: u64, summary: &FightSummary) -> Fight {
+    load_slice(data, base_offset, summary, Actors::new(), true)
+}
+
+/// Like [`load_fight_slice`] for one pull of a set: interns into `actors` so that units already
+/// in it keep their ids, and keeps no position samples, which only the replay draws.
+pub fn load_fight_slice_with(
+    data: &[u8],
+    base_offset: u64,
+    summary: &FightSummary,
+    actors: Actors,
+) -> Fight {
+    load_slice(data, base_offset, summary, actors, false)
+}
+
+fn load_slice(
+    data: &[u8],
+    base_offset: u64,
+    summary: &FightSummary,
+    actors: Actors,
+    keep_positions: bool,
+) -> Fight {
     let clamp = |offset: u64| {
         usize::try_from(offset.saturating_sub(base_offset))
             .map_or(data.len(), |o| o.min(data.len()))
     };
     let start = clamp(summary.prelude_offset);
     let end = clamp(summary.end_offset).max(start);
-    let mut builder = FightBuilder::new(summary);
+    let mut builder = FightBuilder::new(summary, actors, keep_positions);
     let mut fields = Vec::with_capacity(64);
     for raw in Lines::new(&data[start..end]) {
         if raw.bytes.is_empty() {
@@ -139,6 +160,7 @@ struct FightBuilder {
     resume_t: Option<i32>,
     /// Position samples per map, for `Fight::ui_map_id`.
     map_samples: HashMap<u32, usize>,
+    keep_positions: bool,
     /// Index into `fight.raid_markers` of each actor's interval still open.
     open_raid_markers: HashMap<ActorId, usize>,
     /// Index into `fight.world_markers` of each marker's interval still open.
@@ -146,7 +168,7 @@ struct FightBuilder {
 }
 
 impl FightBuilder {
-    fn new(summary: &FightSummary) -> Self {
+    fn new(summary: &FightSummary, actors: Actors, keep_positions: bool) -> Self {
         Self {
             start: summary.start,
             fight: Fight {
@@ -163,7 +185,7 @@ impl FightBuilder {
                 events: Vec::new(),
                 power: Vec::new(),
                 npc_power: Vec::new(),
-                actors: Actors::new(),
+                actors,
                 spells: BTreeMap::new(),
                 broken_lines: 0,
                 encounters: Vec::new(),
@@ -191,6 +213,7 @@ impl FightBuilder {
             run_end_t: None,
             resume_t: None,
             map_samples: HashMap::new(),
+            keep_positions,
             open_raid_markers: HashMap::new(),
             open_world_markers: summary
                 .world_markers
@@ -467,6 +490,7 @@ impl FightBuilder {
             }
         }
         if let (Some(info), Some(hp)) = (event.advanced, unit_hp)
+            && self.keep_positions
             && hp.actor != NOBODY
             && (info.x != 0.0 || info.y != 0.0 || info.ui_map_id != 0)
         {

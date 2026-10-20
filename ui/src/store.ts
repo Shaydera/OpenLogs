@@ -29,10 +29,15 @@ import type {
   Metric,
   PlayerDetail,
   PullComparison,
+  PullSet,
   QuickOverview,
   RecentLog,
   ReportFilter,
   Scope,
+  SetCommand,
+  SetOverview,
+  SetProgress,
+  SetPull,
   Side,
   TargetDetail,
   UnitRef,
@@ -96,11 +101,20 @@ const REPLAY_TICK_MS = 100;
 export type MetricTab = 'damage' | 'healing' | 'taken';
 export const isMetricTab = (tab: FightTab): tab is MetricTab => tab === 'damage' || tab === 'healing' || tab === 'taken';
 
-/** Whole Mythic+ runs have no replay; the boss pulls inside them have one. */
+/** Whole Mythic+ runs and pull sets have no replay; the boss pulls inside runs have one. */
 export function replayOffered({ log, view }: Pick<State, 'log' | 'view'>): boolean {
+  if (view.kind === 'set') return false;
   if (view.kind !== 'fight') return true;
   const { fightIndex } = view;
   return log?.fights.find((fight) => fight.index === fightIndex)?.run == null;
+}
+
+export const SET_TABS: readonly FightTab[] = ['overview', 'damage', 'healing', 'taken'];
+
+/** Whether the shown pull or set has `tab`. */
+export function tabOffered(s: Pick<State, 'log' | 'view'>, tab: FightTab): boolean {
+  if (tab === 'replay') return replayOffered(s);
+  return s.view.kind !== 'set' || SET_TABS.includes(tab);
 }
 
 /** The replay shows beside the report: the split is on and the shown fight has a replay. */
@@ -176,7 +190,7 @@ export type ReportData =
   | { tab: 'resources'; data: ResourcesReport }
   | { tab: 'overview'; data: QuickOverview };
 
-export type View = { kind: 'start' } | { kind: 'fight'; fightIndex: number };
+export type View = { kind: 'start' } | { kind: 'fight'; fightIndex: number } | { kind: 'set'; set: PullSet };
 
 /** Where keyboard focus goes after a navigation: a page title, the comparison title or the active tab. */
 export type FocusTarget = 'start' | 'fight' | 'page' | 'tab' | 'compare';
@@ -240,6 +254,10 @@ interface State {
   hideAborted: boolean;
   view: View;
   overview: QuickOverview | null;
+  /** The open set's pulls with their own figures. */
+  setPulls: SetPull[] | null;
+  /** How far the running pass over the set's pulls is; `null` when none runs. */
+  setProgress: SetProgress | null;
   fightLoading: boolean;
   /** Why the current pull could not be loaded. */
   fightError: string | null;
@@ -317,14 +335,17 @@ interface Actions {
   /** Clears the selections behind a detail page's dimensions and keeps the rest. */
   clearPageFilter(dimensions: Dimension[]): Promise<void>;
   setGrouping(dimension: Dimension): Promise<void>;
-  filterOptions(dimension: Dimension): Promise<FilterOption[]>;
+  /** `wanted`: whether the caller still needs the list; a set's pass over its pulls stops once it does not. */
+  filterOptions(dimension: Dimension, wanted?: () => boolean): Promise<FilterOption[]>;
   refreshRecent(): Promise<void>;
   openLog(chosen: ChosenLog): Promise<void>;
   openRecent(entry: RecentLog): Promise<void>;
   removeRecent(entry: RecentLog): Promise<void>;
   setHideAborted(hide: boolean): void;
   openFight(fightIndex: number): Promise<void>;
+  openSet(set: PullSet): Promise<void>;
   backToPulls(): void;
+  cancelSet(): void;
   dismissError(): void;
   showError(message: string): void;
   /** `focus`: where focus goes once the tab shows (the pull breadcrumb: the Overview title). */
@@ -463,6 +484,8 @@ export function initialState(): State {
     hideAborted: readFlag(HIDE_ABORTED_KEY, true),
     view: { kind: 'start' },
     overview: null,
+    setPulls: null,
+    setProgress: null,
     fightLoading: false,
     fightError: null,
     tab: 'overview',
@@ -516,6 +539,18 @@ let shownTimelineRequest = 0;
 let logRequest = 0;
 let fightRequest = 0;
 let comparisonRequest = 0;
+let setPass = 0;
+/** The pass whose progress is shown. */
+let reading: { pass: number; current: () => boolean } | null = null;
+/** The overkill mode of the set overview shown, or of the first one being read. */
+let setOverviewOverkill: boolean | null = null;
+interface SetCache {
+  fightRequest: number;
+  results: Map<string, unknown[]>;
+  pending: Map<string, { promise: Promise<unknown[]>; wanters: Set<() => boolean> }>;
+}
+/** The open set's merged results by query, and the filter-option passes still reading; each pass reads every pull. */
+let setCache: SetCache = { fightRequest: 0, results: new Map(), pending: new Map() };
 let replayRequest = 0;
 /** The pull a replay load is in flight for; `null` when none. */
 let replayLoadingFor: string | null = null;
@@ -561,6 +596,97 @@ function dropPendingReports(set: SetState) {
 /** Makes an in-flight comparison stale. */
 function dropPendingComparison() {
   comparisonRequest += 1;
+}
+
+/** Leaves the shown pull, set or comparison for `view`, whose overview starts loading; returns the load's token. */
+function startFightLoad(set: SetState, get: () => State, view: View): number {
+  const request = ++fightRequest;
+  dropPendingReports(set);
+  dropPendingComparison();
+  dropReplay(set, get);
+  set({
+    view,
+    overview: null,
+    setPulls: null,
+    setProgress: null,
+    fightLoading: true,
+    fightError: null,
+    error: null,
+    tab: 'overview',
+    range: null,
+    filters: EMPTY_FILTERS,
+    breakdown: null,
+    report: null,
+    reportError: null,
+    reportLoading: false,
+    rangeKpis: null,
+    details: [],
+    detailOrigin: null,
+    focusDeath: null,
+    comparison: null,
+    focusRequest: 'fight',
+    castsRow: null,
+    castsSort: DEFAULT_CASTS_SORT,
+    reportView: 'table',
+    zoom: null,
+    eventsOffset: {},
+    events: null,
+    timeline: null,
+  });
+  return request;
+}
+
+/** Writes what `load` brings for the pull or set load `request`, unless another load has started since. */
+async function settleFightLoad(set: SetState, request: number, load: () => Promise<Partial<State>>) {
+  try {
+    const loaded = await load();
+    if (request === fightRequest) set(loaded);
+  } catch (err) {
+    if (request === fightRequest) set({ error: t('error.loadFailed', { reason: String(err) }), fightError: String(err) });
+  } finally {
+    if (request === fightRequest) set({ fightLoading: false });
+  }
+}
+
+/**
+ * One pass over the set's pulls; it stops once `current()` no longer holds. Passes queue behind each
+ * other, so the progress is the one of the pass reading, from its first report on.
+ */
+async function readSet(set: SetState, logId: string, pullSet: PullSet, commands: SetCommand[], current: () => boolean): Promise<unknown[]> {
+  const pass = ++setPass;
+  const stopShowing = () => {
+    reading = null;
+    set({ setProgress: null });
+  };
+  // A stale pass reads on to its next pull; its count must not stand in for the passes after it.
+  if (reading && !reading.current()) stopShowing();
+  try {
+    return await api.pullSet(logId, pullSet.fights, commands, {
+      onProgress: (setProgress) => {
+        if (!current()) {
+          if (reading?.pass === pass) stopShowing();
+          return;
+        }
+        reading = { pass, current };
+        set({ setProgress });
+      },
+      isStale: () => !current(),
+    });
+  } finally {
+    if (reading?.pass === pass) stopShowing();
+  }
+}
+
+async function readSetOverview(set: SetState, logId: string, pullSet: PullSet, filter: ReportFilter, current: () => boolean): Promise<Partial<State>> {
+  setOverviewOverkill = filter.includeOverkill;
+  const [result] = await readSet(set, logId, pullSet, [{ command: 'quick_overview', args: { filter } }], current);
+  const { overview, pulls } = result as SetOverview;
+  return { overview, setPulls: pulls };
+}
+
+function setCacheOf(request: number): SetCache {
+  if (setCache.fightRequest !== request) setCache = { fightRequest: request, results: new Map(), pending: new Map() };
+  return setCache;
 }
 
 type ReportInput = Pick<State, 'tab' | 'details' | 'auraKind' | 'filters' | 'scope' | 'grouping' | 'hideProcs'>;
@@ -676,9 +802,65 @@ async function loadView(get: () => State & Actions, set: SetState, page?: Events
   }
 }
 
+const SET_REPORT_COMMANDS = {
+  damage: 'damage_done_report',
+  healing: 'healing_report',
+  taken: 'damage_taken_report',
+} as const satisfies Record<MetricTab, SetCommand['command']>;
+
+/**
+ * Loads the set's table tab with its breakdown and, once the overkill mode changed, the overview too, in one pass
+ * over its pulls; only the newest request may write the tab.
+ */
+async function loadSetReport(get: () => State & Actions, set: SetState, logId: string, pullSet: PullSet) {
+  const { tab, scope, grouping, includeOverkill } = get();
+  const request = ++reportRequest;
+  const fight = fightRequest;
+  const filter = reportFilter(get());
+  const withOverview = setOverviewOverkill !== includeOverkill;
+  const table: SetCommand[] = isMetricTab(tab)
+    ? [
+        { command: SET_REPORT_COMMANDS[tab], args: { filter } },
+        { command: 'breakdown_report', args: { filter, scope, metric: SIDES[tab].metric, group: groupOf(grouping, tab) } },
+      ]
+    : [];
+  const tableKey = JSON.stringify(table);
+  const cache = setCacheOf(fight);
+  const cached = table.length > 0 ? cache.results.get(tableKey) : undefined;
+  const toRead = cached ? [] : table;
+  if (cached) set({ report: { tab, data: cached[0] } as ReportData, breakdown: cached[1] as Breakdown, reportLoading: false, reportError: null, rangeKpis: null });
+  else if (table.length > 0) set({ reportLoading: true, reportError: null, rangeKpis: null });
+  else set({ report: null, breakdown: null, reportError: null, reportLoading: false });
+  if (!withOverview && toRead.length === 0) return;
+  const commands: SetCommand[] = withOverview ? [{ command: 'quick_overview', args: { filter } }, ...toRead] : toRead;
+  try {
+    const results = await readSet(set, logId, pullSet, commands, () => request === reportRequest);
+    if (withOverview) {
+      const { overview, pulls } = results.shift() as SetOverview;
+      // A pass that read on after a newer toggle holds the other mode.
+      if (fight === fightRequest && get().includeOverkill === filter.includeOverkill) {
+        setOverviewOverkill = filter.includeOverkill;
+        set({ overview, setPulls: pulls });
+      }
+    }
+    if (toRead.length > 0) {
+      cache.results.set(tableKey, results);
+      const [data, breakdown] = results;
+      if (request === reportRequest) set({ report: { tab, data } as ReportData, breakdown: breakdown as Breakdown });
+    }
+  } catch (err) {
+    if (request !== reportRequest) return;
+    if (toRead.length > 0) set({ reportError: String(err), breakdown: null, focusRequest: null });
+    else set({ error: t('error.setLoadFailed', { reason: String(err) }) });
+  } finally {
+    if (toRead.length > 0 && request === reportRequest) set({ reportLoading: false });
+  }
+}
+
 /** Loads the report of the current tab; only the newest request may write the result. */
 async function loadReport(get: () => State & Actions, set: SetState) {
   const { log, view, tab, range, details, scope, grouping } = get();
+  if (log && view.kind === 'set') return loadSetReport(get, set, log.id, view.set);
   if (!log || view.kind !== 'fight') return;
   const request = ++reportRequest;
   const viewToken = ++viewRequest;
@@ -739,7 +921,7 @@ async function loadReport(get: () => State & Actions, set: SetState) {
   }
 }
 
-/** The open pull's whole-pull overview, which the brush timeline draws; only the pull it was asked for may write. */
+/** The open pull's whole-pull overview, which the brush timeline draws; only the pull it was asked for may write. A set reads its overview with its tab in `loadSetReport`. */
 async function reloadOverview(get: () => State & Actions, set: SetState) {
   const { log, view } = get();
   if (!log || view.kind !== 'fight') return;
@@ -817,7 +999,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
       dropPendingReports(set);
       dropPendingComparison();
       dropReplay(set, get);
-      set({ log, view: { kind: 'start' }, overview: null, reportLoading: false, fightLoading: false, fightError: null, comparison: null });
+      set({ log, view: { kind: 'start' }, overview: null, setPulls: null, setProgress: null, reportLoading: false, fightLoading: false, fightError: null, comparison: null });
     };
     try {
       const source = await chosen.open();
@@ -888,54 +1070,56 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     set({ grouping: { ...get().grouping, [tab]: dimension } });
     await loadReport(get, set);
   },
-  async filterOptions(dimension) {
+  async filterOptions(dimension, wanted = () => true) {
     const { log, view, tab, scope } = get();
-    if (!log || view.kind !== 'fight' || !isFilterTab(tab)) return [];
-    return api.filterOptions(log.id, view.fightIndex, reportFilter(get()), scope, metricOf(tab, get().auraKind), dimension);
+    if (!log || view.kind === 'start' || !isFilterTab(tab)) return [];
+    const filter = reportFilter(get());
+    const metric = metricOf(tab, get().auraKind);
+    if (view.kind === 'fight') return api.filterOptions(log.id, view.fightIndex, filter, scope, metric, dimension);
+    const request = fightRequest;
+    const current = () => request === fightRequest && wanted();
+    const args = { filter, scope, metric, dimension };
+    const cache = setCacheOf(request);
+    const query = JSON.stringify({ options: args });
+    const cached = cache.results.get(query);
+    if (cached) return cached[0] as FilterOption[];
+    let pending = cache.pending.get(query);
+    if (pending) pending.wanters.add(wanted);
+    else {
+      const wanters = new Set([wanted]);
+      const promise = api.pullSet(log.id, view.set.fights, [{ command: 'filter_options', args }], {
+        isStale: () => request !== fightRequest || ![...wanters].some((still) => still()),
+      });
+      pending = { promise, wanters };
+      cache.pending.set(query, pending);
+      void promise
+        .then(
+          (results) => void cache.results.set(query, results),
+          () => {},
+        )
+        .finally(() => cache.pending.delete(query));
+    }
+    try {
+      const [options] = (await pending.promise) as [FilterOption[]];
+      return options;
+    } catch (err) {
+      if (!current()) return [];
+      throw err;
+    }
   },
 
   async openFight(fightIndex) {
     const log = get().log;
     if (!log) return;
-    const request = ++fightRequest;
-    dropPendingReports(set);
-    dropPendingComparison();
-    dropReplay(set, get);
-    set({
-      view: { kind: 'fight', fightIndex },
-      overview: null,
-      fightLoading: true,
-      fightError: null,
-      error: null,
-      tab: 'overview',
-      range: null,
-      filters: EMPTY_FILTERS,
-      breakdown: null,
-      report: null,
-      reportError: null,
-      reportLoading: false,
-      rangeKpis: null,
-      details: [],
-      detailOrigin: null,
-      focusDeath: null,
-      comparison: null,
-      focusRequest: 'fight',
-      castsRow: null,
-      castsSort: DEFAULT_CASTS_SORT,
-      reportView: 'table',
-      zoom: null,
-      eventsOffset: {},
-      events: null,
-      timeline: null,
-    });
-    try {
-      const overview = await api.quickOverview(log.id, fightIndex, reportFilter(get()));
-      if (request === fightRequest) set({ overview });
-    } catch (err) {
-      if (request === fightRequest) set({ error: t('error.loadFailed', { reason: String(err) }), fightError: String(err) });
-    } finally {
-      if (request === fightRequest) set({ fightLoading: false });
-    }
+    const request = startFightLoad(set, get, { kind: 'fight', fightIndex });
+    await settleFightLoad(set, request, async () => ({ overview: await api.quickOverview(log.id, fightIndex, reportFilter(get())) }));
+  },
+
+  async openSet(chosen) {
+    const log = get().log;
+    if (!log) return;
+    const request = startFightLoad(set, get, { kind: 'set', set: chosen });
+    await settleFightLoad(set, request, () => readSetOverview(set, log.id, chosen, reportFilter(get()), () => request === fightRequest));
   },
 
   backToPulls() {
@@ -946,6 +1130,8 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     set({
       view: { kind: 'start' },
       overview: null,
+      setPulls: null,
+      setProgress: null,
       fightLoading: false,
       fightError: null,
       tab: 'overview',
@@ -969,6 +1155,28 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     });
   },
 
+  cancelSet() {
+    if (get().overview === null) {
+      get().backToPulls();
+      return;
+    }
+    dropPendingReports(set);
+    // The stopped pass may have been re-reading the overview for a new overkill mode: the toggle goes back with it.
+    const shown = setOverviewOverkill;
+    const reverted = shown !== null && shown !== get().includeOverkill;
+    if (reverted) writeFlag(INCLUDE_OVERKILL_KEY, shown);
+    set({
+      tab: 'overview',
+      report: null,
+      breakdown: null,
+      reportError: null,
+      reportLoading: false,
+      rangeKpis: null,
+      focusRequest: 'tab',
+      ...(reverted ? { includeOverkill: shown } : {}),
+    });
+  },
+
   dismissError() {
     set({ error: null });
   },
@@ -978,8 +1186,10 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   },
 
   async setTab(chosen, focus = null) {
-    const { details, tab: current } = get();
-    const tab = chosen === 'replay' && !replayOffered(get()) ? 'overview' : chosen;
+    const { details, tab: current, view } = get();
+    const offered = tabOffered(get(), chosen);
+    if (!offered && view.kind === 'set') return;
+    const tab = offered ? chosen : 'overview';
     const keep = tab === 'damage' || tab === 'healing';
     const top = details[details.length - 1];
     // An ability page belongs to one metric; switching the metric shows its player instead.
@@ -990,6 +1200,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
 
   async openPlayer(player) {
     const state = get();
+    if (state.view.kind === 'set') return;
     // An enemy page stays below the player so Back returns to it; a shown player or ability is replaced.
     const below = state.details.slice(0, state.details.findLastIndex((d) => d.kind === 'target') + 1);
     set({
@@ -1013,6 +1224,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
 
   async openTarget(name) {
     const state = get();
+    if (state.view.kind === 'set') return;
     const details = state.details;
     const below = details[details.length - 1]?.kind === 'target' ? details.slice(0, -1) : details;
     set({
@@ -1027,6 +1239,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   },
 
   async openDeathRecap(player, t) {
+    if (get().view.kind === 'set') return;
     // A navigation to one death: show that player's deaths, whatever the page was filtered to.
     const filters: Filters = { perspective: 'friendly', own: [{ kind: 'player', actorId: player }], other: [], ability: [] };
     set({ tab: 'deaths', filters, details: [], detailOrigin: null, focusDeath: { player, t }, report: null, breakdown: null, reportError: null, focusRequest: 'page' });
@@ -1038,7 +1251,8 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   },
 
   async openAbilityOf(player, spellId, tab) {
-    const { details } = get();
+    const { details, view } = get();
+    if (view.kind === 'set') return;
     const top = details[details.length - 1];
     const ability = { kind: 'ability' as const, player, spellId, pet: null };
     if (top?.kind === 'player' && top.player === player) {
@@ -1122,13 +1336,15 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   async setIncludeOverkill(include) {
     writeFlag(INCLUDE_OVERKILL_KEY, include);
     set({ includeOverkill: include, eventsOffset: {}, focusRequest: null });
+    if (get().view.kind === 'set') return loadReport(get, set);
     await reloadOverview(get, set);
     if (get().comparison) await loadComparison(get, set);
     else await loadReport(get, set);
   },
 
   async setRange(range) {
-    const { zoom, overview } = get();
+    const { zoom, overview, view } = get();
+    if (view.kind === 'set') return;
     const inside = zoom !== null && overview !== null && covers(rangeWindow(range, overview.timeline.durationMs), zoom);
     set({ range, zoom: inside ? zoom : null, eventsOffset: {}, focusRequest: null });
     await loadReport(get, set);
@@ -1147,7 +1363,8 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   },
 
   async setReportView(reportView) {
-    if (get().reportView === reportView) return;
+    const { view, reportView: current } = get();
+    if (current === reportView || (view.kind === 'set' && reportView !== 'table')) return;
     set({ reportView, focusRequest: null });
     await loadView(get, set);
   },

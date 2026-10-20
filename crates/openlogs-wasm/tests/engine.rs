@@ -7,6 +7,8 @@ const FIXTURE: &str = include_str!("../../openlogs-index/tests/fixtures/mini_rai
 /// A synthetic +12 in the real line format.
 const MYTHIC_PLUS: &str = include_str!("../../openlogs-index/tests/fixtures/mythic_plus.txt");
 const FAELAN: &str = "Faelan-Emberfall-EU";
+/// In pull 1 only.
+const PYRRIN: &str = "Pyrrin-Emberfall-EU";
 
 fn whole_pull() -> Value {
     json!({ "startMs": null, "endMs": null, "attribution": "augmented", "includeOverkill": false })
@@ -26,9 +28,27 @@ fn open_with(mut engine: Engine, log: &str) -> (Engine, Value) {
 }
 
 fn load(engine: &mut Engine, log: &str, fight: u32) {
-    let (start, end) = engine.fight_range(fight).unwrap();
-    let part = &log.as_bytes()[start as usize..(end as usize).min(log.len())];
+    let (part, start) = part_of(engine, log, fight);
     engine.load_fight(part, start, fight).unwrap();
+}
+
+fn part_of<'a>(engine: &Engine, log: &'a str, fight: u32) -> (&'a [u8], u64) {
+    let (start, end) = engine.fight_range(fight).unwrap();
+    (
+        &log.as_bytes()[start as usize..(end as usize).min(log.len())],
+        start,
+    )
+}
+
+fn feed_set(engine: &mut Engine, log: &str, fights: &[u32], commands: Value) -> Vec<Value> {
+    engine
+        .set_begin(fights.to_vec(), &commands.to_string())
+        .unwrap();
+    for &fight in fights {
+        let (part, start) = part_of(engine, log, fight);
+        engine.set_feed(part, start, fight).unwrap();
+    }
+    serde_json::from_str(&engine.set_finish().unwrap()).unwrap()
 }
 
 fn call(engine: &Engine, command: &str, args: Value) -> Value {
@@ -315,6 +335,188 @@ fn every_report_reaches_the_ui_with_camel_case_keys() {
     for (name, json) in reports {
         assert_camel_case_keys(&json, name);
     }
+
+    let set = feed_set(
+        &mut engine,
+        FIXTURE,
+        &[1, 3],
+        json!([
+            { "command": "quick_overview", "args": { "filter": null } },
+            { "command": "damage_done_report", "args": { "filter": whole_pull() } },
+            { "command": "healing_report", "args": { "filter": whole_pull() } },
+            { "command": "damage_taken_report", "args": { "filter": whole_pull() } },
+            { "command": "breakdown_report", "args": { "filter": whole_pull(), "scope": scope, "metric": "damageDone", "group": "source" } },
+            { "command": "filter_options", "args": { "filter": whole_pull(), "metric": "damageDone", "dimension": "ability" } },
+        ]),
+    );
+    assert_eq!(set.len(), 6);
+    assert_eq!(set[0]["pulls"].as_array().unwrap().len(), 2);
+    assert_camel_case_keys(&Value::Array(set), "set");
+}
+
+fn single_pull_damage(fight: u32) -> Value {
+    let (mut engine, _) = open(FIXTURE);
+    load(&mut engine, FIXTURE, fight);
+    call(
+        &engine,
+        "damage_done_report",
+        json!({ "fightIndex": fight, "filter": whole_pull() }),
+    )
+}
+
+fn total_of(report: &Value, name: &str) -> u64 {
+    let id = actor_id_of(report, name);
+    report["players"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["player"] == id)
+        .map_or(0, |p| p["total"].as_u64().unwrap())
+}
+
+fn actor_id_of(report: &Value, name: &str) -> Value {
+    report["roster"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["name"] == name)
+        .map(|p| p["actorId"].clone())
+        .unwrap()
+}
+
+fn set_damage() -> Value {
+    json!([{ "command": "damage_done_report", "args": { "filter": whole_pull() } }])
+}
+
+#[test]
+fn a_set_pass_sums_damage_over_its_pulls() {
+    let (mut engine, _) = open(FIXTURE);
+    let set = feed_set(&mut engine, FIXTURE, &[1, 3], set_damage()).remove(0);
+    let (first, third) = (single_pull_damage(1), single_pull_damage(3));
+    let sum = |key: &str| first[key].as_u64().unwrap() + third[key].as_u64().unwrap();
+    assert_eq!(set["durationMs"].as_u64().unwrap(), sum("durationMs"));
+    assert_eq!(set["total"].as_u64().unwrap(), sum("total"));
+    assert_eq!(
+        total_of(&set, FAELAN),
+        total_of(&first, FAELAN) + total_of(&third, FAELAN)
+    );
+    assert!(
+        total_of(&third, FAELAN) > 0,
+        "Faelan hits Ula'tek in pull 3"
+    );
+}
+
+#[test]
+fn a_player_filter_means_the_same_player_in_every_pull_of_the_set() {
+    let (mut engine, _) = open(FIXTURE);
+    let set = feed_set(&mut engine, FIXTURE, &[1, 3], set_damage()).remove(0);
+    let faelan = actor_id_of(&set, FAELAN);
+    let (first, third) = (single_pull_damage(1), single_pull_damage(3));
+    assert_ne!(
+        faelan,
+        actor_id_of(&third, FAELAN),
+        "pull 3 alone gives Faelan another id"
+    );
+
+    let only_faelan = json!({
+        "perspective": "friendly",
+        "source": [{ "kind": "player", "actorId": faelan }],
+        "target": [],
+        "ability": []
+    });
+    let breakdown = feed_set(
+        &mut engine,
+        FIXTURE,
+        &[1, 3],
+        json!([{
+            "command": "breakdown_report",
+            "args": { "filter": whole_pull(), "scope": only_faelan, "metric": "damageDone", "group": "ability" }
+        }]),
+    )
+    .remove(0);
+    assert_eq!(
+        breakdown["total"].as_u64().unwrap(),
+        total_of(&first, FAELAN) + total_of(&third, FAELAN)
+    );
+}
+
+#[test]
+fn set_pulls_must_come_in_order() {
+    let (mut engine, _) = open(FIXTURE);
+    engine
+        .set_begin(vec![1, 3], &set_damage().to_string())
+        .unwrap();
+    let (part, start) = part_of(&engine, FIXTURE, 3);
+    assert_eq!(
+        engine.set_feed(part, start, 3).unwrap_err(),
+        "Pull 3 is not the next pull of the set."
+    );
+    let (part, start) = part_of(&engine, FIXTURE, 1);
+    engine.set_feed(part, start, 1).unwrap();
+    assert_eq!(
+        engine.set_finish().unwrap_err(),
+        "The pull set is incomplete."
+    );
+    assert!(
+        engine
+            .set_begin(vec![1, 9], &set_damage().to_string())
+            .is_err()
+    );
+    assert_eq!(
+        engine.set_finish().unwrap_err(),
+        "No pull set is being read.",
+        "a failed begin ends the earlier pass"
+    );
+}
+
+#[test]
+fn a_set_pass_unloads_the_pulls_loaded_before() {
+    let (mut engine, _) = open(FIXTURE);
+    load(&mut engine, FIXTURE, 1);
+    feed_set(&mut engine, FIXTURE, &[1, 3], set_damage());
+    assert!(!engine.touch_fight(1));
+}
+
+#[test]
+fn a_player_filter_counts_only_the_pulls_the_player_was_in() {
+    let overheal = "8526,8526,8526,0,nil";
+    assert!(FIXTURE.contains(overheal));
+    let log = FIXTURE.replacen(overheal, "8526,8526,0,0,nil", 1);
+    let (mut engine, _) = open(&log);
+    let healing = json!([{ "command": "healing_report", "args": { "filter": whole_pull() } }]);
+    let set = feed_set(&mut engine, &log, &[1, 3], healing).remove(0);
+    let pyrrin_healing = |pyrrin: Value| {
+        json!({
+            "filter": whole_pull(),
+            "scope": {
+                "perspective": "friendly",
+                "source": [{ "kind": "player", "actorId": pyrrin }],
+                "target": [],
+                "ability": []
+            },
+            "metric": "healing",
+            "group": "ability"
+        })
+    };
+    let scoped = feed_set(
+        &mut engine,
+        &log,
+        &[1, 3],
+        json!([{ "command": "breakdown_report", "args": pyrrin_healing(actor_id_of(&set, PYRRIN)) }]),
+    )
+    .remove(0);
+
+    load(&mut engine, &log, 1);
+    let healing_1 = call(
+        &engine,
+        "healing_report",
+        json!({ "fightIndex": 1, "filter": whole_pull() }),
+    );
+    let mut args = pyrrin_healing(actor_id_of(&healing_1, PYRRIN));
+    args["fightIndex"] = json!(1);
+    let first = call(&engine, "breakdown_report", args);
+    assert_eq!(first["total"], 8_526);
+    assert_eq!(scoped["total"], first["total"]);
 }
 
 #[test]
@@ -392,7 +594,7 @@ fn comparing_pulls_lists_every_player_of_either_pull_while_both_stay_loaded() {
         faelan["b"]["dps"].as_f64().unwrap() > 0.0,
         "Faelan hits Ula'tek in pull 3"
     );
-    let pyrrin = row("Pyrrin-Emberfall-EU");
+    let pyrrin = row(PYRRIN);
     assert!(pyrrin["a"].is_object() && pyrrin["b"].is_null() && pyrrin["dpsDelta"].is_null());
 
     assert!(engine.touch_fight(1));

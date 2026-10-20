@@ -1,9 +1,11 @@
-import type { Detail, FightRow, LogView, PlayerRef, QuickOverview } from '../../api/types';
+import type { Detail, FightRow, LogView, PlayerRef, PullSet, QuickOverview } from '../../api/types';
 import { formatDuration, formatKeystoneLevel } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { pullStatus, pullView, runStatus } from '../../pulls/groupPulls';
 import type { FightTab, ReportData } from '../../store';
 import { playerIndex, shortName, spellName } from '../overview/players';
+import { setIdentity } from './fightMeta';
+import { tabLabel } from './fightTabs';
 
 /** What a breadcrumb link does. */
 export type CrumbAction =
@@ -105,5 +107,21 @@ export function fightCrumbs({ log, row, tab, details, overview, report, comparin
   } else {
     levels.push({ label: t('crumb.withResult', { pull, result: resultLabel(row) }), action: null });
   }
-  return levels.map((level, i) => (i === levels.length - 1 ? { ...level, action: null, current: true } : { ...level, current: false }));
+  return finish(levels);
+}
+
+const finish = (levels: Level[]): Crumb[] =>
+  levels.map((level, i) => (i === levels.length - 1 ? { ...level, action: null, current: true } : { ...level, current: false }));
+
+/** `Sszorak · All pulls (10)`. */
+const setLabel = (log: LogView, set: PullSet) =>
+  t('crumb.set', { boss: setIdentity(log, set).name, set: t(`pulls.set.${set.kind}`), count: set.fights.length });
+
+/** A set's breadcrumb: the log file, then the set — alone on the Overview, with the tab on the others. */
+export function setCrumbs({ log, set, tab }: { log: LogView; set: PullSet; tab: FightTab }): Crumb[] {
+  const levels: Level[] = [{ label: log.fileName, action: { kind: 'pulls' } }];
+  const label = setLabel(log, set);
+  if (tab === 'overview') levels.push({ label, action: null });
+  else levels.push({ label, action: { kind: 'overview' } }, { label: tabLabel(tab), action: null });
+  return finish(levels);
 }

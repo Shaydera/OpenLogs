@@ -16,6 +16,7 @@ const ORDER: ReportView[] = ['table', 'timeline', 'events'];
 export function ViewSwitch() {
   const tab = useApp((s) => s.tab);
   const inDetail = useApp((s) => s.details.length > 0);
+  const inSet = useApp((s) => s.view.kind === 'set');
   const chosen = useApp((s) => s.reportView);
   const setReportView = useApp((s) => s.setReportView);
   const shown = effectiveView(tab, inDetail, chosen);
@@ -23,7 +24,7 @@ export function ViewSwitch() {
   return (
     <div className="seg view-switch" role="group" aria-label={t('view.label')}>
       {ORDER.map((view) => {
-        const reason = unavailableReason(tab, inDetail, view);
+        const reason = unavailableReason(tab, inDetail, inSet, view);
         const reasonId = `${id}-${view}`;
         return (
           <Fragment key={view}>

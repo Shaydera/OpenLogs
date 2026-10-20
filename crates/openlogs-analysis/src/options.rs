@@ -35,6 +35,8 @@ pub struct FilterOption {
     pub pets: Vec<String>,
     pub primary_spell: Option<SpellId>,
     pub variants: Vec<SpellVariant>,
+    /// What the list is ranked by, largest first.
+    pub amount: i64,
 }
 
 fn npc_id(guid: &str) -> Option<u32> {
@@ -165,7 +167,7 @@ pub fn filter_options(
     let index = (dimension == Dimension::Ability).then(|| VariantIndex::new(fight));
     ranked
         .into_iter()
-        .map(|(value, _)| {
+        .map(|(value, amount)| {
             let mut option = FilterOption {
                 value: value.clone(),
                 npc_id: None,
@@ -173,6 +175,7 @@ pub fn filter_options(
                 pets: Vec::new(),
                 primary_spell: None,
                 variants: Vec::new(),
+                amount,
             };
             match &value {
                 OptionValue::Unit(UnitRef::Unit(name)) => {

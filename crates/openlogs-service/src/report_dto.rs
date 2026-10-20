@@ -95,7 +95,7 @@ pub struct BuffShareDto {
     pub amount: u64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TargetKindDto {
     Unit,
@@ -216,6 +216,8 @@ pub struct HealingReportDto {
 #[serde(rename_all = "camelCase")]
 pub struct TakenAbilityDto {
     pub spell_id: SpellId,
+    #[serde(skip)]
+    pub spell_amounts: Vec<(SpellId, u64)>,
     /// World damage, kept apart from melee (both spell 0).
     pub environmental: bool,
     pub source_name: Option<String>,
@@ -378,6 +380,7 @@ impl<'a> Names<'a> {
     pub(crate) fn taken(&mut self, a: &TakenAbility) -> TakenAbilityDto {
         TakenAbilityDto {
             spell_id: self.spell(a.spell),
+            spell_amounts: a.spell_amounts.clone(),
             environmental: a.environmental,
             source_name: a.source_name.clone(),
             source_id: a.source_player.map(|id| self.player(id)),
@@ -478,9 +481,22 @@ pub struct TakenSpellDto {
 }
 
 pub fn taken_report_dto(fight: &Fight, report: &DamageTakenReport) -> DamageTakenReportDto {
+    taken_dto(fight, report, false)
+}
+
+/// One pull's part of a set's report: every spell of a row is named, as the set may pick another.
+pub fn taken_set_part_dto(fight: &Fight, report: &DamageTakenReport) -> DamageTakenReportDto {
+    taken_dto(fight, report, true)
+}
+
+fn taken_dto(
+    fight: &Fight,
+    report: &DamageTakenReport,
+    name_every_spell: bool,
+) -> DamageTakenReportDto {
     let mut names = Names::new(fight);
-    let by_ability = report.by_ability.iter().map(|a| names.taken(a)).collect();
-    let by_player = report
+    let by_ability: Vec<_> = report.by_ability.iter().map(|a| names.taken(a)).collect();
+    let by_player: Vec<_> = report
         .by_player
         .iter()
         .map(|p| TakenPlayerDto {
@@ -492,6 +508,16 @@ pub fn taken_report_dto(fight: &Fight, report: &DamageTakenReport) -> DamageTake
             abilities: p.abilities.iter().map(|a| names.taken(a)).collect(),
         })
         .collect();
+    if name_every_spell {
+        for row in by_ability
+            .iter()
+            .chain(by_player.iter().flat_map(|p| &p.abilities))
+        {
+            for &(spell, _) in &row.spell_amounts {
+                names.spell(spell);
+            }
+        }
+    }
     let (roster, spells) = names.finish();
     DamageTakenReportDto {
         duration_ms: report.duration_ms,

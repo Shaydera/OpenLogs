@@ -1,15 +1,23 @@
-use openlogs_analysis::{Fight, LANDED_TAIL_BYTES, load_fight_slice};
+use std::collections::BTreeSet;
+
+use openlogs_analysis::{
+    Actors, Fight, LANDED_TAIL_BYTES, load_fight_slice, load_fight_slice_with,
+};
 use openlogs_gamedata::{ChannelSpells, Curated, DungeonTable, SpellClasses};
 use openlogs_index::{FightSummary, Indexer, LogIndex};
 use openlogs_service::auras_dto::AuraKindDto;
 use openlogs_service::log_dto::log_view;
 use openlogs_service::meter_dto::MeterCategoryDto;
 use openlogs_service::player_dto::MetricDto;
-use openlogs_service::report_dto::{AttributionDto, FilterDto};
-use openlogs_service::scope_dto::{DimensionDto, ScopeDto, ScopeMetricDto};
+use openlogs_service::report_dto::{
+    AttributionDto, DamageReportDto, DamageTakenReportDto, FilterDto, HealingReportDto,
+};
+use openlogs_service::scope_dto::{BreakdownDto, DimensionDto, ScopeDto, ScopeMetricDto};
 use openlogs_service::views_dto::{PageDto, ViewOptionsDto, WindowDto};
-use serde::Deserialize;
+use openlogs_service::{FilterOptionsDto, Merge, SetOverviewAcc};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// Pulls kept loaded: the shown pull and the one it is compared with.
 const LOADED_PULLS: usize = 2;
@@ -24,6 +32,7 @@ pub struct Engine {
     dungeons: Option<DungeonTable>,
     channels: ChannelSpells,
     spell_classes: SpellClasses,
+    pass: Option<SetPass>,
 }
 
 impl Default for Engine {
@@ -36,6 +45,7 @@ impl Default for Engine {
             dungeons: None,
             channels: ChannelSpells::default(),
             spell_classes: SpellClasses::default(),
+            pass: None,
         }
     }
 }
@@ -61,6 +71,7 @@ impl Engine {
         self.indexer = Indexer::new();
         self.index = LogIndex::empty();
         self.fights.clear();
+        self.pass = None;
     }
 
     pub fn index_feed(&mut self, chunk: &[u8]) {
@@ -127,6 +138,74 @@ impl Engine {
         self.fights.insert(0, (fight_index, fight));
         self.fights.truncate(LOADED_PULLS);
         Ok(())
+    }
+
+    /// Starts reading a set of pulls, which then come one by one in this order through
+    /// [`Engine::set_feed`]; `commands_json` lists the reports to build over the set.
+    /// Drops the loaded pulls, so a pass holds one pull at a time.
+    pub fn set_begin(&mut self, fights: Vec<u32>, commands_json: &str) -> Result<(), String> {
+        self.pass = None;
+        self.fights.clear();
+        let commands: Vec<SetCommand> = parse(commands_json)?;
+        for &fight_index in &fights {
+            self.summary(fight_index)?;
+        }
+        // A fresh table fed in set order gives every unit the same id in every pass.
+        self.pass = Some(SetPass {
+            fights,
+            next: 0,
+            commands,
+            actors: Actors::new(),
+        });
+        Ok(())
+    }
+
+    /// Adds the next pull of the set from its part of the log, which starts at byte
+    /// `base_offset`. The pull does not stay loaded.
+    pub fn set_feed(
+        &mut self,
+        part: &[u8],
+        base_offset: u64,
+        fight_index: u32,
+    ) -> Result<(), String> {
+        let pass = self.pass.as_mut().ok_or(NO_SET_PASS)?;
+        if pass.fights.get(pass.next) != Some(&fight_index) {
+            return Err(format!(
+                "Pull {fight_index} is not the next pull of the set."
+            ));
+        }
+        let summary = summary_of(&self.index, fight_index)?;
+        let fight = load_fight_slice_with(part, base_offset, summary, pass.actors.carried_over());
+        for command in &mut pass.commands {
+            command.add(fight_index, &fight, &self.curated);
+        }
+        pass.next += 1;
+        pass.actors = fight.actors;
+        Ok(())
+    }
+
+    /// The reports over the whole set as a JSON array, in the order of the commands.
+    pub fn set_finish(&mut self) -> Result<String, String> {
+        let Some(pass) = self.pass.take_if(|pass| pass.next == pass.fights.len()) else {
+            let error = if self.pass.is_some() {
+                SET_INCOMPLETE
+            } else {
+                NO_SET_PASS
+            };
+            return Err(error.to_string());
+        };
+        let mut players = BTreeSet::new();
+        for &fight_index in &pass.fights {
+            let summary = self.summary(fight_index)?;
+            players.extend(summary.roster.iter().map(|entry| entry.guid.as_str()));
+        }
+        let distinct_players = players.len() as u32;
+        let results = pass
+            .commands
+            .into_iter()
+            .map(|command| command.finish(distinct_players))
+            .collect::<Result<Vec<_>, _>>()?;
+        json(results)
     }
 
     /// Runs a report command on loaded pulls. Commands and arguments are the UI's API calls.
@@ -338,11 +417,7 @@ impl Engine {
     }
 
     fn summary(&self, fight_index: u32) -> Result<&FightSummary, String> {
-        self.index
-            .fights
-            .iter()
-            .find(|fight| fight.index == fight_index)
-            .ok_or_else(|| format!("Pull {fight_index} does not exist in this log."))
+        summary_of(&self.index, fight_index)
     }
 
     fn fight(&self, fight_index: u32) -> Result<&Fight, String> {
@@ -353,6 +428,156 @@ impl Engine {
             .map(|(_, fight)| fight)
             .ok_or_else(|| format!("Pull {fight_index} is not loaded."))
     }
+}
+
+fn summary_of(index: &LogIndex, fight_index: u32) -> Result<&FightSummary, String> {
+    index
+        .fights
+        .iter()
+        .find(|fight| fight.index == fight_index)
+        .ok_or_else(|| format!("Pull {fight_index} does not exist in this log."))
+}
+
+const NO_SET_PASS: &str = "No pull set is being read.";
+const SET_INCOMPLETE: &str = "The pull set is incomplete.";
+
+struct SetPass {
+    fights: Vec<u32>,
+    next: usize,
+    commands: Vec<SetCommand>,
+    actors: Actors,
+}
+
+/// A report over a set, with the merge of the pulls read so far.
+#[derive(Deserialize)]
+#[serde(
+    tag = "command",
+    content = "args",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+enum SetCommand {
+    QuickOverview {
+        filter: Option<FilterDto>,
+        #[serde(skip)]
+        set: SetOverviewAcc,
+    },
+    DamageDoneReport {
+        filter: FilterDto,
+        #[serde(skip)]
+        set: Option<DamageReportDto>,
+    },
+    HealingReport {
+        filter: FilterDto,
+        #[serde(skip)]
+        set: Option<HealingReportDto>,
+    },
+    DamageTakenReport {
+        filter: FilterDto,
+        #[serde(skip)]
+        set: Option<DamageTakenReportDto>,
+    },
+    BreakdownReport {
+        filter: FilterDto,
+        #[serde(default)]
+        scope: ScopeDto,
+        metric: ScopeMetricDto,
+        group: DimensionDto,
+        #[serde(skip)]
+        set: Option<BreakdownDto>,
+    },
+    FilterOptions {
+        filter: FilterDto,
+        #[serde(default)]
+        scope: ScopeDto,
+        metric: ScopeMetricDto,
+        dimension: DimensionDto,
+        #[serde(skip)]
+        set: Option<FilterOptionsDto>,
+    },
+}
+
+impl SetCommand {
+    fn add(&mut self, fight_index: u32, fight: &Fight, curated: &Curated) {
+        match self {
+            Self::QuickOverview { filter, set } => set.add(
+                fight_index,
+                openlogs_service::quick_overview(fight, curated, *filter),
+            ),
+            Self::DamageDoneReport { filter, set } => {
+                fold(set, openlogs_service::damage_done_set_part(fight, *filter));
+            }
+            Self::HealingReport { filter, set } => {
+                fold(set, openlogs_service::healing(fight, *filter));
+            }
+            Self::DamageTakenReport { filter, set } => {
+                fold(set, openlogs_service::damage_taken_set_part(fight, *filter));
+            }
+            Self::BreakdownReport {
+                filter,
+                scope,
+                metric,
+                group,
+                set,
+            } => fold(
+                set,
+                openlogs_service::breakdown_report(
+                    fight,
+                    curated,
+                    *filter,
+                    scope.clone(),
+                    *metric,
+                    *group,
+                ),
+            ),
+            Self::FilterOptions {
+                filter,
+                scope,
+                metric,
+                dimension,
+                set,
+            } => fold(
+                set,
+                FilterOptionsDto(openlogs_service::filter_options(
+                    fight,
+                    curated,
+                    *filter,
+                    scope.clone(),
+                    *metric,
+                    *dimension,
+                )),
+            ),
+        }
+    }
+
+    fn finish(self, distinct_players: u32) -> Result<Value, String> {
+        match self {
+            Self::QuickOverview { set, .. } => set_value(set.finish(distinct_players)),
+            Self::DamageDoneReport { set, .. } => set_value(finished(set)),
+            Self::HealingReport { set, .. } => set_value(finished(set)),
+            Self::DamageTakenReport { set, .. } => set_value(finished(set)),
+            Self::BreakdownReport { set, .. } => set_value(finished(set)),
+            Self::FilterOptions { set, .. } => set_value(finished(set)),
+        }
+    }
+}
+
+fn fold<T: Merge>(set: &mut Option<T>, part: T) {
+    match set {
+        Some(set) => set.merge(part),
+        None => *set = Some(part),
+    }
+}
+
+fn finished<T: Merge>(set: Option<T>) -> Option<T> {
+    set.map(|mut set| {
+        set.finish();
+        set
+    })
+}
+
+fn set_value<T: Serialize>(set: Option<T>) -> Result<Value, String> {
+    serde_json::to_value(set.ok_or(SET_INCOMPLETE)?).map_err(|err| err.to_string())
 }
 
 fn parse<T: DeserializeOwned>(args_json: &str) -> Result<T, String> {

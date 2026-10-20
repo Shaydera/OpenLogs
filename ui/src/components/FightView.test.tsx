@@ -181,3 +181,34 @@ describe('compare with…', () => {
     expect(screen.getByRole('tablist')).toBeInTheDocument();
   });
 });
+
+describe('a pull set', () => {
+  const SET = { kind: 'all' as const, encounterId: 3492, difficulty: 15, fights: [1, 3] };
+
+  beforeEach(() => {
+    useApp.setState({ log: compareLogFixture, view: { kind: 'set', set: SET } });
+  });
+
+  it('shows how far the pass over its pulls is and cancels it', async () => {
+    const cancelSet = vi.fn();
+    useApp.setState({ fightLoading: true, setProgress: { done: 4, total: 10 }, cancelSet });
+    render(<FightView />);
+    const bar = screen.getByRole('progressbar', { name: 'Reading pulls' });
+    expect(bar).toHaveAttribute('aria-valuenow', '4');
+    expect(bar).toHaveAttribute('aria-valuemax', '10');
+    expect(screen.getByText('4 of 10')).toBeInTheDocument();
+    expect(screen.getByText('First death')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(cancelSet).toHaveBeenCalled();
+  });
+
+  it('shows a table tab of the set without a time range or a comparison', () => {
+    useApp.setState({ overview: overviewFixture, tab: 'damage', report: { tab: 'damage', data: damageReportFixture }, breakdown: breakdownFixture });
+    render(<FightView />);
+    expect(screen.getByRole('heading', { level: 1, name: "Ula'tek" })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Damage Done' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('region', { name: 'Time range' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Compare with…' })).toBeNull();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+  });
+});

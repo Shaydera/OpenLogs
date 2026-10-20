@@ -290,16 +290,17 @@ impl Rows {
     }
 }
 
-/// A player's largest abilities on each colour group and on "Other", groups in name order
-/// ("Other" first).
+/// A player's largest abilities (at most `limit` each) on each of `groups` and on "Other",
+/// groups in name order ("Other" first).
 pub(crate) fn group_abilities(
     target_spells: &[(TargetKey, SpellId, i64)],
-    color_groups: &[String],
+    groups: &[String],
+    limit: Option<usize>,
 ) -> Vec<GroupAbilities> {
     let mut sums: HashMap<(Option<&str>, SpellId), i64> = HashMap::new();
     for (target, spell, amount) in target_spells {
         let group = match target {
-            TargetKey::Unit(name) if color_groups.contains(name) => Some(name.as_str()),
+            TargetKey::Unit(name) if groups.contains(name) => Some(name.as_str()),
             _ => None,
         };
         *sums.entry((group, *spell)).or_default() += amount;
@@ -312,7 +313,9 @@ pub(crate) fn group_abilities(
         .into_iter()
         .map(|(group, mut abilities)| {
             abilities.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-            abilities.truncate(TOP_ABILITIES_PER_GROUP);
+            if let Some(limit) = limit {
+                abilities.truncate(limit);
+            }
             GroupAbilities {
                 group: group.map(str::to_string),
                 abilities,
@@ -694,7 +697,7 @@ pub(crate) fn support_entry<'a>(
     }
 }
 
-pub(crate) fn per_second(total: u64, duration_ms: u64) -> f64 {
+pub fn per_second(total: u64, duration_ms: u64) -> f64 {
     if duration_ms == 0 {
         0.0
     } else {

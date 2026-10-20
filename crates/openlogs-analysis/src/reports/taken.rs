@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::actors::{ActorId, ActorKind, NOBODY};
 use crate::fight::{DamageVia, Event, EventKind, Fight, MissType, SpellId};
@@ -11,6 +11,8 @@ use crate::timeline::{damage_done_amount, is_distinct_hit};
 pub struct TakenAbility {
     /// The ID with the most damage; same-name IDs of one source are one row.
     pub spell: SpellId,
+    /// The damage of every ID in the row, for choosing `spell` over several pulls.
+    pub spell_amounts: Vec<(SpellId, u64)>,
     /// Falling, lava, drowning and other world damage; kept apart from melee (both spell 0).
     pub environmental: bool,
     /// `None` for environmental or source-less damage.
@@ -54,7 +56,7 @@ struct AbilityAcc {
     hits: u32,
     victims: HashSet<ActorId>,
     source_player: Option<ActorId>,
-    by_spell: HashMap<SpellId, u64>,
+    by_spell: BTreeMap<SpellId, u64>,
 }
 
 impl AbilityAcc {
@@ -150,6 +152,7 @@ fn ability_rows(map: HashMap<AbilityKey<'_>, AbilityAcc>) -> Vec<TakenAbility> {
     let mut rows: Vec<TakenAbility> = map
         .into_iter()
         .map(|((_, environmental, source_name), a)| TakenAbility {
+            spell_amounts: a.by_spell.iter().map(|(&s, &v)| (s, v)).collect(),
             // The ID with the most damage, the lowest on a tie.
             spell: a
                 .by_spell

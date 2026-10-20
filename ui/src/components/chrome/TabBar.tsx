@@ -1,22 +1,8 @@
-import { type KeyboardEvent, type ReactNode, useRef } from 'react';
+import { type KeyboardEvent, type ReactNode, useId, useRef } from 'react';
 import { useFocusRequest } from '../../hooks/useFocusRequest';
-import { type MessageKey, t } from '../../i18n/i18n';
-import { type FightTab, replayOffered, useApp } from '../../store';
-
-type TabEntry = { key: MessageKey; tab: FightTab };
-
-const TABS: TabEntry[] = [
-  { key: 'tabs.overview', tab: 'overview' },
-  { key: 'tabs.damageDone', tab: 'damage' },
-  { key: 'tabs.healing', tab: 'healing' },
-  { key: 'tabs.damageTaken', tab: 'taken' },
-  { key: 'tabs.deaths', tab: 'deaths' },
-  { key: 'tabs.buffs', tab: 'buffs' },
-  { key: 'tabs.casts', tab: 'casts' },
-  { key: 'tabs.interrupts', tab: 'interrupts' },
-  { key: 'tabs.resources', tab: 'resources' },
-  { key: 'tabs.replay', tab: 'replay' },
-];
+import { t } from '../../i18n/i18n';
+import { type FightTab, replayOffered, tabOffered, useApp } from '../../store';
+import { TABS, type TabEntry } from './fightTabs';
 
 /** The one panel every tab controls; its content follows the selected tab. */
 export const PANEL_ID = 'fight-tabpanel';
@@ -39,24 +25,34 @@ const replayIcon = (
   </svg>
 );
 
-/** The fight's tab row: `lead` at its start, then the tabs with the Replay tab last; a whole Mythic+ run has no replay. */
+/**
+ * The fight's tab row: `lead` at its start, then the tabs with the Replay tab last; a whole Mythic+ run
+ * has no replay. A pull set keeps the tabs it has not visible and focusable, disabled with the reason.
+ */
 export function TabBar({ lead }: { lead?: ReactNode }) {
   const tab = useApp((s) => s.tab);
+  const log = useApp((s) => s.log);
+  const view = useApp((s) => s.view);
   const withReplay = useApp(replayOffered);
-  const tabs = withReplay ? TABS : TABS_WITHOUT_REPLAY;
+  const tabs = withReplay || view.kind === 'set' ? TABS : TABS_WITHOUT_REPLAY;
+  const offered = (entry: FightTab) => tabOffered({ log, view }, entry);
   const setTab = useApp((s) => s.setTab);
   const tabRefs = useRef<Map<FightTab, HTMLButtonElement>>(new Map());
+  const reasonId = useId();
   useFocusRequest('tab', () => tabRefs.current.get(tab));
 
   function onTabKey(event: KeyboardEvent<HTMLDivElement>) {
-    const target = nextTab(tabs, tab, event.key);
+    // Focus can rest on a disabled tab, which never becomes the selected one.
+    const focused = tabs.find((entry) => tabRefs.current.get(entry.tab) === event.target)?.tab ?? tab;
+    const target = nextTab(tabs, focused, event.key);
     if (!target) return;
     event.preventDefault();
     tabRefs.current.get(target)?.focus();
     // Home on the first tab or End on the last only moves focus; selecting again would reload it.
-    if (target !== tab) void setTab(target);
+    if (target !== tab && offered(target)) void setTab(target);
   }
 
+  const anyDisabled = tabs.some((entry) => !offered(entry.tab));
   return (
     <div className="tabbar">
       {lead}
@@ -64,6 +60,7 @@ export function TabBar({ lead }: { lead?: ReactNode }) {
         {tabs.map((entry) => {
           const selected = entry.tab === tab;
           const replay = entry.tab === 'replay';
+          const disabled = !offered(entry.tab);
           return (
             <button
               key={entry.key}
@@ -77,8 +74,11 @@ export function TabBar({ lead }: { lead?: ReactNode }) {
               className={['tab', replay && 'tab-replay', selected && 'on'].filter(Boolean).join(' ')}
               aria-selected={selected}
               aria-controls={selected ? PANEL_ID : undefined}
+              aria-disabled={disabled || undefined}
+              aria-describedby={disabled ? reasonId : undefined}
+              title={disabled ? t('tabs.singlePullOnly') : undefined}
               tabIndex={selected ? 0 : -1}
-              onClick={() => void setTab(entry.tab)}
+              onClick={() => !disabled && void setTab(entry.tab)}
             >
               {replay && replayIcon}
               {t(entry.key)}
@@ -86,6 +86,11 @@ export function TabBar({ lead }: { lead?: ReactNode }) {
           );
         })}
       </div>
+      {anyDisabled && (
+        <span id={reasonId} className="sr-only">
+          {t('tabs.singlePullOnly')}
+        </span>
+      )}
     </div>
   );
 }

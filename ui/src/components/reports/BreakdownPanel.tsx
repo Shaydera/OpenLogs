@@ -63,6 +63,7 @@ export function BreakdownPanel(props: Props) {
   const scope = useApp((s) => s.scope);
   const showOnly = useApp((s) => s.showOnly);
   const openPlayer = useApp((s) => s.openPlayer);
+  const hasPlayerPages = useApp((s) => s.view.kind !== 'set');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [splitDimension, setSplitDimension] = useState<Dimension | null>(null);
   const roster = rosterIndex(breakdown.roster);
@@ -70,12 +71,13 @@ export function BreakdownPanel(props: Props) {
   const selected = breakdown.rows.find((r) => keyOf(r) === selectedKey) ?? breakdown.rows[0];
   const splits = selected?.splits.filter((s) => breakdown.side.includes(s.dimension)) ?? [];
   const split = splits.find((s) => s.dimension === splitDimension) ?? splits[0];
-  const selectedPlayer = selected ? playerIdOf(selected) : null;
+  const playerPageOf = (row: BreakdownRow) => (hasPlayerPages ? playerIdOf(row) : null);
+  const selectedPlayer = selected ? playerPageOf(selected) : null;
   const grid = GRID[extraColumns.length];
   const narrowable = (row: BreakdownRow) => scope[breakdown.group].length === 0 && !(row.key.kind === 'ability' && row.key.rowKind === 'unmatched');
   const narrowTo = (row: BreakdownRow) => void showOnly(breakdown.group, row);
   const nameAction = (row: BreakdownRow) => {
-    const player = playerIdOf(row);
+    const player = playerPageOf(row);
     if (player !== null) return () => void openPlayer(player);
     return narrowable(row) ? () => narrowTo(row) : undefined;
   };
@@ -148,7 +150,7 @@ export function BreakdownPanel(props: Props) {
                 const amount = formatScaled(row.amount);
                 const preview = onPreview?.(row);
                 const onName = nameAction(row);
-                const opensPlayer = playerIdOf(row) !== null;
+                const opensPlayer = playerPageOf(row) !== null;
                 return (
                   <button
                     key={keyOf(row)}

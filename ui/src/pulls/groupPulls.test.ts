@@ -66,6 +66,45 @@ describe('groupPulls', () => {
     expect(groupPulls(onlyAborted, false)).toHaveLength(1);
   });
 
+  it('offers sets of the visible pulls only', () => {
+    const boss = [
+      fight('Sszorak', 3420, 'wipe', 77_693, 82.2),
+      fight('Sszorak', 3420, 'wipe', 10, null),
+      fight('Sszorak', 3420, 'wipe', 247_029, 33.8),
+      fight('Sszorak', 3420, 'kill', 309_124, 0),
+    ];
+    const visible = groupPulls(boss, true)[0].sets;
+    expect(visible.map((s) => [s.set.kind, s.set.fights.length])).toEqual([
+      ['all', 3],
+      ['wipes', 2],
+    ]);
+    expect(visible[0].set).toMatchObject({ encounterId: 3420, difficulty: 15 });
+    expect(visible[0].durationMs).toBe(77_693 + 247_029 + 309_124);
+    expect(groupPulls(boss, false)[0].sets.map((s) => [s.set.kind, s.set.fights.length])).toEqual([
+      ['all', 4],
+      ['wipes', 3],
+    ]);
+  });
+
+  it('offers all kills of a boss killed twice', () => {
+    const boss = [fight('Sszorak', 3420, 'kill', 300_000, 0), fight('Sszorak', 3420, 'kill', 290_000, 0)];
+    const sets = groupPulls(boss, true)[0].sets;
+    expect(sets.map((s) => s.set.kind)).toEqual(['all', 'kills']);
+    expect(sets[1].set.fights).toEqual(boss.map((f) => f.index));
+  });
+
+  it('offers no set for a single pull', () => {
+    expect(groupPulls([fight('Sszorak', 3420, 'kill', 300_000, 0)], true)[0].sets).toEqual([]);
+  });
+
+  it('offers no sets for Mythic+ pulls', () => {
+    const pulls = [
+      fight('Sszorak', 3420, 'wipe', 77_693, 82.2, { runIndex: 900 }),
+      fight('Sszorak', 3420, 'kill', 309_124, 0, { runIndex: 900 }),
+    ];
+    expect(groupPulls(pulls, true)).toEqual([]);
+  });
+
   it('keeps each difficulty in its own group and shows unknown ones raw', () => {
     const mixed = [
       fight("Nek'zali the Soulcoiler", 3470, 'wipe', 12_303, 100),

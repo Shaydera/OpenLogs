@@ -162,6 +162,13 @@
 .fight-header .kpi-strip {
   flex: 2 1 560px;
 }
+/* A set's facts line (results, summed time, time span) needs about 650px to stay on one line at 1920px. */
+.fight-header-set .fight-id {
+  flex-basis: 600px;
+}
+.fight-header-set .fight-meta > span {
+  white-space: nowrap;
+}
 /* Detail pages: the pull in one line above the tabs; the page's own head carries the figures. */
 .fight-header.fight-header-compact {
   gap: 12px;
@@ -235,6 +242,12 @@
   gap: 7px;
   margin-left: auto;
 }
+.tab[aria-disabled='true'],
+.tab[aria-disabled='true']:hover {
+  color: var(--faint);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 /* KPI strip: one panel, figures divided by a line. */
 .kpi-strip {
   display: flex;
@@ -285,6 +298,50 @@
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
+}
+.set-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+}
+.set-progress-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.set-progress-title {
+  margin: 0;
+  font: 600 16px var(--font-label);
+}
+.set-progress-cancel {
+  margin-left: auto;
+}
+.set-progress-fill {
+  background: var(--accent);
+}
+.set-progress-pulls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.set-progress-pull {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: 500 12px var(--font-mono);
+  color: var(--faint);
+}
+.set-progress-done {
+  color: var(--text-soft);
+}
+.set-progress-current {
+  border-color: var(--accent-tint-line);
+  background: var(--accent-tint);
+  color: var(--accent);
 }
 /* Panels without a .panel-head row: the same inset as the head row. */
 .panel-pad {

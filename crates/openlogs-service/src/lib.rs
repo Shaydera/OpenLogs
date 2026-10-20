@@ -16,8 +16,10 @@ pub mod report_dto;
 mod reports;
 pub mod resources_dto;
 pub mod scope_dto;
+mod set_merge;
 #[cfg(test)]
 mod test_fight;
 pub mod views_dto;
 
 pub use reports::*;
+pub use set_merge::*;

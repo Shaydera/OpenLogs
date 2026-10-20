@@ -3,7 +3,7 @@ import { compareLogFixture } from '../../test/compareFixture';
 import { overviewFixture } from '../../test/overviewFixture';
 import { abilityDetailFixture } from '../../test/reportFixtures';
 import { runLogFixture } from '../../test/runFixture';
-import { type Crumb, type CrumbInput, fightCrumbs } from './crumbs';
+import { type Crumb, type CrumbInput, fightCrumbs, setCrumbs } from './crumbs';
 
 // Ula'tek Heroic: pull #1 a 2:22 wipe, pull #3 the 7:58 kill.
 const [WIPE, , KILL] = compareLogFixture.fights;
@@ -73,5 +73,18 @@ describe('fight breadcrumb', () => {
       ['Baron Braunpyke · Pull #3', 'current'],
     ]);
     expect(crumbs[1].action).toEqual({ kind: 'fight', index: 1 });
+  });
+
+  it('a_set_crumb_names_boss_set_and_count', () => {
+    const set = { kind: 'all' as const, encounterId: 3492, difficulty: 15, fights: [1, 2, 3] };
+    expect(read(setCrumbs({ log: compareLogFixture, set, tab: 'overview' }))).toEqual([
+      [FILE, 'pulls'],
+      ["Ula'tek · All pulls (3)", 'current'],
+    ]);
+    expect(read(setCrumbs({ log: compareLogFixture, set, tab: 'damage' }))).toEqual([
+      [FILE, 'pulls'],
+      ["Ula'tek · All pulls (3)", 'overview'],
+      ['Damage Done', 'current'],
+    ]);
   });
 });

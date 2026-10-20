@@ -1,5 +1,5 @@
-import { useRef } from 'react';
-import type { QuickOverview } from '../api/types';
+import { type RefObject, useMemo, useRef } from 'react';
+import type { LogView, PullSet, QuickOverview } from '../api/types';
 import { useFocusRequest } from '../hooks/useFocusRequest';
 import { t } from '../i18n/i18n';
 import { rangeKey } from '../pulls/groupPulls';
@@ -7,10 +7,11 @@ import { replaySplitShown, useApp } from '../store';
 import { AbilityDetailView } from './ability/AbilityDetailView';
 import { AurasTab } from './auras/AurasTab';
 import { CastsTab } from './casts/CastsTab';
-import { FightHeader, FightHeading } from './chrome/FightHeader';
+import { FightHeader, FightHeading, pullHeading, setHeading } from './chrome/FightHeader';
 import { headerTiles } from './chrome/headerTiles';
 import { FightTopBar } from './chrome/FightTopBar';
 import { ReportToolbar } from './chrome/ReportToolbar';
+import { SetProgressPanel } from './chrome/SetProgressPanel';
 import { PANEL_ID, TabBar, tabId } from './chrome/TabBar';
 import { PullComparisonView } from './compare/PullComparisonView';
 import { DeathsTab } from './deaths/DeathsTab';
@@ -19,6 +20,8 @@ import { InterruptsTab } from './interrupts/InterruptsTab';
 import { ConsumablesPanel } from './overview/ConsumablesPanel';
 import { CooldownsPanel } from './overview/CooldownsPanel';
 import { DeathsPanel } from './overview/DeathsPanel';
+import { SetOverview } from './overview/SetOverview';
+import { setRows } from './overview/setOverviewModel';
 import { Timeline } from './overview/Timeline';
 import { PlayerDetailView } from './player/PlayerDetailView';
 import { DamageDoneTab } from './reports/DamageDoneTab';
@@ -59,6 +62,7 @@ export function FightView() {
   const crumbRef = useRef<HTMLSpanElement>(null);
   // The pull title; on detail pages (compact header) the current breadcrumb.
   useFocusRequest('fight', () => titleRef.current ?? crumbRef.current);
+  if (view.kind === 'set') return log && <SetScreen log={log} set={view.set} titleRef={titleRef} crumbRef={crumbRef} />;
   const row = view.kind === 'fight' ? log?.fights.find((f) => f.index === view.fightIndex) : undefined;
   if (!row) return null;
   // The comparison replaces the tabs; tab, range and details wait in the store for "Back".
@@ -73,7 +77,9 @@ export function FightView() {
   const onOverview = tab === 'overview';
   const onReplay = tab === 'replay';
   const tiles =
-    details.length > 0 || onReplay ? null : headerTiles({ tab, row, overview, range, report, reportLoading, reportFailed, rangeKpis, breakdown, scope });
+    details.length > 0 || onReplay
+      ? null
+      : headerTiles({ tab, playerCount: row.playerCount, setRows: null, overview, range, report, reportLoading, reportFailed, rangeKpis, breakdown, scope });
 
   const body = failed ? (
     <p className="muted">{t('fight.loadFailed')}</p>
@@ -112,13 +118,77 @@ export function FightView() {
       <FightTopBar row={row} currentRef={crumbRef} />
       <main className={page}>
         <div className="fight-column">
-          {!onReplay && <FightHeader row={row} tiles={tiles} titleRef={titleRef} />}
+          {!onReplay && <FightHeader heading={pullHeading(row)} tiles={tiles} titleRef={titleRef} />}
           <TabBar lead={onReplay && <FightHeading row={row} titleRef={titleRef} />} />
           <ReportToolbar />
         </div>
         <div role="tabpanel" id={PANEL_ID} aria-labelledby={tabId(tab)} className="tabpanel">
           {/* Outside the tab-keyed error boundary: the replay pane keeps its state while the report changes tabs. */}
           {alongside ? <ReplaySplit>{body}</ReplaySplit> : body}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+/** A pull set's screen: its header and tabs, the progress of the pass over its pulls until the tab has data. */
+function SetScreen({
+  log,
+  set,
+  titleRef,
+  crumbRef,
+}: {
+  log: LogView;
+  set: PullSet;
+  titleRef: RefObject<HTMLHeadingElement | null>;
+  crumbRef: RefObject<HTMLSpanElement | null>;
+}) {
+  const overview = useApp((s) => s.overview);
+  const pulls = useApp((s) => s.setPulls);
+  const failed = useApp((s) => s.fightError) !== null;
+  const progress = useApp((s) => s.setProgress);
+  const tab = useApp((s) => s.tab);
+  const report = useApp((s) => s.report);
+  const reportLoading = useApp((s) => s.reportLoading);
+  const reportFailed = useApp((s) => s.reportError) !== null;
+  const rangeKpis = useApp((s) => s.rangeKpis);
+  const breakdown = useApp((s) => s.breakdown);
+  const scope = useApp((s) => s.scope);
+  const closeDetail = useApp((s) => s.closeDetail);
+  const onOverview = tab === 'overview';
+  const players = overview?.kpis.players ?? null;
+  const rows = useMemo(() => (pulls ? setRows(log.fights, pulls) : null), [log, pulls]);
+  const tiles =
+    tab === 'replay'
+      ? null
+      : headerTiles({ tab, playerCount: players ?? 0, setRows: rows ?? [], overview, range: null, report, reportLoading, reportFailed, rangeKpis, breakdown, scope });
+  const nothingShown = overview === null || (!onOverview && report === null);
+
+  const body = failed ? (
+    <p className="muted">{t('set.loadFailed')}</p>
+  ) : progress && nothingShown ? (
+    <SetProgressPanel progress={progress} fights={log.fights} pulls={set.fights} />
+  ) : !overview ? (
+    <p className="muted">{t('set.loading')}</p>
+  ) : onOverview ? (
+    rows && <SetOverview set={set} rows={rows} kpis={overview.kpis} />
+  ) : (
+    <ErrorBoundary key={tab} onReset={() => void closeDetail()}>
+      <ReportView />
+    </ErrorBoundary>
+  );
+
+  return (
+    <div className="fight-view">
+      <FightTopBar set={set} currentRef={crumbRef} />
+      <main className={onOverview ? 'fight-page fight-page-overview' : 'fight-page'}>
+        <div className="fight-column">
+          <FightHeader heading={setHeading(log, set, players)} tiles={tiles} titleRef={titleRef} />
+          <TabBar />
+          <ReportToolbar />
+        </div>
+        <div role="tabpanel" id={PANEL_ID} aria-labelledby={tabId(tab)} className="tabpanel">
+          {body}
         </div>
       </main>
     </div>

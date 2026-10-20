@@ -1,28 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { FightRow } from '../../api/types';
+import type { SetPull } from '../../api/types';
+import { compareLogFixture } from '../../test/compareFixture';
 import { overviewFixture } from '../../test/overviewFixture';
-import { aurasReportFixture, breakdownFixture, castsReportFixture, damageReportFixture, deathsReportFixture, interruptsReportFixture, resourcesReportFixture } from '../../test/reportFixtures';
+import { aurasReportFixture, breakdownFixture, castsReportFixture, damageReportFixture, deathsReportFixture, interruptsReportFixture, resourcesReportFixture, takenReportFixture } from '../../test/reportFixtures';
+import { setRows } from '../overview/setOverviewModel';
 import { type HeaderInput, headerTiles } from './headerTiles';
-
-const ROW: FightRow = {
-  index: 1,
-  encounterId: 3492,
-  name: "Ula'tek",
-  difficulty: 15,
-  difficultyLabel: 'Heroic',
-  outcome: 'kill',
-  durationMs: 478_610,
-  bossHpPercent: 0,
-  playerCount: 23,
-  startUnixMs: 0,
-  zone: null,
-  run: null,
-  runIndex: null,
-};
 
 const input = (partial: Partial<HeaderInput>): HeaderInput => ({
   tab: 'overview',
-  row: ROW,
+  playerCount: 23,
+  setRows: null,
   overview: overviewFixture,
   range: null,
   report: null,
@@ -124,5 +111,38 @@ describe('headerTiles', () => {
       'Top source|Wendel|2.00M',
       'Sources|2|',
     ]);
+  });
+
+  it('set_tiles_average_the_first_death_over_pulls_with_a_death', () => {
+    const [wipe, , kill] = compareLogFixture.fights;
+    const fights = [
+      { ...wipe, index: 1, durationMs: 120_000, bossHpPercent: 60.4 },
+      { ...wipe, index: 2, durationMs: 80_000, bossHpPercent: 33.8 },
+      { ...kill, index: 3, durationMs: 300_000, bossHpPercent: 0 },
+    ];
+    const pull = (fightIndex: number, deaths: number, firstDeathMs: number | null): SetPull => ({
+      fightIndex,
+      kpis: { ...overviewFixture.kpis, deaths, firstDeathMs },
+      bossHpStepMs: 60_000,
+      bossHp: [],
+    });
+    const rows = setRows(fights, [pull(1, 3, 40_000), pull(2, 1, 120_000), pull(3, 0, null)]);
+    const kpis = { ...overviewFixture.kpis, durationMs: 500_000, raidDamage: 1_500_000_000, raidDps: 3_000_000, deaths: 4, firstDeathMs: 40_000 };
+    expect(text({ setRows: rows, overview: { ...overviewFixture, kpis } })).toEqual([
+      'Raid DPS|3.00M|1.500B over 8:20',
+      'Best wipe|33.8%|pull #2',
+      'Deaths|4|1.3 per pull',
+      'First death|avg 1:20|earliest 0:40.0 (#1)',
+    ]);
+    const kills = setRows(fights, [pull(3, 0, null)]);
+    expect(text({ setRows: kills, overview: { ...overviewFixture, kpis } }).slice(1)).toEqual(['Best kill|5:00|pull #3', 'Deaths|4|4.0 per pull', 'First death|—|nobody died']);
+  });
+
+  it('set_damage_taken_counts_the_deaths_of_every_pull', () => {
+    const rows = setRows(compareLogFixture.fights, [1, 3].map((fightIndex) => ({ fightIndex, kpis: overviewFixture.kpis, bossHpStepMs: 60_000, bossHp: [] })));
+    const markers = { ...overviewFixture.timeline.markers, deaths: [] };
+    const overview = { ...overviewFixture, kpis: { ...overviewFixture.kpis, deaths: 5 }, timeline: { ...overviewFixture.timeline, markers } };
+    const report = { tab: 'taken' as const, data: takenReportFixture };
+    expect(text({ tab: 'taken', setRows: rows, overview, report })[3]).toBe('Deaths|5|2.5 per pull');
   });
 });

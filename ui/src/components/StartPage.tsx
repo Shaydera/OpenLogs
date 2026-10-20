@@ -67,6 +67,7 @@ function LogPulls({ log }: { log: LogView }) {
   const hideAborted = useApp((s) => s.hideAborted);
   const setHideAborted = useApp((s) => s.setHideAborted);
   const openFight = useApp((s) => s.openFight);
+  const openSet = useApp((s) => s.openSet);
   const groups = useMemo(() => groupPulls(log.fights, hideAborted), [log.fights, hideAborted]);
   const runs = useMemo(() => groupRuns(log.fights, hideAborted), [log.fights, hideAborted]);
   const start = logStartMs(log.fileName, log.startUnixMs);
@@ -103,7 +104,7 @@ function LogPulls({ log }: { log: LogView }) {
       {runs.length > 0 && <RunCards runs={runs} onOpen={(index) => void openFight(index)} />}
       {bothKinds && <h2 className="cap section-label">{t('pulls.raidBosses')}</h2>}
       {groups.length > 0 ? (
-        <PullList groups={groups} onOpen={(index) => void openFight(index)} />
+        <PullList groups={groups} onOpen={(index) => void openFight(index)} onOpenSet={(set) => void openSet(set)} />
       ) : (
         runs.length === 0 && <EmptyState title={t('pulls.noneTitle')} text={t('pulls.none')} />
       )}

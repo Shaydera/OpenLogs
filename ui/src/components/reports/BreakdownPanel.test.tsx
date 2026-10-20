@@ -101,6 +101,16 @@ describe('BreakdownPanel', () => {
     expect(useApp.getState().openPlayer).toHaveBeenCalledTimes(1);
   });
 
+  it("narrows to a player from the name in a pull set, which has no player pages", async () => {
+    useApp.setState({ view: { kind: 'set', set: { kind: 'all', encounterId: 3492, difficulty: 15, fights: [1, 3] } } });
+    render(<BreakdownPanel tab="damage" breakdown={breakdownFixture} title="Damage Done" unit="DPS" />);
+    const [, speronis] = within(screen.getByRole('group', { name: 'Damage Done rows' })).getAllByRole('button');
+    await userEvent.click(within(speronis).getByText('Speronis'));
+    expect(useApp.getState().showOnly).toHaveBeenCalledWith('source', expect.objectContaining({ name: 'Speronis' }));
+    expect(within(screen.getByRole('complementary')).queryByRole('button', { name: 'Open player details' })).toBeNull();
+    expect(useApp.getState().openPlayer).not.toHaveBeenCalled();
+  });
+
   it('names the pets behind a pet ability row and narrows to the ability and those pets', async () => {
     const wolves: UnitRef[] = [{ kind: 'pet', owner: 3, name: 'Wolf' }];
     const melee = (pet: string | null, amount: number, pets: UnitRef[]): GroupedRow => ({

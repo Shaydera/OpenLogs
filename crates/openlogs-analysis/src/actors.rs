@@ -83,6 +83,19 @@ impl Actors {
         }
     }
 
+    /// The same ids, GUIDs, names and kinds, without the facts that belong to one pull.
+    pub fn carried_over(&self) -> Actors {
+        let mut carried = self.clone();
+        for actor in &mut carried.list {
+            actor.flags = 0;
+            actor.owner = None;
+            actor.spec_id = None;
+            actor.item_level = None;
+            actor.max_hp = None;
+        }
+        carried
+    }
+
     /// Id for `unit`, created on first sight; refreshes the name (if unknown) and flags.
     pub fn intern(&mut self, unit: &Unit<'_>) -> ActorId {
         if unit.is_empty() {
