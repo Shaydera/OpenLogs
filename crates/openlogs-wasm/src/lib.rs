@@ -102,6 +102,25 @@ impl Session {
             .map_err(to_js)
     }
 
+    pub fn set_begin(&mut self, fights: Vec<u32>, commands_json: &str) -> Result<(), JsValue> {
+        self.engine.set_begin(fights, commands_json).map_err(to_js)
+    }
+
+    pub fn set_feed(
+        &mut self,
+        part: &[u8],
+        base_offset: f64,
+        fight_index: u32,
+    ) -> Result<(), JsValue> {
+        self.engine
+            .set_feed(part, base_offset as u64, fight_index)
+            .map_err(to_js)
+    }
+
+    pub fn set_finish(&mut self) -> Result<String, JsValue> {
+        self.engine.set_finish().map_err(to_js)
+    }
+
     pub fn call(&self, command: &str, args_json: &str) -> Result<String, JsValue> {
         self.engine.call(command, args_json).map_err(to_js)
     }
