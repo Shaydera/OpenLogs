@@ -134,7 +134,7 @@ export function DeathList({ report, groups }: { report: DeathsReport; groups: De
                 (group) =>
                   group.pull &&
                   group.deaths.length > 0 && (
-                    <div key={group.fight} role="group" aria-label={t('setDeaths.pull', { n: group.pull.n })}>
+                    <div key={group.fight} role="group" aria-label={t('set.pull', { n: group.pull.n })}>
                       <div className="dlist-head">
                         <PullHead pull={group.pull} count={t('deaths.count', { count: group.deaths.length })} />
                       </div>

@@ -7,11 +7,11 @@ import { useApp } from '../../../store';
 import { ReportHead } from '../../filters/ReportHead';
 import { classColor, shortName } from '../../overview/players';
 import { hitName, reportSpellName, rosterIndex } from '../../reports/reportData';
-import { PullHead, SeamRow } from '../../set/PullHead';
+import { CompactPullHead, SeamRow } from '../../set/PullHead';
 import { deathWindowMs, windowScaleMs, windowTicksMs } from './lifetimeModel';
 import type { PullPart } from './SetDeathsPage';
 
-/** A tooltip past this share of its pull opens to the left of the bar. */
+/** Past this share of the whole seam row, not of its own pull (a short end pull would clip it), a tooltip opens to the left. */
 const TIP_FLIP_PCT = 55;
 
 const atPct = (value: number, whole: number) => (whole > 0 ? Math.min(100, Math.max(0, (value / whole) * 100)) : 0);
@@ -43,6 +43,8 @@ export function DeathWindowChart({ parts, report, selected }: { parts: PullPart[
   const scaleMs = windowScaleMs(parts.flatMap(({ part }) => part.deaths.map(deathWindowMs)));
   const ticks = windowTicksMs(scaleMs);
   const spellName = (id: number) => reportSpellName(report.spells, id);
+  const seams = seamsOf(parts);
+  const totalMs = seams.at(-1)?.endMs ?? 0;
 
   const box = (seam: Seam) => {
     const entry = byFight.get(seam.fightIndex);
@@ -53,7 +55,7 @@ export function DeathWindowChart({ parts, report, selected }: { parts: PullPart[
     return (
       <>
         <div className="dw-head">
-          <PullHead pull={pull} />
+          <CompactPullHead pull={pull} />
         </div>
         <div className="dw-plot">
           {ticks.slice(1).map((ms) => (
@@ -90,7 +92,17 @@ export function DeathWindowChart({ parts, report, selected }: { parts: PullPart[
               />
             );
           })}
-          {tipped && <DeathTip id={tipId} death={tipped} pull={pull} player={roster.get(tipped.player)} durationMs={part.durationMs} spellName={spellName} />}
+          {tipped && (
+            <DeathTip
+              id={tipId}
+              death={tipped}
+              pull={pull}
+              player={roster.get(tipped.player)}
+              durationMs={part.durationMs}
+              openLeft={atPct(seam.startMs + tipped.t, totalMs) > TIP_FLIP_PCT}
+              spellName={spellName}
+            />
+          )}
         </div>
       </>
     );
@@ -114,15 +126,23 @@ export function DeathWindowChart({ parts, report, selected }: { parts: PullPart[
           ))}
         </div>
         <div className="dw-scroll">
-          <SeamRow seams={seamsOf(parts)}>{box}</SeamRow>
+          <SeamRow seams={seams}>{box}</SeamRow>
         </div>
       </div>
     </section>
   );
 }
 
-function DeathTip(props: { id: string; death: DeathRecap; pull: PullView; player: PlayerRef | undefined; durationMs: number; spellName: (id: number) => string }) {
-  const { id, death, pull, player, durationMs, spellName } = props;
+function DeathTip(props: {
+  id: string;
+  death: DeathRecap;
+  pull: PullView;
+  player: PlayerRef | undefined;
+  durationMs: number;
+  openLeft: boolean;
+  spellName: (id: number) => string;
+}) {
+  const { id, death, pull, player, durationMs, openLeft, spellName } = props;
   const kb = death.killingBlow;
   const blow = !kb
     ? t('setDeaths.diesNoBlow')
@@ -130,7 +150,7 @@ function DeathTip(props: { id: string; death: DeathRecap; pull: PullView; player
       ? t('setDeaths.diesFrom', { source: shortName(kb.sourceName), spell: hitName(kb, spellName) })
       : t('setDeaths.diesFromSpell', { spell: hitName(kb, spellName) });
   const x = atPct(death.t, durationMs);
-  const side = x > TIP_FLIP_PCT ? { right: `${100 - x + 1}%` } : { left: `${x + 1}%` };
+  const side = openLeft ? { right: `${100 - x + 1}%` } : { left: `${x + 1}%` };
   return (
     <div role="tooltip" id={id} className="dw-tip" style={side}>
       <span className="num text-muted">{t('setDeaths.tipAt', { n: pull.n, time: formatEventTimeTenths(death.t) })}</span>

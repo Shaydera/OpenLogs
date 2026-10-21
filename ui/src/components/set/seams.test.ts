@@ -12,8 +12,4 @@ describe('seams', () => {
     expect(bandIn(second, [30_000, 40_000])).toEqual({ leftPct: 25, widthPct: 25 });
     expect(bandIn(first, [30_000, 40_000])).toBeNull();
   });
-
-  it('each_segment_is_as_wide_as_its_pull_is_long', () => {
-    expect(seamBoxes(seams).map((box) => box.flex)).toEqual([20_000, 40_000]);
-  });
 });

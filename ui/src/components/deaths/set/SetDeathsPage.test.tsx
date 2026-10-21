@@ -82,6 +82,18 @@ describe('set deaths page', () => {
     expect(within(screen.getByRole('group', { name: 'Pull #3' })).getByRole('button', { pressed: true })).toHaveTextContent('Serrik');
   });
 
+  it('the same death time in two pulls selects only the clicked pull', async () => {
+    const [first, second, third] = report.pulls;
+    const twice = { ...report, pulls: [first, { ...second, deaths: [death(4, 'Faelan-Emberfall-EU', 50_000)] }, third] };
+    render(<SetDeathsPage report={twice} />);
+    const list = within(screen.getByRole('complementary', { name: /^All deaths/ }));
+    await userEvent.click(within(list.getByRole('group', { name: 'Pull #2' })).getByRole('button', { name: /Faelan/ }));
+    const pressed = list.getAllByRole('button', { pressed: true });
+    expect(pressed).toHaveLength(1);
+    expect(within(list.getByRole('group', { name: 'Pull #2' })).getByRole('button', { pressed: true })).toBe(pressed[0]);
+    expect(screen.getByText(/Pull #2 \(Wipe\)/)).toBeInTheDocument();
+  });
+
   it('the lifetime table can leave out players who were in fewer pulls', async () => {
     render(<SetDeathsPage report={report} />);
     const lifetime = () => within(screen.getByRole('table', { name: 'Lifetime' }));

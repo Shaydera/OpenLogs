@@ -17,9 +17,10 @@ import { SIDES } from '../../scopeSides';
 import type { FightTab, MetricTab, ReportData, TimeRange } from '../../store';
 import { rowLabel, valueLabel } from '../filters/labels';
 import { deathWindowMs, medianMs } from '../deaths/set/lifetimeModel';
+import { kickTotals } from '../interrupts/kickTotals';
 import type { KpiTone } from '../Kpi';
 import { shortName } from '../overview/players';
-import { type SetRow, averageFirstDeath, bestPull, earliestFirstDeath } from '../overview/setOverviewModel';
+import { type PullFirst, type SetRow, averageFirstDeath, bestPull, earliestOfPulls, pullFirstDeaths } from '../overview/setOverviewModel';
 import { formatCapTime, powerName } from '../resources/powerNames';
 import { hitName, reportSpellName } from '../reports/reportData';
 
@@ -140,7 +141,7 @@ function setTiles(kpis: Kpis | null, rows: SetRow[]): HeaderTile[] {
     { label: labels[0], value: formatAmount(kpis.raidDps), sub: t('kpi.damageOver', { damage: formatAmount(kpis.raidDamage), duration: formatDuration(kpis.durationMs) }) },
     { label: labels[1], value: bestValue, sub: best ? t('kpi.pullNumber', { n: best.row.view.n }) : '' },
     setDeathsTile(kpis.deaths, rows.length),
-    firstDeathTile(rows),
+    firstDeathTile(pullFirstDeaths(rows)),
   ];
 }
 
@@ -153,13 +154,23 @@ function setDeathsTile(deaths: number, pulls: number): HeaderTile {
   };
 }
 
-function firstDeathTile(rows: SetRow[]): HeaderTile {
-  const earliest = earliestFirstDeath(rows);
+function firstDeathTile(pulls: PullFirst[]): HeaderTile {
+  const earliest = earliestOfPulls(pulls);
   return {
     label: t('kpi.firstDeathLabel'),
-    value: averageFirstDeath(rows),
+    value: averageFirstDeath(pulls),
     sub: earliest ? t('kpi.earliestFirstDeath', { time: formatEventTimeTenths(earliest.ms), n: earliest.n }) : t('kpi.noDeaths'),
   };
+}
+
+/** The earliest of each report pull's `times`, numbered as in the set's rows. */
+function pullFirsts<P extends { fightIndex: number }>(pulls: P[], rows: SetRow[], times: (pull: P) => number[]): PullFirst[] {
+  const numbers = new Map(rows.map((row) => [row.pull.fightIndex, row.view.n]));
+  return pulls.flatMap((pull) => {
+    const n = numbers.get(pull.fightIndex);
+    const all = times(pull);
+    return n === undefined ? [] : [{ ms: all.length > 0 ? Math.min(...all) : null, n }];
+  });
 }
 
 const perSecond = (total: number, durationMs: number) => (durationMs > 0 ? (total * 1000) / durationMs : 0);
@@ -251,7 +262,8 @@ function takenTiles(report: ReportOf['taken'] | null, input: HeaderInput): Heade
 /** The deaths tiles from the core; one selected player trades Survivors for the time dead, enemies count kills. */
 function deathsTiles(report: ReportOf['deaths'] | null, input: HeaderInput): HeaderTile[] {
   const enemies = input.scope.perspective === 'enemy';
-  if (input.setRows && !enemies) return setFriendlyDeathsTiles(report && isSetReport(report) ? report : null, input.setRows);
+  const setReport = report && isSetReport(report) ? report : null;
+  if (input.setRows && !enemies) return setFriendlyDeathsTiles(setReport, input.setRows);
   const onePlayer = !enemies && input.scope.target.length === 1 && input.scope.target[0].kind === 'player';
   const labels = enemies
     ? [t('kpi.kills'), t('kpi.mostLethal'), t('kpi.topKiller'), t('kpi.avgAlive')]
@@ -264,15 +276,9 @@ function deathsTiles(report: ReportOf['deaths'] | null, input: HeaderInput): Hea
     sub: lethal ? hitName(lethal, (id) => reportSpellName(report.spells, id)) : '',
   };
   if (enemies) {
-    const kills = isSetReport(report) ? report.pulls.flatMap((pull) => pull.kills) : report.kills;
-    const times = kills.map((k) => k.t);
     const killer = report.topKiller;
     return [
-      {
-        label: labels[0],
-        value: formatInteger(times.length),
-        sub: times.length > 0 ? t('kpi.firstKill', { time: formatEventTime(Math.min(...times)) }) : t('kpi.noKills'),
-      },
+      setReport ? setKillsTile(setReport, input.setRows ?? []) : killsTile(report.kills.map((k) => k.t)),
       lethalTile,
       { label: labels[2], value: killer ? valueLabel(killer.unit.unit, killer.unit.name, killer.unit.number) : '—', sub: killer ? t('kpi.killingBlows', { count: killer.count }) : '' },
       { label: labels[3], value: report.avgAliveMs !== null ? formatDuration(report.avgAliveMs) : '—', sub: '' },
@@ -287,6 +293,23 @@ function deathsTiles(report: ReportOf['deaths'] | null, input: HeaderInput): Hea
       ? { label: labels[3], value: formatDuration(report.deadMs), sub: t('kpi.ofDeaths', { count }) }
       : { label: labels[3], value: formatInteger(Math.max(0, input.playerCount - report.deadUnits)), sub: t('kpi.ofPlayers', { count: input.playerCount }) },
   ];
+}
+
+function killsTile(times: number[]): HeaderTile {
+  return {
+    label: t('kpi.kills'),
+    value: formatInteger(times.length),
+    sub: times.length > 0 ? t('kpi.firstKill', { time: formatEventTime(Math.min(...times)) }) : t('kpi.noKills'),
+  };
+}
+
+function setKillsTile(report: SetDeaths, rows: SetRow[]): HeaderTile {
+  const first = earliestOfPulls(pullFirsts(report.pulls, rows, (pull) => pull.kills.map((k) => k.t)));
+  return {
+    label: t('kpi.kills'),
+    value: formatInteger(report.pulls.reduce((sum, pull) => sum + pull.kills.length, 0)),
+    sub: first ? t('kpi.firstKillInPull', { time: formatEventTime(first.ms), n: first.n }) : t('kpi.noKills'),
+  };
 }
 
 /** A set's friendly deaths: the count per pull, the deadliest spell with its main source, the median death window and the first death. */
@@ -305,26 +328,29 @@ function setFriendlyDeathsTiles(report: SetDeaths | null, rows: SetRow[]): Heade
       sub: lethal ? (source ? t('kpi.lethalDeaths', { count: lethal.count, source }) : t('deaths.count', { count: lethal.count })) : '',
     },
     { label: labels[2], value: median !== null ? formatSeconds(median) : '—', sub: median !== null ? t('kpi.medianWindowSub') : '' },
-    firstDeathTile(rows),
+    firstDeathTile(pullFirsts(report.pulls, rows, (pull) => pull.lifetime.flatMap((life) => life.firstDeathMs ?? []))),
   ];
 }
 
+/** A set's overview has no Bloodlust markers: its buffs tiles leave Bloodlust out. */
 function aurasTiles(report: ReportOf['buffs'] | null, input: HeaderInput): HeaderTile[] {
   const byTarget = report?.group === 'target';
+  const inSet = input.setRows !== null;
   const labels = [t('kpi.bloodlust'), t('kpi.ebonMight'), t(byTarget ? 'kpi.targets' : 'kpi.auras'), t('kpi.players')];
-  if (!report) return labels.map(pendingTile);
+  if (!report) return (inSet ? labels.slice(1) : labels).map(pendingTile);
   const overview = input.overview;
   const lust = overview?.timeline.markers.bloodlust.find((l) => inRange(input.range, l.t, overview.timeline.durationMs));
   const ebon = report.ebonMight;
   const onEnemies = input.scope.perspective === 'enemy';
+  const lustTile: HeaderTile = !overview
+    ? pendingTile(labels[0])
+    : {
+        label: labels[0],
+        value: lust ? formatEventTime(lust.t) : '—',
+        sub: lust ? reportSpellName(overview.spells, lust.spellId) : t('kpi.noBloodlust'),
+      };
   return [
-    !overview
-      ? pendingTile(labels[0])
-      : {
-          label: labels[0],
-          value: lust ? formatEventTime(lust.t) : '—',
-          sub: lust ? reportSpellName(overview.spells, lust.spellId) : t('kpi.noBloodlust'),
-        },
+    ...(inSet ? [] : [lustTile]),
     {
       label: labels[1],
       value: ebon ? formatShare(ebon.uptime * 100) : '—',
@@ -358,11 +384,11 @@ function interruptsTiles(report: ReportOf['interrupts'] | null, scope: Scope): H
   if (!report) return labels.map(pendingTile);
   const by = (count: number) => (count === 0 ? '—' : t('kicks.bySources', { count }));
   const top = report.mostInterrupted;
-  const missed = report.missed.length;
+  const { interrupts, dispels, missed } = kickTotals(report);
   const friendlyOnly = scope.perspective === 'friendly' && scope.source.length === 0;
   return [
-    { label: labels[0], value: formatInteger(report.interrupts.length), sub: by(report.kickers) },
-    { label: labels[1], value: formatInteger(report.dispels.length), sub: by(report.dispellers) },
+    { label: labels[0], value: formatInteger(interrupts), sub: by(report.kickers) },
+    { label: labels[1], value: formatInteger(dispels), sub: by(report.dispellers) },
     friendlyOnly
       ? { label: labels[2], value: formatInteger(missed), tone: missed > 0 ? 'warn' : undefined, sub: t('kicks.missedSub') }
       : { label: labels[2], value: '—', sub: scope.perspective === 'friendly' ? t('kicks.missedNoSource') : t('kicks.missedFriendlies') },

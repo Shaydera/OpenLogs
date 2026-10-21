@@ -647,6 +647,14 @@
   margin-left: auto;
   color: var(--muted);
 }
+.pull-head-compact {
+  gap: 5px;
+}
+.pull-head-compact .chip {
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 11px;
+}
 .seam-row {
   display: flex;
   gap: 4px;

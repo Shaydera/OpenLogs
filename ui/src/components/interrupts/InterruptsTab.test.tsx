@@ -1,6 +1,8 @@
 import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { FightRow, PullSet, SetInterrupts } from '../../api/types';
 import { initialState, useApp } from '../../store';
+import { compareLogFixture } from '../../test/compareFixture';
 import { interruptsReportFixture } from '../../test/reportFixtures';
 import { InterruptsTab } from './InterruptsTab';
 
@@ -27,5 +29,31 @@ describe('InterruptsTab', () => {
     const faelan = interruptsReportFixture.interrupts.slice(0, 1);
     render(<InterruptsTab report={{ ...interruptsReportFixture, group: 'target', interrupts: faelan, dispels: [], missed: [] }} />);
     expect(head('Interrupts')).toEqual(['Time', 'Spell', 'Target']);
+  });
+
+  it('a_sets_kicks_are_listed_under_their_pull', () => {
+    const [WIPE] = compareLogFixture.fights;
+    const fights: FightRow[] = [1, 2, 3].map((index) => ({ ...WIPE, index, durationMs: 100_000 }));
+    const set: PullSet = { kind: 'all', encounterId: WIPE.encounterId, difficulty: WIPE.difficulty, fights: [1, 2, 3] };
+    useApp.setState({ log: { ...compareLogFixture, fights }, view: { kind: 'set', set } });
+    const [faelan, wendel] = interruptsReportFixture.interrupts;
+    const pull = (fightIndex: number, interrupts: SetInterrupts['interrupts']) => ({ fightIndex, durationMs: 100_000, interrupts, dispels: [], missed: [] });
+    const report: SetInterrupts = {
+      ...interruptsReportFixture,
+      interrupts: [],
+      dispels: [],
+      missed: [],
+      pulls: [pull(1, [faelan]), pull(2, []), pull(3, [wendel])],
+    };
+    render(<InterruptsTab report={report} />);
+    const log = within(screen.getByRole('region', { name: /^Interrupts \d/ }));
+    expect(log.getAllByRole('group').map((group) => group.getAttribute('aria-label'))).toEqual(['Pull #1', 'Pull #3']);
+    const entries = (n: number) => {
+      const group = within(log.getByRole('group', { name: `Pull #${n}` }));
+      expect(group.getByText(`#${n}`)).toBeInTheDocument();
+      return within(group.getByRole('table', { name: `Interrupts, Pull #${n}` })).getAllByRole('row').slice(1).map((row) => row.textContent);
+    };
+    expect(entries(1)).toEqual(["0:12FaelanCounterspellUla'tekVenom Bolt"]);
+    expect(entries(3)).toEqual(["0:30WendelPummelUla'tekVenom Bolt"]);
   });
 });

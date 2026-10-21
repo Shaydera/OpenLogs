@@ -159,6 +159,15 @@ describe('headerTiles', () => {
     ]);
   });
 
+  it('set_first_death_tile_follows_the_selected_players', () => {
+    const raidFirstDeath = { ...overviewFixture.kpis, firstDeathMs: 5_000 };
+    const rows = setRows(compareLogFixture.fights, [1, 3].map((fightIndex) => ({ fightIndex, kpis: raidFirstDeath, bossHpStepMs: 60_000, bossHp: [] })));
+    const pull = (fightIndex: number, firstDeathMs: number | null) => ({ fightIndex, durationMs: 120_000, deaths: [], kills: [], lifetime: [{ player: 4, firstDeathMs }] });
+    const data: SetDeaths = { ...deathsReportFixture, deaths: [], pulls: [pull(1, 70_000), pull(3, 20_000)], byKillingBlow: [], noLethal: 0, byPlayer: [] };
+    const faelan = { perspective: 'friendly' as const, source: [], target: [{ kind: 'player' as const, actorId: 4 }], ability: [] };
+    expect(text({ tab: 'deaths', setRows: rows, scope: faelan, report: { tab: 'deaths', data } })[3]).toBe('First death|avg 0:45|earliest 0:20.0 (#3)');
+  });
+
   it('set_damage_taken_counts_the_deaths_of_every_pull', () => {
     const rows = setRows(compareLogFixture.fights, [1, 3].map((fightIndex) => ({ fightIndex, kpis: overviewFixture.kpis, bossHpStepMs: 60_000, bossHp: [] })));
     const markers = { ...overviewFixture.timeline.markers, deaths: [] };

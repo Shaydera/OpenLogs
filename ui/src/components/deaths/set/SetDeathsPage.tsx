@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { SetDeaths, SetDeathsPull } from '../../../api/types';
 import type { PullView } from '../../../pulls/groupPulls';
 import { useApp } from '../../../store';
-import { pullViews } from '../../set/seams';
+import { useSetPullViews } from '../../set/useSetPullViews';
 import { DeathList, pickDeath } from '../DeathList';
 import { DeathWindowChart } from './DeathWindowChart';
 import { KillingBlowTable } from './KillingBlowTable';
@@ -16,16 +16,15 @@ export interface PullPart {
 
 /** The report's pulls in set order with their number and result. */
 export function usePullParts(report: SetDeaths): PullPart[] {
-  const log = useApp((s) => s.log);
-  const view = useApp((s) => s.view);
-  const fights = view.kind === 'set' ? view.set.fights : null;
-  return useMemo(() => {
-    const views = log && fights ? pullViews(log, fights) : new Map<number, PullView>();
-    return report.pulls.flatMap((part) => {
-      const pull = views.get(part.fightIndex);
-      return pull ? [{ part, pull }] : [];
-    });
-  }, [log, fights, report.pulls]);
+  const views = useSetPullViews();
+  return useMemo(
+    () =>
+      report.pulls.flatMap((part) => {
+        const pull = views.get(part.fightIndex);
+        return pull ? [{ part, pull }] : [];
+      }),
+    [views, report.pulls],
+  );
 }
 
 /** A set's friendly deaths: the death windows, what killed whom, how long everyone lived, then the deaths with their recap. */

@@ -64,6 +64,8 @@ export function CastsTab({ report }: { report: CastsReport }) {
   const selectRow = useApp((s) => s.selectCastsRow);
   const select = useApp((s) => s.select);
   const openPlayer = useApp((s) => s.openPlayer);
+  const inSet = useApp((s) => s.view.kind === 'set');
+  const openPlayerOf = inSet ? undefined : (player: number) => void openPlayer(player);
   const roster = useMemo(
     () => new Map([...(overview ? playerIndex(overview) : []), ...rosterIndex(breakdown.roster)]),
     [overview, breakdown.roster],
@@ -78,7 +80,7 @@ export function CastsTab({ report }: { report: CastsReport }) {
   const nameOf = (player: number) => shortName(roster.get(player)?.name ?? t('report.unknownPlayer'));
   const friendly = scope.perspective === 'friendly';
   const caption = t(friendly ? 'report.player' : 'scope.source');
-  const note = <div className="casts-note">{t(range ? 'casts.noteRange' : 'casts.note', { duration: formatDuration(breakdown.durationMs) })}</div>;
+  const note = <div className="casts-note">{t(inSet ? 'casts.noteSet' : range ? 'casts.noteRange' : 'casts.note', { duration: formatDuration(breakdown.durationMs) })}</div>;
 
   const title =
     onePlayer !== null ? (
@@ -95,7 +97,7 @@ export function CastsTab({ report }: { report: CastsReport }) {
   let main: ReactNode;
   let side: ReactNode = null;
   if (breakdown.rows.length === 0) {
-    main = <NoMatch nothing={t('casts.none')} />;
+    main = <NoMatch nothing={t(inSet ? 'casts.noneInSet' : 'casts.none')} />;
   } else if (onePlayer !== null) {
     main = (
       <>
@@ -110,7 +112,7 @@ export function CastsTab({ report }: { report: CastsReport }) {
         rows={breakdown.rows}
         selected={selected}
         onSelect={selectable ? selectRow : undefined}
-        onOpenPlayer={(player) => void openPlayer(player)}
+        onOpenPlayer={openPlayerOf}
         roster={roster}
         cpm={cpm}
         caption={caption}
@@ -128,7 +130,7 @@ export function CastsTab({ report }: { report: CastsReport }) {
           sub={t('casts.spellCount', { count: lines.length })}
           suffix={t('casts.spellCasts')}
           cpm={cpm}
-          onOpenPlayer={player !== null ? () => void openPlayer(player) : undefined}
+          onOpenPlayer={player !== null && openPlayerOf ? () => openPlayerOf(player) : undefined}
           onShowOnly={() => void select('source', rowValue(selected.key))}
         >
           <SpellTable lines={lines} player={player} label={t('casts.tableLabel', { name: rowLabel(selected) })} cpm={cpm} roster={roster} />
@@ -144,7 +146,7 @@ export function CastsTab({ report }: { report: CastsReport }) {
         <SidePanel row={selected} roster={roster} sub="" cpm={cpm} onShowOnly={() => void select('ability', rowValue(selected.key))}>
           <CasterList
             rows={casters}
-            onOpenPlayer={(player) => void openPlayer(player)}
+            onOpenPlayer={openPlayerOf}
             roster={roster}
             cpm={cpm}
             caption={caption}
@@ -175,10 +177,10 @@ export function CastsTab({ report }: { report: CastsReport }) {
               {' · '}
               <span className="num value-text">{cpm(breakdown.total)}</span>{' '}
               {t(onePlayer === null && friendly && breakdown.group === 'source' ? 'casts.raidCpm' : 'casts.cpm')}
-              {onePlayer !== null && (
+              {onePlayer !== null && openPlayerOf && (
                 <>
                   {' · '}
-                  <button type="button" className="link-accent" onClick={() => void openPlayer(onePlayer)}>
+                  <button type="button" className="link-accent" onClick={() => openPlayerOf(onePlayer)}>
                     {t('report.playerDetails')}
                   </button>
                 </>
@@ -381,12 +383,13 @@ function SidePanel(props: {
   );
 }
 
-/** One caster's spells, sortable; spells link to the player's ability page where it has hits. */
+/** One caster's spells, sortable; spells link to the player's ability page where it has hits, outside a set. */
 function SpellTable(props: { lines: SpellLine[]; player: number | null; label: string; cpm: (casts: number) => string; roster: Map<number, PlayerRef> }) {
   const { lines, player, label, cpm, roster } = props;
   const sort = useApp((s) => s.castsSort);
   const setCastsSort = useApp((s) => s.setCastsSort);
   const openAbilityOf = useApp((s) => s.openAbilityOf);
+  const inSet = useApp((s) => s.view.kind === 'set');
   const colour = player !== null ? classColor(roster.get(player)?.classToken ?? null) : undefined;
   // Only a player's own auras are known: other casters have no uptime column.
   const uptimes = player !== null;
@@ -432,7 +435,7 @@ function SpellTable(props: { lines: SpellLine[]; player: number | null; label: s
               <GameIcon name={s.name} icon={spellIcon(s.spellId)} />
             </span>
             <span role="cell" className="cast-spell">
-              {s.link && player !== null ? (
+              {s.link && player !== null && !inSet ? (
                 <button type="button" className="link-btn cast-spell-name" onClick={() => s.link && void openAbilityOf(player, s.link.spellId, s.link.metric)}>
                   {s.name}
                 </button>

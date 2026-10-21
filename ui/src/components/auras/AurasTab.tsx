@@ -1,8 +1,9 @@
 import { Fragment, useState } from 'react';
-import type { AuraHolder, AuraLane, AuraRow, AurasReport, PlayerRef } from '../../api/types';
+import { type AuraHolder, type AuraLane, type AuraRow, type AurasReport, type PlayerRef, type Seam, type SetAuras, isSetReport } from '../../api/types';
 import { spellIcon } from '../../icons';
 import { formatDuration, formatInteger, formatShare } from '../../i18n/format';
 import { t, type MessageKey } from '../../i18n/i18n';
+import type { PullView } from '../../pulls/groupPulls';
 import { useApp } from '../../store';
 import { TimeAxis } from '../detail/TimeAxis';
 import { GameIcon, MonogramTile } from '../GameIcon';
@@ -10,9 +11,12 @@ import { rowValue } from '../filters/labels';
 import { NoMatch } from '../filters/NoMatch';
 import { ReportHead } from '../filters/ReportHead';
 import { classColor, shortName } from '../overview/players';
-import { band } from '../player/chartGeometry';
+import { band, intervalList } from '../player/chartGeometry';
 import { PlayerIcon } from '../reports/PlayerName';
 import { reportSpellName, rosterIndex } from '../reports/reportData';
+import { CompactPullHead, SeamRow } from '../set/PullHead';
+import { bandIn } from '../set/seams';
+import { useSetPullViews } from '../set/useSetPullViews';
 import { AURA_ROWS, auraColour, sortAuras, type AuraSort } from './auraModel';
 import { AuraKindSwitch } from './AuraKindSwitch';
 
@@ -24,8 +28,8 @@ const SORTS: { key: AuraSort; label: MessageKey; byTarget?: MessageKey }[] = [
 
 const keyOf = (row: AuraRow) => `${JSON.stringify(row.key)}#${row.spellId}`;
 
-/** Auras by aura (a lane per holder) or by target (a lane per aura); the lens decides whose auras. */
-export function AurasTab({ report }: { report: AurasReport }) {
+/** Auras by aura (a lane per holder) or by target (a lane per aura); the lens decides whose auras. A set's lanes show its pulls back to back. */
+export function AurasTab({ report }: { report: AurasReport | SetAuras }) {
   const kind = useApp((s) => s.auraKind);
   const scope = useApp((s) => s.scope);
   const select = useApp((s) => s.select);
@@ -33,6 +37,8 @@ export function AurasTab({ report }: { report: AurasReport }) {
   const [open, setOpen] = useState<string | null>(null);
   const [sort, setSort] = useState<AuraSort>('uptime');
   const [all, setAll] = useState(false);
+  const views = useSetPullViews();
+  const seams = isSetReport(report) ? report.pulls : null;
   const roster = rosterIndex(report.roster);
   const spellName = (id: number) => reportSpellName(report.spells, id);
   const holderName = (holder: AuraHolder) => (holder.player !== null ? shortName(roster.get(holder.player)?.name ?? holder.name) : holder.name);
@@ -53,12 +59,15 @@ export function AurasTab({ report }: { report: AurasReport }) {
         title={t(`auras.${kind}_on_${side === 'friendly' ? 'players' : 'enemies'}`)}
         group={report.group}
         summary={
-          count > 0 && (
+          count > 0 &&
+          (seams ? (
+            <span className="auras-summary">{t('auras.setUptimeOver', { duration: formatDuration(report.endMs - report.startMs), n: formatInteger(seams.length) })}</span>
+          ) : (
             <span className="auras-summary">
               <span className="num value-text">{formatInteger(count)}</span> {t(byTarget ? 'kpi.targetWord' : 'auras.auraWord', { count })} ·{' '}
               {t('auras.uptimeOver')} <span className="num value-text">{formatDuration(report.endMs - report.startMs)}</span>
             </span>
-          )
+          ))
         }
         tools={<AuraKindSwitch />}
       />
@@ -67,7 +76,7 @@ export function AurasTab({ report }: { report: AurasReport }) {
         {loading ? t('report.loading') : ''}
       </p>
       {count === 0 ? (
-        <NoMatch nothing={t('auras.none')} />
+        <NoMatch nothing={t(seams ? 'auras.noneInSet' : 'auras.none')} />
       ) : (
         <>
           <div className="scroll-x">
@@ -136,6 +145,8 @@ export function AurasTab({ report }: { report: AurasReport }) {
                             byTarget={byTarget}
                             colour={colour}
                             report={report}
+                            seams={seams}
+                            views={views}
                             roster={roster}
                             spellName={spellName}
                             label={t(byTarget ? 'auras.aurasOf' : 'auras.targetsOf', { name })}
@@ -158,7 +169,7 @@ export function AurasTab({ report }: { report: AurasReport }) {
                 <br />
               </>
             )}
-            {t(byTarget ? 'auras.noteTargets' : 'auras.note')}
+            {t(byTarget ? (seams ? 'auras.noteTargetsSet' : 'auras.noteTargets') : seams ? 'auras.noteSet' : 'auras.note')}
           </div>
         </>
       )}
@@ -166,22 +177,46 @@ export function AurasTab({ report }: { report: AurasReport }) {
   );
 }
 
-/** One uptime lane per holder (by aura) or per aura (by target). */
+/** One uptime lane per holder (by aura) or per aura (by target); a set's lane has a segment per pull. */
 function AuraLanes(props: {
   lanes: AuraLane[];
   byTarget: boolean;
   colour: (sources: number[]) => string;
   report: AurasReport;
+  seams: Seam[] | null;
+  views: Map<number, PullView>;
   roster: Map<number, PlayerRef>;
   spellName: (id: number) => string;
   label: string;
 }) {
-  const { lanes, byTarget, colour, report, roster, spellName, label } = props;
+  const { lanes, byTarget, colour, report, seams, views, roster, spellName, label } = props;
+  const bar = (key: number, pos: { leftPct: number; widthPct: number } | null, fill: string) =>
+    pos ? <span key={key} className="atl-bar" style={{ left: `${pos.leftPct}%`, width: `${pos.widthPct}%`, background: fill }} /> : null;
+  const segment = (lane: AuraLane, seam: Seam, fill: string) => {
+    const pull = views.get(seam.fightIndex);
+    const inPull = lane.intervals.map(([a, b]): [number, number] => [a - seam.startMs, b - seam.startMs]);
+    const list = intervalList(inPull, 0, seam.endMs - seam.startMs);
+    const described = pull && list ? { role: 'img', 'aria-label': t('chart.intervals', { name: t('set.pull', { n: pull.n }), list }) } : { 'aria-hidden': true };
+    return (
+      <span className="atl-seam" {...described}>
+        {lane.intervals.map(([a, b]) => bar(a, bandIn(seam, [a, b]), fill))}
+      </span>
+    );
+  };
   return (
     <>
       <div className="atl-row atl-row-head" aria-hidden="true">
         <span />
-        <TimeAxis startMs={report.startMs} endMs={report.endMs} flush />
+        {seams ? (
+          <SeamRow seams={seams}>
+            {(seam) => {
+              const pull = views.get(seam.fightIndex);
+              return pull && <div className="atl-seam-head"><CompactPullHead pull={pull} /></div>;
+            }}
+          </SeamRow>
+        ) : (
+          <TimeAxis startMs={report.startMs} endMs={report.endMs} flush />
+        )}
         <span className="cap atl-cap">{t('auras.uptimeShort')}</span>
       </div>
       <ul className="atl-list" aria-label={label}>
@@ -207,12 +242,11 @@ function AuraLanes(props: {
                   <span className="atl-enemy">{lane.holder.name}</span>
                 )}
               </span>
-              <span className="track">
-                {lane.intervals.map(([a, b]) => {
-                  const pos = band(a, b, report.startMs, report.endMs);
-                  return pos ? <span key={a} className="atl-bar" style={{ left: `${pos.leftPct}%`, width: `${pos.widthPct}%`, background: fill }} /> : null;
-                })}
-              </span>
+              {seams ? (
+                <SeamRow seams={seams}>{(seam) => segment(lane, seam, fill)}</SeamRow>
+              ) : (
+                <span className="track">{lane.intervals.map(([a, b]) => bar(a, band(a, b, report.startMs, report.endMs), fill))}</span>
+              )}
               <span className="num atl-uptime">{formatShare(lane.uptime * 100)}</span>
             </li>
           );

@@ -4,7 +4,7 @@ import { formatAmount, formatDuration, formatEventTimeTenths, formatInteger, for
 import { t } from '../../i18n/i18n';
 import { PULL_CHIP } from '../../pulls/groupPulls';
 import { useApp } from '../../store';
-import { type SetOrder, type SetRow, averageFirstDeath, bestPull, sortRows } from './setOverviewModel';
+import { type SetOrder, type SetRow, averageFirstDeath, bestPull, pullFirstDeaths, sortRows } from './setOverviewModel';
 
 const CURVE_HEIGHT = 34;
 const ORDERS: SetOrder[] = ['inOrder', 'bestFirst'];
@@ -113,7 +113,7 @@ export function SetOverview({ set, rows, kpis }: { set: PullSet; rows: SetRow[];
             </span>
             <span />
             <span className="num num-col">{formatInteger(kpis.deaths)}</span>
-            <span className="num num-col text-soft">{averageFirstDeath(rows)}</span>
+            <span className="num num-col text-soft">{averageFirstDeath(pullFirstDeaths(rows))}</span>
             <span className="num num-col">{formatAmount(kpis.raidDps)}</span>
             <span className="num num-col text-soft">{potions(kpis)}</span>
             <span />

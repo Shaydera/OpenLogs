@@ -13,7 +13,6 @@ export type RunStatus = 'completed' | 'notCompleted' | 'incomplete';
 /** Chip style of a run result: completed like a kill, not completed like a wipe, no end neutral. */
 export const RUN_CHIP: Record<RunStatus, string> = { completed: 'kill', notCompleted: 'wipe', incomplete: 'abort' };
 
-/** Chip style of a pull status. */
 export const PULL_CHIP: Record<PullStatus, string> = { kill: 'kill', wipe: 'wipe', incomplete: 'wipe', aborted: 'abort' };
 
 export interface PullView {

@@ -122,7 +122,7 @@
   background: var(--panel);
   font-size: 12px;
 }
-.kill-group-head {
+.pull-group-head {
   padding: 10px 16px 6px;
   border-top: 1px solid var(--line-soft);
   font-size: 12px;
@@ -804,6 +804,26 @@
 .atl-uptime {
   font-size: 13px;
   text-align: right;
+}
+/* A set's lanes: a segment per pull, as long as it ran. */
+.atl-row .seam-row {
+  min-width: 0;
+}
+.atl-seam-head {
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.atl-seam {
+  display: block;
+  position: relative;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--plot);
+  box-shadow: inset 0 0 0 1px var(--bar-track);
+}
+.atl-seam .atl-bar {
+  top: 3px;
 }
 
 /* Interrupts & Dispels tab: players and event logs; the totals sit in the fight header. */

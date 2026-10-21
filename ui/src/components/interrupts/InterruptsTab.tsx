@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
-import type { InterruptsReport, KickRow, PlayerRef, ReportUnit } from '../../api/types';
+import { type InterruptsReport, type KickRow, type PlayerRef, type ReportUnit, type SetInterrupts, type SetKicksPull, isSetReport } from '../../api/types';
 import { spellIcon } from '../../icons';
 import { formatEventTime, formatInteger } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
@@ -11,6 +11,9 @@ import { ReportHead } from '../filters/ReportHead';
 import { classColor } from '../overview/players';
 import { PlayerIcon } from '../reports/PlayerName';
 import { reportSpellName, rosterIndex } from '../reports/reportData';
+import { PullHead } from '../set/PullHead';
+import { useSetPullViews } from '../set/useSetPullViews';
+import { kickTotals } from './kickTotals';
 
 const TITLE = { source: 'kicks.byPlayer', ability: 'kicks.bySpell', target: 'kicks.byTarget' } as const;
 const FIRST_COLUMN = { source: 'scope.source', ability: 'casts.spell', target: 'ability.target' } as const;
@@ -22,9 +25,17 @@ interface LogColumn<E> {
 
 const kickLabel = (row: KickRow) => valueLabel(rowValue(row.key), row.name, row.number);
 
-/** The tab's key figures sit in the fight header. A narrowed dimension has no column in the logs. */
-export function InterruptsTab({ report }: { report: InterruptsReport }) {
+/** The tab's key figures sit in the fight header. A narrowed dimension has no column in the logs; a set's logs are split by pull. */
+export function InterruptsTab({ report }: { report: InterruptsReport | SetInterrupts }) {
   const scope = useApp((s) => s.scope);
+  const views = useSetPullViews();
+  const pulls = isSetReport(report)
+    ? report.pulls.flatMap((part) => {
+        const pull = views.get(part.fightIndex);
+        return pull ? [{ part, pull }] : [];
+      })
+    : null;
+  const totals = kickTotals(report);
   const roster = rosterIndex(report.roster);
   const spell = (id: number) => reportSpellName(report.spells, id);
   const maxKicks = Math.max(1, ...report.rows.map((r) => r.interrupts));
@@ -85,6 +96,27 @@ export function InterruptsTab({ report }: { report: InterruptsReport }) {
     ...(abilityOpen ? [{ head: t('casts.spell'), cell: (m: Missed) => spellCell(m.spellId, null, true) }] : []),
   ];
 
+  const log = <E extends { t: number }>(label: string, columns: LogColumn<E>[], entries: E[], inPull: (part: SetKicksPull) => E[], warn?: boolean) =>
+    pulls ? (
+      <div className="scroll-box" tabIndex={0}>
+        {pulls.map(({ part, pull }) => {
+          const listed = inPull(part);
+          return (
+            listed.length > 0 && (
+              <div key={part.fightIndex} role="group" aria-label={t('set.pull', { n: pull.n })}>
+                <div className="pull-group-head">
+                  <PullHead pull={pull} count={formatInteger(listed.length)} />
+                </div>
+                <EventLog label={t('set.logInPull', { log: label, n: pull.n })} columns={columns} entries={listed} time={time} warn={warn} ownScroll={false} />
+              </div>
+            )
+          );
+        })}
+      </div>
+    ) : (
+      <EventLog label={label} columns={columns} entries={entries} time={time} warn={warn} />
+    );
+
   return (
     <div className="kicks-page">
       <div className="kicks-layout">
@@ -96,15 +128,15 @@ export function InterruptsTab({ report }: { report: InterruptsReport }) {
             group={report.group}
             summary={
               <span className="kicks-summary">
-                <span className="num value-text">{formatInteger(report.interrupts.length)}</span>{' '}
-                {t('kicks.interruptWord', { count: report.interrupts.length })} ·{' '}
-                <span className="num value-text">{formatInteger(report.dispels.length)}</span>{' '}
-                {t('kicks.dispelWord', { count: report.dispels.length })}
+                <span className="num value-text">{formatInteger(totals.interrupts)}</span>{' '}
+                {t('kicks.interruptWord', { count: totals.interrupts })} ·{' '}
+                <span className="num value-text">{formatInteger(totals.dispels)}</span>{' '}
+                {t('kicks.dispelWord', { count: totals.dispels })}
               </span>
             }
           />
           {report.rows.length === 0 ? (
-            <NoMatch nothing={t('kicks.noneByPlayer')} />
+            <NoMatch nothing={t(pulls ? 'kicks.noneByPlayerInSet' : 'kicks.noneByPlayer')} />
           ) : (
             <div className="scroll-x">
               <div className="kick-prows" role="table" aria-label={title}>
@@ -133,24 +165,24 @@ export function InterruptsTab({ report }: { report: InterruptsReport }) {
           )}
         </section>
         <div className="kicks-logs">
-          {report.missed.length > 0 && (
+          {totals.missed > 0 && (
             <section className="panel panel-clip" aria-labelledby="kicks-missed-title">
               <div className="panel-head panel-head-tight">
                 <div>
                   <h2 id="kicks-missed-title" className="h2">
-                    {t('kicks.missed')} <span className="num h2-count">{formatInteger(report.missed.length)}</span>
+                    {t('kicks.missed')} <span className="num h2-count">{formatInteger(totals.missed)}</span>
                   </h2>
                   <div className="panel-sub">{t('kicks.missedHint')}</div>
                 </div>
               </div>
-              <EventLog label={t('kicks.missed')} columns={missedColumns} entries={report.missed} time={time} warn />
+              {log(t('kicks.missed'), missedColumns, report.missed, (part) => part.missed, true)}
             </section>
           )}
-          <KickLog id="kicks-interrupts-title" title={t('kicks.interrupts')} count={report.interrupts.length} empty={t('kicks.noInterrupts')}>
-            <EventLog label={t('kicks.interrupts')} columns={kickColumns} entries={report.interrupts} time={time} />
+          <KickLog id="kicks-interrupts-title" title={t('kicks.interrupts')} count={totals.interrupts} empty={t(pulls ? 'kicks.noInterruptsInSet' : 'kicks.noInterrupts')}>
+            {log(t('kicks.interrupts'), kickColumns, report.interrupts, (part) => part.interrupts)}
           </KickLog>
-          <KickLog id="kicks-dispels-title" title={t('kicks.dispels')} count={report.dispels.length} empty={t('kicks.noDispels')}>
-            <EventLog label={t('kicks.dispels')} columns={dispelColumns} entries={report.dispels} time={time} />
+          <KickLog id="kicks-dispels-title" title={t('kicks.dispels')} count={totals.dispels} empty={t(pulls ? 'kicks.noDispelsInSet' : 'kicks.noDispels')}>
+            {log(t('kicks.dispels'), dispelColumns, report.dispels, (part) => part.dispels)}
           </KickLog>
         </div>
       </div>
@@ -196,13 +228,14 @@ function EventLog<E extends { t: number }>(props: {
   entries: E[];
   time: (at: number) => ReactNode;
   warn?: boolean;
+  ownScroll?: boolean;
 }) {
-  const { label, columns, entries, time, warn } = props;
+  const { label, columns, entries, time, warn, ownScroll = true } = props;
   const grid = { gridTemplateColumns: `64px repeat(${columns.length}, minmax(150px, 1fr))` };
   const row = warn ? 'kick-ev kick-ev-warn' : 'kick-ev';
   return (
     <div className="scroll-x">
-      <div className="kick-log scroll-box" role="table" aria-label={label} tabIndex={0}>
+      <div className={ownScroll ? 'kick-log scroll-box' : 'kick-log'} role="table" aria-label={label} tabIndex={ownScroll ? 0 : undefined}>
         <div role="row" className="kick-ev kick-ev-head" style={grid}>
           {[t('ability.time'), ...columns.map((c) => c.head)].map((h) => (
             <span key={h} role="columnheader" className="cap kick-cap">

@@ -17,11 +17,9 @@ export interface LifetimeRow {
   avgTimePct: number;
 }
 
-/** Upper limits of the lifetime value bands, lowest first. */
 export const LIFE_BANDS = [50, 75, 90, 100] as const;
 export type LifeBand = (typeof LIFE_BANDS)[number];
 
-const WINDOW_STEP_MS = 10_000;
 const MIN_PULL_OPTIONS = [1, 2, 3];
 
 const shareOf = (part: number, whole: number) => (whole > 0 ? (part / whole) * 100 : 100);
@@ -72,12 +70,18 @@ export function medianMs(values: number[]): number | null {
   return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-/** The death-window chart's ceiling: the longest window rounded up to the next 10 s, at least 10 s. */
+/** Windows from the pull start (no advanced logging) can run for minutes: longer scales get wider ticks. */
+const windowStepMs = (ms: number) => (ms <= 60_000 ? 10_000 : ms <= 180_000 ? 30_000 : 60_000);
+
+/** The death-window chart's ceiling: the longest window rounded up to the next tick, at least 10 s. */
 export function windowScaleMs(windows: number[]): number {
-  return Math.max(WINDOW_STEP_MS, Math.ceil(Math.max(0, ...windows) / WINDOW_STEP_MS) * WINDOW_STEP_MS);
+  const longest = Math.max(0, ...windows);
+  const step = windowStepMs(longest);
+  return Math.max(step, Math.ceil(longest / step) * step);
 }
 
-/** The y ticks of the death-window chart, every 10 s from 0 to the ceiling. */
+/** The y ticks of the death-window chart from 0 to the ceiling. */
 export function windowTicksMs(scaleMs: number): number[] {
-  return Array.from({ length: Math.floor(scaleMs / WINDOW_STEP_MS) + 1 }, (_, i) => i * WINDOW_STEP_MS);
+  const step = windowStepMs(scaleMs);
+  return Array.from({ length: Math.floor(scaleMs / step) + 1 }, (_, i) => i * step);
 }

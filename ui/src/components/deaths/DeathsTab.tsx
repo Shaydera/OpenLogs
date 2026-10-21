@@ -120,10 +120,10 @@ function KillList({ report, groups }: { report: DeathsReport; groups: KillGroup[
             group.pull &&
             group.kills.length > 0 && (
               <div key={group.fight} className="kill-group">
-                <div className="kill-group-head">
+                <div className="pull-group-head">
                   <PullHead pull={group.pull} count={t('kills.count', { count: group.kills.length })} />
                 </div>
-                {table(group.kills, t('setDeaths.pull', { n: group.pull.n }))}
+                {table(group.kills, t('set.pull', { n: group.pull.n }))}
               </div>
             ),
         )
