@@ -46,10 +46,10 @@ describe('PlayerAbilities', () => {
       'Avg hit',
       'Max hit',
     ]);
-    expect(cells(rows()[1])).toEqual(['', 'Arcane Missiles', '37.99M', '—', '36.8%', '85', '1325', '25.7%', '28.7k', '242.7k']);
+    expect(cells(rows()[1])).toEqual(['', 'Arcane Missiles', '37.99M', '—', '36.80%', '85', '1325', '25.66%', '28.7k', '242.7k']);
     // Avg hit as logged: (22.49M net + 5.98M Aug) / 117.
-    expect(cells(rows()[2])).toEqual(['', 'Arcane Barrage', '22.49M', '−5.98M', '21.8%', '67', '117', '40.2%', '243.3k', '1.06M']);
-    expect(cells(rows()[4])).toEqual(['', 'Mirror Image & other pets', '1.32M', '—', '1.3%', '—', '—', '—', '—', '—']);
+    expect(cells(rows()[2])).toEqual(['', 'Arcane Barrage', '22.49M', '−5.98M', '21.78%', '67', '117', '40.17%', '243.3k', '1.06M']);
+    expect(cells(rows()[4])).toEqual(['', 'Mirror Image & other pets', '1.32M', '—', '1.28%', '—', '—', '—', '—', '—']);
     expect(cells(rows()[5])).toEqual(['…', 'Unmatched hits', '−12.0k', '−12.0k', '', '—', '—', '—', '—', '—']);
   });
 
@@ -61,13 +61,13 @@ describe('PlayerAbilities', () => {
     const group = screen.getByRole('rowgroup', { name: 'Targets of Arcane Barrage' });
     expect(within(group).getAllByRole('row').map(cells)).toEqual([
       ['', 'Targets · 3', '', '', 'of ability', '', '', '', '', ''],
-      ['', "Ula'tek", '12.00M', '', '53.4%', '', '60', '40.0%', '', ''],
-      ['', 'Blightscale Rawling · 58 units', '8.00M', '', '35.6%', '', '40', '40.0%', '', ''],
-      ['', 'Doomscale Warden · 2 units', '2.49M', '', '11.1%', '', '17', '41.2%', '', ''],
+      ['', "Ula'tek", '12.00M', '', '53.36%', '', '60', '40.00%', '', ''],
+      ['', 'Blightscale Rawling · 58 units', '8.00M', '', '35.58%', '', '40', '40.00%', '', ''],
+      ['', 'Doomscale Warden · 2 units', '2.49M', '', '11.06%', '', '17', '41.18%', '', ''],
     ]);
-    const strip = within(group).getByRole('img', { name: "Split of Arcane Barrage by target, Ula'tek 53.4%, Blightscale Rawling 35.6%, Other 11.1%" });
+    const strip = within(group).getByRole('img', { name: "Split of Arcane Barrage by target, Ula'tek 53.36%, Blightscale Rawling 35.58%, Other 11.06%" });
     await userEvent.hover(strip.querySelectorAll('.tseg')[1]);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('35.6% of Arcane Barrage · 58 units · 40 hits · 40.0% crit');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('35.58% of Arcane Barrage · 58 units · 40 hits · 40.00% crit');
     await userEvent.click(toggle);
     expect(screen.queryByRole('rowgroup')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Arcane Barrage' }));

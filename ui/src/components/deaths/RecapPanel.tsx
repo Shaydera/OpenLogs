@@ -86,7 +86,7 @@ export function RecapPanel({ recap, report, pull = null }: { recap: DeathRecap; 
           </div>
           <div className="recap-stat">
             <span className="cap">{t('recap.hpBefore')}</span>
-            <b>{recap.hpBeforePct !== null ? formatPercent(Math.round(recap.hpBeforePct)) : '—'}</b>
+            <b>{recap.hpBeforePct !== null ? formatPercent(recap.hpBeforePct) : '—'}</b>
           </div>
           <div className="recap-stat">
             <span className="cap">{t('recap.overkill')}</span>
@@ -122,7 +122,7 @@ export function RecapPanel({ recap, report, pull = null }: { recap: DeathRecap; 
         role="img"
         aria-label={
           first && last
-            ? t('recap.chartLabel', { name, from: formatPercent(Math.round(first.pct)), to: formatPercent(Math.round(last.pct)) })
+            ? t('recap.chartLabel', { name, from: formatPercent(first.pct), to: formatPercent(last.pct) })
             : t('recap.noHp')
         }
         style={{ color: colour }}

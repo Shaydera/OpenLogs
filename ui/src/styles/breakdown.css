@@ -105,7 +105,7 @@
 }
 .rpop-row {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) 64px 46px;
+  grid-template-columns: 18px minmax(0, 1fr) 64px 56px;
   gap: 8px;
   align-items: center;
   min-height: 28px;

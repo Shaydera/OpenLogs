@@ -149,13 +149,13 @@ export function recapCallout(recap: DeathRecap, spellName: (id: number) => strin
       const to = first?.hpPct ?? null;
       body +=
         from !== null && to !== null
-          ? `${t('recap.callout.drop', { from: wholePct(from), to: wholePct(to) })}${t(burst.count === 2 ? 'recap.callout.lethalSecond' : 'recap.callout.lethalLast')}`
+          ? `${t('recap.callout.drop', { from: formatPercent(from), to: formatPercent(to) })}${t(burst.count === 2 ? 'recap.callout.lethalSecond' : 'recap.callout.lethalLast')}`
           : '.';
     } else {
       lead = spell;
       if (kb.amount > 0) body += `${t('recap.callout.hit', { amount: formatAmount(kb.amount) })}${ofMax(kb.amount)}`;
       const at = hpBefore(recap, kb.t);
-      body += at !== null ? t('recap.callout.at', { hp: wholePct(at) }) : '.';
+      body += at !== null ? t('recap.callout.at', { hp: formatPercent(at) }) : '.';
     }
   }
   if (cooldown.length > 0) {
@@ -222,7 +222,7 @@ export function recapRows(recap: DeathRecap, spellName: (id: number) => string):
       source: eventSource(e),
       amount: damage ? `${formatSignedInteger(-hpDamage(e))}${overkill}` : formatSignedInteger(e.amount),
       // A SWING's HP block is the attacker's: the killing row is 0 % all the same.
-      hp: damage ? (e.hpPct !== null ? wholePct(e.hpPct) : isKill ? wholePct(0) : '—') : '',
+      hp: damage ? (e.hpPct !== null ? formatPercent(e.hpPct) : isKill ? formatPercent(0) : '—') : '',
       tone: isKill ? 'kill' : damage && hpDamage(e) >= big ? 'big' : null,
     };
   });

@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use openlogs_analysis::{EBON_MIGHT, Fight, SourceSpec, SpellId};
+use openlogs_analysis::{EBON_MIGHT, Fight, SourceSpec, SpellId, coverage, union_ms};
 use serde::Serialize;
 
 use super::{Merge, merge_roster, merge_rows, merge_spells, spell_key};
@@ -92,7 +92,7 @@ impl Merge for SetAurasDto {
     fn finish(&mut self) {
         let report = &mut self.report;
         let duration = f64::from(report.end_ms);
-        let mut ebon_might: Vec<f64> = Vec::new();
+        let mut ebon_might: Vec<Vec<(i32, i32)>> = Vec::new();
         for row in &mut report.rows {
             let mut spell_counts = Vec::new();
             let mut source_counts = Vec::new();
@@ -103,7 +103,7 @@ impl Merge for SetAurasDto {
                 let held_ms: i64 = lane.intervals.iter().map(|[a, b]| i64::from(b - a)).sum();
                 lane.uptime = held_ms as f64 / duration;
                 if lane.spell_ids.contains(&EBON_MIGHT) {
-                    ebon_might.push(lane.uptime);
+                    ebon_might.push(lane.intervals.iter().map(|&[a, b]| (a, b)).collect());
                 }
                 sum_counts(&mut spell_counts, lane.spell_counts.clone());
                 sum_counts(&mut source_counts, lane.source_counts.clone());
@@ -117,10 +117,16 @@ impl Merge for SetAurasDto {
             if row.holder.is_none() {
                 row.spell_ids = by_count(&mut spell_counts);
                 row.spell_id = row.spell_ids.first().copied().unwrap_or(row.spell_id);
+                let held: Vec<(i32, i32)> = row
+                    .lanes
+                    .iter()
+                    .flat_map(|l| &l.intervals)
+                    .map(|&[a, b]| (a, b))
+                    .collect();
+                row.uptime = union_ms(&held, 0, report.end_ms) as f64 / duration;
             }
             row.sources = by_count(&mut source_counts);
             row.applications = row.lanes.iter().map(|l| l.applications).sum();
-            row.uptime = row.lanes.iter().map(|l| l.uptime).sum::<f64>() / row.lanes.len() as f64;
         }
         report.rows.sort_by(|a, b| {
             b.uptime
@@ -128,10 +134,8 @@ impl Merge for SetAurasDto {
                 .then(a.spell_id.cmp(&b.spell_id))
                 .then_with(|| a.holder.cmp(&b.holder))
         });
-        report.ebon_might = (!ebon_might.is_empty()).then(|| EbonMightDto {
-            uptime: ebon_might.iter().sum::<f64>() / ebon_might.len() as f64,
-            holders: ebon_might.len() as u32,
-        });
+        report.ebon_might = coverage(&ebon_might, 0, report.end_ms)
+            .map(|(uptime, allies)| EbonMightDto { uptime, allies });
         report.players = report.player_ids.len() as u32;
     }
 }
@@ -323,6 +327,47 @@ mod tests {
         let row = &set.report.rows[0];
         assert_eq!(row.uptime, 0.25);
         assert_eq!(row.lanes[0].intervals, [[25_000, 35_000]]);
+    }
+
+    #[test]
+    fn an_aura_is_up_while_any_holder_has_it_across_the_pulls() {
+        let raid = raid();
+        let (a, b, c) = (raid.a, raid.b, raid.c);
+        let first = [
+            held(0, 10_000, c, a, BLESSING),
+            held(5_000, 15_000, c, b, BLESSING),
+        ];
+        let pulls = [
+            pull(&raid, first.concat()),
+            pull(&raid, held(0, 5_000, c, a, BLESSING).into()),
+        ];
+        let set = set_of(&pulls, DimensionDto::Ability);
+        assert_eq!(set.report.rows.len(), 1);
+        let row = &set.report.rows[0];
+        assert_eq!(uptimes(&row.lanes), [(BLESSING, 0.375), (BLESSING, 0.25)]);
+        assert_eq!(row.uptime, 0.5);
+    }
+
+    #[test]
+    fn ebon_might_is_taken_over_the_pulls_back_to_back() {
+        let raid = raid();
+        let (a, b, c) = (raid.a, raid.b, raid.c);
+        let first = [
+            held(0, 10_000, c, a, EBON_MIGHT),
+            held(5_000, 15_000, c, b, EBON_MIGHT),
+        ];
+        let pulls = [
+            pull(&raid, first.concat()),
+            pull(&raid, held(0, 5_000, c, a, EBON_MIGHT).into()),
+        ];
+        let set = set_of(&pulls, DimensionDto::Ability);
+        assert_eq!(
+            set.report.ebon_might,
+            Some(EbonMightDto {
+                uptime: 0.5,
+                allies: 1.25
+            })
+        );
     }
 
     #[test]

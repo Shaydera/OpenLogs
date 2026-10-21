@@ -1,5 +1,5 @@
 import type { EffectInstance, MapArtTable, ReplayData, ReplayDeath, ReplayHealthTrack, ReplayRaidMarker, ReplayTrack, ReplayUnit, ReplayWorldMarker } from '../../api/types';
-import { formatFixed, formatInteger, formatSpan, formatYards } from '../../i18n/format';
+import { formatFixed, formatPercent, formatSpan, formatYards } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { type IconRef, bossIcon, classIcon, specIcon } from '../../icons';
 import { bossMonogram, initials } from '../../monogram';
@@ -565,7 +565,7 @@ function missingLine(effect: EffectInstance): string {
 function tooltipLines(frame: StageFrame, unit: PlacedUnit): TipLine[] {
   const facts: string[] = [];
   const health = unit.stage.health && healthAt(unit.stage.health, frame.t);
-  if (health && health.max > 0) facts.push(t('replay.tipHealth', { value: formatInteger(Math.round((health.current / health.max) * 100)) }));
+  if (health && health.max > 0) facts.push(t('replay.tipHealth', { value: formatPercent((health.current / health.max) * 100) }));
   const selected = frame.selected === null ? undefined : frame.index.byActor.get(frame.selected);
   if (selected && selected !== unit.stage && !onOtherFloor(frame.index, selected, frame.t)) {
     const at = placeUnit(selected, frame.t);

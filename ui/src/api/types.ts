@@ -841,7 +841,7 @@ export interface AurasReport {
   startMs: number;
   endMs: number;
   rows: AuraRow[];
-  ebonMight: { uptime: number; holders: number } | null;
+  ebonMight: { uptime: number; allies: number } | null;
   /** Friendlies: players with an aura; enemies: players who applied one. */
   players: number;
   roster: PlayerRef[];

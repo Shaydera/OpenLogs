@@ -22,7 +22,7 @@ describe('AbilityDetailView', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Arcane Barrage' })).toBeInTheDocument();
     expect(screen.getByText('Direct damage')).toBeInTheDocument();
     const kpis = screen.getByRole('region', { name: 'Ability key figures' });
-    expect(kpis).toHaveTextContent("23.0% of Faelan's damage");
+    expect(kpis).toHaveTextContent("23.00% of Faelan's damage");
     expect(kpis).toHaveTextContent('1.25 targets per cast');
     expect(kpis).toHaveTextContent('median 343k');
     await userEvent.click(screen.getByRole('button', { name: '← Faelan' }));

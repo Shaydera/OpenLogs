@@ -398,15 +398,15 @@ describe('TimelineView', () => {
   it("draws a unit's power and health as logged and reads the value under the pointer, also after a pan", async () => {
     useApp.setState({ tab: 'resources', timeline: resourcesTimelineFixture });
     render(<TimelineView tab="resources" />);
-    const health = screen.getByRole('img', { name: 'Health, lowest 0 / 1.00M (0.0%) at 2:12.000' });
+    const health = screen.getByRole('img', { name: 'Health, lowest 0 / 1.00M (0.00%) at 2:12.000' });
     vi.spyOn(health, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1_000, 40));
     fireEvent.mouseMove(health, { clientX: 575 });
-    expect(screen.getByText('Health 400.00k / 1.00M (40.0%) at 2:11.000')).toBeInTheDocument();
+    expect(screen.getByText('Health 400.00k / 1.00M (40.00%) at 2:11.000')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /^Mana, lowest/ })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Later' }));
-    expect(screen.getByText('Health 0 / 1.00M (0.0%) at 2:12.000')).toBeInTheDocument();
+    expect(screen.getByText('Health 0 / 1.00M (0.00%) at 2:12.000')).toBeInTheDocument();
     fireEvent.mouseMove(health, { clientX: 150 });
-    expect(screen.getByText('Health 0 / 1.00M (0.0%) at 2:12.000 · dead')).toBeInTheDocument();
+    expect(screen.getByText('Health 0 / 1.00M (0.00%) at 2:12.000 · dead')).toBeInTheDocument();
   });
 
   it('draws rage in game units', () => {
@@ -414,7 +414,7 @@ describe('TimelineView', () => {
     const power = [{ powerType: 1, samples: [[118_000, 1300, 1300] as [number, number, number], [125_000, 500, 1300] as [number, number, number]] }];
     useApp.setState({ tab: 'resources', timeline: { ...resourcesTimelineFixture, lanes: [{ ...lane, power }] } });
     render(<TimelineView tab="resources" />);
-    expect(screen.getByRole('img', { name: 'Rage, lowest 50 / 130 (38.5%) at 2:05.000' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Rage, lowest 50 / 130 (38.46%) at 2:05.000' })).toBeInTheDocument();
   });
 
   describe('Resources lanes', () => {

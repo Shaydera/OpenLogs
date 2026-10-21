@@ -5,6 +5,7 @@ import {
   formatDuration,
   formatEventTime,
   formatEventTimeTenths,
+  formatFixed,
   formatInteger,
   formatOneDecimal,
   formatPercent,
@@ -332,6 +333,11 @@ function setFriendlyDeathsTiles(report: SetDeaths | null, rows: SetRow[]): Heade
   ];
 }
 
+function alliesLine(allies: number): string {
+  const shown = Math.round(allies * 100) / 100;
+  return t('kpi.alliesOnAverage', { count: shown, value: formatFixed(allies, 2) });
+}
+
 /** A set's overview has no Bloodlust markers: its buffs tiles leave Bloodlust out. */
 function aurasTiles(report: ReportOf['buffs'] | null, input: HeaderInput): HeaderTile[] {
   const byTarget = report?.group === 'target';
@@ -355,7 +361,7 @@ function aurasTiles(report: ReportOf['buffs'] | null, input: HeaderInput): Heade
       label: labels[1],
       value: ebon ? formatShare(ebon.uptime * 100) : '—',
       tone: ebon ? 'support' : undefined,
-      sub: ebon ? t('kpi.onPlayers', { count: ebon.holders }) : t('kpi.noEbonMight'),
+      sub: ebon ? alliesLine(ebon.allies) : t('kpi.noEbonMight'),
     },
     { label: labels[2], value: formatInteger(report.rows.length), sub: t('kpi.inThisView') },
     { label: labels[3], value: formatInteger(report.players), sub: t(onEnemies ? 'kpi.whoApplied' : 'kpi.withAuras') },

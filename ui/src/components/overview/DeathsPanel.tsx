@@ -103,7 +103,7 @@ function DeathRow({ n, death, player, overview }: { n: number; death: DeathEntry
         <div className="death-taken-head">
           <span className="death-hp">
             {t('deaths.hpBeforeLabel')}{' '}
-            <span className="num">{death.hpBeforePct === null ? '—' : formatPercent(Math.round(death.hpBeforePct))}</span>
+            <span className="num">{death.hpBeforePct === null ? '—' : formatPercent(death.hpBeforePct)}</span>
           </span>
           <span className="num death-total">{t('deaths.total', { amount: formatAmountWhole(death.damageTaken5s) })}</span>
         </div>

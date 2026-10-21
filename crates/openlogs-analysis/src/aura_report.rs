@@ -2,7 +2,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use crate::ability::unit_name;
 use crate::actors::{ActorId, ActorKind};
-use crate::auras::{AuraInterval, aura_intervals, merged, union_ms};
+use crate::auras::{AuraInterval, aura_intervals, aura_spans, coverage, merged, union_ms};
 use crate::breakdown::{Dimension, effective_group};
 use crate::cells::{CellKind, Facts, ScopeMetric, book};
 use crate::fight::{AuraType, Fight, SpellId};
@@ -32,6 +32,8 @@ pub struct AuraLane {
     pub source_counts: Vec<(ActorId, u32)>,
     /// The specs that applied the aura's spells (on any holder), which keep same-named auras apart.
     pub source_specs: BTreeSet<SourceSpec>,
+    /// Applied, refreshed and added-stack events in the range, plus one per aura already up
+    /// when the range starts.
     pub applications: u32,
     pub uptime: f64,
     /// Merged and clipped to the range.
@@ -50,9 +52,9 @@ pub struct AuraRow {
     pub holder: Option<AuraHolder>,
     /// The players who applied the row's auras, most applications first.
     pub sources: Vec<ActorId>,
-    /// Intervals overlapping the range.
     pub applications: u32,
-    /// Mean uptime over the lanes.
+    /// By aura: the union of its lanes' intervals over the range, as an aura is up while any
+    /// holder has it. 0 by target, where it would mix the holder's auras.
     pub uptime: f64,
     /// By aura: one lane per holder; by target: one per aura.
     pub lanes: Vec<AuraLane>,
@@ -62,8 +64,9 @@ pub struct AuraRow {
 pub struct AurasReport {
     pub group: Dimension,
     pub rows: Vec<AuraRow>,
-    /// Ebon Might among the lanes: mean uptime and holders.
-    pub ebon_might: Option<(f64, u32)>,
+    /// Ebon Might among the lanes: its uptime on anyone and the allies it buffed on average
+    /// while up.
+    pub ebon_might: Option<(f64, f64)>,
     /// Friendlies: players with an aura; enemies: players who applied one.
     pub players: u32,
     pub player_ids: BTreeSet<ActorId>,
@@ -154,10 +157,20 @@ pub(crate) fn side_intervals(
     side: Side,
     aura_type: AuraType,
 ) -> Vec<AuraInterval> {
+    on_side(aura_intervals(fight), fight, filter, side, aura_type)
+}
+
+fn on_side(
+    spans: Vec<AuraInterval>,
+    fight: &Fight,
+    filter: &ReportFilter,
+    side: Side,
+    aura_type: AuraType,
+) -> Vec<AuraInterval> {
     let (start, end) = filter.clipped(fight);
-    aura_intervals(fight)
+    spans
         .into_iter()
-        .filter(|i| i.end_ms > start && i.start_ms < end)
+        .filter(|i| i.start_ms < end && (i.end_ms > start || i.start_ms >= start))
         .filter(|i| i.aura_type == aura_type && holds(fight, i.target, i.target_hostile, side))
         .collect()
 }
@@ -193,12 +206,22 @@ enum RowId {
     Holder(AuraHolder),
 }
 
-/// The intervals of one lane and what it counts.
+/// The intervals of one lane and its applications per spell and source.
 #[derive(Default)]
 struct LaneAcc {
     intervals: Vec<(i32, i32)>,
     spells: HashMap<SpellId, u32>,
     sources: HashMap<ActorId, u32>,
+}
+
+impl LaneAcc {
+    fn count(&mut self, fight: &Fight, interval: &AuraInterval, (start, end): (i32, i32)) {
+        let applications = interval.applications_in(start, end);
+        *self.spells.entry(interval.spell).or_default() += applications;
+        if let Some(source) = fight.actors.credited_player(interval.source) {
+            *self.sources.entry(source).or_default() += applications;
+        }
+    }
 }
 
 /// Auras by `wanted` (or its fallback): by aura with a lane per holder, or by target with a lane
@@ -226,7 +249,14 @@ pub fn auras_report(
             player_ids: BTreeSet::new(),
         };
     }
-    let intervals: Vec<AuraInterval> = side_intervals(fight, filter, scope.perspective, aura_type)
+    let spans = on_side(
+        aura_spans(fight),
+        fight,
+        filter,
+        scope.perspective,
+        aura_type,
+    );
+    let (intervals, instants): (Vec<AuraInterval>, Vec<AuraInterval>) = spans
         .into_iter()
         .filter(|i| {
             scope.accepts(
@@ -236,7 +266,7 @@ pub fn auras_report(
                 Some(&unit_of(fight, i.target)),
             )
         })
-        .collect();
+        .partition(|i| i.end_ms > i.start_ms);
     let mut specs: HashMap<SpellId, HashSet<SourceSpec>> = HashMap::new();
     for interval in &intervals {
         let spec = fight
@@ -254,9 +284,17 @@ pub fn auras_report(
             .entry((keys[&interval.spell].clone(), holder))
             .or_default();
         lane.intervals.push((interval.start_ms, interval.end_ms));
-        *lane.spells.entry(interval.spell).or_default() += 1;
-        if let Some(source) = fight.actors.credited_player(interval.source) {
-            *lane.sources.entry(source).or_default() += 1;
+        lane.count(fight, interval, (start, end));
+    }
+    // Applied and removed in one millisecond: no uptime, but the applications count in a lane
+    // the aura holds anyway.
+    for instant in &instants {
+        let Some(key) = keys.get(&instant.spell) else {
+            continue;
+        };
+        let holder = holder_of(fight, instant.target);
+        if let Some(lane) = lanes.get_mut(&(key.clone(), holder)) {
+            lane.count(fight, instant, (start, end));
         }
     }
     let mut players: BTreeSet<ActorId> = BTreeSet::new();
@@ -290,7 +328,7 @@ pub fn auras_report(
         };
         by_row.entry(row).or_default().push((lane, acc));
     }
-    let mut ebon: Vec<f64> = Vec::new();
+    let mut ebon: Vec<Vec<(i32, i32)>> = Vec::new();
     let mut rows: Vec<AuraRow> = by_row
         .into_iter()
         .map(|(row, parts)| {
@@ -300,7 +338,9 @@ pub fn auras_report(
             };
             let mut spells: HashMap<SpellId, u32> = HashMap::new();
             let mut sources: HashMap<ActorId, u32> = HashMap::new();
+            let mut held: Vec<(i32, i32)> = Vec::new();
             for (_, acc) in &parts {
+                held.extend(&acc.intervals);
                 for (&spell, &n) in &acc.spells {
                     *spells.entry(spell).or_default() += n;
                 }
@@ -313,7 +353,7 @@ pub fn auras_report(
                 lanes
                     .iter()
                     .filter(|l| l.spells.contains(&EBON_MIGHT))
-                    .map(|l| l.uptime),
+                    .map(|l| l.intervals.clone()),
             );
             lanes.sort_by(|a, b| {
                 b.uptime
@@ -321,10 +361,11 @@ pub fn auras_report(
                     .then_with(|| a.holder.cmp(&b.holder))
                     .then(a.spell.cmp(&b.spell))
             });
-            let spells = if holder.is_some() {
-                Vec::new()
+            let (spells, uptime) = if holder.is_some() {
+                (Vec::new(), 0.0)
             } else {
-                by_count(&spells)
+                let up_ms = union_ms(&held, start, end);
+                (by_count(&spells), up_ms as f64 / f64::from(len))
             };
             AuraRow {
                 spell: spells.first().copied().unwrap_or(0),
@@ -332,7 +373,7 @@ pub fn auras_report(
                 holder,
                 sources: by_count(&sources),
                 applications: lanes.iter().map(|l| l.applications).sum(),
-                uptime: lanes.iter().map(|l| l.uptime).sum::<f64>() / lanes.len() as f64,
+                uptime,
                 lanes,
             }
         })
@@ -346,12 +387,7 @@ pub fn auras_report(
     AurasReport {
         group,
         rows,
-        ebon_might: (!ebon.is_empty()).then(|| {
-            (
-                ebon.iter().sum::<f64>() / ebon.len() as f64,
-                ebon.len() as u32,
-            )
-        }),
+        ebon_might: coverage(&ebon, start, end),
         players: players.len() as u32,
         player_ids: players,
     }
