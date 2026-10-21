@@ -1,9 +1,22 @@
-import type { Breakdown, Kpis, PowerTrack, QuickOverview, Scope, Side } from '../../api/types';
-import { formatAmount, formatCpm, formatDuration, formatEventTime, formatEventTimeTenths, formatInteger, formatOneDecimal, formatPercent, formatScaled, formatShare } from '../../i18n/format';
+import { type Breakdown, type Kpis, type PowerTrack, type QuickOverview, type Scope, type SetDeaths, type Side, isSetReport } from '../../api/types';
+import {
+  formatAmount,
+  formatCpm,
+  formatDuration,
+  formatEventTime,
+  formatEventTimeTenths,
+  formatInteger,
+  formatOneDecimal,
+  formatPercent,
+  formatScaled,
+  formatSeconds,
+  formatShare,
+} from '../../i18n/format';
 import { type MessageKey, t } from '../../i18n/i18n';
 import { SIDES } from '../../scopeSides';
 import type { FightTab, MetricTab, ReportData, TimeRange } from '../../store';
 import { rowLabel, valueLabel } from '../filters/labels';
+import { deathWindowMs, medianMs } from '../deaths/set/lifetimeModel';
 import type { KpiTone } from '../Kpi';
 import { shortName } from '../overview/players';
 import { type SetRow, averageFirstDeath, bestPull, earliestFirstDeath } from '../overview/setOverviewModel';
@@ -122,26 +135,30 @@ function setTiles(kpis: Kpis | null, rows: SetRow[]): HeaderTile[] {
   const best = bestPull(rows);
   const labels = [t('kpi.raidDps'), t(best?.kind === 'kill' ? 'kpi.bestKill' : 'kpi.bestWipe'), t('kpi.deaths'), t('kpi.firstDeathLabel')];
   if (!kpis) return labels.map(pendingTile);
-  const earliest = earliestFirstDeath(rows);
   const bestValue = best ? (best.kind === 'kill' ? formatDuration(best.row.view.durationMs) : formatPercent(best.row.view.bossHpPercent ?? 0)) : '—';
   return [
     { label: labels[0], value: formatAmount(kpis.raidDps), sub: t('kpi.damageOver', { damage: formatAmount(kpis.raidDamage), duration: formatDuration(kpis.durationMs) }) },
     { label: labels[1], value: bestValue, sub: best ? t('kpi.pullNumber', { n: best.row.view.n }) : '' },
-    setDeathsTile(kpis, rows),
-    {
-      label: labels[3],
-      value: averageFirstDeath(rows),
-      sub: earliest ? t('kpi.earliestFirstDeath', { time: formatEventTimeTenths(earliest.ms), n: earliest.n }) : t('kpi.noDeaths'),
-    },
+    setDeathsTile(kpis.deaths, rows.length),
+    firstDeathTile(rows),
   ];
 }
 
-function setDeathsTile(kpis: Kpis, rows: SetRow[]): HeaderTile {
+function setDeathsTile(deaths: number, pulls: number): HeaderTile {
   return {
     label: t('kpi.deaths'),
-    value: formatInteger(kpis.deaths),
-    tone: kpis.deaths > 0 ? 'death' : undefined,
-    sub: t('kpi.deathsPerPull', { count: formatOneDecimal(rows.length > 0 ? kpis.deaths / rows.length : 0) }),
+    value: formatInteger(deaths),
+    tone: deaths > 0 ? 'death' : undefined,
+    sub: t('kpi.deathsPerPull', { count: formatOneDecimal(pulls > 0 ? deaths / pulls : 0) }),
+  };
+}
+
+function firstDeathTile(rows: SetRow[]): HeaderTile {
+  const earliest = earliestFirstDeath(rows);
+  return {
+    label: t('kpi.firstDeathLabel'),
+    value: averageFirstDeath(rows),
+    sub: earliest ? t('kpi.earliestFirstDeath', { time: formatEventTimeTenths(earliest.ms), n: earliest.n }) : t('kpi.noDeaths'),
   };
 }
 
@@ -226,7 +243,7 @@ function takenTiles(report: ReportOf['taken'] | null, input: HeaderInput): Heade
     !input.overview
       ? pendingTile(labels[3])
       : input.setRows
-        ? setDeathsTile(input.overview.kpis, input.setRows)
+        ? setDeathsTile(input.overview.kpis.deaths, input.setRows.length)
         : deathsTile(input.overview.timeline.markers.deaths.map((d) => d.t).filter((at) => inRange(input.range, at, input.overview!.timeline.durationMs))),
   ];
 }
@@ -234,6 +251,7 @@ function takenTiles(report: ReportOf['taken'] | null, input: HeaderInput): Heade
 /** The deaths tiles from the core; one selected player trades Survivors for the time dead, enemies count kills. */
 function deathsTiles(report: ReportOf['deaths'] | null, input: HeaderInput): HeaderTile[] {
   const enemies = input.scope.perspective === 'enemy';
+  if (input.setRows && !enemies) return setFriendlyDeathsTiles(report && isSetReport(report) ? report : null, input.setRows);
   const onePlayer = !enemies && input.scope.target.length === 1 && input.scope.target[0].kind === 'player';
   const labels = enemies
     ? [t('kpi.kills'), t('kpi.mostLethal'), t('kpi.topKiller'), t('kpi.avgAlive')]
@@ -246,7 +264,8 @@ function deathsTiles(report: ReportOf['deaths'] | null, input: HeaderInput): Hea
     sub: lethal ? hitName(lethal, (id) => reportSpellName(report.spells, id)) : '',
   };
   if (enemies) {
-    const times = report.kills.map((k) => k.t);
+    const kills = isSetReport(report) ? report.pulls.flatMap((pull) => pull.kills) : report.kills;
+    const times = kills.map((k) => k.t);
     const killer = report.topKiller;
     return [
       {
@@ -267,6 +286,26 @@ function deathsTiles(report: ReportOf['deaths'] | null, input: HeaderInput): Hea
     onePlayer
       ? { label: labels[3], value: formatDuration(report.deadMs), sub: t('kpi.ofDeaths', { count }) }
       : { label: labels[3], value: formatInteger(Math.max(0, input.playerCount - report.deadUnits)), sub: t('kpi.ofPlayers', { count: input.playerCount }) },
+  ];
+}
+
+/** A set's friendly deaths: the count per pull, the deadliest spell with its main source, the median death window and the first death. */
+function setFriendlyDeathsTiles(report: SetDeaths | null, rows: SetRow[]): HeaderTile[] {
+  const labels = [t('kpi.deaths'), t('kpi.mostLethal'), t('kpi.medianWindow'), t('kpi.firstDeathLabel')];
+  if (!report) return labels.map(pendingTile);
+  const deaths = report.pulls.flatMap((pull) => pull.deaths);
+  const lethal = report.mostLethal;
+  const source = lethal ? report.byKillingBlow.find((row) => row.spellId === lethal.spellId && row.environmental === lethal.environmental)?.sources[0] : undefined;
+  const median = medianMs(deaths.map(deathWindowMs));
+  return [
+    setDeathsTile(deaths.length, report.pulls.length),
+    {
+      label: labels[1],
+      value: lethal ? hitName(lethal, (id) => reportSpellName(report.spells, id)) : '—',
+      sub: lethal ? (source ? t('kpi.lethalDeaths', { count: lethal.count, source }) : t('deaths.count', { count: lethal.count })) : '',
+    },
+    { label: labels[2], value: median !== null ? formatSeconds(median) : '—', sub: median !== null ? t('kpi.medianWindowSub') : '' },
+    firstDeathTile(rows),
   ];
 }
 

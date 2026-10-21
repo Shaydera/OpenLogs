@@ -635,3 +635,22 @@
   font-weight: 400;
   color: var(--muted);
 }
+
+/* Pull sections of a set: a heading per pull, and pulls back to back as long as they ran. */
+.pull-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.pull-head-count {
+  margin-left: auto;
+  color: var(--muted);
+}
+.seam-row {
+  display: flex;
+  gap: 4px;
+}
+.seam-box {
+  min-width: 0;
+}

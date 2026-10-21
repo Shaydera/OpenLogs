@@ -2,11 +2,10 @@ import { useId, useMemo, useState } from 'react';
 import type { Kpis, PullSet, SetPull } from '../../api/types';
 import { formatAmount, formatDuration, formatEventTimeTenths, formatInteger, formatPercent, formatSeconds } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import type { PullStatus } from '../../pulls/groupPulls';
+import { PULL_CHIP } from '../../pulls/groupPulls';
 import { useApp } from '../../store';
 import { type SetOrder, type SetRow, averageFirstDeath, bestPull, sortRows } from './setOverviewModel';
 
-const CHIP: Record<PullStatus, string> = { kill: 'kill', wipe: 'wipe', incomplete: 'wipe', aborted: 'abort' };
 const CURVE_HEIGHT = 34;
 const ORDERS: SetOrder[] = ['inOrder', 'bestFirst'];
 
@@ -90,7 +89,7 @@ export function SetOverview({ set, rows, kpis }: { set: PullSet; rows: SetRow[];
               onClick={() => void openFight(row.view.index)}
             >
               <span className="num text-muted">#{row.view.n}</span>
-              <span className={`chip ${CHIP[row.view.status]}`}>{t(`status.${row.view.status}`)}</span>
+              <span className={`chip ${PULL_CHIP[row.view.status]}`}>{t(`status.${row.view.status}`)}</span>
               <span className="num num-col">{row.view.status === 'aborted' ? formatSeconds(row.view.durationMs) : formatDuration(row.view.durationMs)}</span>
               <span className="set-track" style={{ width: `${(row.view.durationMs / longest) * 100}%` }}>
                 <BossHpCurve pull={row.pull} durationMs={row.view.durationMs} />

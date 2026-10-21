@@ -21,9 +21,9 @@ describe('tab bar', () => {
 
   it('keeps the tabs a set has not focusable but inert, with the reason', async () => {
     const setTab = vi.fn(async () => {});
-    useApp.setState({ view: { kind: 'set', set: { kind: 'all', encounterId: 3492, difficulty: 15, fights: [1, 3] } }, tab: 'taken', setTab });
+    useApp.setState({ view: { kind: 'set', set: { kind: 'all', encounterId: 3492, difficulty: 15, fights: [1, 3] } }, tab: 'interrupts', setTab });
     render(<TabBar />);
-    for (const name of ['Deaths', 'Replay']) {
+    for (const name of ['Resources', 'Replay']) {
       const tab = screen.getByRole('tab', { name });
       expect(tab).toHaveAttribute('aria-disabled', 'true');
       expect(tab).toHaveAccessibleDescription('Needs a single pull');
@@ -32,9 +32,9 @@ describe('tab bar', () => {
     }
     expect(setTab).not.toHaveBeenCalled();
 
-    screen.getByRole('tab', { name: 'Damage Taken' }).focus();
+    screen.getByRole('tab', { name: 'Interrupts & Dispels' }).focus();
     await userEvent.keyboard('{ArrowRight}');
-    expect(screen.getByRole('tab', { name: 'Deaths' })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: 'Resources' })).toHaveFocus();
     await userEvent.keyboard('{End}');
     expect(screen.getByRole('tab', { name: 'Replay' })).toHaveFocus();
     expect(setTab).not.toHaveBeenCalled();

@@ -35,6 +35,9 @@ import type {
   ReportFilter,
   Scope,
   SetCommand,
+  SetAuras,
+  SetDeaths,
+  SetInterrupts,
   SetOverview,
   SetProgress,
   SetPull,
@@ -109,7 +112,7 @@ export function replayOffered({ log, view }: Pick<State, 'log' | 'view'>): boole
   return log?.fights.find((fight) => fight.index === fightIndex)?.run == null;
 }
 
-export const SET_TABS: readonly FightTab[] = ['overview', 'damage', 'healing', 'taken'];
+export const SET_TABS: readonly FightTab[] = ['overview', 'damage', 'healing', 'taken', 'deaths', 'casts', 'buffs', 'interrupts'];
 
 /** Whether the shown pull or set has `tab`. */
 export function tabOffered(s: Pick<State, 'log' | 'view'>, tab: FightTab): boolean {
@@ -183,10 +186,10 @@ export type ReportData =
   | { tab: 'player'; data: PlayerDetail }
   | { tab: 'ability'; data: AbilityDetail }
   | { tab: 'target'; data: TargetDetail }
-  | { tab: 'deaths'; data: DeathsReport }
+  | { tab: 'deaths'; data: DeathsReport | SetDeaths }
   | { tab: 'casts'; data: CastsReport }
-  | { tab: 'buffs'; data: AurasReport }
-  | { tab: 'interrupts'; data: InterruptsReport }
+  | { tab: 'buffs'; data: AurasReport | SetAuras }
+  | { tab: 'interrupts'; data: InterruptsReport | SetInterrupts }
   | { tab: 'resources'; data: ResourcesReport }
   | { tab: 'overview'; data: QuickOverview };
 
@@ -306,7 +309,7 @@ interface State {
   /** Tab a detail stack was opened from; shown again once the stack is empty. */
   detailOrigin: FightTab | null;
   /** Death the Deaths tab shows: a cross-link target or the user's choice. */
-  focusDeath: { player: number; t: number } | null;
+  focusDeath: { player: number; t: number; fight: number | null } | null;
   /** Open pull comparison; `null` shows the pull's tabs. Tab, range and details stay as they were. */
   comparison: ComparisonState | null;
   /**
@@ -379,7 +382,7 @@ interface Actions {
   openAbility(spellId: number, pet: string | null): Promise<void>;
   openTarget(name: string): Promise<void>;
   openDeathRecap(player: number, t: number): Promise<void>;
-  selectDeath(player: number, t: number): void;
+  selectDeath(player: number, t: number, fight?: number | null): void;
   openAbilityOf(player: number, spellId: number, tab: 'damage' | 'healing'): Promise<void>;
   back(): Promise<void>;
   /** Shows the page at `depth` of the detail stack (a breadcrumb link); the pages above it close. */
@@ -808,27 +811,45 @@ const SET_REPORT_COMMANDS = {
   taken: 'damage_taken_report',
 } as const satisfies Record<MetricTab, SetCommand['command']>;
 
+function setTableCommands(state: State, filter: ReportFilter): SetCommand[] {
+  const { tab, scope, grouping, auraKind, hideProcs } = state;
+  switch (tab) {
+    case 'damage':
+    case 'healing':
+    case 'taken':
+      return [
+        { command: SET_REPORT_COMMANDS[tab], args: { filter } },
+        { command: 'breakdown_report', args: { filter, scope, metric: SIDES[tab].metric, group: groupOf(grouping, tab) } },
+      ];
+    case 'deaths':
+      return [{ command: 'deaths_report', args: { filter, scope } }];
+    case 'casts':
+      return [{ command: 'casts_report', args: { filter, scope, group: groupOf(grouping, tab), hideProcs } }];
+    case 'buffs':
+      return [{ command: 'auras_report', args: { filter, scope, kind: auraKind, group: groupOf(grouping, tab) } }];
+    case 'interrupts':
+      return [{ command: 'interrupts_report', args: { filter, scope, group: groupOf(grouping, tab) } }];
+    default:
+      return [];
+  }
+}
+
 /**
  * Loads the set's table tab with its breakdown and, once the overkill mode changed, the overview too, in one pass
  * over its pulls; only the newest request may write the tab.
  */
 async function loadSetReport(get: () => State & Actions, set: SetState, logId: string, pullSet: PullSet) {
-  const { tab, scope, grouping, includeOverkill } = get();
+  const { tab, includeOverkill } = get();
   const request = ++reportRequest;
   const fight = fightRequest;
   const filter = reportFilter(get());
   const withOverview = setOverviewOverkill !== includeOverkill;
-  const table: SetCommand[] = isMetricTab(tab)
-    ? [
-        { command: SET_REPORT_COMMANDS[tab], args: { filter } },
-        { command: 'breakdown_report', args: { filter, scope, metric: SIDES[tab].metric, group: groupOf(grouping, tab) } },
-      ]
-    : [];
+  const table = setTableCommands(get(), filter);
   const tableKey = JSON.stringify(table);
   const cache = setCacheOf(fight);
   const cached = table.length > 0 ? cache.results.get(tableKey) : undefined;
   const toRead = cached ? [] : table;
-  if (cached) set({ report: { tab, data: cached[0] } as ReportData, breakdown: cached[1] as Breakdown, reportLoading: false, reportError: null, rangeKpis: null });
+  if (cached) set({ report: { tab, data: cached[0] } as ReportData, breakdown: (cached[1] as Breakdown | undefined) ?? null, reportLoading: false, reportError: null, rangeKpis: null });
   else if (table.length > 0) set({ reportLoading: true, reportError: null, rangeKpis: null });
   else set({ report: null, breakdown: null, reportError: null, reportLoading: false });
   if (!withOverview && toRead.length === 0) return;
@@ -846,7 +867,7 @@ async function loadSetReport(get: () => State & Actions, set: SetState, logId: s
     if (toRead.length > 0) {
       cache.results.set(tableKey, results);
       const [data, breakdown] = results;
-      if (request === reportRequest) set({ report: { tab, data } as ReportData, breakdown: breakdown as Breakdown });
+      if (request === reportRequest) set({ report: { tab, data } as ReportData, breakdown: (breakdown as Breakdown | undefined) ?? null });
     }
   } catch (err) {
     if (request !== reportRequest) return;
@@ -1242,12 +1263,12 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     if (get().view.kind === 'set') return;
     // A navigation to one death: show that player's deaths, whatever the page was filtered to.
     const filters: Filters = { perspective: 'friendly', own: [{ kind: 'player', actorId: player }], other: [], ability: [] };
-    set({ tab: 'deaths', filters, details: [], detailOrigin: null, focusDeath: { player, t }, report: null, breakdown: null, reportError: null, focusRequest: 'page' });
+    set({ tab: 'deaths', filters, details: [], detailOrigin: null, focusDeath: { player, t, fight: null }, report: null, breakdown: null, reportError: null, focusRequest: 'page' });
     await loadReport(get, set);
   },
 
-  selectDeath(player, t) {
-    set({ focusDeath: { player, t } });
+  selectDeath(player, t, fight = null) {
+    set({ focusDeath: { player, t, fight } });
   },
 
   async openAbilityOf(player, spellId, tab) {
