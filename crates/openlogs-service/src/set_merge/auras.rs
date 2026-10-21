@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use openlogs_analysis::{EBON_MIGHT, Fight, SourceSpec, SpellId};
+use openlogs_analysis::{EBON_MIGHT, Fight, SourceSpec, SpellId, union_ms};
 use serde::Serialize;
 
 use super::{Merge, merge_roster, merge_rows, merge_spells, spell_key};
@@ -120,7 +120,13 @@ impl Merge for SetAurasDto {
             }
             row.sources = by_count(&mut source_counts);
             row.applications = row.lanes.iter().map(|l| l.applications).sum();
-            row.uptime = row.lanes.iter().map(|l| l.uptime).sum::<f64>() / row.lanes.len() as f64;
+            let held: Vec<(i32, i32)> = row
+                .lanes
+                .iter()
+                .flat_map(|l| &l.intervals)
+                .map(|&[a, b]| (a, b))
+                .collect();
+            row.uptime = union_ms(&held, 0, report.end_ms) as f64 / duration;
         }
         report.rows.sort_by(|a, b| {
             b.uptime
@@ -323,6 +329,25 @@ mod tests {
         let row = &set.report.rows[0];
         assert_eq!(row.uptime, 0.25);
         assert_eq!(row.lanes[0].intervals, [[25_000, 35_000]]);
+    }
+
+    #[test]
+    fn an_aura_is_up_while_any_holder_has_it_across_the_pulls() {
+        let raid = raid();
+        let (a, b, c) = (raid.a, raid.b, raid.c);
+        let first = [
+            held(0, 10_000, c, a, BLESSING),
+            held(5_000, 15_000, c, b, BLESSING),
+        ];
+        let pulls = [
+            pull(&raid, first.concat()),
+            pull(&raid, held(0, 5_000, c, a, BLESSING).into()),
+        ];
+        let set = set_of(&pulls, DimensionDto::Ability);
+        assert_eq!(set.report.rows.len(), 1);
+        let row = &set.report.rows[0];
+        assert_eq!(uptimes(&row.lanes), [(BLESSING, 0.375), (BLESSING, 0.25)]);
+        assert_eq!(row.uptime, 0.5);
     }
 
     #[test]

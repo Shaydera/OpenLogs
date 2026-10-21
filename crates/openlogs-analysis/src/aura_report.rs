@@ -5,7 +5,7 @@ use crate::actors::{ActorId, ActorKind};
 use crate::auras::{AuraInterval, aura_intervals, merged, union_ms};
 use crate::breakdown::{Dimension, effective_group};
 use crate::cells::{CellKind, Facts, ScopeMetric, book};
-use crate::fight::{AuraType, Fight, SpellId};
+use crate::fight::{AuraAction, AuraType, EventKind, Fight, SpellId};
 use crate::filter::ReportFilter;
 use crate::player::EBON_MIGHT;
 use crate::scope::{Scope, Side, side_of, unit_of};
@@ -32,6 +32,8 @@ pub struct AuraLane {
     pub source_counts: Vec<(ActorId, u32)>,
     /// The specs that applied the aura's spells (on any holder), which keep same-named auras apart.
     pub source_specs: BTreeSet<SourceSpec>,
+    /// Applied, refreshed and added-stack events in the range, plus one per aura already up
+    /// when the range starts.
     pub applications: u32,
     pub uptime: f64,
     /// Merged and clipped to the range.
@@ -50,9 +52,9 @@ pub struct AuraRow {
     pub holder: Option<AuraHolder>,
     /// The players who applied the row's auras, most applications first.
     pub sources: Vec<ActorId>,
-    /// Intervals overlapping the range.
     pub applications: u32,
-    /// Mean uptime over the lanes.
+    /// The union of its lanes' intervals over the range: an aura is up while any holder has it.
+    /// By target, the union of the holder's auras, which is not shown.
     pub uptime: f64,
     /// By aura: one lane per holder; by target: one per aura.
     pub lanes: Vec<AuraLane>,
@@ -193,12 +195,21 @@ enum RowId {
     Holder(AuraHolder),
 }
 
-/// The intervals of one lane and what it counts.
+/// The intervals of one lane and its applications per spell and source.
 #[derive(Default)]
 struct LaneAcc {
     intervals: Vec<(i32, i32)>,
     spells: HashMap<SpellId, u32>,
     sources: HashMap<ActorId, u32>,
+}
+
+impl LaneAcc {
+    fn count(&mut self, fight: &Fight, spell: SpellId, source: ActorId) {
+        *self.spells.entry(spell).or_default() += 1;
+        if let Some(source) = fight.actors.credited_player(source) {
+            *self.sources.entry(source).or_default() += 1;
+        }
+    }
 }
 
 /// Auras by `wanted` (or its fallback): by aura with a lane per holder, or by target with a lane
@@ -248,15 +259,61 @@ pub fn auras_report(
     let keys = row_keys(fight, &specs);
     // Keyed by (aura key, holder); a holder is a player or every enemy of one name.
     let mut lanes: HashMap<(String, AuraHolder), LaneAcc> = HashMap::new();
+    let mut applied_at_start: HashSet<(ActorId, SpellId, ActorId)> = HashSet::new();
     for interval in &intervals {
         let holder = holder_of(fight, interval.target);
         let lane = lanes
             .entry((keys[&interval.spell].clone(), holder))
             .or_default();
         lane.intervals.push((interval.start_ms, interval.end_ms));
-        *lane.spells.entry(interval.spell).or_default() += 1;
+        lane.spells.entry(interval.spell).or_default();
         if let Some(source) = fight.actors.credited_player(interval.source) {
-            *lane.sources.entry(source).or_default() += 1;
+            lane.sources.entry(source).or_default();
+        }
+    }
+    for event in &fight.events {
+        let EventKind::Aura {
+            action: action @ (AuraAction::Applied | AuraAction::Refresh | AuraAction::AppliedDose),
+            aura_type: event_type,
+            ..
+        } = event.kind
+        else {
+            continue;
+        };
+        if event_type != aura_type
+            || event.t < start
+            || event.t >= end
+            || !holds(fight, event.target, event.target_hostile, scope.perspective)
+            || !scope.accepts(
+                fight,
+                Some(&unit_of(fight, event.source)),
+                Some(event.spell),
+                Some(&unit_of(fight, event.target)),
+            )
+        {
+            continue;
+        }
+        let Some(key) = keys.get(&event.spell) else {
+            continue;
+        };
+        let Some(lane) = lanes.get_mut(&(key.clone(), holder_of(fight, event.target))) else {
+            continue;
+        };
+        if event.t == start && action == AuraAction::Applied {
+            applied_at_start.insert((event.target, event.spell, event.source));
+        }
+        lane.count(fight, event.spell, event.source);
+    }
+    // An aura already up when the range starts counts as one application; one applied exactly
+    // then is already counted by its event.
+    for interval in &intervals {
+        let opened_by_event = interval.start_ms == start
+            && applied_at_start.contains(&(interval.target, interval.spell, interval.source));
+        if interval.start_ms <= start && !opened_by_event {
+            let holder = holder_of(fight, interval.target);
+            if let Some(lane) = lanes.get_mut(&(keys[&interval.spell].clone(), holder)) {
+                lane.count(fight, interval.spell, interval.source);
+            }
         }
     }
     let mut players: BTreeSet<ActorId> = BTreeSet::new();
@@ -300,7 +357,9 @@ pub fn auras_report(
             };
             let mut spells: HashMap<SpellId, u32> = HashMap::new();
             let mut sources: HashMap<ActorId, u32> = HashMap::new();
+            let mut held: Vec<(i32, i32)> = Vec::new();
             for (_, acc) in &parts {
+                held.extend(&acc.intervals);
                 for (&spell, &n) in &acc.spells {
                     *spells.entry(spell).or_default() += n;
                 }
@@ -332,7 +391,7 @@ pub fn auras_report(
                 holder,
                 sources: by_count(&sources),
                 applications: lanes.iter().map(|l| l.applications).sum(),
-                uptime: lanes.iter().map(|l| l.uptime).sum::<f64>() / lanes.len() as f64,
+                uptime: union_ms(&held, start, end) as f64 / f64::from(len),
                 lanes,
             }
         })

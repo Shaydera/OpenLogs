@@ -19,6 +19,13 @@ fn whole() -> ReportFilter {
     ReportFilter::whole(Attribution::Augmented)
 }
 
+fn from(start_ms: i32) -> ReportFilter {
+    ReportFilter {
+        start_ms,
+        ..whole()
+    }
+}
+
 fn report(
     fight: &openlogs_analysis::Fight,
     side: Side,
@@ -65,7 +72,7 @@ fn scene() -> Scene {
 }
 
 #[test]
-fn buffs_on_players_average_uptime_over_targets() {
+fn an_aura_is_up_while_any_of_its_holders_has_it() {
     let mut s = scene();
     s.b.push(
         0,
@@ -82,14 +89,14 @@ fn buffs_on_players_average_uptime_over_targets() {
         aura(AuraAction::Removed, AuraType::Buff),
     );
     s.b.push(
-        0,
+        5_000,
         s.priest,
         s.warrior,
         10060,
         aura(AuraAction::Applied, AuraType::Buff),
     );
     s.b.push(
-        5_000,
+        15_000,
         s.priest,
         s.warrior,
         10060,
@@ -111,7 +118,7 @@ fn buffs_on_players_average_uptime_over_targets() {
     .rows;
     assert_eq!(rows.len(), 1);
     let row = &rows[0];
-    assert_eq!((row.spell, row.applications, row.uptime), (10060, 2, 0.375));
+    assert_eq!((row.spell, row.applications, row.uptime), (10060, 2, 0.75));
     let targets: Vec<_> = row
         .lanes
         .iter()
@@ -121,9 +128,107 @@ fn buffs_on_players_average_uptime_over_targets() {
         targets,
         [
             (Some(s.mage), 0.5, vec![(0, 10_000)]),
-            (Some(s.warrior), 0.25, vec![(0, 5_000)])
+            (Some(s.warrior), 0.5, vec![(5_000, 15_000)])
         ]
     );
+}
+
+#[test]
+fn applications_count_applies_refreshes_and_added_stacks_in_the_range() {
+    let mut s = scene();
+    let debuff = |action| aura(action, AuraType::Debuff);
+    s.b.push(1_000, s.mage, s.boss, 172, debuff(AuraAction::Applied));
+    s.b.push(3_000, s.mage, s.boss, 172, debuff(AuraAction::Refresh));
+    s.b.push(5_000, s.mage, s.boss, 172, debuff(AuraAction::AppliedDose));
+    s.b.push(7_000, s.mage, s.boss, 172, debuff(AuraAction::AppliedDose));
+    s.b.push(9_000, s.mage, s.boss, 172, debuff(AuraAction::RemovedDose));
+    let fight = s.b.build();
+    let scope = Scope {
+        perspective: Side::Enemy,
+        ..Scope::default()
+    };
+    let applications = |filter: &ReportFilter| {
+        let report = auras_report(&fight, filter, &scope, AuraType::Debuff, Dimension::Ability);
+        let row = &report.rows[0];
+        (row.applications, row.lanes[0].applications)
+    };
+    assert_eq!(applications(&whole()), (4, 4));
+    assert_eq!(
+        applications(&from(4_000)),
+        (3, 3),
+        "two added stacks and the debuff already up"
+    );
+}
+
+#[test]
+fn applications_count_only_the_selected_sources() {
+    let mut s = scene();
+    let debuff = |action| aura(action, AuraType::Debuff);
+    s.b.push(1_000, s.mage, s.boss, 172, debuff(AuraAction::Applied));
+    s.b.push(3_000, s.warrior, s.boss, 172, debuff(AuraAction::Refresh));
+    let from_mage = Scope {
+        source: vec![UnitRef::Player(s.mage)],
+        ..Scope::default()
+    };
+    let rows = report(&s.b.build(), Side::Enemy, AuraType::Debuff, from_mage).rows;
+    let lanes: Vec<_> = rows[0]
+        .lanes
+        .iter()
+        .map(|l| (l.holder.name.as_str(), l.applications, l.sources.clone()))
+        .collect();
+    assert_eq!(lanes, [("Ula'tek", 1, vec![s.mage])]);
+}
+
+fn buff_applications(fight: &openlogs_analysis::Fight, filter: &ReportFilter) -> Vec<u32> {
+    let report = auras_report(
+        fight,
+        filter,
+        &Scope::default(),
+        AuraType::Buff,
+        Dimension::Ability,
+    );
+    report.rows[0]
+        .lanes
+        .iter()
+        .map(|l| l.applications)
+        .collect()
+}
+
+#[test]
+fn an_aura_already_up_when_the_range_starts_counts_as_one_application() {
+    let mut s = scene();
+    let buff = |action| aura(action, AuraType::Buff);
+    s.b.push(8_000, s.priest, s.mage, 1126, buff(AuraAction::Removed));
+    assert_eq!(buff_applications(&s.b.build(), &whole()), [1]);
+}
+
+#[test]
+fn each_source_of_an_aura_already_up_counts_once() {
+    let mut s = scene();
+    let buff = |action| aura(action, AuraType::Buff);
+    s.b.push(6_000, s.priest, s.mage, 1126, buff(AuraAction::Removed));
+    s.b.push(8_000, s.warrior, s.mage, 1126, buff(AuraAction::Removed));
+    let report = report(
+        &s.b.build(),
+        Side::Friendly,
+        AuraType::Buff,
+        Scope::default(),
+    );
+    let lane = &report.rows[0].lanes[0];
+    assert_eq!(lane.applications, 2);
+    assert_eq!(lane.source_counts, [(s.warrior, 1), (s.priest, 1)]);
+}
+
+#[test]
+fn an_aura_applied_as_the_range_starts_counts_once() {
+    let mut s = scene();
+    let buff = |action| aura(action, AuraType::Buff);
+    s.b.push(0, s.priest, s.mage, 1126, buff(AuraAction::Applied));
+    s.b.push(4_000, s.priest, s.mage, 1126, buff(AuraAction::Removed));
+    s.b.push(6_000, s.priest, s.mage, 1126, buff(AuraAction::Applied));
+    let fight = s.b.build();
+    assert_eq!(buff_applications(&fight, &whole()), [2]);
+    assert_eq!(buff_applications(&fight, &from(6_000)), [1]);
 }
 
 #[test]
@@ -169,10 +274,10 @@ fn enemy_debuffs_group_targets_by_name() {
     .rows;
     assert_eq!(
         rows.iter().map(|r| r.spell).collect::<Vec<_>>(),
-        [99, 172],
+        [172, 99],
         "the boss's own debuff is an enemy's debuff too"
     );
-    let targets: Vec<_> = rows[1]
+    let targets: Vec<_> = rows[0]
         .lanes
         .iter()
         .map(|t| (t.holder.name.as_str(), t.uptime, t.intervals.clone()))
@@ -188,7 +293,7 @@ fn enemy_debuffs_group_targets_by_name() {
             )
         ]
     );
-    assert_eq!(rows[1].applications, 4);
+    assert_eq!(rows[0].applications, 4);
 }
 
 #[test]
