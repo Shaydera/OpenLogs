@@ -1,8 +1,8 @@
 mod support;
 
 use openlogs_analysis::{
-    AbilityRef, Attribution, AuraAction, AuraType, AurasReport, Dimension, EventKind, NO_SPELL,
-    ReportFilter, Scope, Side, UnitRef, auras_report,
+    AbilityRef, Attribution, AuraAction, AuraType, AurasReport, Dimension, EBON_MIGHT, EventKind,
+    NO_SPELL, ReportFilter, Scope, Side, UnitRef, auras_report,
 };
 use support::{FightBuilder, HOSTILE_FLAGS};
 
@@ -131,6 +131,23 @@ fn an_aura_is_up_while_any_of_its_holders_has_it() {
             (Some(s.warrior), 0.5, vec![(5_000, 15_000)])
         ]
     );
+}
+
+#[test]
+fn ebon_might_is_up_while_any_ally_has_it_and_counts_the_allies_it_covered() {
+    let mut s = scene();
+    let buff = |action| aura(action, AuraType::Buff);
+    for (ally, from, to) in [(s.mage, 0, 10_000), (s.warrior, 5_000, 15_000)] {
+        s.b.push(from, s.priest, ally, EBON_MIGHT, buff(AuraAction::Applied));
+        s.b.push(to, s.priest, ally, EBON_MIGHT, buff(AuraAction::Removed));
+    }
+    let report = report(
+        &s.b.build(),
+        Side::Friendly,
+        AuraType::Buff,
+        Scope::default(),
+    );
+    assert_eq!(report.ebon_might, Some((0.75, 20.0 / 15.0)));
 }
 
 #[test]

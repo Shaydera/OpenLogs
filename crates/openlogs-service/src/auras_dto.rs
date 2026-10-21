@@ -74,7 +74,7 @@ pub struct AuraRowDto {
 #[serde(rename_all = "camelCase")]
 pub struct EbonMightDto {
     pub uptime: f64,
-    pub holders: u32,
+    pub allies: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -158,7 +158,7 @@ pub fn auras_report_dto(
         rows,
         ebon_might: report
             .ebon_might
-            .map(|(uptime, holders)| EbonMightDto { uptime, holders }),
+            .map(|(uptime, allies)| EbonMightDto { uptime, allies }),
         players: report.players,
         player_ids: report.player_ids.clone(),
         roster,

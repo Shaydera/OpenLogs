@@ -44,9 +44,9 @@ describe('headerTiles', () => {
   });
 
   it('reads Ebon Might and the player count from the core and names targets when grouped by target', () => {
-    const data = { ...aurasReportFixture, group: 'target' as const, ebonMight: { uptime: 0.5, holders: 3 }, players: 7 };
+    const data = { ...aurasReportFixture, group: 'target' as const, ebonMight: { uptime: 0.5, allies: 2.875 }, players: 7 };
     const lines = text({ tab: 'buffs', report: { tab: 'buffs', data }, scope: { perspective: 'enemy', source: [], target: [], ability: [] } });
-    expect(lines[1]).toBe('Ebon Might uptime|50.00%|on 3 players');
+    expect(lines[1]).toBe('Ebon Might uptime|50.00%|2.88 allies on average');
     expect(lines[2].split('|')[0]).toBe('Targets');
     expect(lines[3]).toBe('Players|7|who applied them');
   });

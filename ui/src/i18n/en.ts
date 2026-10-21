@@ -234,7 +234,7 @@ export const en = {
   'kpi.bloodlust': 'Bloodlust',
   'kpi.noBloodlust': 'not cast',
   'kpi.ebonMight': 'Ebon Might uptime',
-  'kpi.onPlayers': { one: 'on {count} player', other: 'on {count} players' },
+  'kpi.alliesOnAverage': '{value} allies on average',
   'kpi.noEbonMight': 'not in this view',
   'kpi.auras': 'Auras',
   'kpi.targets': 'Targets',

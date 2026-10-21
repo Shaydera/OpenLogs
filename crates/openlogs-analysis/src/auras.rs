@@ -131,6 +131,21 @@ pub fn union_ms(intervals: &[(i32, i32)], start: i32, end: i32) -> u64 {
         .sum()
 }
 
+/// The share of `[start, end)` in which any lane is up, and how many lanes are up on average
+/// meanwhile; `None` when none is.
+pub fn coverage(lanes: &[Vec<(i32, i32)>], start: i32, end: i32) -> Option<(f64, f64)> {
+    let all: Vec<(i32, i32)> = lanes.concat();
+    let up_ms = union_ms(&all, start, end);
+    if up_ms == 0 {
+        return None;
+    }
+    let held_ms: u64 = lanes.iter().map(|lane| union_ms(lane, start, end)).sum();
+    Some((
+        up_ms as f64 / f64::from(end - start),
+        held_ms as f64 / up_ms as f64,
+    ))
+}
+
 /// `intervals` clipped to `[start, end)` and merged where they overlap.
 pub(crate) fn merged(intervals: &[(i32, i32)], start: i32, end: i32) -> Vec<(i32, i32)> {
     let mut clipped: Vec<(i32, i32)> = intervals

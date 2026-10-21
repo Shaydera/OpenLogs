@@ -2,7 +2,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use crate::ability::unit_name;
 use crate::actors::{ActorId, ActorKind};
-use crate::auras::{AuraInterval, aura_intervals, merged, union_ms};
+use crate::auras::{AuraInterval, aura_intervals, coverage, merged, union_ms};
 use crate::breakdown::{Dimension, effective_group};
 use crate::cells::{CellKind, Facts, ScopeMetric, book};
 use crate::fight::{AuraAction, AuraType, EventKind, Fight, SpellId};
@@ -64,8 +64,9 @@ pub struct AuraRow {
 pub struct AurasReport {
     pub group: Dimension,
     pub rows: Vec<AuraRow>,
-    /// Ebon Might among the lanes: mean uptime and holders.
-    pub ebon_might: Option<(f64, u32)>,
+    /// Ebon Might among the lanes: its uptime on anyone and the allies it buffed on average
+    /// while up.
+    pub ebon_might: Option<(f64, f64)>,
     /// Friendlies: players with an aura; enemies: players who applied one.
     pub players: u32,
     pub player_ids: BTreeSet<ActorId>,
@@ -347,7 +348,7 @@ pub fn auras_report(
         };
         by_row.entry(row).or_default().push((lane, acc));
     }
-    let mut ebon: Vec<f64> = Vec::new();
+    let mut ebon: Vec<Vec<(i32, i32)>> = Vec::new();
     let mut rows: Vec<AuraRow> = by_row
         .into_iter()
         .map(|(row, parts)| {
@@ -372,7 +373,7 @@ pub fn auras_report(
                 lanes
                     .iter()
                     .filter(|l| l.spells.contains(&EBON_MIGHT))
-                    .map(|l| l.uptime),
+                    .map(|l| l.intervals.clone()),
             );
             lanes.sort_by(|a, b| {
                 b.uptime
@@ -405,12 +406,7 @@ pub fn auras_report(
     AurasReport {
         group,
         rows,
-        ebon_might: (!ebon.is_empty()).then(|| {
-            (
-                ebon.iter().sum::<f64>() / ebon.len() as f64,
-                ebon.len() as u32,
-            )
-        }),
+        ebon_might: coverage(&ebon, start, end),
         players: players.len() as u32,
         player_ids: players,
     }
