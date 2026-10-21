@@ -1,12 +1,26 @@
-import type { Breakdown, Kpis, PowerTrack, QuickOverview, Scope, Side } from '../../api/types';
-import { formatAmount, formatCpm, formatDuration, formatEventTime, formatEventTimeTenths, formatInteger, formatOneDecimal, formatPercent, formatScaled, formatShare } from '../../i18n/format';
+import { type Breakdown, type Kpis, type PowerTrack, type QuickOverview, type Scope, type SetDeaths, type Side, isSetReport } from '../../api/types';
+import {
+  formatAmount,
+  formatCpm,
+  formatDuration,
+  formatEventTime,
+  formatEventTimeTenths,
+  formatInteger,
+  formatOneDecimal,
+  formatPercent,
+  formatScaled,
+  formatSeconds,
+  formatShare,
+} from '../../i18n/format';
 import { type MessageKey, t } from '../../i18n/i18n';
 import { SIDES } from '../../scopeSides';
 import type { FightTab, MetricTab, ReportData, TimeRange } from '../../store';
 import { rowLabel, valueLabel } from '../filters/labels';
+import { deathWindowMs, medianMs } from '../deaths/set/lifetimeModel';
+import { kickTotals } from '../interrupts/kickTotals';
 import type { KpiTone } from '../Kpi';
 import { shortName } from '../overview/players';
-import { type SetRow, averageFirstDeath, bestPull, earliestFirstDeath } from '../overview/setOverviewModel';
+import { type PullFirst, type SetRow, averageFirstDeath, bestPull, earliestOfPulls, pullFirstDeaths } from '../overview/setOverviewModel';
 import { formatCapTime, powerName } from '../resources/powerNames';
 import { hitName, reportSpellName } from '../reports/reportData';
 
@@ -122,27 +136,41 @@ function setTiles(kpis: Kpis | null, rows: SetRow[]): HeaderTile[] {
   const best = bestPull(rows);
   const labels = [t('kpi.raidDps'), t(best?.kind === 'kill' ? 'kpi.bestKill' : 'kpi.bestWipe'), t('kpi.deaths'), t('kpi.firstDeathLabel')];
   if (!kpis) return labels.map(pendingTile);
-  const earliest = earliestFirstDeath(rows);
   const bestValue = best ? (best.kind === 'kill' ? formatDuration(best.row.view.durationMs) : formatPercent(best.row.view.bossHpPercent ?? 0)) : '—';
   return [
     { label: labels[0], value: formatAmount(kpis.raidDps), sub: t('kpi.damageOver', { damage: formatAmount(kpis.raidDamage), duration: formatDuration(kpis.durationMs) }) },
     { label: labels[1], value: bestValue, sub: best ? t('kpi.pullNumber', { n: best.row.view.n }) : '' },
-    setDeathsTile(kpis, rows),
-    {
-      label: labels[3],
-      value: averageFirstDeath(rows),
-      sub: earliest ? t('kpi.earliestFirstDeath', { time: formatEventTimeTenths(earliest.ms), n: earliest.n }) : t('kpi.noDeaths'),
-    },
+    setDeathsTile(kpis.deaths, rows.length),
+    firstDeathTile(pullFirstDeaths(rows)),
   ];
 }
 
-function setDeathsTile(kpis: Kpis, rows: SetRow[]): HeaderTile {
+function setDeathsTile(deaths: number, pulls: number): HeaderTile {
   return {
     label: t('kpi.deaths'),
-    value: formatInteger(kpis.deaths),
-    tone: kpis.deaths > 0 ? 'death' : undefined,
-    sub: t('kpi.deathsPerPull', { count: formatOneDecimal(rows.length > 0 ? kpis.deaths / rows.length : 0) }),
+    value: formatInteger(deaths),
+    tone: deaths > 0 ? 'death' : undefined,
+    sub: t('kpi.deathsPerPull', { count: formatOneDecimal(pulls > 0 ? deaths / pulls : 0) }),
   };
+}
+
+function firstDeathTile(pulls: PullFirst[]): HeaderTile {
+  const earliest = earliestOfPulls(pulls);
+  return {
+    label: t('kpi.firstDeathLabel'),
+    value: averageFirstDeath(pulls),
+    sub: earliest ? t('kpi.earliestFirstDeath', { time: formatEventTimeTenths(earliest.ms), n: earliest.n }) : t('kpi.noDeaths'),
+  };
+}
+
+/** The earliest of each report pull's `times`, numbered as in the set's rows. */
+function pullFirsts<P extends { fightIndex: number }>(pulls: P[], rows: SetRow[], times: (pull: P) => number[]): PullFirst[] {
+  const numbers = new Map(rows.map((row) => [row.pull.fightIndex, row.view.n]));
+  return pulls.flatMap((pull) => {
+    const n = numbers.get(pull.fightIndex);
+    const all = times(pull);
+    return n === undefined ? [] : [{ ms: all.length > 0 ? Math.min(...all) : null, n }];
+  });
 }
 
 const perSecond = (total: number, durationMs: number) => (durationMs > 0 ? (total * 1000) / durationMs : 0);
@@ -226,7 +254,7 @@ function takenTiles(report: ReportOf['taken'] | null, input: HeaderInput): Heade
     !input.overview
       ? pendingTile(labels[3])
       : input.setRows
-        ? setDeathsTile(input.overview.kpis, input.setRows)
+        ? setDeathsTile(input.overview.kpis.deaths, input.setRows.length)
         : deathsTile(input.overview.timeline.markers.deaths.map((d) => d.t).filter((at) => inRange(input.range, at, input.overview!.timeline.durationMs))),
   ];
 }
@@ -234,6 +262,8 @@ function takenTiles(report: ReportOf['taken'] | null, input: HeaderInput): Heade
 /** The deaths tiles from the core; one selected player trades Survivors for the time dead, enemies count kills. */
 function deathsTiles(report: ReportOf['deaths'] | null, input: HeaderInput): HeaderTile[] {
   const enemies = input.scope.perspective === 'enemy';
+  const setReport = report && isSetReport(report) ? report : null;
+  if (input.setRows && !enemies) return setFriendlyDeathsTiles(setReport, input.setRows);
   const onePlayer = !enemies && input.scope.target.length === 1 && input.scope.target[0].kind === 'player';
   const labels = enemies
     ? [t('kpi.kills'), t('kpi.mostLethal'), t('kpi.topKiller'), t('kpi.avgAlive')]
@@ -246,14 +276,9 @@ function deathsTiles(report: ReportOf['deaths'] | null, input: HeaderInput): Hea
     sub: lethal ? hitName(lethal, (id) => reportSpellName(report.spells, id)) : '',
   };
   if (enemies) {
-    const times = report.kills.map((k) => k.t);
     const killer = report.topKiller;
     return [
-      {
-        label: labels[0],
-        value: formatInteger(times.length),
-        sub: times.length > 0 ? t('kpi.firstKill', { time: formatEventTime(Math.min(...times)) }) : t('kpi.noKills'),
-      },
+      setReport ? setKillsTile(setReport, input.setRows ?? []) : killsTile(report.kills.map((k) => k.t)),
       lethalTile,
       { label: labels[2], value: killer ? valueLabel(killer.unit.unit, killer.unit.name, killer.unit.number) : '—', sub: killer ? t('kpi.killingBlows', { count: killer.count }) : '' },
       { label: labels[3], value: report.avgAliveMs !== null ? formatDuration(report.avgAliveMs) : '—', sub: '' },
@@ -270,22 +295,62 @@ function deathsTiles(report: ReportOf['deaths'] | null, input: HeaderInput): Hea
   ];
 }
 
+function killsTile(times: number[]): HeaderTile {
+  return {
+    label: t('kpi.kills'),
+    value: formatInteger(times.length),
+    sub: times.length > 0 ? t('kpi.firstKill', { time: formatEventTime(Math.min(...times)) }) : t('kpi.noKills'),
+  };
+}
+
+function setKillsTile(report: SetDeaths, rows: SetRow[]): HeaderTile {
+  const first = earliestOfPulls(pullFirsts(report.pulls, rows, (pull) => pull.kills.map((k) => k.t)));
+  return {
+    label: t('kpi.kills'),
+    value: formatInteger(report.pulls.reduce((sum, pull) => sum + pull.kills.length, 0)),
+    sub: first ? t('kpi.firstKillInPull', { time: formatEventTime(first.ms), n: first.n }) : t('kpi.noKills'),
+  };
+}
+
+/** A set's friendly deaths: the count per pull, the deadliest spell with its main source, the median death window and the first death. */
+function setFriendlyDeathsTiles(report: SetDeaths | null, rows: SetRow[]): HeaderTile[] {
+  const labels = [t('kpi.deaths'), t('kpi.mostLethal'), t('kpi.medianWindow'), t('kpi.firstDeathLabel')];
+  if (!report) return labels.map(pendingTile);
+  const deaths = report.pulls.flatMap((pull) => pull.deaths);
+  const lethal = report.mostLethal;
+  const source = lethal ? report.byKillingBlow.find((row) => row.spellId === lethal.spellId && row.environmental === lethal.environmental)?.sources[0] : undefined;
+  const median = medianMs(deaths.map(deathWindowMs));
+  return [
+    setDeathsTile(deaths.length, report.pulls.length),
+    {
+      label: labels[1],
+      value: lethal ? hitName(lethal, (id) => reportSpellName(report.spells, id)) : '—',
+      sub: lethal ? (source ? t('kpi.lethalDeaths', { count: lethal.count, source }) : t('deaths.count', { count: lethal.count })) : '',
+    },
+    { label: labels[2], value: median !== null ? formatSeconds(median) : '—', sub: median !== null ? t('kpi.medianWindowSub') : '' },
+    firstDeathTile(pullFirsts(report.pulls, rows, (pull) => pull.lifetime.flatMap((life) => life.firstDeathMs ?? []))),
+  ];
+}
+
+/** A set's overview has no Bloodlust markers: its buffs tiles leave Bloodlust out. */
 function aurasTiles(report: ReportOf['buffs'] | null, input: HeaderInput): HeaderTile[] {
   const byTarget = report?.group === 'target';
+  const inSet = input.setRows !== null;
   const labels = [t('kpi.bloodlust'), t('kpi.ebonMight'), t(byTarget ? 'kpi.targets' : 'kpi.auras'), t('kpi.players')];
-  if (!report) return labels.map(pendingTile);
+  if (!report) return (inSet ? labels.slice(1) : labels).map(pendingTile);
   const overview = input.overview;
   const lust = overview?.timeline.markers.bloodlust.find((l) => inRange(input.range, l.t, overview.timeline.durationMs));
   const ebon = report.ebonMight;
   const onEnemies = input.scope.perspective === 'enemy';
+  const lustTile: HeaderTile = !overview
+    ? pendingTile(labels[0])
+    : {
+        label: labels[0],
+        value: lust ? formatEventTime(lust.t) : '—',
+        sub: lust ? reportSpellName(overview.spells, lust.spellId) : t('kpi.noBloodlust'),
+      };
   return [
-    !overview
-      ? pendingTile(labels[0])
-      : {
-          label: labels[0],
-          value: lust ? formatEventTime(lust.t) : '—',
-          sub: lust ? reportSpellName(overview.spells, lust.spellId) : t('kpi.noBloodlust'),
-        },
+    ...(inSet ? [] : [lustTile]),
     {
       label: labels[1],
       value: ebon ? formatShare(ebon.uptime * 100) : '—',
@@ -319,11 +384,11 @@ function interruptsTiles(report: ReportOf['interrupts'] | null, scope: Scope): H
   if (!report) return labels.map(pendingTile);
   const by = (count: number) => (count === 0 ? '—' : t('kicks.bySources', { count }));
   const top = report.mostInterrupted;
-  const missed = report.missed.length;
+  const { interrupts, dispels, missed } = kickTotals(report);
   const friendlyOnly = scope.perspective === 'friendly' && scope.source.length === 0;
   return [
-    { label: labels[0], value: formatInteger(report.interrupts.length), sub: by(report.kickers) },
-    { label: labels[1], value: formatInteger(report.dispels.length), sub: by(report.dispellers) },
+    { label: labels[0], value: formatInteger(interrupts), sub: by(report.kickers) },
+    { label: labels[1], value: formatInteger(dispels), sub: by(report.dispellers) },
     friendlyOnly
       ? { label: labels[2], value: formatInteger(missed), tone: missed > 0 ? 'warn' : undefined, sub: t('kicks.missedSub') }
       : { label: labels[2], value: '—', sub: scope.perspective === 'friendly' ? t('kicks.missedNoSource') : t('kicks.missedFriendlies') },

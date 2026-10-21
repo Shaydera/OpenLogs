@@ -1,8 +1,9 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AurasReport } from '../../api/types';
+import type { AurasReport, FightRow, PullSet, SetAuras } from '../../api/types';
 import { initialState, useApp } from '../../store';
+import { compareLogFixture } from '../../test/compareFixture';
 import { aurasReportFixture } from '../../test/reportFixtures';
 import { AurasTab } from './AurasTab';
 
@@ -57,5 +58,29 @@ describe('AurasTab', () => {
     expect(auraRows().map((r) => r.textContent)).toEqual(['Faelan100.0%12', 'Wendel100.0%12']);
     await userEvent.click(screen.getByRole('button', { name: 'Faelan' }));
     expect(within(screen.getByRole('list', { name: 'Auras of Faelan' })).getByRole('listitem')).toHaveTextContent('Arcane Intellect100.0%');
+  });
+
+  it('a_lane_in_a_set_draws_each_pull_in_its_own_segment', async () => {
+    const [WIPE] = compareLogFixture.fights;
+    const fights: FightRow[] = [
+      { ...WIPE, index: 1, durationMs: 100_000 },
+      { ...WIPE, index: 2, durationMs: 200_000 },
+    ];
+    const set: PullSet = { kind: 'all', encounterId: WIPE.encounterId, difficulty: WIPE.difficulty, fights: [1, 2] };
+    useApp.setState({ log: { ...compareLogFixture, fights }, view: { kind: 'set', set } });
+    const bloodlust = aurasReportFixture.rows[1];
+    const report: SetAuras = {
+      ...aurasReportFixture,
+      endMs: 300_000,
+      rows: [{ ...bloodlust, lanes: [{ ...bloodlust.lanes[0], intervals: [[105_000, 110_000]] }] }],
+      pulls: [
+        { fightIndex: 1, startMs: 0, endMs: 100_000 },
+        { fightIndex: 2, startMs: 100_000, endMs: 300_000 },
+      ],
+    };
+    render(<AurasTab report={report} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Bloodlust' }));
+    const lane = within(screen.getByRole('list', { name: 'Targets of Bloodlust' })).getByRole('listitem');
+    expect(within(lane).getAllByRole('img').map((segment) => segment.getAttribute('aria-label'))).toEqual(['Pull #2: 0:05–0:10.']);
   });
 });

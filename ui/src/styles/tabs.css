@@ -107,6 +107,264 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* A pull set's list: one scrolling box, a sticky heading per pull. */
+.dlist-scroll {
+  position: relative;
+  max-height: 620px;
+  overflow-y: auto;
+}
+.dlist-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 14px 6px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--panel);
+  font-size: 12px;
+}
+.pull-group-head {
+  padding: 10px 16px 6px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+}
+
+/* A pull set's Deaths tab: death windows, killing blows and players, lifetime, then the list beside the recap. */
+.set-deaths {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.set-deaths-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.dw-body {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 8px;
+  padding: 4px 16px 16px;
+}
+/* Level with the plots: below the 24px pull heading and its 6px gap. */
+.dw-axis {
+  position: relative;
+  height: 200px;
+  margin-top: 30px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.dw-axis > span {
+  position: absolute;
+  right: 0;
+  transform: translateY(50%);
+}
+.dw-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.dw-scroll .seam-box {
+  min-width: 104px;
+}
+.dw-head {
+  height: 24px;
+  margin-bottom: 6px;
+  overflow: hidden;
+  font-size: 12px;
+}
+.dw-plot {
+  position: relative;
+  height: 200px;
+  border-radius: 4px;
+  background: var(--plot);
+  box-shadow: inset 0 -1px 0 var(--line-strong);
+}
+.dw-grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed var(--line);
+}
+.dw-bar {
+  position: absolute;
+  bottom: 0;
+  width: 4px;
+  margin-left: -2px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px 2px 0 0;
+  cursor: pointer;
+}
+.dw-bar:hover,
+.dw-bar:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+.dw-bar-dim {
+  opacity: 0.45;
+}
+.dw-bar.dw-bar-on {
+  z-index: 2;
+  box-shadow: 0 0 0 2px var(--plot), 0 0 0 4px var(--accent);
+}
+.dw-tip {
+  position: absolute;
+  top: 8px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 11px;
+  border: 1px solid var(--neutral-fill);
+  border-radius: 7px;
+  background: var(--tile);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--shadow) 55%, transparent);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.sd-table {
+  table-layout: fixed;
+}
+.sd-table th,
+.sd-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.sd-table tbody th,
+.sd-life tbody th {
+  font-weight: 400;
+}
+.sd-table thead th,
+.sd-life thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+}
+.sd-col-bar {
+  width: 38%;
+}
+.sd-col-bar-sm {
+  width: 30%;
+}
+.sd-col-num {
+  width: 84px;
+}
+.sd-table .bar {
+  display: block;
+}
+.bar-fill-death {
+  background: var(--death);
+}
+.sd-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.sd-name-text {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sd-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+.sd-row-muted {
+  background: var(--panel-raised);
+  color: var(--muted);
+}
+.panel-head.sd-life-head {
+  justify-content: flex-start;
+}
+.sd-life-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-left: auto;
+}
+.sd-bands {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.sd-band {
+  padding: 2px 7px;
+  border-radius: 4px;
+  color: var(--text);
+}
+.sd-band.sd-band-survived {
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+/* Lifetime bands: the shorter the life, the stronger the death tint. */
+.life-b50 {
+  background: color-mix(in srgb, var(--death) 42%, transparent);
+}
+.life-b75 {
+  background: color-mix(in srgb, var(--death) 27%, transparent);
+}
+.life-b90 {
+  background: color-mix(in srgb, var(--death) 15%, transparent);
+}
+.life-b100 {
+  background: color-mix(in srgb, var(--death) 7%, transparent);
+}
+.sd-life-scroll {
+  max-height: 560px;
+  overflow: auto;
+}
+.sd-life {
+  min-width: max-content;
+}
+.sd-life th,
+.sd-life td {
+  white-space: nowrap;
+}
+.sd-life .sd-life-player {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 180px;
+  max-width: 220px;
+  overflow: hidden;
+  background: var(--panel);
+}
+.sd-life thead .sd-life-player {
+  z-index: 2;
+}
+.sd-life-avg {
+  font-weight: 600;
+}
+.sd-life-sep {
+  border-right: 1px solid var(--line-strong);
+}
+.sd-life-survived {
+  color: var(--muted);
+}
+.sd-life-none {
+  color: var(--dash);
+}
+.sd-life th.sd-pull-kill {
+  color: var(--kill-text);
+}
+.sd-life th.sd-pull-wipe {
+  color: var(--wipe-text);
+}
+.sd-life th.sd-pull-abort {
+  color: var(--neutral-text);
+}
 
 /* The death recap panel: title, figures, callout, HP chart. */
 .panel-head.panel-head-recap {
@@ -546,6 +804,26 @@
 .atl-uptime {
   font-size: 13px;
   text-align: right;
+}
+/* A set's lanes: a segment per pull, as long as it ran. */
+.atl-row .seam-row {
+  min-width: 0;
+}
+.atl-seam-head {
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.atl-seam {
+  display: block;
+  position: relative;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--plot);
+  box-shadow: inset 0 0 0 1px var(--bar-track);
+}
+.atl-seam .atl-bar {
+  top: 3px;
 }
 
 /* Interrupts & Dispels tab: players and event logs; the totals sit in the fight header. */

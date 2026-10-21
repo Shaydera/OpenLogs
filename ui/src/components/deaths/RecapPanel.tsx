@@ -4,6 +4,7 @@ import { useFocusRequest } from '../../hooks/useFocusRequest';
 import { classIcon } from '../../icons';
 import { formatAmount, formatEventTime, formatEventTimeTenths, formatPercent } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
+import type { PullView } from '../../pulls/groupPulls';
 import { replayOffered, useApp } from '../../store';
 import { GameIcon, MonogramTile } from '../GameIcon';
 import { classColor, shortName } from '../overview/players';
@@ -11,7 +12,8 @@ import { hitIcon, hitName, reportSpellName, rosterIndex } from '../reports/repor
 import { deathJumpMs } from '../replay/playback';
 import { hitSource, recapCallout, recapPlot } from './recapModel';
 
-export function RecapPanel({ recap, report }: { recap: DeathRecap; report: DeathsReport }) {
+/** `pull` names a set's pull; the player's page is not offered there. */
+export function RecapPanel({ recap, report, pull = null }: { recap: DeathRecap; report: DeathsReport; pull?: PullView | null }) {
   const openPlayer = useApp((s) => s.openPlayer);
   const openReplayAt = useApp((s) => s.openReplayAt);
   const withReplay = useApp(replayOffered);
@@ -28,7 +30,7 @@ export function RecapPanel({ recap, report }: { recap: DeathRecap; report: Death
   const plot = recapPlot(recap);
   const first = recap.hp[0];
   const last = recap.hp[recap.hp.length - 1];
-  const facts = [recap.specName, t('recap.number', { n: recap.number })].filter(Boolean).join(' · ');
+  const facts = [recap.specName, pull && t('recap.pull', { n: pull.n, status: t(`status.${pull.status}`) }), t('recap.number', { n: recap.number })].filter(Boolean).join(' · ');
   const resurrected =
     recap.resurrectedAt === null
       ? null
@@ -46,9 +48,13 @@ export function RecapPanel({ recap, report }: { recap: DeathRecap; report: Death
         )}
         <div className="recap-id">
           <h2 id="recap-title" ref={titleRef} tabIndex={-1} className="recap-title">
-            <button type="button" className="recap-name" style={{ color: colour }} onClick={() => void openPlayer(recap.player)}>
-              {name}
-            </button>{' '}
+            {pull ? (
+              <span style={{ color: colour }}>{name}</span>
+            ) : (
+              <button type="button" className="recap-name" style={{ color: colour }} onClick={() => void openPlayer(recap.player)}>
+                {name}
+              </button>
+            )}{' '}
             <span className="recap-dagger">{t('recap.dagger', { time: formatEventTime(recap.t) })}</span>
           </h2>
           <span className="recap-sub">

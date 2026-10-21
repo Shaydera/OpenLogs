@@ -65,6 +65,9 @@ pub struct DeathRecapDto {
     /// The killing blow's spell hitting in a row before the death.
     pub lethal_burst: Option<LethalBurstDto>,
     pub max_hp: Option<u64>,
+    /// The last full-HP sample of this life, else the life's start.
+    pub window_start_ms: i32,
+    pub window_from_full_hp: bool,
     pub events: Vec<RecapEventDto>,
     pub hp: Vec<HpPointDto>,
     pub buffs: Vec<BuffRefDto>,
@@ -221,6 +224,11 @@ fn recap_dtos(
                 resurrected_by,
                 lethal_burst,
                 max_hp: recap.max_hp,
+                window_start_ms: recap
+                    .death
+                    .last_full_hp_ms
+                    .unwrap_or(recap.death.life_start_ms),
+                window_from_full_hp: recap.death.last_full_hp_ms.is_some(),
                 events: recap
                     .events
                     .iter()
@@ -329,6 +337,8 @@ mod tests {
             death: Death {
                 player: faelan,
                 t: 239_107,
+                life_start_ms: 0,
+                last_full_hp_ms: Some(236_000),
                 killing_blow: Some(Hit {
                     t: 239_097,
                     spell: 1302982,
@@ -394,6 +404,8 @@ mod tests {
         let json = serde_json::to_value(&dto).unwrap();
         let death = &json["deaths"][0];
         assert_eq!(death["killingBlow"]["periodic"], false);
+        assert_eq!(death["windowStartMs"], 236_000);
+        assert_eq!(death["windowFromFullHp"], true);
         assert_eq!(death["events"][0]["periodic"], true);
         assert_eq!(death["events"][0]["sourceName"], serde_json::Value::Null);
         assert_eq!(

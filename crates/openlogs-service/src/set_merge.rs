@@ -16,6 +16,15 @@ use crate::scope_dto::{
     per_second as rate, share_of,
 };
 
+mod auras;
+mod casts;
+mod deaths;
+mod kicks;
+
+pub use auras::*;
+pub use deaths::*;
+pub use kicks::*;
+
 /// Folds the reports of a set's pulls into one: the first pull's report takes each later one
 /// through [`Merge::merge`], then [`Merge::finish`] runs once.
 pub trait Merge {
@@ -642,14 +651,14 @@ mod tests {
     use crate::test_fight::{HOSTILE_FLAGS, PET_FLAGS, PLAYER_FLAGS, damage_event, fight, unit};
     use crate::{breakdown_report, damage_done_set_part, damage_taken_set_part, filter_options};
 
-    const WHOLE: FilterDto = FilterDto {
+    pub(super) const WHOLE: FilterDto = FilterDto {
         start_ms: None,
         end_ms: None,
         attribution: AttributionDto::Augmented,
         include_overkill: false,
     };
 
-    fn merged<T: Merge>(parts: Vec<T>) -> T {
+    pub(super) fn merged<T: Merge>(parts: Vec<T>) -> T {
         let mut parts = parts.into_iter();
         let mut set = parts.next().expect("a set has pulls");
         for part in parts {

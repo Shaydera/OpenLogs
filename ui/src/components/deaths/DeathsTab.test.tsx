@@ -42,7 +42,7 @@ describe('DeathsTab', () => {
   it('selects a death on click, keeps it across range changes and falls back when it is gone', async () => {
     const { rerender } = render(<DeathsTab report={report} />);
     await userEvent.click(screen.getByRole('button', { name: /^6:59Sabrel/ }));
-    expect(useApp.getState().focusDeath).toEqual({ player: 7, t: 419_080 });
+    expect(useApp.getState().focusDeath).toEqual({ player: 7, t: 419_080, fight: null });
     rerender(<DeathsTab report={{ ...report, deaths: [{ ...faelan, t: 100_000 }, faelan, sabrel] }} />);
     expect(within(screen.getByRole('group', { name: 'All deaths · 3' })).getByRole('button', { pressed: true })).toHaveTextContent('6:59');
     rerender(<DeathsTab report={{ ...report, deaths: [faelan] }} />);

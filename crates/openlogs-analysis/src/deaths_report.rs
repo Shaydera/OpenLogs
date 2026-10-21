@@ -160,13 +160,9 @@ pub fn deaths_report(
         let (source, spell) = parts(fight, killing_blow);
         scope.accepts(fight, source.as_ref(), spell, Some(&unit_of(fight, dead)))
     };
-    let own_side = Scope {
-        source: Vec::new(),
-        ability: Vec::new(),
-        ..scope.clone()
-    };
+    let dead_side = scope.dead_side();
     let dead_selected =
-        |dead: ActorId| own_side.accepts(fight, None, None, Some(&unit_of(fight, dead)));
+        |dead: ActorId| dead_side.accepts(fight, None, None, Some(&unit_of(fight, dead)));
     let (_, end) = filter.clipped(fight);
     match scope.perspective {
         Side::Friendly => {

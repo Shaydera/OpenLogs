@@ -41,25 +41,29 @@ export function bestPull(rows: SetRow[]): BestPull | null {
   return kill ? { kind: 'kill', row: kill } : null;
 }
 
-function firstDeaths(rows: SetRow[]): number[] {
-  return rows.map((row) => row.pull.kpis.firstDeathMs).filter((ms): ms is number => ms !== null);
+/** The time of a pull's first death (or kill) and the pull's number; `ms` is `null` when it has none. */
+export interface PullFirst {
+  ms: number | null;
+  n: number;
 }
 
+export const pullFirstDeaths = (rows: SetRow[]): PullFirst[] => rows.map((row) => ({ ms: row.pull.kpis.firstDeathMs, n: row.view.n }));
+
 /** Mean first-death time over the pulls with a death; `null` when nobody died. */
-function averageFirstDeathMs(rows: SetRow[]): number | null {
-  const times = firstDeaths(rows);
+function averageFirstDeathMs(pulls: PullFirst[]): number | null {
+  const times = pulls.map((pull) => pull.ms).filter((ms): ms is number => ms !== null);
   return times.length > 0 ? times.reduce((sum, ms) => sum + ms, 0) / times.length : null;
 }
 
 /** The mean first death in whole seconds (a pull's own first death shows tenths); `—` when nobody died. */
-export function averageFirstDeath(rows: SetRow[]): string {
-  const average = averageFirstDeathMs(rows);
+export function averageFirstDeath(pulls: PullFirst[]): string {
+  const average = averageFirstDeathMs(pulls);
   return average !== null ? t('kpi.averageFirstDeath', { time: formatEventTime(average) }) : '—';
 }
 
-export function earliestFirstDeath(rows: SetRow[]): { ms: number; n: number } | null {
-  return rows.reduce<{ ms: number; n: number } | null>((earliest, row) => {
-    const ms = row.pull.kpis.firstDeathMs;
-    return ms !== null && (earliest === null || ms < earliest.ms) ? { ms, n: row.view.n } : earliest;
-  }, null);
+export function earliestOfPulls(pulls: PullFirst[]): { ms: number; n: number } | null {
+  return pulls.reduce<{ ms: number; n: number } | null>(
+    (earliest, { ms, n }) => (ms !== null && (earliest === null || ms < earliest.ms) ? { ms, n } : earliest),
+    null,
+  );
 }

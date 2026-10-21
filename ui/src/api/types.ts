@@ -241,6 +241,10 @@ export interface PullSet {
 export type SetCommand =
   | { command: 'quick_overview'; args: { filter: ReportFilter | null } }
   | { command: 'damage_done_report' | 'healing_report' | 'damage_taken_report'; args: { filter: ReportFilter } }
+  | { command: 'deaths_report'; args: { filter: ReportFilter; scope: Scope } }
+  | { command: 'casts_report'; args: { filter: ReportFilter; scope: Scope; group: Dimension; hideProcs: boolean } }
+  | { command: 'auras_report'; args: { filter: ReportFilter; scope: Scope; kind: AuraKind; group: Dimension } }
+  | { command: 'interrupts_report'; args: { filter: ReportFilter; scope: Scope; group: Dimension } }
   | { command: 'breakdown_report'; args: { filter: ReportFilter; scope: Scope; metric: ScopeMetric; group: Dimension } }
   | { command: 'filter_options'; args: { filter: ReportFilter; scope: Scope; metric: ScopeMetric; dimension: Dimension } };
 export interface SetPull {
@@ -253,6 +257,52 @@ export interface SetOverview {
   overview: QuickOverview;
   pulls: SetPull[];
 }
+
+export interface SetDeathsPull {
+  fightIndex: number;
+  durationMs: number;
+  deaths: DeathRecap[];
+  kills: Kill[];
+  lifetime: { player: number; firstDeathMs: number | null }[];
+}
+export interface KillingBlowRow {
+  spellId: number;
+  environmental: boolean;
+  sources: string[];
+  count: number;
+}
+export interface PlayerDeaths {
+  player: number;
+  pulls: number;
+  deaths: number;
+}
+/** A set's deaths report: `deaths` and `kills` stay empty, the pulls carry them. */
+export interface SetDeaths extends DeathsReport {
+  pulls: SetDeathsPull[];
+  byKillingBlow: KillingBlowRow[];
+  noLethal: number;
+  byPlayer: PlayerDeaths[];
+}
+export interface SetKicksPull {
+  fightIndex: number;
+  durationMs: number;
+  interrupts: InterruptsReport['interrupts'];
+  dispels: InterruptsReport['dispels'];
+  missed: InterruptsReport['missed'];
+}
+export interface SetInterrupts extends InterruptsReport {
+  pulls: SetKicksPull[];
+}
+/** Where one pull starts and ends on a set's merged time axis. */
+export interface Seam {
+  fightIndex: number;
+  startMs: number;
+  endMs: number;
+}
+export interface SetAuras extends AurasReport {
+  pulls: Seam[];
+}
+export const isSetReport = (data: object): data is SetDeaths | SetInterrupts | SetAuras => 'pulls' in data;
 export interface SetProgress {
   done: number;
   total: number;
@@ -684,6 +734,9 @@ export interface DeathRecap extends DeathEntry {
   /** The killing blow's spell hitting in a row before the death. */
   lethalBurst: PlayerDeath['lethalBurst'];
   maxHp: number | null;
+  /** The last full-HP sample of the life, else the life's start. */
+  windowStartMs: number;
+  windowFromFullHp: boolean;
   /** The last 8 s, oldest first. */
   events: RecapEvent[];
   hp: { t: number; pct: number }[];

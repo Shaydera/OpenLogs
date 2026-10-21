@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use crate::ability::unit_name;
 use crate::actors::{ActorId, ActorKind};
@@ -27,6 +27,11 @@ pub struct AuraLane {
     pub spells: Vec<SpellId>,
     /// The players who applied it (pets credited to their owner), most applications first.
     pub sources: Vec<ActorId>,
+    /// Applications per spell and per source, in the order of `spells` and `sources`.
+    pub spell_counts: Vec<(SpellId, u32)>,
+    pub source_counts: Vec<(ActorId, u32)>,
+    /// The specs that applied the aura's spells (on any holder), which keep same-named auras apart.
+    pub source_specs: BTreeSet<SourceSpec>,
     pub applications: u32,
     pub uptime: f64,
     /// Merged and clipped to the range.
@@ -61,10 +66,11 @@ pub struct AurasReport {
     pub ebon_might: Option<(f64, u32)>,
     /// Friendlies: players with an aura; enemies: players who applied one.
     pub players: u32,
+    pub player_ids: BTreeSet<ActorId>,
 }
 
 /// The spec of the player behind an aura's source; `None` for no player or an unknown spec.
-type SourceSpec = Option<u32>;
+pub type SourceSpec = Option<u32>;
 
 /// Spells of one name share a row when the specs that applied them overlap (Blessing of the
 /// Bronze logs 13 IDs), but not across unrelated specs (mage and druid Clearcasting).
@@ -113,11 +119,15 @@ fn row_keys(
     keys
 }
 
-/// Keys of a count map, most counted first, ties by the smaller key.
+/// A count map's entries, most counted first, ties by the smaller key.
+fn counted<K: Copy + Ord>(counts: &HashMap<K, u32>) -> Vec<(K, u32)> {
+    let mut entries: Vec<(K, u32)> = counts.iter().map(|(&k, &n)| (k, n)).collect();
+    entries.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    entries
+}
+
 fn by_count<K: Copy + Ord>(counts: &HashMap<K, u32>) -> Vec<K> {
-    let mut keys: Vec<(K, u32)> = counts.iter().map(|(&k, &n)| (k, n)).collect();
-    keys.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-    keys.into_iter().map(|(k, _)| k).collect()
+    counted(counts).into_iter().map(|(k, _)| k).collect()
 }
 
 /// Friendly holders are players (their pets' auras are not counted); enemy holders are units
@@ -213,6 +223,7 @@ pub fn auras_report(
             rows: Vec::new(),
             ebon_might: None,
             players: 0,
+            player_ids: BTreeSet::new(),
         };
     }
     let intervals: Vec<AuraInterval> = side_intervals(fight, filter, scope.perspective, aura_type)
@@ -248,7 +259,7 @@ pub fn auras_report(
             *lane.sources.entry(source).or_default() += 1;
         }
     }
-    let mut players: HashSet<ActorId> = HashSet::new();
+    let mut players: BTreeSet<ActorId> = BTreeSet::new();
     let mut by_row: HashMap<RowId, Vec<(AuraLane, LaneAcc)>> = HashMap::new();
     for ((aura, holder), acc) in lanes {
         match scope.perspective {
@@ -260,6 +271,14 @@ pub fn auras_report(
             spell: spells[0],
             spells,
             sources: by_count(&acc.sources),
+            spell_counts: counted(&acc.spells),
+            source_counts: counted(&acc.sources),
+            source_specs: acc
+                .spells
+                .keys()
+                .flat_map(|spell| &specs[spell])
+                .copied()
+                .collect(),
             applications: acc.spells.values().sum(),
             uptime: union_ms(&acc.intervals, start, end) as f64 / f64::from(len),
             intervals: merged(&acc.intervals, start, end),
@@ -334,5 +353,6 @@ pub fn auras_report(
             )
         }),
         players: players.len() as u32,
+        player_ids: players,
     }
 }

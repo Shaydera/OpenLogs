@@ -244,7 +244,7 @@ impl UnitRefDto {
 }
 
 impl AbilityRefDto {
-    fn to_ability(&self) -> AbilityRef {
+    pub(crate) fn to_ability(&self) -> AbilityRef {
         match self {
             Self::Name { name } => AbilityRef::Name(name.clone()),
             Self::Id { spell_id } => AbilityRef::Id(*spell_id),

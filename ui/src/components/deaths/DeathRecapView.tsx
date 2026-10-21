@@ -1,13 +1,14 @@
 import type { DeathRecap, DeathsReport } from '../../api/types';
 import { spellIcon } from '../../icons';
 import { t } from '../../i18n/i18n';
+import type { PullView } from '../../pulls/groupPulls';
 import { GameIcon } from '../GameIcon';
 import { shortName } from '../overview/players';
 import { hitIcon, reportSpellName } from '../reports/reportData';
 import { RecapPanel } from './RecapPanel';
 import { contextRows, recapRows, type ContextRow } from './recapModel';
 
-export function DeathRecapView({ recap, report }: { recap: DeathRecap; report: DeathsReport }) {
+export function DeathRecapView({ recap, report, pull = null }: { recap: DeathRecap; report: DeathsReport; pull?: PullView | null }) {
   const spellName = (id: number) => reportSpellName(report.spells, id);
   const rows = recapRows(recap, spellName);
   const { defensives, consumables } = contextRows(recap, spellName);
@@ -15,7 +16,7 @@ export function DeathRecapView({ recap, report }: { recap: DeathRecap; report: D
 
   return (
     <>
-      <RecapPanel recap={recap} report={report} />
+      <RecapPanel recap={recap} report={report} pull={pull} />
       <div className="recap-lower">
         <section className="panel panel-clip recap-events" aria-labelledby="recap-events-title">
           <div className="panel-head panel-head-events">

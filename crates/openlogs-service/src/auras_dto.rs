@@ -1,8 +1,8 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use openlogs_analysis::{
     AbilityRef, ActorId, AuraHolder, AuraType, AurasReport, CellKind, Fight, ReportFilter, RowKey,
-    SpellId, UnitRef,
+    SourceSpec, SpellId, UnitRef,
 };
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +26,7 @@ impl AuraKindDto {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuraHolderDto {
     pub name: String,
@@ -43,6 +43,12 @@ pub struct AuraLaneDto {
     /// The players who applied it (in `roster`), most applications first: one source colours
     /// the uptime bar in its class colour.
     pub sources: Vec<ActorId>,
+    #[serde(skip)]
+    pub spell_counts: Vec<(SpellId, u32)>,
+    #[serde(skip)]
+    pub source_counts: Vec<(ActorId, u32)>,
+    #[serde(skip)]
+    pub source_specs: BTreeSet<SourceSpec>,
     pub applications: u32,
     pub uptime: f64,
     pub intervals: Vec<[i32; 2]>,
@@ -80,6 +86,8 @@ pub struct AurasReportDto {
     pub rows: Vec<AuraRowDto>,
     pub ebon_might: Option<EbonMightDto>,
     pub players: u32,
+    #[serde(skip)]
+    pub player_ids: BTreeSet<ActorId>,
     pub roster: Vec<PlayerRef>,
     pub spells: BTreeMap<SpellId, SpellRef>,
 }
@@ -131,6 +139,9 @@ pub fn auras_report_dto(
                         spell_id: refs.spell(fight, lane.spell),
                         spell_ids: lane.spells.iter().map(|&s| refs.spell(fight, s)).collect(),
                         sources: lane.sources.iter().map(|&p| refs.player(p)).collect(),
+                        spell_counts: lane.spell_counts.clone(),
+                        source_counts: lane.source_counts.clone(),
+                        source_specs: lane.source_specs.clone(),
                         applications: lane.applications,
                         uptime: lane.uptime,
                         intervals: lane.intervals.iter().map(|&(a, b)| [a, b]).collect(),
@@ -149,6 +160,7 @@ pub fn auras_report_dto(
             .ebon_might
             .map(|(uptime, holders)| EbonMightDto { uptime, holders }),
         players: report.players,
+        player_ids: report.player_ids.clone(),
         roster,
         spells,
     }

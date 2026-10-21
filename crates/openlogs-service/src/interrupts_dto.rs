@@ -14,6 +14,8 @@ pub struct KickRowDto {
     pub name: String,
     pub number: Option<u32>,
     pub spell_id: SpellId,
+    #[serde(skip)]
+    pub spell_counts: Vec<(SpellId, u32)>,
     pub interrupts: u32,
     pub dispels: u32,
 }
@@ -100,6 +102,7 @@ pub fn interrupts_report_dto(fight: &Fight, report: &InterruptsReport) -> Interr
                 name,
                 number,
                 spell_id: refs.spell(fight, row.spell),
+                spell_counts: row.spell_counts.clone(),
                 interrupts: row.interrupts,
                 dispels: row.dispels,
             }

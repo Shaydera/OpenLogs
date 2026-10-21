@@ -11,6 +11,8 @@ pub struct CastExtraDto {
     pub ability: AbilityRefDto,
     pub proc_trigger: bool,
     pub spell_id: SpellId,
+    #[serde(skip)]
+    pub casts_by_spell: Vec<(SpellId, u32)>,
     pub casts: u32,
     /// The first cast in the range (ms from the pull); equal counts are ordered by it.
     pub first_cast_ms: i32,
@@ -37,6 +39,7 @@ pub fn casts_report_dto(fight: &Fight, report: &CastsReport) -> CastsReportDto {
                 ability: AbilityRefDto::of(&e.ability),
                 proc_trigger: e.kind == CellKind::Proc,
                 spell_id: e.spell,
+                casts_by_spell: e.casts_by_spell.clone(),
                 casts: e.casts,
                 first_cast_ms: e.first_cast_ms,
                 uptime: e.uptime,

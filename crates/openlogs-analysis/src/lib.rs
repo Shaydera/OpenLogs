@@ -33,7 +33,7 @@ mod views;
 
 pub use ability::{AbilityDetail, AbilityHit, TargetHits, ability_detail};
 pub use actors::{Actor, ActorId, ActorKind, Actors, NOBODY};
-pub use aura_report::{AuraHolder, AuraLane, AuraRow, AurasReport, auras_report};
+pub use aura_report::{AuraHolder, AuraLane, AuraRow, AurasReport, SourceSpec, auras_report};
 pub use auras::{AuraInterval, aura_intervals, union_ms};
 pub use breakdown::{
     Breakdown, BreakdownRow, Dimension, GroupedRow, RowKey, Split, breakdown, effective_group,

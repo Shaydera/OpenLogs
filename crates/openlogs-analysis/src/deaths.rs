@@ -61,6 +61,10 @@ pub struct LethalBurst {
 pub struct Death {
     pub player: ActorId,
     pub t: i32,
+    /// When this life began: 0, a run segment's start or the return from a previous death.
+    pub life_start_ms: i32,
+    /// The player's last sample at full HP within this life; `None` without one.
+    pub last_full_hp_ms: Option<i32>,
     /// `None` when the log holds no lethal hit (no overkill, no 0 HP, no instakill).
     pub killing_blow: Option<Hit>,
     /// Damage taken in the last 5 s by spell, largest first.
@@ -276,10 +280,18 @@ pub(crate) fn death_at(fight: &Fight, player: ActorId, t: i32, life_start: i32) 
                 .find_map(sample)
         })
         .map(hp_pct);
+    let last_full_hp_ms = fight.events[..end]
+        .iter()
+        .rev()
+        .take_while(|event| event.t >= life_start)
+        .find(|event| sample(event).is_some_and(|hp| hp.current >= hp.max))
+        .map(|event| event.t);
 
     Death {
         player,
         t,
+        life_start_ms: life_start,
+        last_full_hp_ms,
         killing_blow,
         damage_last_5s,
         damage_taken_5s,

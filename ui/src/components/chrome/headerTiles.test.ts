@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SetPull } from '../../api/types';
+import type { SetDeaths, SetPull } from '../../api/types';
 import { compareLogFixture } from '../../test/compareFixture';
 import { overviewFixture } from '../../test/overviewFixture';
 import { aurasReportFixture, breakdownFixture, castsReportFixture, damageReportFixture, deathsReportFixture, interruptsReportFixture, resourcesReportFixture, takenReportFixture } from '../../test/reportFixtures';
@@ -136,6 +136,36 @@ describe('headerTiles', () => {
     ]);
     const kills = setRows(fights, [pull(3, 0, null)]);
     expect(text({ setRows: kills, overview: { ...overviewFixture, kpis } }).slice(1)).toEqual(['Best kill|5:00|pull #3', 'Deaths|4|4.0 per pull', 'First death|—|nobody died']);
+  });
+
+  it('set_death_tiles_give_the_median_window', () => {
+    const rows = setRows(compareLogFixture.fights, [1, 3].map((fightIndex) => ({ fightIndex, kpis: overviewFixture.kpis, bossHpStepMs: 60_000, bossHp: [] })));
+    const recap = deathsReportFixture.deaths[0];
+    const death = (windowMs: number) => ({ ...recap, t: 100_000, windowStartMs: 100_000 - windowMs });
+    const pull = (fightIndex: number, windows: number[]) => ({ fightIndex, durationMs: 120_000, deaths: windows.map(death), kills: [], lifetime: [] });
+    const data: SetDeaths = {
+      ...deathsReportFixture,
+      deaths: [],
+      mostLethal: { spellId: 1302982, environmental: false, count: 3 },
+      pulls: [pull(1, [2_000, 9_000]), pull(3, [5_000])],
+      byKillingBlow: [{ spellId: 1302982, environmental: false, sources: ["Ula'tek"], count: 3 }],
+      noLethal: 0,
+      byPlayer: [],
+    };
+    expect(text({ tab: 'deaths', setRows: rows, report: { tab: 'deaths', data } }).slice(0, 3)).toEqual([
+      'Deaths|3|1.5 per pull',
+      "Most lethal ability|Virulent Spit|3 deaths · Ula'tek",
+      'Median window|5.0 s|last full HP → death',
+    ]);
+  });
+
+  it('set_first_death_tile_follows_the_selected_players', () => {
+    const raidFirstDeath = { ...overviewFixture.kpis, firstDeathMs: 5_000 };
+    const rows = setRows(compareLogFixture.fights, [1, 3].map((fightIndex) => ({ fightIndex, kpis: raidFirstDeath, bossHpStepMs: 60_000, bossHp: [] })));
+    const pull = (fightIndex: number, firstDeathMs: number | null) => ({ fightIndex, durationMs: 120_000, deaths: [], kills: [], lifetime: [{ player: 4, firstDeathMs }] });
+    const data: SetDeaths = { ...deathsReportFixture, deaths: [], pulls: [pull(1, 70_000), pull(3, 20_000)], byKillingBlow: [], noLethal: 0, byPlayer: [] };
+    const faelan = { perspective: 'friendly' as const, source: [], target: [{ kind: 'player' as const, actorId: 4 }], ability: [] };
+    expect(text({ tab: 'deaths', setRows: rows, scope: faelan, report: { tab: 'deaths', data } })[3]).toBe('First death|avg 0:45|earliest 0:20.0 (#3)');
   });
 
   it('set_damage_taken_counts_the_deaths_of_every_pull', () => {

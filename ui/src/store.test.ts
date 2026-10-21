@@ -743,9 +743,45 @@ describe('pull sets', () => {
 
   it('tabs_without_set_support_cannot_be_opened_in_a_set', async () => {
     await openSet();
-    await useApp.getState().setTab('deaths');
+    await useApp.getState().setTab('resources');
     expect(useApp.getState()).toMatchObject({ tab: 'overview', overview: overviewFixture });
+    expect(api.resourcesReport).not.toHaveBeenCalled();
+  });
+
+  it('the_deaths_tab_of_a_set_reads_its_report_over_every_pull', async () => {
+    await openSet();
+    const setDeaths = { ...deathsReportFixture, pulls: [], byKillingBlow: [], noLethal: 0, byPlayer: [] };
+    vi.mocked(api.pullSet).mockResolvedValueOnce([setDeaths]);
+    await useApp.getState().setTab('deaths');
+    expect(api.pullSet).toHaveBeenLastCalledWith(LOG.id, [1, 3], [{ command: 'deaths_report', args: { filter: WHOLE_PULL, scope: OPEN } }], expect.anything());
     expect(api.deathsReport).not.toHaveBeenCalled();
+    expect(useApp.getState()).toMatchObject({ report: { tab: 'deaths', data: setDeaths }, breakdown: null, reportLoading: false });
+  });
+
+  it('switching_the_aura_kind_in_a_set_reads_debuffs', async () => {
+    await openSet();
+    const buffs = { ...aurasReportFixture, pulls: [] };
+    const debuffs = { ...aurasReportFixture, pulls: [], players: 9 };
+    vi.mocked(api.pullSet).mockResolvedValueOnce([buffs]);
+    await useApp.getState().setTab('buffs');
+    vi.mocked(api.pullSet).mockResolvedValueOnce([debuffs]);
+    await useApp.getState().setAuraKind('debuffs');
+    expect(api.pullSet).toHaveBeenLastCalledWith(
+      LOG.id,
+      [1, 3],
+      [{ command: 'auras_report', args: { filter: WHOLE_PULL, scope: OPEN, kind: 'debuffs', group: 'ability' } }],
+      expect.anything(),
+    );
+    expect(useApp.getState().report).toMatchObject({ tab: 'buffs', data: debuffs });
+    const passes = vi.mocked(api.pullSet).mock.calls.length;
+    await useApp.getState().setAuraKind('buffs');
+    expect(api.pullSet).toHaveBeenCalledTimes(passes);
+    expect(useApp.getState().report).toMatchObject({ tab: 'buffs', data: buffs });
+  });
+
+  it('a_selected_death_names_its_pull', () => {
+    useApp.getState().selectDeath(7, 5000, 3);
+    expect(useApp.getState().focusDeath).toEqual({ player: 7, t: 5000, fight: 3 });
   });
 });
 
