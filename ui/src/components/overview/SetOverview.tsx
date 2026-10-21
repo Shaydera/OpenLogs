@@ -1,17 +1,25 @@
 import { useId, useMemo, useState } from 'react';
 import type { Kpis, PullSet, SetPull } from '../../api/types';
-import { formatAmount, formatDuration, formatEventTimeTenths, formatInteger, formatPercent, formatSeconds } from '../../i18n/format';
+import { formatAmount, formatDuration, formatEventTimeTenths, formatInteger, formatOrdinal, formatPercent, formatSeconds } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { PULL_CHIP } from '../../pulls/groupPulls';
 import { useApp } from '../../store';
-import { type SetOrder, type SetRow, averageFirstDeath, bestPull, pullFirstDeaths, sortRows } from './setOverviewModel';
+import { CutoffShade } from '../reports/CutoffShade';
+import { type SetOrder, type SetRow, averageFirstDeath, bestPull, pullFirstDeaths, rowHpAtEnd, sortRows } from './setOverviewModel';
 
 const CURVE_HEIGHT = 34;
 const ORDERS: SetOrder[] = ['inOrder', 'bestFirst'];
 
-function hpAtEnd(row: SetRow): string {
-  if (row.view.status === 'kill') return formatPercent(0);
-  return row.view.bossHpPercent !== null ? formatPercent(row.view.bossHpPercent) : '—';
+function hpAtEndText(row: SetRow): string {
+  const hp = rowHpAtEnd(row);
+  return hp !== null ? formatPercent(hp) : '—';
+}
+
+const lengthText = (row: SetRow, ms: number) => (row.view.status === 'aborted' ? formatSeconds(ms) : formatDuration(ms));
+
+function durationText(row: SetRow): string {
+  const whole = lengthText(row, row.view.durationMs);
+  return row.pull.cutoffMs === null ? whole : t('setOverview.cutDuration', { analysed: lengthText(row, row.pull.kpis.durationMs), whole });
 }
 
 const potions = (kpis: Kpis) => t('setOverview.potions', { used: formatInteger(kpis.combatPotions), without: formatInteger(kpis.playersWithoutCombatPotion) });
@@ -42,6 +50,7 @@ function Chevron() {
 export function SetOverview({ set, rows, kpis }: { set: PullSet; rows: SetRow[]; kpis: Kpis }) {
   const log = useApp((s) => s.log);
   const openFight = useApp((s) => s.openFight);
+  const deathCutoff = useApp((s) => s.deathCutoff);
   const [order, setOrder] = useState<SetOrder>('inOrder');
   const titleId = useId();
   const shown = useMemo(() => sortRows(rows, order), [rows, order]);
@@ -67,13 +76,14 @@ export function SetOverview({ set, rows, kpis }: { set: PullSet; rows: SetRow[];
         </div>
       </div>
       <div className="set-scroll">
-        <div className="set-table">
+        <div className={deathCutoff !== null ? 'set-table set-cut' : 'set-table'}>
           <div className="set-row set-head" aria-hidden="true">
             <span className="cap">{t('pulls.column.pull')}</span>
             <span className="cap">{t('pulls.column.result')}</span>
             <span className="cap num-col">{t('pulls.column.duration')}</span>
             <span className="cap">{t('setOverview.column.bossHp')}</span>
             <span className="cap num-col">{t('setOverview.column.atEnd')}</span>
+            {deathCutoff !== null && <span className="cap">{t('setOverview.column.endsAt')}</span>}
             <span className="cap num-col">{t('setOverview.column.deaths')}</span>
             <span className="cap num-col">{t('setOverview.column.firstDeath')}</span>
             <span className="cap num-col">{t('setOverview.column.raidDps')}</span>
@@ -90,11 +100,17 @@ export function SetOverview({ set, rows, kpis }: { set: PullSet; rows: SetRow[];
             >
               <span className="num text-muted">#{row.view.n}</span>
               <span className={`chip ${PULL_CHIP[row.view.status]}`}>{t(`status.${row.view.status}`)}</span>
-              <span className="num num-col">{row.view.status === 'aborted' ? formatSeconds(row.view.durationMs) : formatDuration(row.view.durationMs)}</span>
+              <span className="num num-col">{durationText(row)}</span>
               <span className="set-track" style={{ width: `${(row.view.durationMs / longest) * 100}%` }}>
                 <BossHpCurve pull={row.pull} durationMs={row.view.durationMs} />
+                {row.pull.cutoffMs !== null && <CutoffShade cutoffMs={row.pull.cutoffMs} durationMs={row.view.durationMs} />}
               </span>
-              <span className="num num-col text-soft">{hpAtEnd(row)}</span>
+              <span className="num num-col text-soft">{hpAtEndText(row)}</span>
+              {deathCutoff !== null && (
+                <span className={row.pull.cutoffMs !== null ? 'set-ends-cut' : 'text-soft'}>
+                  {row.pull.cutoffMs !== null ? t('cutoff.mark', { nth: formatOrdinal(deathCutoff) }) : t('setOverview.pullEnd')}
+                </span>
+              )}
               <span className="num num-col">{formatInteger(row.pull.kpis.deaths)}</span>
               <span className="num num-col text-soft">{row.pull.kpis.firstDeathMs !== null ? formatEventTimeTenths(row.pull.kpis.firstDeathMs) : '—'}</span>
               <span className="num num-col">{formatAmount(row.pull.kpis.raidDps)}</span>
@@ -108,10 +124,11 @@ export function SetOverview({ set, rows, kpis }: { set: PullSet; rows: SetRow[];
             <span className="set-best">
               {best &&
                 (best.kind === 'wipe'
-                  ? t('setOverview.bestWipe', { percent: formatPercent(best.row.view.bossHpPercent ?? 0), n: best.row.view.n })
+                  ? t('setOverview.bestWipe', { percent: formatPercent(rowHpAtEnd(best.row) ?? 0), n: best.row.view.n })
                   : t('setOverview.bestKill', { duration: formatDuration(best.row.view.durationMs), n: best.row.view.n }))}
             </span>
             <span />
+            {deathCutoff !== null && <span />}
             <span className="num num-col">{formatInteger(kpis.deaths)}</span>
             <span className="num num-col text-soft">{averageFirstDeath(pullFirstDeaths(rows))}</span>
             <span className="num num-col">{formatAmount(kpis.raidDps)}</span>

@@ -52,3 +52,26 @@ export function DeathCutoffChip() {
     </span>
   );
 }
+
+/** One compared pull: its number, where its death cut it (`null`: nothing cut) and how many players died in it. */
+export interface ComparedCut {
+  n: number;
+  cutoffMs: number | null;
+  deaths: number;
+}
+
+/** The death cutoff of a pull comparison, read-only: each pull ends at its own death; `pulls` is empty until both are loaded. */
+export function ComparisonCutoffChip({ pulls }: { pulls: ComparedCut[] }) {
+  const deathCutoff = useApp((s) => (cutoffOffered(s) ? s.deathCutoff : null));
+  if (deathCutoff === null) return null;
+  const cuts = pulls.map(({ n, cutoffMs, deaths }) =>
+    cutoffMs !== null ? t('compare.cutAt', { n, time: formatEventTimeTenths(cutoffMs) }) : t(deaths >= deathCutoff ? 'compare.cutNothing' : 'compare.cutNotReached', { n }),
+  );
+  return (
+    <span className="death-chip death-chip-static">
+      <SkullIcon />
+      <span>{t('cutoff.until', { nth: formatOrdinal(deathCutoff) })}</span>
+      {cuts.length > 0 && <span className="death-chip-time">{cuts.join(' · ')}</span>}
+    </span>
+  );
+}

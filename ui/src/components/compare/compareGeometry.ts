@@ -25,3 +25,9 @@ export function compareChart(a: OverviewTimeline, b: OverviewTimeline): CompareC
   });
   return { axisMs, a: paths(a), b: paths(b), ticks: minuteTicks(axisMs) };
 }
+
+/** The pulls in drawing order: the one cut earlier first, so neither shade greys a part that is still analysed. */
+export function drawOrder(a: OverviewTimeline, b: OverviewTimeline): ('a' | 'b')[] {
+  const cut = (timeline: OverviewTimeline) => timeline.cutoffMs ?? Infinity;
+  return cut(b) < cut(a) ? ['b', 'a'] : ['a', 'b'];
+}

@@ -62,6 +62,7 @@
 .page-filter-link:hover, .page-filter-link:focus-visible { color: var(--accent-hover); }
 
 .death-chip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 4px 0 10px; border: 1px solid var(--death-tint-line); border-radius: 999px; background: var(--death-tint); color: var(--death); font-size: 13px; }
+.death-chip-static { padding-right: 10px; }
 .death-chip-time { color: var(--faint); font-variant-numeric: tabular-nums; }
 .death-chip-clear { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: none; color: inherit; cursor: pointer; }
 .death-chip-clear:hover { background: color-mix(in srgb, var(--death) 18%, transparent); }

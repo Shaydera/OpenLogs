@@ -89,4 +89,24 @@ describe('set overview', () => {
     await userEvent.click(screen.getByRole('button', { name: 'In order' }));
     expect(rowOrder()[0]).toBe("Open pull 1 of Ula'tek");
   });
+
+  it('cut_pulls_show_analysed_over_whole_and_the_ends_at_column', () => {
+    const cutFights: FightRow[] = [
+      { ...WIPE, index: 1, durationMs: 169_000, bossHpPercent: 20 },
+      { ...WIPE, index: 2, durationMs: 80_000, bossHpPercent: 33.8 },
+    ];
+    const cut: SetPull = { ...pull(1, 169_000, { durationMs: 130_321 }), cutoffMs: 130_320 };
+    const rows = setRows(cutFights, [cut, pull(2, 80_000, {})]);
+    useApp.setState({ deathCutoff: 3 });
+    render(<SetOverview set={set} rows={rows} kpis={total} />);
+    expect(screen.getByRole('button', { name: "Open pull 1 of Ula'tek" })).toHaveTextContent('2:10 / 2:49');
+    expect(screen.getByRole('button', { name: "Open pull 1 of Ula'tek" })).toHaveTextContent('3rd death');
+    expect(screen.getByRole('button', { name: "Open pull 2 of Ula'tek" })).toHaveTextContent('pull end');
+  });
+
+  it('there_is_no_ends_at_column_without_a_cutoff', () => {
+    render(<SetOverview set={set} rows={setRows(fights, pulls)} kpis={total} />);
+    expect(screen.queryByText('Ends at')).toBeNull();
+    expect(screen.queryByText('pull end')).toBeNull();
+  });
 });
