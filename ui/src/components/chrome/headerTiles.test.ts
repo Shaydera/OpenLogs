@@ -47,6 +47,8 @@ describe('headerTiles', () => {
     const data = { ...aurasReportFixture, group: 'target' as const, ebonMight: { uptime: 0.5, allies: 2.875 }, players: 7 };
     const lines = text({ tab: 'buffs', report: { tab: 'buffs', data }, scope: { perspective: 'enemy', source: [], target: [], ability: [] } });
     expect(lines[1]).toBe('Ebon Might uptime|50.00%|2.88 allies on average');
+    const one = { ...data, ebonMight: { uptime: 0.5, allies: 0.996 } };
+    expect(text({ tab: 'buffs', report: { tab: 'buffs', data: one } })[1]).toBe('Ebon Might uptime|50.00%|1.00 ally on average');
     expect(lines[2].split('|')[0]).toBe('Targets');
     expect(lines[3]).toBe('Players|7|who applied them');
   });

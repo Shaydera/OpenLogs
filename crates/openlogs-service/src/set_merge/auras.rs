@@ -117,16 +117,16 @@ impl Merge for SetAurasDto {
             if row.holder.is_none() {
                 row.spell_ids = by_count(&mut spell_counts);
                 row.spell_id = row.spell_ids.first().copied().unwrap_or(row.spell_id);
+                let held: Vec<(i32, i32)> = row
+                    .lanes
+                    .iter()
+                    .flat_map(|l| &l.intervals)
+                    .map(|&[a, b]| (a, b))
+                    .collect();
+                row.uptime = union_ms(&held, 0, report.end_ms) as f64 / duration;
             }
             row.sources = by_count(&mut source_counts);
             row.applications = row.lanes.iter().map(|l| l.applications).sum();
-            let held: Vec<(i32, i32)> = row
-                .lanes
-                .iter()
-                .flat_map(|l| &l.intervals)
-                .map(|&[a, b]| (a, b))
-                .collect();
-            row.uptime = union_ms(&held, 0, report.end_ms) as f64 / duration;
         }
         report.rows.sort_by(|a, b| {
             b.uptime

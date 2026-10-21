@@ -237,6 +237,52 @@ fn each_source_of_an_aura_already_up_counts_once() {
 }
 
 #[test]
+fn a_refresh_reopening_an_aura_as_the_range_starts_counts_once() {
+    let mut s = scene();
+    let buff = |action| aura(action, AuraType::Buff);
+    s.b.push(1_000, s.priest, s.mage, 1126, buff(AuraAction::Applied));
+    s.b.push(4_000, s.priest, s.mage, 1126, buff(AuraAction::Removed));
+    s.b.push(6_000, s.priest, s.mage, 1126, buff(AuraAction::Refresh));
+    s.b.push(8_000, s.priest, s.mage, 1126, buff(AuraAction::Removed));
+    assert_eq!(buff_applications(&s.b.build(), &from(6_000)), [1]);
+}
+
+#[test]
+fn an_enemy_debuff_keeps_its_applications_after_the_holder_turns_friendly() {
+    let mut s = scene();
+    let debuff = |action| aura(action, AuraType::Debuff);
+    s.b.push(1_000, s.mage, s.boss, 172, debuff(AuraAction::Applied));
+    for (t, action) in [
+        (3_000, AuraAction::Refresh),
+        (5_000, AuraAction::AppliedDose),
+        (9_000, AuraAction::Removed),
+    ] {
+        s.b.push(t, s.mage, s.boss, 172, debuff(action));
+        s.b.fight.events.last_mut().unwrap().target_hostile = false;
+    }
+    let rows = report(
+        &s.b.build(),
+        Side::Enemy,
+        AuraType::Debuff,
+        Scope::default(),
+    )
+    .rows;
+    let lane = &rows[0].lanes[0];
+    assert_eq!((lane.uptime, lane.applications), (0.4, 3));
+}
+
+#[test]
+fn an_aura_applied_and_removed_in_one_millisecond_still_counts() {
+    let mut s = scene();
+    let buff = |action| aura(action, AuraType::Buff);
+    s.b.push(1_000, s.priest, s.mage, 1126, buff(AuraAction::Applied));
+    s.b.push(5_000, s.priest, s.mage, 1126, buff(AuraAction::Removed));
+    s.b.push(8_000, s.priest, s.mage, 1126, buff(AuraAction::Applied));
+    s.b.push(8_000, s.priest, s.mage, 1126, buff(AuraAction::Removed));
+    assert_eq!(buff_applications(&s.b.build(), &whole()), [2]);
+}
+
+#[test]
 fn an_aura_applied_as_the_range_starts_counts_once() {
     let mut s = scene();
     let buff = |action| aura(action, AuraType::Buff);
@@ -367,9 +413,15 @@ fn one_aura_lists_its_holders_and_one_holder_lists_its_auras() {
     let rows: Vec<_> = by_target
         .rows
         .iter()
-        .map(|r| (r.holder.as_ref().unwrap().player, r.uptime, r.lanes.len()))
+        .map(|r| {
+            let lanes: Vec<f64> = r.lanes.iter().map(|l| l.uptime).collect();
+            (r.holder.as_ref().unwrap().player, lanes)
+        })
         .collect();
-    assert_eq!(rows, [(Some(s.mage), 0.5, 1), (Some(s.warrior), 0.25, 1)]);
+    assert_eq!(
+        rows,
+        [(Some(s.mage), vec![0.5]), (Some(s.warrior), vec![0.25])]
+    );
 
     let one_mage = Scope {
         target: vec![UnitRef::Player(s.mage)],

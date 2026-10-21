@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::actors::ActorId;
 use crate::fight::{AuraAction, AuraType, Event, EventKind, Fight, SpellId};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuraInterval {
     /// The unit that has the aura.
     pub target: ActorId,
@@ -17,22 +17,59 @@ pub struct AuraInterval {
     pub target_hostile: bool,
     /// The applier's hostile flag at the event that opened the interval.
     pub source_hostile: bool,
+    /// When the event that opened it came, unclipped; `None` when it was up before the log slice.
+    pub opened_ms: Option<i32>,
+    /// When it was applied, refreshed or given a stack, unclipped, the opening event included.
+    pub applied: Vec<i32>,
+}
+
+impl AuraInterval {
+    /// Its applications in `[start, end)`, plus one when it was already up as `start` came.
+    pub fn applications_in(&self, start: i32, end: i32) -> u32 {
+        let in_range = self
+            .applied
+            .iter()
+            .filter(|&&t| t >= start && t < end)
+            .count();
+        let carried = self.opened_ms.is_none_or(|t| t < start) && self.end_ms > start;
+        in_range as u32 + u32::from(carried)
+    }
 }
 
 type Key = (ActorId, SpellId, ActorId);
 /// The holder's and the applier's hostile flags.
 type Hostile = (bool, bool);
-/// An open interval: its start, aura type and hostile flags.
-type Open = (i32, AuraType, Hostile);
+
+struct Open {
+    start: i32,
+    aura_type: AuraType,
+    hostile: Hostile,
+    opened_ms: Option<i32>,
+    applied: Vec<i32>,
+}
 
 fn hostile(event: &Event) -> Hostile {
     (event.target_hostile, event.source_hostile)
+}
+
+fn counts_as_application(action: AuraAction) -> bool {
+    matches!(
+        action,
+        AuraAction::Applied | AuraAction::Refresh | AuraAction::AppliedDose
+    )
 }
 
 /// Aura intervals clipped to the pull `[0, duration]`. An aura whose first event is a
 /// remove, refresh or dose change was active before the log slice; one still open at the
 /// end lasts until the end.
 pub fn aura_intervals(fight: &Fight) -> Vec<AuraInterval> {
+    let mut spans = aura_spans(fight);
+    spans.retain(|i| i.end_ms > i.start_ms);
+    spans
+}
+
+/// [`aura_intervals`] plus the instants of auras applied and removed in one millisecond.
+pub(crate) fn aura_spans(fight: &Fight) -> Vec<AuraInterval> {
     let end = fight.duration_ms.min(i32::MAX as u64) as i32;
     let mut open: HashMap<Key, Open> = HashMap::new();
     let mut seen: HashSet<Key> = HashSet::new();
@@ -47,36 +84,50 @@ pub fn aura_intervals(fight: &Fight) -> Vec<AuraInterval> {
         let key = (event.target, event.spell, event.source);
         let first = seen.insert(key);
         match action {
-            AuraAction::Applied => {
-                open.entry(key)
-                    .or_insert((event.t, aura_type, hostile(event)));
-            }
-            AuraAction::Refresh | AuraAction::AppliedDose | AuraAction::RemovedDose => {
-                let start = if first { i32::MIN } else { event.t };
-                open.entry(key)
-                    .or_insert((start, aura_type, hostile(event)));
+            AuraAction::Applied
+            | AuraAction::Refresh
+            | AuraAction::AppliedDose
+            | AuraAction::RemovedDose => {
+                let up_before = first && action != AuraAction::Applied;
+                let interval = open.entry(key).or_insert_with(|| Open {
+                    start: if up_before { i32::MIN } else { event.t },
+                    aura_type,
+                    hostile: hostile(event),
+                    opened_ms: (!up_before).then_some(event.t),
+                    applied: Vec::new(),
+                });
+                if counts_as_application(action) {
+                    interval.applied.push(event.t);
+                }
             }
             // A break names the breaker as source, not the caster; the REMOVED that
             // follows ends the aura.
             AuraAction::Broken | AuraAction::BrokenSpell => {}
             AuraAction::Removed => {
-                let (key, start, hostile) = match open.remove(&key) {
-                    Some((start, _, hostile)) => (key, start, hostile),
+                let unopened = |start: i32| Open {
+                    start,
+                    aura_type,
+                    hostile: hostile(event),
+                    opened_ms: (start != i32::MIN).then_some(start),
+                    applied: Vec::new(),
+                };
+                let (key, interval) = match open.remove(&key) {
+                    Some(interval) => (key, interval),
                     None => match sibling(fight, &open, key) {
                         Some(other) => match open.remove(&other) {
-                            Some((start, _, hostile)) => (other, start, hostile),
-                            None => (other, event.t, hostile(event)),
+                            Some(interval) => (other, interval),
+                            None => (other, unopened(event.t)),
                         },
-                        None if first => (key, i32::MIN, hostile(event)),
+                        None if first => (key, unopened(i32::MIN)),
                         None => continue,
                     },
                 };
-                push_clipped(&mut out, key, (aura_type, hostile), start, event.t, end);
+                push_clipped(&mut out, key, interval, event.t, end);
             }
         }
     }
-    for (key, (start, aura_type, hostile)) in open {
-        push_clipped(&mut out, key, (aura_type, hostile), start, end, end);
+    for (key, interval) in open {
+        push_clipped(&mut out, key, interval, end, end);
     }
     out.sort_by_key(|i| (i.target, i.spell, i.source, i.start_ms));
     out
@@ -103,22 +154,25 @@ fn sibling(fight: &Fight, open: &HashMap<Key, Open>, (target, spell, source): Ke
 fn push_clipped(
     out: &mut Vec<AuraInterval>,
     (target, spell, source): Key,
-    (aura_type, (target_hostile, source_hostile)): (AuraType, Hostile),
-    start: i32,
+    interval: Open,
     stop: i32,
     end: i32,
 ) {
-    let (start_ms, end_ms) = (start.max(0), stop.min(end));
-    if end_ms > start_ms {
+    let (start_ms, end_ms) = (interval.start.max(0), stop.min(end));
+    let instant = end_ms == start_ms && !interval.applied.is_empty();
+    if end_ms > start_ms || instant {
+        let (target_hostile, source_hostile) = interval.hostile;
         out.push(AuraInterval {
             target,
             source,
             spell,
-            aura_type,
+            aura_type: interval.aura_type,
             start_ms,
             end_ms,
             target_hostile,
             source_hostile,
+            opened_ms: interval.opened_ms,
+            applied: interval.applied,
         });
     }
 }
