@@ -44,8 +44,11 @@ export function AurasTab({ report }: { report: AurasReport | SetAuras }) {
   const holderName = (holder: AuraHolder) => (holder.player !== null ? shortName(roster.get(holder.player)?.name ?? holder.name) : holder.name);
   const rowName = (row: AuraRow) => (row.holder ? holderName(row.holder) : spellName(row.spellId));
   const byTarget = report.group === 'target';
+  // A holder row's uptime would mix different auras, so by target it is neither shown nor sorted by.
+  const sorts = byTarget ? SORTS.filter((s) => s.key !== 'uptime') : SORTS;
+  const activeSort: AuraSort = byTarget && sort === 'uptime' ? 'applications' : sort;
   const side = scope.perspective;
-  const rows = sortAuras(report.rows, sort, rowName);
+  const rows = sortAuras(report.rows, activeSort, rowName);
   const shown = all ? rows : rows.slice(0, AURA_ROWS);
   const count = report.rows.length;
   const narrowable = scope[report.group].length === 0;
@@ -80,7 +83,7 @@ export function AurasTab({ report }: { report: AurasReport | SetAuras }) {
       ) : (
         <>
           <div className="scroll-x">
-            <div className={loading ? 'aura-rows dim' : 'aura-rows'} role="table" aria-label={t('auras.table')} aria-busy={loading}>
+            <div className={['aura-rows', byTarget && 'aura-rows-holders', loading && 'dim'].filter(Boolean).join(' ')} role="table" aria-label={t('auras.table')} aria-busy={loading}>
               <div className="aura-row aura-row-head" role="row">
                 <span role="columnheader">
                   <span className="sr-only">{t('recap.iconColumn')}</span>
@@ -88,11 +91,11 @@ export function AurasTab({ report }: { report: AurasReport | SetAuras }) {
                 <span role="columnheader" className="cap aura-cap">
                   {t(byTarget ? 'ability.target' : 'auras.aura')}
                 </span>
-                {SORTS.map(({ key, label, byTarget: targetLabel }) => (
-                  <span key={key} role="columnheader" aria-sort={sort === key ? 'descending' : 'none'} className={key === 'uptime' ? 'aura-sort' : 'aura-sort aura-sort-end'}>
-                    <button type="button" className={sort === key ? 'sort-btn sort-btn-on' : 'sort-btn'} onClick={() => setSort(key)}>
+                {sorts.map(({ key, label, byTarget: targetLabel }) => (
+                  <span key={key} role="columnheader" aria-sort={activeSort === key ? 'descending' : 'none'} className={key === 'uptime' ? 'aura-sort' : 'aura-sort aura-sort-end'}>
+                    <button type="button" className={activeSort === key ? 'sort-btn sort-btn-on' : 'sort-btn'} onClick={() => setSort(key)}>
                       {t(byTarget && targetLabel ? targetLabel : label)}
-                      {sort === key ? ' ↓' : ''}
+                      {activeSort === key ? ' ↓' : ''}
                     </button>
                   </span>
                 ))}
@@ -119,12 +122,14 @@ export function AurasTab({ report }: { report: AurasReport | SetAuras }) {
                           {name}
                         </button>
                       </span>
-                      <span role="cell" className="aura-bar">
-                        <span className="bar bar-lg" aria-hidden="true">
-                          <span style={{ width: `${row.uptime * 100}%`, background: colour(row.sources) }} />
+                      {!byTarget && (
+                        <span role="cell" className="aura-bar">
+                          <span className="bar bar-lg" aria-hidden="true">
+                            <span style={{ width: `${row.uptime * 100}%`, background: colour(row.sources) }} />
+                          </span>
+                          <span className="num aura-uptime">{formatShare(row.uptime * 100)}</span>
                         </span>
-                        <span className="num aura-uptime">{formatShare(row.uptime * 100)}</span>
-                      </span>
+                      )}
                       <span role="cell" className="num aura-end aura-end-muted">
                         {formatInteger(row.lanes.length)}
                       </span>

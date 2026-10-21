@@ -49,7 +49,7 @@ describe('CastsTab', () => {
     render(<CastsTab report={castsReportFixture} />);
     await pick('Pyrrin');
     expect(spellRows('Pyrrin').map(cells)).toEqual([
-      ['', 'Rejuvenation', '30', '80.0%', '15.0'],
+      ['', 'Rejuvenation', '30', '80.00%', '15.0'],
       ['', 'Regrowth', '6', '—', '3.0'],
     ]);
     const table = screen.getByRole('table', { name: 'Spell casts of Pyrrin' });

@@ -517,7 +517,7 @@
 }
 .hud-meter-entry {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto 44px;
+  grid-template-columns: 16px minmax(0, 1fr) auto 52px;
   align-items: center;
   gap: 8px;
   min-height: var(--hud-meter-entry);

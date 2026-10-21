@@ -688,6 +688,9 @@
   border-top: 1px solid var(--line-soft);
   font-size: 13px;
 }
+.aura-rows-holders .aura-row {
+  grid-template-columns: 24px minmax(200px, 1fr) 84px 96px;
+}
 .aura-row:hover {
   background: var(--hover);
 }
@@ -740,7 +743,7 @@
   opacity: 0.75;
 }
 .aura-uptime {
-  width: 48px;
+  width: 56px;
   text-align: right;
 }
 .aura-end {

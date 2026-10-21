@@ -20,7 +20,7 @@ describe('CastsAndBuffs', () => {
     expect(within(cooldowns[0]).getAllByRole('img', { name: /^Arcane Surge at/ })).toHaveLength(2);
     expect(cooldowns[0]).toHaveTextContent('2×');
     const buffs = within(screen.getByRole('list', { name: 'Buffs' })).getAllByRole('listitem');
-    expect(buffs[0]).toHaveTextContent('Ebon Mightfrom Speronis76.6%');
+    expect(buffs[0]).toHaveTextContent('Ebon Mightfrom Speronis76.60%');
     expect(screen.getByRole('img', { name: 'Ebon Might: 0:00–0:06, 0:07–0:16.' })).toBeInTheDocument();
   });
 });

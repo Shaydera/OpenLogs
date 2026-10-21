@@ -4,7 +4,7 @@ const oneDecimal = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, max
 const upToOneDecimal = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
 const integer = new Intl.NumberFormat(locale);
 const megabytes = new Intl.NumberFormat(locale, { style: 'unit', unit: 'megabyte', minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 1 });
+const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 2 });
 // Log timestamps are zone-less wall-clock values; Rust sends them as if they were UTC.
 const clock = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' });
 const calendarDate = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
@@ -14,7 +14,7 @@ const threeDecimals = new Intl.NumberFormat(locale, { minimumFractionDigits: 3, 
 // Real instants (a download time), unlike log times, are shown in the user's time zone.
 const localDate = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric' });
 const plain = new Intl.NumberFormat(locale, { maximumFractionDigits: 0, useGrouping: false });
-const oneDecimalPercent = new Intl.NumberFormat(locale, { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const twoDecimalPercent = new Intl.NumberFormat(locale, { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const oneDecimalUngrouped = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false });
 
 /** `value` rounded to `digits` decimals; picks the unit a formatted amount lands in. */
@@ -44,7 +44,7 @@ export function formatSeconds(ms: number): string {
   return t('unit.seconds', { value: oneDecimal.format(ms / 1000) });
 }
 
-/** A 0–100 value with at most one decimal, e.g. `82.2%`. */
+/** A 0–100 value with at most two decimals, e.g. `82.25%`, `40%`. */
 export function formatPercent(value: number): string {
   return percent.format(value / 100);
 }
@@ -145,9 +145,9 @@ export function formatSignedMillions(value: number): string {
   return value > 0 ? `+${formatMillions(value)}` : formatMillions(value);
 }
 
-/** A 0–100 share with exactly one decimal: `7.5%`, `0.0%`, `100.0%`. */
+/** A 0–100 share with exactly two decimals: `7.52%`, `0.00%`, `100.00%`. */
 export function formatShare(value: number): string {
-  return oneDecimalPercent.format(value / 100);
+  return twoDecimalPercent.format(value / 100);
 }
 
 /** Two decimals at every unit: `845`, `300.24k`, `142.44M`, `1.90B`; rounding into the next unit moves there. */

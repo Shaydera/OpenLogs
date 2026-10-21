@@ -22,11 +22,11 @@ describe('AurasTab', () => {
   it('lists the auras and expands one into per-target lanes', async () => {
     render(<AurasTab report={aurasReportFixture} />);
     expect(screen.getByRole('heading', { level: 2, name: 'Buffs on players' })).toBeInTheDocument();
-    expect(auraRows().map((r) => r.textContent)).toEqual(['Arcane Intellect100.0%24', 'Power Infusion75.0%11', 'Bloodlust40.0%22']);
+    expect(auraRows().map((r) => r.textContent)).toEqual(['Arcane Intellect100.00%24', 'Power Infusion75.00%11', 'Bloodlust40.00%22']);
     await userEvent.click(screen.getByRole('button', { name: 'Bloodlust' }));
     expect(screen.getByRole('button', { name: 'Bloodlust' })).toHaveAttribute('aria-expanded', 'true');
     const lanes = screen.getByRole('list', { name: 'Targets of Bloodlust' });
-    expect(within(lanes).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Faelan40.0%', 'Wendel40.0%']);
+    expect(within(lanes).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Faelan40.00%', 'Wendel40.00%']);
   });
 
   it('sorts by a column and switches between buffs and debuffs', async () => {
@@ -37,7 +37,7 @@ describe('AurasTab', () => {
     expect(setAuraKind).toHaveBeenCalledWith('debuffs');
   });
 
-  it("shows one aura's holders as the rows once grouped by target", async () => {
+  it("shows one aura's holders as the rows once grouped by target, without a row uptime and by applications", async () => {
     const [intellect] = aurasReportFixture.rows;
     const byTarget: AurasReport = {
       ...aurasReportFixture,
@@ -55,9 +55,10 @@ describe('AurasTab', () => {
       })),
     };
     render(<AurasTab report={byTarget} />);
-    expect(auraRows().map((r) => r.textContent)).toEqual(['Faelan100.0%12', 'Wendel100.0%12']);
+    expect(auraRows().map((r) => r.textContent)).toEqual(['Faelan12', 'Wendel12']);
+    expect(screen.getByRole('columnheader', { name: 'Applications ↓' })).toHaveAttribute('aria-sort', 'descending');
     await userEvent.click(screen.getByRole('button', { name: 'Faelan' }));
-    expect(within(screen.getByRole('list', { name: 'Auras of Faelan' })).getByRole('listitem')).toHaveTextContent('Arcane Intellect100.0%');
+    expect(within(screen.getByRole('list', { name: 'Auras of Faelan' })).getByRole('listitem')).toHaveTextContent('Arcane Intellect100.00%');
   });
 
   it('a_lane_in_a_set_draws_each_pull_in_its_own_segment', async () => {

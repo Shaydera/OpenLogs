@@ -173,7 +173,7 @@
 }
 .side-row {
   display: grid;
-  grid-template-columns: 24px minmax(120px, 1fr) 86px 52px;
+  grid-template-columns: 24px minmax(120px, 1fr) 86px 56px;
   gap: 10px;
   align-items: center;
   min-height: 36px;
