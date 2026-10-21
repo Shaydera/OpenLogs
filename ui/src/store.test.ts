@@ -5,6 +5,7 @@ import type { ChosenLog, LogSource } from './api/logSource';
 import type { BreakdownRow, DamageReport, LogView, PullComparison, PullSet, QuickOverview, ReplayData, RecentLog, Scope, SetOverview, Timeline, UnitRef } from './api/types';
 import { comparisonFixture } from './test/compareFixture';
 import { overviewFixture } from './test/overviewFixture';
+import { runLogFixture } from './test/runFixture';
 import {
   abilityDetailFixture,
   aurasReportFixture,
@@ -65,7 +66,7 @@ const LOG: LogView = {
   fights: [],
 };
 
-const WHOLE_PULL = { startMs: null, endMs: null, attribution: 'reattributed', includeOverkill: false };
+const WHOLE_PULL = { startMs: null, endMs: null, attribution: 'reattributed', includeOverkill: false, deathCutoff: null };
 const OPEN = { perspective: 'friendly', source: [], target: [], ability: [] };
 
 function sourceOf(log: LogView): LogSource {
@@ -211,7 +212,7 @@ describe('reports', () => {
     expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { ...WHOLE_PULL, attribution: 'augmented' });
 
     await useApp.getState().setRange({ startMs: 158_000, endMs: 273_000 });
-    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 158_000, endMs: 273_000, attribution: 'augmented', includeOverkill: false });
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 158_000, endMs: 273_000, attribution: 'augmented', includeOverkill: false, deathCutoff: null });
   });
 
   it('counts overkill in the report and the pull overview once included, and remembers it for every log', async () => {
@@ -229,14 +230,14 @@ describe('reports', () => {
     const ranged = { ...overviewFixture, deaths: [] };
     vi.mocked(api.quickOverview).mockResolvedValue(ranged);
     await useApp.getState().setRange({ startMs: 40_000, endMs: 60_000 });
-    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed', includeOverkill: false });
+    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed', includeOverkill: false, deathCutoff: null });
     expect(useApp.getState().report).toEqual({ tab: 'overview', data: ranged });
     expect(useApp.getState().overview).toBe(overviewFixture);
 
     await useApp.getState().setTab('damage');
     await useApp.getState().setRange({ startMs: 0, endMs: 30_000 });
     await useApp.getState().setTab('overview');
-    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 30_000, attribution: 'reattributed', includeOverkill: false });
+    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 30_000, attribution: 'reattributed', includeOverkill: false, deathCutoff: null });
 
     await useApp.getState().setRange(null);
     expect(useApp.getState().report).toBeNull();
@@ -254,7 +255,7 @@ describe('reports', () => {
     // The whole-pull overview arrives with the pull; only a range makes Overview request a report.
     useApp.setState({ range: { startMs: 40_000, endMs: 60_000 } });
     await useApp.getState().setTab(tab);
-    expect(load).toHaveBeenLastCalledWith(LOG.id, 1, ...scope, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed', includeOverkill: false });
+    expect(load).toHaveBeenLastCalledWith(LOG.id, 1, ...scope, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed', includeOverkill: false, deathCutoff: null });
     expect(useApp.getState().report).toEqual({ tab, data });
   });
 });
@@ -265,15 +266,15 @@ describe('detail stack', () => {
     await useApp.getState().setTab('healing');
     await useApp.getState().setRange({ startMs: 0, endMs: 60_000 });
     await useApp.getState().openPlayer(2);
-    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'reattributed', includeOverkill: false }, OPEN);
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'reattributed', includeOverkill: false, deathCutoff: null }, OPEN);
     expect(useApp.getState().report).toEqual({ tab: 'player', data: playerDetailFixture });
 
     await useApp.getState().setAttribution('augmented');
-    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'augmented', includeOverkill: false }, OPEN);
+    expect(api.playerDetail).toHaveBeenLastCalledWith(LOG.id, 1, 2, 'healing', { startMs: 0, endMs: 60_000, attribution: 'augmented', includeOverkill: false, deathCutoff: null }, OPEN);
 
     await useApp.getState().closeDetail();
     expect(useApp.getState().details).toEqual([]);
-    expect(api.healingReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 60_000, attribution: 'augmented', includeOverkill: false });
+    expect(api.healingReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 60_000, attribution: 'augmented', includeOverkill: false, deathCutoff: null });
   });
 
   it('opens players from Damage Taken in the damage view and forgets that origin on a tab change', async () => {
@@ -328,7 +329,7 @@ describe('detail stack', () => {
     expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.id, 1, '', WHOLE_PULL, OPEN);
     expect(useApp.getState().details).toEqual([{ kind: 'target', name: "Ula'tek" }]);
     await useApp.getState().setRange({ startMs: 120_000, endMs: 140_000 });
-    expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.id, 1, "Ula'tek", { startMs: 120_000, endMs: 140_000, attribution: 'reattributed', includeOverkill: false }, OPEN);
+    expect(api.targetDetail).toHaveBeenLastCalledWith(LOG.id, 1, "Ula'tek", { startMs: 120_000, endMs: 140_000, attribution: 'reattributed', includeOverkill: false, deathCutoff: null }, OPEN);
 
     await useApp.getState().openTarget(ENEMY);
     expect(useApp.getState().details).toEqual([{ kind: 'target', name: ENEMY }]);
@@ -521,7 +522,7 @@ describe('pull sets', () => {
   const SET: PullSet = { kind: 'wipes', encounterId: 3492, difficulty: 15, fights: [1, 3] };
   const SET_OVERVIEW: SetOverview = {
     overview: overviewFixture,
-    pulls: [1, 3].map((fightIndex) => ({ fightIndex, kpis: overviewFixture.kpis, bossHpStepMs: 1000, bossHp: [100, 62] })),
+    pulls: [1, 3].map((fightIndex) => ({ fightIndex, kpis: overviewFixture.kpis, pullDurationMs: overviewFixture.kpis.durationMs, cutoffMs: null, bossHpStepMs: 1000, bossHp: [100, 62] })),
   };
 
   async function openSet() {
@@ -690,15 +691,30 @@ describe('pull sets', () => {
     expect(useApp.getState()).toMatchObject({ view: { kind: 'set', set: SET }, tab: 'overview', overview: overviewFixture, report: null, reportLoading: false, reportError: null });
   });
 
-  it('cancelling_an_overkill_refresh_of_a_set_puts_the_toggle_back_with_the_overview_shown', async () => {
+  it.each([
+    { option: 'overkill', change: () => useApp.getState().setIncludeOverkill(true) },
+    { option: 'cutoff', change: () => useApp.getState().setDeathCutoff(3) },
+  ])('cancelling_a_set_refresh_puts_the_option_back_with_the_overview_shown ($option)', async ({ change }) => {
     await onDamageTab();
     const { pass, captured } = capturedPass();
-    const toggling = useApp.getState().setIncludeOverkill(true);
+    const toggling = change();
     useApp.getState().cancelSet();
     expect(captured.isStale?.()).toBe(true);
     pass.reject(new Error('cancelled'));
     await toggling;
-    expect(useApp.getState()).toMatchObject({ includeOverkill: false, tab: 'overview', overview: overviewFixture, error: null });
+    expect(useApp.getState()).toMatchObject({ includeOverkill: false, deathCutoff: null, tab: 'overview', overview: overviewFixture, error: null });
+  });
+
+  it('set_view_re_reads_the_overview_when_the_cutoff_changes', async () => {
+    await onDamageTab();
+    const overviewRead = expect.objectContaining({ command: 'quick_overview' });
+    vi.mocked(api.pullSet).mockResolvedValueOnce([SET_OVERVIEW, damageReportFixture, breakdownFixture]);
+    await useApp.getState().setDeathCutoff(3);
+    expect(vi.mocked(api.pullSet).mock.lastCall?.[2]).toContainEqual({ command: 'quick_overview', args: { filter: { ...WHOLE_PULL, deathCutoff: 3 } } });
+
+    vi.mocked(api.pullSet).mockResolvedValueOnce([healingReportFixture, breakdownFixture]);
+    await useApp.getState().setTab('healing');
+    expect(vi.mocked(api.pullSet).mock.lastCall?.[2]).not.toContainEqual(overviewRead);
   });
 
   it('the_overkill_toggle_in_a_set_reads_the_overview_and_the_tab_in_one_pass', async () => {
@@ -793,13 +809,13 @@ describe('pull comparison', () => {
 
     await useApp.getState().openFight(3);
     await useApp.getState().openComparison(1);
-    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.id, 1, 3, 'reattributed', false);
-    expect(useApp.getState().comparison).toEqual({ a: 1, b: 3, data: comparisonFixture, loading: false, error: null, reportAttribution: 'reattributed', reportIncludeOverkill: false });
+    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.id, 1, 3, 'reattributed', false, null);
+    expect(useApp.getState().comparison).toEqual({ a: 1, b: 3, data: comparisonFixture, loading: false, error: null, reportAttribution: 'reattributed', reportIncludeOverkill: false, reportDeathCutoff: null });
     expect(useApp.getState().focusRequest).toBe('compare');
     expect(useApp.getState().view).toEqual({ kind: 'fight', fightIndex: 3 });
 
     await useApp.getState().setAttribution('augmented');
-    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.id, 1, 3, 'augmented', false);
+    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.id, 1, 3, 'augmented', false, null);
 
     vi.mocked(api.comparePulls).mockRejectedValueOnce('Pull 9 does not exist in this log.');
     await useApp.getState().openComparison(9);
@@ -812,7 +828,7 @@ describe('pull comparison', () => {
     await useApp.getState().openComparison(3);
     const pullLoads = vi.mocked(api.damageDoneReport).mock.calls.length;
     await useApp.getState().setIncludeOverkill(true);
-    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.id, 1, 3, 'reattributed', true);
+    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.id, 1, 3, 'reattributed', true, null);
     expect(api.damageDoneReport).toHaveBeenCalledTimes(pullLoads);
     await useApp.getState().closeComparison();
     expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { ...WHOLE_PULL, includeOverkill: true });
@@ -840,7 +856,92 @@ describe('pull comparison', () => {
     expect(api.damageDoneReport).toHaveBeenCalledTimes(2);
     await useApp.getState().closeComparison();
     expect(api.damageDoneReport).toHaveBeenCalledTimes(3);
-    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 60_000, attribution: 'augmented', includeOverkill: false });
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 0, endMs: 60_000, attribution: 'augmented', includeOverkill: false, deathCutoff: null });
+  });
+
+  it('compares both pulls at the cutoff and recalculates the pull for it once back', async () => {
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().openComparison(3);
+    await useApp.getState().setDeathCutoff(3);
+    expect(api.comparePulls).toHaveBeenLastCalledWith(LOG.id, 1, 3, 'reattributed', false, 3);
+    await useApp.getState().closeComparison();
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { ...WHOLE_PULL, deathCutoff: 3 });
+  });
+});
+
+describe('death cutoff', () => {
+  const PULL: QuickOverview = { ...overviewFixture, timeline: { ...overviewFixture.timeline, durationMs: 168_729 } };
+  const CUT: QuickOverview = { ...PULL, timeline: { ...PULL.timeline, cutoffMs: 130_320 } };
+  const CUT_AT_3 = { ...WHOLE_PULL, deathCutoff: 3 };
+
+  async function cutAtThirdDeath() {
+    vi.mocked(api.quickOverview).mockResolvedValue(CUT);
+    await useApp.getState().setDeathCutoff(3);
+  }
+
+  it('setDeathCutoff reloads the overview and the report with the cutoff', async () => {
+    await openPull();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().setDeathCutoff(3);
+    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.id, 1, CUT_AT_3);
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, CUT_AT_3);
+  });
+
+  it('a slower overview of an earlier cutoff does not replace the newer one', async () => {
+    await openPull();
+    const slow = deferred<QuickOverview>();
+    vi.mocked(api.quickOverview).mockReturnValueOnce(slow.promise).mockResolvedValueOnce(CUT);
+    const first = useApp.getState().setDeathCutoff(1);
+    await useApp.getState().setDeathCutoff(3);
+    slow.resolve(PULL);
+    await first;
+    expect(useApp.getState().overview).toBe(CUT);
+  });
+
+  it('cutoff resets when another pull opens', async () => {
+    await openPull();
+    await useApp.getState().setDeathCutoff(3);
+    await useApp.getState().openFight(2);
+    expect(useApp.getState().deathCutoff).toBeNull();
+    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG.id, 2, WHOLE_PULL);
+  });
+
+  it.each([
+    { range: { startMs: 100_000, endMs: 150_000 }, clipped: { startMs: 100_000, endMs: 130_321 } },
+    { range: { startMs: 140_000, endMs: 150_000 }, clipped: null },
+  ])('cutoff_clips_or_drops_a_range_past_the_cut (from $range.startMs)', async ({ range, clipped }) => {
+    vi.mocked(api.quickOverview).mockResolvedValue(PULL);
+    await openPull();
+    await useApp.getState().setRange(range);
+    useApp.getState().setZoom({ startMs: 140_000, endMs: 145_000 });
+    await cutAtThirdDeath();
+    expect(useApp.getState()).toMatchObject({ range: clipped, zoom: null });
+  });
+
+  it('a range ending at the cut is sent open', async () => {
+    await openPull();
+    await cutAtThirdDeath();
+    await useApp.getState().setTab('damage');
+    await useApp.getState().setRange({ startMs: 0, endMs: 130_321 });
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { ...CUT_AT_3, startMs: 0 });
+  });
+
+  it('runs never send a cutoff', async () => {
+    vi.mocked(api.openLog).mockResolvedValue(runLogFixture);
+    await useApp.getState().openLog(chosen(runLogFixture));
+    await useApp.getState().openFight(1);
+    await useApp.getState().setTab('damage');
+    await useApp.getState().setDeathCutoff(3);
+    expect(api.quickOverview).toHaveBeenLastCalledWith(runLogFixture.id, 1, WHOLE_PULL);
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(runLogFixture.id, 1, WHOLE_PULL);
+  });
+
+  it('replay stops at the cut', async () => {
+    await openPull();
+    await cutAtThirdDeath();
+    useApp.getState().setReplayTime(160_000);
+    expect(useApp.getState().replay.time).toBe(130_321);
   });
 });
 
@@ -980,7 +1081,7 @@ describe('view filters', () => {
     useApp.setState({ range: { startMs: 40_000, endMs: 60_000 } });
     await useApp.getState().setTab('resources');
     const scope = { perspective: 'friendly', source: [{ kind: 'player', actorId: 3 }], target: [], ability: [] };
-    expect(api.resourcesReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed', includeOverkill: false }, scope);
+    expect(api.resourcesReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 40_000, endMs: 60_000, attribution: 'reattributed', includeOverkill: false, deathCutoff: null }, scope);
   });
 
   it('hands the page filter to a detail page by side, also from an Enemies view', async () => {
@@ -1306,9 +1407,9 @@ describe('timeline and events views', () => {
     await openPull();
     await useApp.getState().setTab('damage');
     await useApp.getState().setRange({ startMs: 300_000, endMs: 478_610 });
-    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 300_000, endMs: null, attribution: 'reattributed', includeOverkill: false });
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 300_000, endMs: null, attribution: 'reattributed', includeOverkill: false, deathCutoff: null });
     await useApp.getState().setRange({ startMs: 300_000, endMs: 400_000 });
-    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 300_000, endMs: 400_000, attribution: 'reattributed', includeOverkill: false });
+    expect(api.damageDoneReport).toHaveBeenLastCalledWith(LOG.id, 1, { startMs: 300_000, endMs: 400_000, attribution: 'reattributed', includeOverkill: false, deathCutoff: null });
   });
 });
 

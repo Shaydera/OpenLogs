@@ -4,6 +4,7 @@ import { bossHpPath, phaseLabels, timelineGeometry } from './timelineGeometry';
 
 const base: OverviewTimeline = {
   durationMs: 0,
+  cutoffMs: null,
   markers: { deaths: [], bloodlust: [], bossCasts: [] },
   bossHpStepMs: 1_000,
   bossHp: [],

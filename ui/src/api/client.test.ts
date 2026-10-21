@@ -159,14 +159,14 @@ describe('reports', () => {
     await api.openLog(log);
     log.read.mockClear();
 
-    const filter = { startMs: null, endMs: null, attribution: 'reattributed' as const, includeOverkill: false };
+    const filter = { startMs: null, endMs: null, attribution: 'reattributed' as const, includeOverkill: false, deathCutoff: null };
     await api.damageDoneReport('raid.txt', 1, filter);
     await api.healingReport('raid.txt', 1, filter);
     expect(log.read.mock.calls).toEqual([[100, 100]]);
 
-    expect(await api.comparePulls('raid.txt', 1, 3, 'augmented', true)).toEqual({
+    expect(await api.comparePulls('raid.txt', 1, 3, 'augmented', true, 2)).toEqual({
       command: 'compare_pulls',
-      args: { fightA: 1, fightB: 3, attribution: 'augmented', includeOverkill: true },
+      args: { fightA: 1, fightB: 3, attribution: 'augmented', includeOverkill: true, deathCutoff: 2 },
     });
     expect(loaded).toEqual([1, 3]);
 
@@ -229,7 +229,7 @@ describe('failures', () => {
     const { api, state } = client();
     await api.openLog(source('raid.txt', 1000));
     state.restarts = 1;
-    const filter = { startMs: null, endMs: null, attribution: 'reattributed' as const, includeOverkill: false };
+    const filter = { startMs: null, endMs: null, attribution: 'reattributed' as const, includeOverkill: false, deathCutoff: null };
     await expect(api.damageDoneReport('raid.txt', 1, filter)).rejects.toBe('This log is no longer open. Open it again.');
   });
 });

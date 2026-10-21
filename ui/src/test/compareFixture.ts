@@ -21,6 +21,7 @@ const wipeOverview: QuickOverview = {
   },
   timeline: {
     durationMs: 142_550,
+    cutoffMs: null,
     markers: { deaths: [{ t: 47_400, player: 3 }], bloodlust: [], bossCasts: [] },
     bossHpStepMs: 60_000,
     bossHp: [99, 80, 60.4],

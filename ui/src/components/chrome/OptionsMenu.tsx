@@ -1,9 +1,10 @@
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { Side } from '../../api/types';
 import { useDismiss } from '../../hooks/useDismiss';
+import { formatEventTimeTenths, formatOrdinal } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { effectiveView } from '../../reportViews';
-import { type FightTab, useApp } from '../../store';
+import { cutoffOffered, type FightTab, useApp } from '../../store';
 
 function augCreditApplies(tab: FightTab, perspective: Side, inDetail: boolean): boolean {
   if (inDetail) return tab === 'damage' || tab === 'healing';
@@ -16,6 +17,62 @@ function optionsTitle(augOff: boolean, includeOverkill: boolean): string {
   if (augOff) return t('options.titleAugOff');
   if (includeOverkill) return t('options.titleOverkill');
   return t('options.title');
+}
+
+const MAX_DEATH_CUTOFF = 999;
+
+function parseDeathCutoff(text: string): number | null {
+  const n = Number(text);
+  return text.trim() !== '' && Number.isInteger(n) && n >= 1 && n <= MAX_DEATH_CUTOFF ? n : null;
+}
+
+function DeathCutoffInput() {
+  const deathCutoff = useApp((s) => s.deathCutoff);
+  const setDeathCutoff = useApp((s) => s.setDeathCutoff);
+  const cutoffMs = useApp((s) => (s.overviewCutoff === s.deathCutoff ? (s.overview?.timeline.cutoffMs ?? null) : null));
+  const loading = useApp((s) => s.fightLoading);
+  const [draft, setDraft] = useState(deathCutoff === null ? '' : String(deathCutoff));
+  const cancelled = useRef(false);
+  useEffect(() => setDraft(deathCutoff === null ? '' : String(deathCutoff)), [deathCutoff]);
+  const commit = () => {
+    // Escape closes the menu, and the blur that follows must not apply the draft it discarded.
+    if (cancelled.current) {
+      cancelled.current = false;
+      return;
+    }
+    const next = parseDeathCutoff(draft);
+    setDraft(next === null ? '' : String(next));
+    if (next !== deathCutoff) void setDeathCutoff(next);
+  };
+  const hint =
+    deathCutoff !== null && cutoffMs !== null
+      ? t('options.deathCutoffHint', { nth: formatOrdinal(deathCutoff), time: formatEventTimeTenths(cutoffMs) })
+      : t('options.deathCutoffHintNoCut');
+  return (
+    <label className="options-row">
+      <input
+        type="number"
+        className="options-number"
+        aria-label={t('options.deathCutoff')}
+        min={1}
+        max={MAX_DEATH_CUTOFF}
+        step={1}
+        value={draft}
+        placeholder={t('options.deathCutoffOff')}
+        disabled={loading}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') cancelled.current = true;
+        }}
+      />
+      <span>
+        {t('options.deathCutoff')}
+        <span className="options-hint">{hint}</span>
+      </span>
+    </label>
+  );
 }
 
 interface Option {
@@ -39,10 +96,12 @@ export function OptionsMenu() {
   const setColorByTarget = useApp((s) => s.setColorByTarget);
   const hideProcs = useApp((s) => s.hideProcs);
   const setHideProcs = useApp((s) => s.setHideProcs);
+  const withCutoff = useApp(cutoffOffered);
   const view = useApp((s) => effectiveView(s.tab, s.details.length > 0, s.reportView));
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
   const menuId = useId();
   const augApplies = augCreditApplies(tab, perspective, inDetail);
   const metricTab = tab === 'damage' || tab === 'healing';
@@ -63,23 +122,29 @@ export function OptionsMenu() {
     { title: t('options.table'), options: table },
     { title: t('options.casts'), options: casts },
   ].filter((section) => section.options.length > 0);
+  const close = () => {
+    // A field unmounted while focused never blurs, and its blur commits what was typed.
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && pop.current?.contains(focused)) focused.blur();
+    setOpen(false);
+  };
   useDismiss(root, open, {
-    onDismiss: () => setOpen(false),
+    onDismiss: close,
     onEscape: () => {
-      setOpen(false);
+      close();
       button.current?.focus();
     },
   });
 
   return (
     <div ref={root} className="options">
-      <button ref={button} type="button" className="dd options-btn" aria-label={title} title={title} aria-expanded={open} aria-controls={open ? menuId : undefined} onClick={() => setOpen(!open)}>
+      <button ref={button} type="button" className="dd options-btn" aria-label={title} title={title} aria-expanded={open} aria-controls={open ? menuId : undefined} onClick={() => (open ? close() : setOpen(true))}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>
         {t('options.label')}
         {changed && <span className="options-dot" aria-hidden="true" />}
       </button>
       {open && (
-        <div id={menuId} className="options-pop" role="dialog" aria-label={t('options.label')}>
+        <div ref={pop} id={menuId} className="options-pop" role="dialog" aria-label={t('options.label')}>
           <h3 className="cap options-head">{t('options.thisPull')}</h3>
           <label className="options-row" title={augApplies ? undefined : t('options.augOnlyMetric')}>
             <input type="checkbox" checked={attribution === 'reattributed'} disabled={!augApplies} onChange={() => void setAttribution(attribution === 'reattributed' ? 'augmented' : 'reattributed')} />
@@ -88,6 +153,7 @@ export function OptionsMenu() {
               <span className="options-hint">{t('options.augCreditHint')}</span>
             </span>
           </label>
+          {withCutoff && <DeathCutoffInput />}
           <h3 className="cap options-head options-split">{t('options.allLogs')}</h3>
           <label className="options-row">
             <input type="checkbox" checked={includeOverkill} onChange={() => void setIncludeOverkill(!includeOverkill)} />

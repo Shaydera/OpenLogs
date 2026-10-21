@@ -37,7 +37,8 @@
 .options-split { border-top: 1px solid var(--line-strong); margin-top: 4px; padding-top: 10px; }
 .options-row { display: flex; gap: 10px; align-items: flex-start; padding: 8px; border-radius: 7px; font-size: 13px; cursor: pointer; }
 .options-row:hover { background: var(--tile); }
-.options-row input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--accent); }
+.options-row input:not(.options-number) { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--accent); }
+.options-row .options-number { flex: none; width: 56px; height: 28px; margin: 0; padding: 0 6px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--tile); color: inherit; font: inherit; }
 .options-hint { display: block; font-size: 12px; color: var(--faint); }
 .view-switch button[aria-disabled='true'] { cursor: default; opacity: 0.5; }
 .options-row:has(input:disabled) { cursor: default; opacity: 0.5; }
@@ -59,3 +60,8 @@
 .page-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; padding: 8px 12px; border: 1px solid var(--accent-tint-line); border-radius: 8px; background: var(--accent-tint); font-size: 13px; }
 .page-filter-link { padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--accent); text-decoration: underline; cursor: pointer; }
 .page-filter-link:hover, .page-filter-link:focus-visible { color: var(--accent-hover); }
+
+.death-chip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 4px 0 10px; border: 1px solid var(--death-tint-line); border-radius: 999px; background: var(--death-tint); color: var(--death); font-size: 13px; }
+.death-chip-time { color: var(--faint); font-variant-numeric: tabular-nums; }
+.death-chip-clear { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: none; color: inherit; cursor: pointer; }
+.death-chip-clear:hover { background: color-mix(in srgb, var(--death) 18%, transparent); }

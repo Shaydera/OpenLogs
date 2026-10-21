@@ -47,6 +47,7 @@ import type {
   ReplayData,
 } from './api/types';
 import { rangeWindow, requestWindow, sameWindow, shownWindow, covers, windowSpan } from './components/views/zoomGeometry';
+import { rangeInPull } from './components/reports/rangeGeometry';
 import { type GameDataManifest, gameDataManifest } from './gameData';
 import { replayClock } from './components/replay/replayClock';
 import { t } from './i18n/i18n';
@@ -104,12 +105,29 @@ const REPLAY_TICK_MS = 100;
 export type MetricTab = 'damage' | 'healing' | 'taken';
 export const isMetricTab = (tab: FightTab): tab is MetricTab => tab === 'damage' || tab === 'healing' || tab === 'taken';
 
-/** Whole Mythic+ runs and pull sets have no replay; the boss pulls inside runs have one. */
-export function replayOffered({ log, view }: Pick<State, 'log' | 'view'>): boolean {
-  if (view.kind === 'set') return false;
-  if (view.kind !== 'fight') return true;
+function showsWholeRun({ log, view }: Pick<State, 'log' | 'view'>): boolean {
+  if (view.kind !== 'fight') return false;
   const { fightIndex } = view;
-  return log?.fights.find((fight) => fight.index === fightIndex)?.run == null;
+  return log?.fights.find((fight) => fight.index === fightIndex)?.run != null;
+}
+
+/** Whole Mythic+ runs and pull sets have no replay; the boss pulls inside runs have one. */
+export function replayOffered(s: Pick<State, 'log' | 'view'>): boolean {
+  return s.view.kind !== 'set' && !showsWholeRun(s);
+}
+
+/** Whole Mythic+ runs have no death cutoff; a set cuts each of its pulls at its own death. */
+export function cutoffOffered(s: Pick<State, 'log' | 'view'>): boolean {
+  return !showsWholeRun(s);
+}
+
+/** The death cutoff while it cuts the open single pull, else `null`. */
+export const pullCutDeath = (s: Pick<State, 'overview' | 'deathCutoff'>): number | null => (s.overview?.timeline.cutoffMs != null ? s.deathCutoff : null);
+
+/** Where the analysed part of the pull ends: a millisecond after the cut death, so that death's millisecond stays in. */
+export function analysedEndMs(overview: QuickOverview): number {
+  const { durationMs, cutoffMs } = overview.timeline;
+  return cutoffMs === null ? durationMs : Math.min(durationMs, cutoffMs + 1);
 }
 
 export const SET_TABS: readonly FightTab[] = ['overview', 'damage', 'healing', 'taken', 'deaths', 'casts', 'buffs', 'interrupts'];
@@ -168,12 +186,14 @@ function derivedScope(state: State): Scope {
   const same = next.perspective === scope.perspective && next.source === scope.source && next.target === scope.target && next.ability === scope.ability;
   return same ? scope : next;
 }
-/** The range a request sends; one that reaches the pull's end stays open, so the pull's last events count as they do for the whole pull. */
-function reportFilter(s: Pick<State, 'range' | 'attribution' | 'includeOverkill' | 'overview'>): ReportFilter {
+const sentDeathCutoff = (s: Pick<State, 'deathCutoff' | 'log' | 'view'>) => (cutoffOffered(s) ? s.deathCutoff : null);
+
+/** The range a request sends; one that reaches the analysed end stays open, so the last events count as they do for the whole pull. */
+function reportFilter(s: Pick<State, 'range' | 'attribution' | 'includeOverkill' | 'deathCutoff' | 'overview' | 'log' | 'view'>): ReportFilter {
   const { range } = s;
-  const pullEnd = s.overview?.timeline.durationMs;
-  const endMs = range === null || (pullEnd !== undefined && range.endMs >= pullEnd) ? null : range.endMs;
-  return { startMs: range?.startMs ?? null, endMs, attribution: s.attribution, includeOverkill: s.includeOverkill };
+  const end = s.overview ? analysedEndMs(s.overview) : undefined;
+  const endMs = range === null || (end !== undefined && range.endMs >= end) ? null : range.endMs;
+  return { startMs: range?.startMs ?? null, endMs, attribution: s.attribution, includeOverkill: s.includeOverkill, deathCutoff: sentDeathCutoff(s) };
 }
 export interface TimeRange {
   startMs: number;
@@ -227,9 +247,10 @@ export interface ComparisonState {
   data: PullComparison | null;
   loading: boolean;
   error: string | null;
-  /** Aug mode and overkill rule the pull's report was calculated with; Back recalculates it after a change. */
+  /** Aug mode, overkill rule and death cutoff the pull's report was calculated with; Back recalculates it after a change. */
   reportAttribution: Attribution;
   reportIncludeOverkill: boolean;
+  reportDeathCutoff: number | null;
 }
 
 /** The log being opened; `totalBytes` is `null` until its size is known. */
@@ -270,6 +291,10 @@ interface State {
   includeOverkill: boolean;
   /** `null` = the whole pull. */
   range: TimeRange | null;
+  /** Every view ends at this player death of the pull (of each pull in a set); `null` = the whole pull. Kept per pull. */
+  deathCutoff: number | null;
+  /** The death cutoff the shown overview was read with; it lags `deathCutoff` while a new one loads. */
+  overviewCutoff: number | null;
   report: ReportData | null;
   reportLoading: boolean;
   /** The Overview's figures for the range, loaded with the report of a tab whose header shows them. */
@@ -355,6 +380,8 @@ interface Actions {
   setTab(tab: FightTab, focus?: FocusTarget | null): Promise<void>;
   setAttribution(attribution: Attribution): Promise<void>;
   setIncludeOverkill(include: boolean): Promise<void>;
+  /** A range past the new analysed end is cut there, or dropped once too little of it is left; a zoom outside the new window is dropped. */
+  setDeathCutoff(n: number | null): Promise<void>;
   setRange(range: TimeRange | null): Promise<void>;
   setShowAugDelta(show: boolean): void;
   setColorByTarget(on: boolean): void;
@@ -495,6 +522,8 @@ export function initialState(): State {
     attribution: 'reattributed',
     includeOverkill: readFlag(INCLUDE_OVERKILL_KEY, false),
     range: null,
+    deathCutoff: null,
+    overviewCutoff: null,
     report: null,
     reportLoading: false,
     rangeKpis: null,
@@ -541,12 +570,15 @@ let viewQuery = 0;
 let shownTimelineRequest = 0;
 let logRequest = 0;
 let fightRequest = 0;
+let overviewRequest = 0;
 let comparisonRequest = 0;
 let setPass = 0;
 /** The pass whose progress is shown. */
 let reading: { pass: number; current: () => boolean } | null = null;
-/** The overkill mode of the set overview shown, or of the first one being read. */
-let setOverviewOverkill: boolean | null = null;
+type SetOverviewOptions = Pick<ReportFilter, 'includeOverkill' | 'deathCutoff'>;
+const sameOverviewOptions = (a: SetOverviewOptions, b: SetOverviewOptions) => a.includeOverkill === b.includeOverkill && a.deathCutoff === b.deathCutoff;
+/** The options of the set overview shown, or of the first one being read. */
+let setOverviewShown: SetOverviewOptions | null = null;
 interface SetCache {
   fightRequest: number;
   results: Map<string, unknown[]>;
@@ -566,11 +598,11 @@ function stopReplayTicker() {
   replayTicker = null;
 }
 
-/** The replay's time window: the selected range, else the whole pull. */
+/** The replay's time window: the selected range, else the pull up to its analysed end. */
 function replayWindow(state: Pick<State, 'range' | 'replayData' | 'overview'>): { startMs: number; endMs: number } {
   if (state.range) return state.range;
-  const durationMs = state.replayData?.durationMs ?? state.overview?.timeline.durationMs ?? Infinity;
-  return { startMs: 0, endMs: durationMs };
+  const durationMs = state.replayData?.durationMs ?? Infinity;
+  return { startMs: 0, endMs: state.overview ? Math.min(durationMs, analysedEndMs(state.overview)) : durationMs };
 }
 
 /** Pauses the clock and makes an in-flight replay load stale; the next pull starts at 0. */
@@ -617,6 +649,8 @@ function startFightLoad(set: SetState, get: () => State, view: View): number {
     error: null,
     tab: 'overview',
     range: null,
+    deathCutoff: null,
+    overviewCutoff: null,
     filters: EMPTY_FILTERS,
     breakdown: null,
     report: null,
@@ -681,10 +715,10 @@ async function readSet(set: SetState, logId: string, pullSet: PullSet, commands:
 }
 
 async function readSetOverview(set: SetState, logId: string, pullSet: PullSet, filter: ReportFilter, current: () => boolean): Promise<Partial<State>> {
-  setOverviewOverkill = filter.includeOverkill;
+  setOverviewShown = filter;
   const [result] = await readSet(set, logId, pullSet, [{ command: 'quick_overview', args: { filter } }], current);
   const { overview, pulls } = result as SetOverview;
-  return { overview, setPulls: pulls };
+  return { overview, setPulls: pulls, overviewCutoff: filter.deathCutoff };
 }
 
 function setCacheOf(request: number): SetCache {
@@ -756,7 +790,7 @@ async function fetchView(logId: string, fight: number, state: State, filter: Rep
     const request = page ?? { kind: 'from', offset: eventsOffset[tab] ?? 0, limit: EVENTS_PAGE_ROWS };
     return { events: await api.events(logId, fight, filter, scope, metric, options, request), timeline: null };
   }
-  const whole = rangeWindow(range, overview.timeline.durationMs);
+  const whole = rangeWindow(range, analysedEndMs(overview));
   const window = requestWindow(shownWindow(zoom, whole), whole);
   pendingTimeline = window;
   const timeline = await api.timeline(logId, fight, filter, scope, metric, lanesOf(lanes, tab), options, window);
@@ -767,7 +801,7 @@ async function fetchView(logId: string, fight: number, state: State, filter: Rep
 /** How much of the timeline's shown window `timeline` holds, in ms. */
 function shownMs(timeline: Timeline | null, state: State): number {
   if (!timeline || !state.overview) return 0;
-  const shown = shownWindow(state.zoom, rangeWindow(state.range, state.overview.timeline.durationMs));
+  const shown = shownWindow(state.zoom, rangeWindow(state.range, analysedEndMs(state.overview)));
   return Math.max(0, Math.min(timeline.endMs, shown.endMs) - Math.max(timeline.startMs, shown.startMs));
 }
 
@@ -835,15 +869,15 @@ function setTableCommands(state: State, filter: ReportFilter): SetCommand[] {
 }
 
 /**
- * Loads the set's table tab with its breakdown and, once the overkill mode changed, the overview too, in one pass
+ * Loads the set's table tab with its breakdown and, once the overkill mode or the cutoff changed, the overview too, in one pass
  * over its pulls; only the newest request may write the tab.
  */
 async function loadSetReport(get: () => State & Actions, set: SetState, logId: string, pullSet: PullSet) {
-  const { tab, includeOverkill } = get();
+  const { tab } = get();
   const request = ++reportRequest;
   const fight = fightRequest;
   const filter = reportFilter(get());
-  const withOverview = setOverviewOverkill !== includeOverkill;
+  const withOverview = setOverviewShown === null || !sameOverviewOptions(setOverviewShown, filter);
   const table = setTableCommands(get(), filter);
   const tableKey = JSON.stringify(table);
   const cache = setCacheOf(fight);
@@ -858,10 +892,10 @@ async function loadSetReport(get: () => State & Actions, set: SetState, logId: s
     const results = await readSet(set, logId, pullSet, commands, () => request === reportRequest);
     if (withOverview) {
       const { overview, pulls } = results.shift() as SetOverview;
-      // A pass that read on after a newer toggle holds the other mode.
-      if (fight === fightRequest && get().includeOverkill === filter.includeOverkill) {
-        setOverviewOverkill = filter.includeOverkill;
-        set({ overview, setPulls: pulls });
+      // A pass that read on after a newer change holds the other options.
+      if (fight === fightRequest && sameOverviewOptions(get(), filter)) {
+        setOverviewShown = filter;
+        set({ overview, setPulls: pulls, overviewCutoff: filter.deathCutoff });
       }
     }
     if (toRead.length > 0) {
@@ -942,17 +976,42 @@ async function loadReport(get: () => State & Actions, set: SetState) {
   }
 }
 
-/** The open pull's whole-pull overview, which the brush timeline draws; only the pull it was asked for may write. A set reads its overview with its tab in `loadSetReport`. */
-async function reloadOverview(get: () => State & Actions, set: SetState) {
+/**
+ * The open pull's whole-pull overview, which the brush timeline draws; only the newest request for the pull may write.
+ * A set reads its overview with its tab in `loadSetReport`. Resolves whether no other overview or pull load started since.
+ */
+async function reloadOverview(get: () => State & Actions, set: SetState): Promise<boolean> {
   const { log, view } = get();
-  if (!log || view.kind !== 'fight') return;
-  const request = fightRequest;
+  if (!log || view.kind !== 'fight') return false;
+  const request = ++overviewRequest;
+  const fight = fightRequest;
+  const current = () => request === overviewRequest && fight === fightRequest;
+  const { deathCutoff } = get();
   try {
     const overview = await api.quickOverview(log.id, view.fightIndex, reportFilter({ ...get(), range: null }));
-    if (request === fightRequest) set({ overview });
+    if (current()) set({ overview, overviewCutoff: deathCutoff });
   } catch (err) {
-    if (request === fightRequest) set({ error: t('error.loadFailed', { reason: String(err) }) });
+    if (current()) set({ error: t('error.loadFailed', { reason: String(err) }) });
   }
+  return current();
+}
+
+/** Keeps the range and zoom inside the shown overview's analysed end, as `setDeathCutoff` describes. */
+function fitToAnalysedEnd(get: () => State, set: SetState) {
+  const { range, zoom, overview } = get();
+  if (!overview) return;
+  const end = analysedEndMs(overview);
+  const fitted = range === null || range.endMs <= end ? range : (rangeInPull(range, end) ?? null);
+  set({ range: fitted, zoom: zoom !== null && covers(rangeWindow(fitted, end), zoom) ? zoom : null });
+}
+
+/** Recalculates the open pull, its overview first, or the open set for changed options. */
+async function reloadForOptions(get: () => State & Actions, set: SetState) {
+  if (get().view.kind === 'set') return loadReport(get, set);
+  if (!(await reloadOverview(get, set))) return;
+  fitToAnalysedEnd(get, set);
+  if (get().comparison) await loadComparison(get, set);
+  else await loadReport(get, set);
 }
 
 /** Loads the open comparison in the current Aug mode; only the newest request may write. */
@@ -967,7 +1026,7 @@ async function loadComparison(get: () => State & Actions, set: SetState) {
     if (request === comparisonRequest && current) set({ comparison: { ...current, ...partial } });
   };
   try {
-    update({ data: await api.comparePulls(log.id, comparison.a, comparison.b, attribution, includeOverkill) });
+    update({ data: await api.comparePulls(log.id, comparison.a, comparison.b, attribution, includeOverkill, sentDeathCutoff(get())) });
   } catch (err) {
     update({ data: null, error: String(err) });
   } finally {
@@ -1157,6 +1216,8 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
       fightError: null,
       tab: 'overview',
       range: null,
+      deathCutoff: null,
+      overviewCutoff: null,
       report: null, breakdown: null,
       rangeKpis: null,
       reportError: null,
@@ -1182,10 +1243,10 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
       return;
     }
     dropPendingReports(set);
-    // The stopped pass may have been re-reading the overview for a new overkill mode: the toggle goes back with it.
-    const shown = setOverviewOverkill;
-    const reverted = shown !== null && shown !== get().includeOverkill;
-    if (reverted) writeFlag(INCLUDE_OVERKILL_KEY, shown);
+    // The stopped pass may have been re-reading the overview for a new overkill mode or cutoff: the options go back with it.
+    const shown = setOverviewShown;
+    const reverted = shown !== null && !sameOverviewOptions(shown, get());
+    if (reverted) writeFlag(INCLUDE_OVERKILL_KEY, shown.includeOverkill);
     set({
       tab: 'overview',
       report: null,
@@ -1194,7 +1255,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
       reportLoading: false,
       rangeKpis: null,
       focusRequest: 'tab',
-      ...(reverted ? { includeOverkill: shown } : {}),
+      ...(reverted ? { includeOverkill: shown.includeOverkill, deathCutoff: shown.deathCutoff } : {}),
     });
   },
 
@@ -1327,11 +1388,11 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   },
 
   async openComparison(other) {
-    const { view, attribution, includeOverkill } = get();
+    const { view, attribution, includeOverkill, deathCutoff } = get();
     if (view.kind !== 'fight' || other === view.fightIndex) return;
     const [a, b] = other < view.fightIndex ? [other, view.fightIndex] : [view.fightIndex, other];
     set({
-      comparison: { a, b, data: null, loading: true, error: null, reportAttribution: attribution, reportIncludeOverkill: includeOverkill },
+      comparison: { a, b, data: null, loading: true, error: null, reportAttribution: attribution, reportIncludeOverkill: includeOverkill, reportDeathCutoff: deathCutoff },
       focusRequest: 'compare',
     });
     await loadComparison(get, set);
@@ -1342,8 +1403,9 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     if (!comparison) return;
     dropPendingComparison();
     set({ comparison: null, focusRequest: 'fight' });
-    const { attribution, includeOverkill } = get();
-    if (comparison.reportAttribution !== attribution || comparison.reportIncludeOverkill !== includeOverkill) await loadReport(get, set);
+    const { attribution, includeOverkill, deathCutoff } = get();
+    const changed = comparison.reportAttribution !== attribution || comparison.reportIncludeOverkill !== includeOverkill || comparison.reportDeathCutoff !== deathCutoff;
+    if (changed) await loadReport(get, set);
   },
 
   async setAttribution(attribution) {
@@ -1357,16 +1419,19 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   async setIncludeOverkill(include) {
     writeFlag(INCLUDE_OVERKILL_KEY, include);
     set({ includeOverkill: include, eventsOffset: {}, focusRequest: null });
-    if (get().view.kind === 'set') return loadReport(get, set);
-    await reloadOverview(get, set);
-    if (get().comparison) await loadComparison(get, set);
-    else await loadReport(get, set);
+    await reloadForOptions(get, set);
+  },
+
+  async setDeathCutoff(deathCutoff) {
+    if (get().deathCutoff === deathCutoff) return;
+    set({ deathCutoff, eventsOffset: {}, focusRequest: null });
+    await reloadForOptions(get, set);
   },
 
   async setRange(range) {
     const { zoom, overview, view } = get();
     if (view.kind === 'set') return;
-    const inside = zoom !== null && overview !== null && covers(rangeWindow(range, overview.timeline.durationMs), zoom);
+    const inside = zoom !== null && overview !== null && covers(rangeWindow(range, analysedEndMs(overview)), zoom);
     set({ range, zoom: inside ? zoom : null, eventsOffset: {}, focusRequest: null });
     await loadReport(get, set);
   },
@@ -1399,7 +1464,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   async refreshTimeline() {
     const { timeline, zoom, range, overview, viewLoading } = get();
     if (!overview) return;
-    const whole = rangeWindow(range, overview.timeline.durationMs);
+    const whole = rangeWindow(range, analysedEndMs(overview));
     const shown = shownWindow(zoom, whole);
     // A wide window lists no log lines; zooming in asks again once the request is narrow enough to list them.
     const limit = timeline?.listedWindowMs ?? listedWindowMs;

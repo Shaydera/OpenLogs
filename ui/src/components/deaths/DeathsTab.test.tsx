@@ -70,6 +70,13 @@ describe('DeathsTab', () => {
     expect(rows[1]).toHaveTextContent('1:01Blightscale Rawling #7Virulent SpitFaelan0:12');
   });
 
+  it('says no enemy died up to the cut rather than in the pull', () => {
+    const cutOverview = { ...overviewFixture, timeline: { ...overviewFixture.timeline, cutoffMs: 130_320 } };
+    useApp.setState({ overview: cutOverview, deathCutoff: 3, filters: { ...initialState().filters, perspective: 'enemy' } });
+    render(<DeathsTab report={{ ...report, deaths: [], kills: [] }} />);
+    expect(screen.getByText('No enemy died up to the 3rd death.')).toBeInTheDocument();
+  });
+
   it('keeps the unit column for a selected name group but drops it for a single unit', () => {
     const rawling: ReportUnit = { unit: { kind: 'instance', actorId: 9 }, name: 'Blightscale Rawling', number: 7 };
     const kill = { t: 61_000, unit: rawling, killingBlow: null, killer: null, aliveMs: null };

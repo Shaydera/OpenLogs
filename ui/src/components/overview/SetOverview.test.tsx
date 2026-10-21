@@ -24,6 +24,8 @@ const kpis = (overrides: Partial<Kpis>): Kpis => ({ ...overviewFixture.kpis, ...
 const pull = (fightIndex: number, durationMs: number, overrides: Partial<Kpis>): SetPull => ({
   fightIndex,
   kpis: kpis({ durationMs, ...overrides }),
+  cutoffMs: null,
+  pullDurationMs: durationMs,
   bossHpStepMs: 60_000,
   bossHp: [100, 80],
 });

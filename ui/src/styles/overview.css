@@ -82,6 +82,10 @@
   text-align: left;
   cursor: pointer;
 }
+.tl-phase-label:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
 .tl-phase-label span {
   white-space: nowrap;
   overflow: hidden;

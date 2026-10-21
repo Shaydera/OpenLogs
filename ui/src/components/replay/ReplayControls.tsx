@@ -5,6 +5,7 @@ import { type MessageKey, t } from '../../i18n/i18n';
 import { type ReplayFilters, type ReplayLayers, type ReplaySpeed, type TimeRange, useApp } from '../../store';
 import { shortName } from '../overview/players';
 import { phaseLabels } from '../overview/timelineGeometry';
+import { CutoffShade, cutoffRest } from '../reports/CutoffShade';
 import { percentIn, timeAtX } from '../views/zoomGeometry';
 import { replayClock } from './replayClock';
 
@@ -40,8 +41,11 @@ export function replayNow(): number {
   return playing ? replayClock.now() : time;
 }
 
-/** The bar under the stage: the timeline, play/pause, the time, speeds, unit filters, layers and follow (`compact`: a hint instead of the last three). */
-export function ReplayControls({ data, bounds, compact = false }: { data: ReplayData; bounds: TimeRange; compact?: boolean }) {
+/**
+ * The bar under the stage: the timeline over `bounds`, play/pause, the time, speeds, unit filters, layers and follow (`compact`: a hint
+ * instead of the last three). Seeking ends at `limitMs`, the analysed end inside `bounds`.
+ */
+export function ReplayControls({ data, bounds, limitMs, compact = false }: { data: ReplayData; bounds: TimeRange; limitMs: number; compact?: boolean }) {
   const replay = useApp((s) => s.replay);
   const toggleReplayPlay = useApp((s) => s.toggleReplayPlay);
   const setReplaySpeed = useApp((s) => s.setReplaySpeed);
@@ -52,7 +56,7 @@ export function ReplayControls({ data, bounds, compact = false }: { data: Replay
 
   return (
     <div className="replay-controls">
-      <ReplayScrubber data={data} bounds={bounds} time={replay.time} />
+      <ReplayScrubber data={data} bounds={bounds} limitMs={limitMs} time={replay.time} />
       <div className="replay-bar">
         <button type="button" className="replay-play" aria-label={t(replay.playing ? 'replay.pause' : 'replay.play')} onClick={toggleReplayPlay}>
           <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
@@ -60,7 +64,7 @@ export function ReplayControls({ data, bounds, compact = false }: { data: Replay
           </svg>
         </button>
         <span className="num replay-time">
-          {formatEventTime(replay.time)} <span className="replay-time-end">{t('replay.ofEnd', { end: formatEventTime(bounds.endMs) })}</span>
+          {formatEventTime(replay.time)} <span className="replay-time-end">{t('replay.ofEnd', { end: formatEventTime(limitMs) })}</span>
         </span>
         <div className="replay-seg" role="group" aria-label={t('replay.speed')}>
           {SPEEDS.map(({ speed, key }) => (
@@ -103,8 +107,8 @@ export function ReplayControls({ data, bounds, compact = false }: { data: Replay
   );
 }
 
-/** The pull's (or range's) timeline: phase bands, player deaths and the playhead. A click, a drag or the wheel seeks. */
-function ReplayScrubber({ data, bounds, time }: { data: ReplayData; bounds: TimeRange; time: number }) {
+/** The pull's (or range's) timeline: phase bands, player deaths, the rest after the cut and the playhead. A click, a drag or the wheel seeks. */
+function ReplayScrubber({ data, bounds, limitMs, time }: { data: ReplayData; bounds: TimeRange; limitMs: number; time: number }) {
   const setReplayTime = useApp((s) => s.setReplayTime);
   const track = useRef<HTMLDivElement>(null);
   const dragging = useRef<number | null>(null);
@@ -117,7 +121,7 @@ function ReplayScrubber({ data, bounds, time }: { data: ReplayData; bounds: Time
       const unit = event.deltaMode === 1 ? LINE_PX : event.deltaMode === 2 ? PAGE_PX : 1;
       const px = (Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY) * unit;
       const now = Math.round(replayNow());
-      const next = Math.min(Math.max(Math.round(now + px * WHEEL_MS_PER_PX), startMs), endMs);
+      const next = Math.min(Math.max(Math.round(now + px * WHEEL_MS_PER_PX), startMs), limitMs);
       // At either end the wheel scrolls the page again.
       if (next === now) return;
       event.preventDefault();
@@ -125,7 +129,7 @@ function ReplayScrubber({ data, bounds, time }: { data: ReplayData; bounds: Time
     };
     element.addEventListener('wheel', wheel, { passive: false });
     return () => element.removeEventListener('wheel', wheel);
-  }, [startMs, endMs, setReplayTime]);
+  }, [startMs, limitMs, setReplayTime]);
 
   const seekAt = (element: HTMLElement, clientX: number) => {
     const box = element.getBoundingClientRect();
@@ -147,7 +151,7 @@ function ReplayScrubber({ data, bounds, time }: { data: ReplayData; bounds: Time
   function key(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key !== 'Home' && event.key !== 'End') return;
     event.preventDefault();
-    setReplayTime(event.key === 'Home' ? startMs : endMs);
+    setReplayTime(event.key === 'Home' ? startMs : limitMs);
   }
 
   const pct = (ms: number) => Math.min(100, Math.max(0, percentIn(ms, bounds)));
@@ -166,9 +170,9 @@ function ReplayScrubber({ data, bounds, time }: { data: ReplayData; bounds: Time
       tabIndex={0}
       aria-label={t('replay.timeline')}
       aria-valuemin={startMs}
-      aria-valuemax={endMs}
+      aria-valuemax={limitMs}
       aria-valuenow={Math.round(time)}
-      aria-valuetext={t('replay.timeOf', { time: formatEventTime(time), end: formatEventTime(endMs) })}
+      aria-valuetext={t('replay.timeOf', { time: formatEventTime(time), end: formatEventTime(limitMs) })}
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={release}
@@ -196,6 +200,7 @@ function ReplayScrubber({ data, bounds, time }: { data: ReplayData; bounds: Time
           />
         );
       })}
+      {limitMs < endMs && <CutoffShade cutoffMs={limitMs - startMs} durationMs={endMs - startMs} rest={cutoffRest(limitMs, endMs)} />}
       <span className="replay-playhead" style={{ left: `${played}%` }} />
     </div>
   );

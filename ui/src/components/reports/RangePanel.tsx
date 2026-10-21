@@ -3,10 +3,11 @@ import type { QuickOverview } from '../../api/types';
 import { formatDuration, formatEventTime } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { effectiveView } from '../../reportViews';
-import { type TimeRange, useApp } from '../../store';
+import { type TimeRange, analysedEndMs, useApp } from '../../store';
 import { clampWindow, rangeWindow, shownWindow } from '../views/zoomGeometry';
 import { TIMELINE_VIEW_BOX, numberRepeats, percentOf, timelineGeometry } from '../overview/timelineGeometry';
-import { fullRange, normalizeRange, rangeInPull, rangeLabel, rangeSpan, sameRange } from './rangeGeometry';
+import { PullCutoffShade, afterCutTitle } from './CutoffShade';
+import { fullRange, phaseInPull, rangeInPull, rangeLabel, rangeSpan, sameRange } from './rangeGeometry';
 import { SaveRangePopover } from './SaveRangePopover';
 import { type SavedRange, deleteRange, loadSavedRanges, saveRange } from './savedRanges';
 import { useBrush } from './useBrush';
@@ -34,10 +35,12 @@ export function RangePanel({
   const zoom = useApp((s) => s.zoom);
   const setZoom = useApp((s) => s.setZoom);
   const timeline = useApp((s) => effectiveView(s.tab, s.details.length > 0, s.reportView) === 'timeline');
+  const deathCutoff = useApp((s) => s.deathCutoff);
   const duration = overview.timeline.durationMs;
+  const end = analysedEndMs(overview);
   const geometry = timelineGeometry(overview.timeline, duration);
   const pillLabels = numberRepeats(geometry.phases.map((phase) => phase.label));
-  const phaseRanges = overview.timeline.phases.map((phase) => normalizeRange({ startMs: phase.startMs, endMs: phase.endMs }, duration));
+  const phaseRanges = overview.timeline.phases.map((phase) => phaseInPull(phase, end));
   const plotRef = useRef<HTMLDivElement>(null);
   const saveRef = useRef<HTMLButtonElement>(null);
   const hintId = useId();
@@ -60,14 +63,15 @@ export function RangePanel({
     if (!sameRange(next, range)) void setRange(next);
   };
   // The pills select phases here; a click on the plot changes nothing.
-  const brush = useBrush(plotRef, duration, range, change, () => {});
-  const keys = useRangeKeys(duration, range, change, hintId);
+  const brush = useBrush(plotRef, duration, range, change, () => {}, end);
+  const keys = useRangeKeys(end, range, change, hintId);
   const shown = keys.draft !== undefined ? keys.draft : brush.preview !== undefined ? brush.preview : range;
-  const selection = shown ?? fullRange(duration);
+  const selection = shown ?? fullRange(end);
   const from = percentOf(selection.startMs, duration);
   const to = percentOf(selection.endMs, duration);
+  const cut = percentOf(end, duration);
 
-  const whole = rangeWindow(range, duration);
+  const whole = rangeWindow(range, end);
   const shownZoom = shownWindow(zoom, whole);
   const stopZoomDrag = useRef<(() => void) | null>(null);
   useEffect(() => () => stopZoomDrag.current?.(), []);
@@ -157,16 +161,25 @@ export function RangePanel({
           {t(run ? 'range.wholeRun' : 'range.whole')}
         </button>
         {geometry.phases.map((phase, i) => {
-          const on = range !== null && sameRange(phaseRanges[i], range);
+          const phaseRange = phaseRanges[i];
+          const on = range !== null && phaseRange !== undefined && sameRange(phaseRange, range);
           return (
-            <button key={phase.key} type="button" className={on ? 'pill on' : 'pill'} aria-pressed={on} onClick={() => change(phaseRanges[i])}>
+            <button
+              key={phase.key}
+              type="button"
+              className={on ? 'pill on' : 'pill'}
+              aria-pressed={on}
+              disabled={phaseRange === undefined}
+              title={afterCutTitle(overview.timeline.phases[i].startMs, end, deathCutoff)}
+              onClick={() => phaseRange !== undefined && change(phaseRange)}
+            >
               {pillLabels[i]}
             </button>
           );
         })}
         {saved.map((entry) => {
           // Saved per boss and difficulty: a range from a longer pull is cut to this one, or left out.
-          const entryRange = rangeInPull(entry, duration);
+          const entryRange = rangeInPull(entry, end);
           const on = range !== null && entryRange !== undefined && sameRange(entryRange, range);
           return (
             <span key={entry.name} className={on ? 'pill pill-saved on' : 'pill pill-saved'}>
@@ -236,8 +249,9 @@ export function RangePanel({
           {geometry.dpsPath && <path d={geometry.dpsPath} className="tl-dps" />}
           {geometry.bossHpPath && <path d={geometry.bossHpPath} className="tl-boss" />}
         </svg>
+        <PullCutoffShade overview={overview} />
         <div className="range-dim" style={{ left: 0, width: `${from}%` }} />
-        <div className="range-dim" style={{ right: 0, width: `${100 - to}%` }} />
+        <div className="range-dim" style={{ left: `${to}%`, width: `${cut - to}%` }} />
         <div className="range-brush" style={{ left: `${from}%`, width: `${to - from}%` }}>
           <span
             className="range-handle range-handle-start"

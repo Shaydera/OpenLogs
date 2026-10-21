@@ -43,6 +43,15 @@ describe('headerTiles', () => {
     expect(text({ tab: 'buffs', overview, range: { startMs: 5_000, endMs: 60_000 }, report })[0]).toBe('Bloodlust|—|not cast');
   });
 
+  it('deaths after the cut do not count', () => {
+    const deaths = [60_814, 128_767, 130_320, 130_538].map((at, i) => ({ t: at, player: i + 1 }));
+    const timeline = (cutoffMs: number | null) => ({ ...overviewFixture.timeline, cutoffMs, markers: { ...overviewFixture.timeline.markers, deaths } });
+    const report = { tab: 'taken' as const, data: takenReportFixture };
+    const deathsTile = (cutoffMs: number | null) => text({ tab: 'taken', overview: { ...overviewFixture, timeline: timeline(cutoffMs) }, report })[3].split('|')[1];
+    expect(deathsTile(130_320)).toBe('3');
+    expect(deathsTile(null)).toBe('4');
+  });
+
   it('reads Ebon Might and the player count from the core and names targets when grouped by target', () => {
     const data = { ...aurasReportFixture, group: 'target' as const, ebonMight: { uptime: 0.5, allies: 2.875 }, players: 7 };
     const lines = text({ tab: 'buffs', report: { tab: 'buffs', data }, scope: { perspective: 'enemy', source: [], target: [], ability: [] } });
@@ -125,6 +134,8 @@ describe('headerTiles', () => {
     const pull = (fightIndex: number, deaths: number, firstDeathMs: number | null): SetPull => ({
       fightIndex,
       kpis: { ...overviewFixture.kpis, deaths, firstDeathMs },
+      cutoffMs: null,
+      pullDurationMs: overviewFixture.kpis.durationMs,
       bossHpStepMs: 60_000,
       bossHp: [],
     });
@@ -141,7 +152,7 @@ describe('headerTiles', () => {
   });
 
   it('set_death_tiles_give_the_median_window', () => {
-    const rows = setRows(compareLogFixture.fights, [1, 3].map((fightIndex) => ({ fightIndex, kpis: overviewFixture.kpis, bossHpStepMs: 60_000, bossHp: [] })));
+    const rows = setRows(compareLogFixture.fights, [1, 3].map((fightIndex) => ({ fightIndex, kpis: overviewFixture.kpis, cutoffMs: null, pullDurationMs: overviewFixture.kpis.durationMs, bossHpStepMs: 60_000, bossHp: [] })));
     const recap = deathsReportFixture.deaths[0];
     const death = (windowMs: number) => ({ ...recap, t: 100_000, windowStartMs: 100_000 - windowMs });
     const pull = (fightIndex: number, windows: number[]) => ({ fightIndex, durationMs: 120_000, deaths: windows.map(death), kills: [], lifetime: [] });
@@ -163,7 +174,7 @@ describe('headerTiles', () => {
 
   it('set_first_death_tile_follows_the_selected_players', () => {
     const raidFirstDeath = { ...overviewFixture.kpis, firstDeathMs: 5_000 };
-    const rows = setRows(compareLogFixture.fights, [1, 3].map((fightIndex) => ({ fightIndex, kpis: raidFirstDeath, bossHpStepMs: 60_000, bossHp: [] })));
+    const rows = setRows(compareLogFixture.fights, [1, 3].map((fightIndex) => ({ fightIndex, kpis: raidFirstDeath, cutoffMs: null, pullDurationMs: overviewFixture.kpis.durationMs, bossHpStepMs: 60_000, bossHp: [] })));
     const pull = (fightIndex: number, firstDeathMs: number | null) => ({ fightIndex, durationMs: 120_000, deaths: [], kills: [], lifetime: [{ player: 4, firstDeathMs }] });
     const data: SetDeaths = { ...deathsReportFixture, deaths: [], pulls: [pull(1, 70_000), pull(3, 20_000)], byKillingBlow: [], noLethal: 0, byPlayer: [] };
     const faelan = { perspective: 'friendly' as const, source: [], target: [{ kind: 'player' as const, actorId: 4 }], ability: [] };
@@ -171,7 +182,7 @@ describe('headerTiles', () => {
   });
 
   it('set_damage_taken_counts_the_deaths_of_every_pull', () => {
-    const rows = setRows(compareLogFixture.fights, [1, 3].map((fightIndex) => ({ fightIndex, kpis: overviewFixture.kpis, bossHpStepMs: 60_000, bossHp: [] })));
+    const rows = setRows(compareLogFixture.fights, [1, 3].map((fightIndex) => ({ fightIndex, kpis: overviewFixture.kpis, cutoffMs: null, pullDurationMs: overviewFixture.kpis.durationMs, bossHpStepMs: 60_000, bossHp: [] })));
     const markers = { ...overviewFixture.timeline.markers, deaths: [] };
     const overview = { ...overviewFixture, kpis: { ...overviewFixture.kpis, deaths: 5 }, timeline: { ...overviewFixture.timeline, markers } };
     const report = { tab: 'taken' as const, data: takenReportFixture };

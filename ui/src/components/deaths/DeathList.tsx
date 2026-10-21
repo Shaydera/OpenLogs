@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { DeathRecap, DeathsReport } from '../../api/types';
-import { formatEventTime } from '../../i18n/format';
+import { formatEventTime, formatOrdinal } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import type { PullView } from '../../pulls/groupPulls';
-import { replaySplitShown, useApp } from '../../store';
+import { pullCutDeath, replaySplitShown, useApp } from '../../store';
 import { GameIcon, MonogramTile } from '../GameIcon';
 import { NoMatch } from '../filters/NoMatch';
 import { ReportHead } from '../filters/ReportHead';
@@ -51,6 +51,7 @@ export function DeathList({ report, groups }: { report: DeathsReport; groups: De
   const split = useApp(replaySplitShown);
   const setReplayTime = useApp((s) => s.setReplayTime);
   const range = useApp((s) => s.range);
+  const cutDeath = useApp(pullCutDeath);
   const scope = useApp((s) => s.scope);
   const overview = useApp((s) => s.overview);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -83,7 +84,7 @@ export function DeathList({ report, groups }: { report: DeathsReport; groups: De
     return (
       <section className="panel" aria-labelledby="deaths-empty-title">
         {head('deaths-empty-title', onePlayer ? title : t('tabs.deaths'))}
-        <NoMatch nothing={t(inSet ? 'deaths.noneInSet' : range ? 'deaths.noneInRange' : 'deaths.none')} />
+        <NoMatch nothing={inSet ? t('deaths.noneInSet') : range ? t('deaths.noneInRange') : cutDeath !== null ? t('deaths.noneBeforeCut', { nth: formatOrdinal(cutDeath) }) : t('deaths.none')} />
       </section>
     );
   }

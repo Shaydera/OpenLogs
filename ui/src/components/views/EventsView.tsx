@@ -3,7 +3,7 @@ import type { EventRow, EventsPage, SharePart } from '../../api/types';
 import { formatEventTimeMs, formatInteger, formatScaled } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import type { FilterTab } from '../../scopeSides';
-import { EVENTS_PAGE_ROWS, type ViewToggles, replayOffered, replaySplitShown, useApp } from '../../store';
+import { EVENTS_PAGE_ROWS, type ViewToggles, analysedEndMs, replayOffered, replaySplitShown, useApp } from '../../store';
 import { spellIcon } from '../../icons';
 import { GameIcon } from '../GameIcon';
 import { NoMatch } from '../filters/NoMatch';
@@ -93,7 +93,7 @@ export function EventsView({ tab }: { tab: FilterTab }) {
   const showEventsPage = useApp((s) => s.showEventsPage);
   const perspective = useApp((s) => s.scope.perspective);
   const range = useApp((s) => s.range);
-  const durationMs = useApp((s) => s.overview?.timeline.durationMs ?? 0);
+  const durationMs = useApp((s) => (s.overview ? analysedEndMs(s.overview) : 0));
   const [open, setOpen] = useState<string | null>(null);
   const title = t('events.title', { tab: t(TAB_TITLE[tab]) });
   const head = (summary?: string) => <ViewHead tab={tab} id="events-title" title={title} summary={summary && <span className="view-summary">{summary}</span>} toggles={TOGGLES[tab] ?? []} />;

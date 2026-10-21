@@ -1,9 +1,9 @@
 import { type ReactNode, useMemo } from 'react';
 import type { BreakdownRow, CastExtra, CastsReport, GroupedRow, PlayerRef } from '../../api/types';
 import { spellIcon } from '../../icons';
-import { formatCpm, formatDuration, formatInteger, formatShare } from '../../i18n/format';
+import { formatCpm, formatDuration, formatInteger, formatOrdinal, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import { type CastsSortKey, useApp } from '../../store';
+import { type CastsSortKey, pullCutDeath, useApp } from '../../store';
 import { GameIcon, MonogramTile } from '../GameIcon';
 import { rowLabel, rowValue, valueLabel } from '../filters/labels';
 import { NoMatch } from '../filters/NoMatch';
@@ -59,6 +59,7 @@ export function CastsTab({ report }: { report: CastsReport }) {
   const { breakdown, extras } = report;
   const scope = useApp((s) => s.scope);
   const range = useApp((s) => s.range);
+  const cutDeath = useApp(pullCutDeath);
   const overview = useApp((s) => s.overview);
   const selectedKey = useApp((s) => s.castsRow);
   const selectRow = useApp((s) => s.selectCastsRow);
@@ -80,7 +81,8 @@ export function CastsTab({ report }: { report: CastsReport }) {
   const nameOf = (player: number) => shortName(roster.get(player)?.name ?? t('report.unknownPlayer'));
   const friendly = scope.perspective === 'friendly';
   const caption = t(friendly ? 'report.player' : 'scope.source');
-  const note = <div className="casts-note">{t(inSet ? 'casts.noteSet' : range ? 'casts.noteRange' : 'casts.note', { duration: formatDuration(breakdown.durationMs) })}</div>;
+  const noteKey = inSet ? 'casts.noteSet' : range ? 'casts.noteRange' : cutDeath !== null ? 'casts.noteCut' : 'casts.note';
+  const note = <div className="casts-note">{t(noteKey, { duration: formatDuration(breakdown.durationMs), nth: cutDeath !== null ? formatOrdinal(cutDeath) : '' })}</div>;
 
   const title =
     onePlayer !== null ? (
