@@ -84,6 +84,12 @@ pub struct Death {
     pub lethal_burst: Option<LethalBurst>,
 }
 
+/// When the `n`th player death (1-based) happened; `None` for `n == 0` or fewer deaths.
+pub fn nth_death_ms(fight: &Fight, n: u32) -> Option<i32> {
+    let index = usize::try_from(n.checked_sub(1)?).ok()?;
+    deaths(fight).get(index).map(|death| death.t)
+}
+
 /// Player deaths from `ENCOUNTER_START` on, one per life.
 pub fn deaths(fight: &Fight) -> Vec<Death> {
     let mut result: Vec<Death> = Vec::new();

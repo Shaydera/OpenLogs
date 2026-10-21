@@ -89,11 +89,11 @@ pub fn pull_comparison_dto(
     PullComparisonDto {
         a: PullSideDto {
             fight_index: index_a,
-            overview: quick_overview_dto(fight_a, curated, &comparison.a),
+            overview: quick_overview_dto(fight_a, curated, &comparison.a, comparison.cut_a),
         },
         b: PullSideDto {
             fight_index: index_b,
-            overview: quick_overview_dto(fight_b, curated, &comparison.b),
+            overview: quick_overview_dto(fight_b, curated, &comparison.b, comparison.cut_b),
         },
         players: comparison
             .players
@@ -156,6 +156,7 @@ mod tests {
             &curated,
             Attribution::Augmented,
             Overkill::Excluded,
+            None,
         );
 
         let dto = pull_comparison_dto(&curated, (1, &pull_a), (3, &pull_b), &comparison);

@@ -6,6 +6,7 @@ use openlogs_gamedata::Curated;
 
 use crate::ability::unit_name;
 use crate::actors::ActorId;
+use crate::deaths::nth_death_ms;
 use crate::fight::Fight;
 use crate::filter::{Attribution, Overkill, ReportFilter};
 use crate::overview::{QuickOverview, quick_overview_in};
@@ -45,35 +46,45 @@ pub struct PullComparison {
     /// Players of both pulls by |DPS difference|, largest first; then players of one pull
     /// by their DPS; ties by name.
     pub players: Vec<ComparedPlayer>,
+    /// The death each pull was cut at; `None` without a cutoff or when it was not reached.
+    pub cut_a: Option<i32>,
+    pub cut_b: Option<i32>,
 }
 
 /// Compares two whole pulls; the time range never applies. `attribution` decides the
-/// players' DPS and HPS; KPIs, series and deaths are the same in both modes.
+/// players' DPS and HPS; KPIs, series and deaths are the same in both modes. With
+/// `death_cutoff`, each pull ends at its own Nth player death.
 pub fn compare_pulls(
     a: &Fight,
     b: &Fight,
     curated: &Curated,
     attribution: Attribution,
     overkill: Overkill,
+    death_cutoff: Option<u32>,
 ) -> PullComparison {
-    let whole = |attribution| ReportFilter {
-        overkill,
-        ..ReportFilter::whole(attribution)
+    let cut = |fight: &Fight| death_cutoff.and_then(|n| nth_death_ms(fight, n));
+    let (cut_a, cut_b) = (cut(a), cut(b));
+    let filter = |cut: Option<i32>, attribution| {
+        ReportFilter {
+            overkill,
+            ..ReportFilter::whole(attribution)
+        }
+        .cut_after(cut)
     };
-    let overview_a = quick_overview_in(a, curated, &whole(Attribution::Augmented));
-    let overview_b = quick_overview_in(b, curated, &whole(Attribution::Augmented));
-    let filter = whole(attribution);
-    let mut only_a = player_sides(a, &overview_a, &filter);
-    let mut rows: Vec<(String, ComparedPlayer)> = player_sides(b, &overview_b, &filter)
-        .into_iter()
-        .map(|(guid, side_b)| {
-            let row = ComparedPlayer {
-                a: only_a.remove(&guid),
-                b: Some(side_b),
-            };
-            (unit_name(b, side_b.actor), row)
-        })
-        .collect();
+    let overview_a = quick_overview_in(a, curated, &filter(cut_a, Attribution::Augmented));
+    let overview_b = quick_overview_in(b, curated, &filter(cut_b, Attribution::Augmented));
+    let mut only_a = player_sides(a, &overview_a, &filter(cut_a, attribution));
+    let mut rows: Vec<(String, ComparedPlayer)> =
+        player_sides(b, &overview_b, &filter(cut_b, attribution))
+            .into_iter()
+            .map(|(guid, side_b)| {
+                let row = ComparedPlayer {
+                    a: only_a.remove(&guid),
+                    b: Some(side_b),
+                };
+                (unit_name(b, side_b.actor), row)
+            })
+            .collect();
     rows.extend(only_a.into_values().map(|side_a| {
         let row = ComparedPlayer {
             a: Some(side_a),
@@ -93,6 +104,8 @@ pub fn compare_pulls(
         a: overview_a,
         b: overview_b,
         players: rows.into_iter().map(|(_, row)| row).collect(),
+        cut_a,
+        cut_b,
     }
 }
 

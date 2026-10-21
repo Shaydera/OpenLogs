@@ -48,6 +48,9 @@ pub struct TimelineDto {
     pub markers: MarkersDto,
     /// The whole pull's duration: `kpis.durationMs` follows the range.
     pub duration_ms: u64,
+    /// The death the analysis ends at; `None` when no cutoff is set, the pull has fewer deaths
+    /// or the death falls in its last millisecond (nothing is cut).
+    pub cutoff_ms: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -402,6 +405,7 @@ pub fn quick_overview_dto(
     fight: &Fight,
     curated: &Curated,
     overview: &QuickOverview,
+    cut_ms: Option<i32>,
 ) -> QuickOverviewDto {
     let mut spells: BTreeMap<SpellId, SpellRef> = BTreeMap::new();
 
@@ -551,6 +555,7 @@ pub fn quick_overview_dto(
                 .collect(),
             markers,
             duration_ms: fight.duration_ms,
+            cutoff_ms: cut_ms.filter(|&t| i64::from(t) + 1 < fight.duration_ms as i64),
         },
         players,
         spells,
@@ -578,7 +583,7 @@ pub fn player_ref(fight: &Fight, id: ActorId) -> PlayerRef {
 
 #[cfg(test)]
 mod tests {
-    use openlogs_analysis::{Actors, SpellInfo};
+    use openlogs_analysis::{Actors, Attribution, Event, EventKind, ReportFilter, SpellInfo};
 
     use super::*;
     use crate::test_fight::{PLAYER_FLAGS, fight, unit};
@@ -698,5 +703,35 @@ mod tests {
                 ),
             ]
         );
+    }
+
+    #[test]
+    fn a_death_in_the_pulls_last_millisecond_cuts_nothing() {
+        let mut actors = Actors::new();
+        let raider = unit(&mut actors, "Player-1", "Raider1", PLAYER_FLAGS);
+        let cutoff_of = |t: i32| {
+            let died = Event {
+                t,
+                source: NOBODY,
+                target: raider,
+                spell: 0,
+                kind: EventKind::Died { unconscious: false },
+                source_hostile: false,
+                target_hostile: false,
+                unit_hp: None,
+            };
+            let pull = fight(actors.clone(), vec![died]);
+            let curated = Curated::bundled();
+            let overview = openlogs_analysis::quick_overview_in(
+                &pull,
+                &curated,
+                &ReportFilter::whole(Attribution::Augmented),
+            );
+            quick_overview_dto(&pull, &curated, &overview, Some(t))
+                .timeline
+                .cutoff_ms
+        };
+        assert_eq!(cutoff_of(19_998), Some(19_998));
+        assert_eq!(cutoff_of(19_999), None);
     }
 }

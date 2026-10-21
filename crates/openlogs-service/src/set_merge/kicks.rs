@@ -37,11 +37,13 @@ pub fn interrupts_set_part(
     scope: ScopeDto,
     group: DimensionDto,
 ) -> SetInterruptsDto {
+    let filter = filter.for_fight(fight);
+    let analysed_ms = filter.to_filter(fight).duration_ms(fight);
     let mut report = interrupts(fight, filter, scope, group);
     SetInterruptsDto {
         pulls: vec![SetKicksPullDto {
             fight_index,
-            duration_ms: fight.duration_ms,
+            duration_ms: analysed_ms,
             interrupts: take(&mut report.interrupts),
             dispels: take(&mut report.dispels),
             missed: take(&mut report.missed),
