@@ -21,7 +21,7 @@ import { deathWindowMs, medianMs } from '../deaths/set/lifetimeModel';
 import { kickTotals } from '../interrupts/kickTotals';
 import type { KpiTone } from '../Kpi';
 import { shortName } from '../overview/players';
-import { type PullFirst, type SetRow, averageFirstDeath, bestPull, earliestOfPulls, pullFirstDeaths, rowHpAtEnd } from '../overview/setOverviewModel';
+import { type PullFirst, type SetRow, averageFirstDeath, bestPull, earliestOfPulls, pullFirstDeaths } from '../overview/setOverviewModel';
 import { formatCapTime, powerName } from '../resources/powerNames';
 import { hitName, reportSpellName } from '../reports/reportData';
 
@@ -137,7 +137,7 @@ function setTiles(kpis: Kpis | null, rows: SetRow[]): HeaderTile[] {
   const best = bestPull(rows);
   const labels = [t('kpi.raidDps'), t(best?.kind === 'kill' ? 'kpi.bestKill' : 'kpi.bestWipe'), t('kpi.deaths'), t('kpi.firstDeathLabel')];
   if (!kpis) return labels.map(pendingTile);
-  const bestValue = best ? (best.kind === 'kill' ? formatDuration(best.row.view.durationMs) : formatPercent(rowHpAtEnd(best.row) ?? 0)) : '—';
+  const bestValue = best ? (best.kind === 'kill' ? formatDuration(best.row.view.durationMs) : formatPercent(best.row.view.bossHpPercent ?? 0)) : '—';
   return [
     { label: labels[0], value: formatAmount(kpis.raidDps), sub: t('kpi.damageOver', { damage: formatAmount(kpis.raidDamage), duration: formatDuration(kpis.durationMs) }) },
     { label: labels[1], value: bestValue, sub: best ? t('kpi.pullNumber', { n: best.row.view.n }) : '' },

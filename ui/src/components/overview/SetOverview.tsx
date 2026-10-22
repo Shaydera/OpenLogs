@@ -124,7 +124,7 @@ export function SetOverview({ set, rows, kpis }: { set: PullSet; rows: SetRow[];
             <span className="set-best">
               {best &&
                 (best.kind === 'wipe'
-                  ? t('setOverview.bestWipe', { percent: formatPercent(rowHpAtEnd(best.row) ?? 0), n: best.row.view.n })
+                  ? t('setOverview.bestWipe', { percent: formatPercent(best.row.view.bossHpPercent ?? 0), n: best.row.view.n })
                   : t('setOverview.bestKill', { duration: formatDuration(best.row.view.durationMs), n: best.row.view.n }))}
             </span>
             <span />

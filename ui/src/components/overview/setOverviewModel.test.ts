@@ -28,14 +28,15 @@ describe('set overview model', () => {
     expect(hpAtEnd(pull(1, { bossHp: [100, 80, null, null], cutoffMs: 3_000 }))).toBe(80);
   });
 
-  it('judges the best wipe at its cut', () => {
+  it('picks the best wipe by its logged boss HP whatever the cutoff', () => {
     const fights: FightRow[] = [
       { ...WIPE, index: 1, durationMs: 140_000, bossHpPercent: 30 },
       { ...WIPE, index: 2, durationMs: 120_000, bossHpPercent: 60 },
+      { ...WIPE, index: 3, durationMs: 300_000, outcome: 'kill', bossHpPercent: 0 },
     ];
     const cutEarly = pull(1, { cutoffMs: 2_000, bossHp: [100, 90, 80, 30] });
     const whole = pull(2, { bossHp: [100, 60] });
-    expect(bestPull(setRows(fights, [cutEarly, whole]))?.row.view.n).toBe(2);
-    expect(bestPull(setRows(fights, [{ ...cutEarly, cutoffMs: null }, whole]))?.row.view.n).toBe(1);
+    const cutKill = pull(3, { cutoffMs: 1_000, bossHp: [100, 95, 0] });
+    expect(bestPull(setRows(fights, [cutEarly, whole, cutKill]))?.row.view.n).toBe(1);
   });
 });
