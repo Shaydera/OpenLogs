@@ -9,7 +9,7 @@ use crate::model::WorldMarker;
 const LEAVING_REMOVAL_MICROS: i64 = 10_000_000;
 
 /// World markers the log shows as active, with those it hides while the player is away.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct MarkerState {
     instance: Option<u32>,
     active: BTreeMap<u8, WorldMarker>,
