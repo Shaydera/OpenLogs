@@ -582,6 +582,8 @@ mod tests {
             end_ms: None,
             attribution: AttributionDto::Reattributed,
             include_overkill: false,
+            death_cutoff: None,
+            known_cut_ms: None,
         };
         let scope: ScopeDto =
             serde_json::from_str(r#"{"source":[{"kind":"player","actorId":1}]}"#).unwrap();

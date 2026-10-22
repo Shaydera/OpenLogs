@@ -204,6 +204,8 @@ pub struct SetPullDto {
     pub kpis: KpisDto,
     pub boss_hp_step_ms: u32,
     pub boss_hp: Vec<Option<f32>>,
+    pub cutoff_ms: Option<i32>,
+    pub pull_duration_ms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -226,6 +228,8 @@ impl SetOverviewAcc {
             kpis: part.kpis.clone(),
             boss_hp_step_ms: part.timeline.boss_hp_step_ms,
             boss_hp: part.timeline.boss_hp.clone(),
+            cutoff_ms: part.timeline.cutoff_ms,
+            pull_duration_ms: part.timeline.duration_ms,
         });
         let Some(set) = &mut self.overview else {
             self.overview = Some(part);
@@ -253,6 +257,7 @@ impl SetOverviewAcc {
         overview.timeline.boss_hp.clear();
         overview.timeline.raid_dps.clear();
         overview.timeline.phases.clear();
+        overview.timeline.cutoff_ms = None;
         overview.timeline.markers = MarkersDto {
             deaths: Vec::new(),
             bloodlust: Vec::new(),
@@ -642,7 +647,7 @@ fn sort_taken(rows: &mut [TakenAbilityDto]) {
 
 #[cfg(test)]
 mod tests {
-    use openlogs_analysis::{Actors, Fight, NOBODY, SpellInfo};
+    use openlogs_analysis::{Actors, Event, EventKind, Fight, NOBODY, SpellInfo};
 
     use super::*;
     use crate::overview_dto::TimelineDto;
@@ -656,6 +661,8 @@ mod tests {
         end_ms: None,
         attribution: AttributionDto::Augmented,
         include_overkill: false,
+        death_cutoff: None,
+        known_cut_ms: None,
     };
 
     pub(super) fn merged<T: Merge>(parts: Vec<T>) -> T {
@@ -1210,6 +1217,7 @@ mod tests {
                         boss_casts: Vec::new(),
                     },
                     duration_ms: duration,
+                    cutoff_ms: None,
                 },
                 players: Vec::new(),
                 spells: BTreeMap::new(),
@@ -1248,5 +1256,65 @@ mod tests {
         assert_eq!(set.pulls[1].fight_index, 5);
         assert_eq!(set.pulls[1].kpis.first_death_ms, Some(9_000));
         assert_eq!(set.pulls[1].boss_hp, [Some(10.0)]);
+    }
+
+    #[test]
+    fn set_pulls_cut_each_at_their_own_death() {
+        let mut actors = Actors::new();
+        let players: Vec<_> = (1..=3)
+            .map(|i| {
+                unit(
+                    &mut actors,
+                    &format!("Player-{i}"),
+                    &format!("Raider{i}"),
+                    PLAYER_FLAGS,
+                )
+            })
+            .collect();
+        let died = |t: i32, player: ActorId| Event {
+            t,
+            source: NOBODY,
+            target: player,
+            spell: 0,
+            kind: EventKind::Died { unconscious: false },
+            source_hostile: false,
+            target_hostile: false,
+            unit_hp: None,
+        };
+        let mut long = fight(
+            actors.clone(),
+            vec![
+                died(10_000, players[0]),
+                died(20_000, players[1]),
+                died(40_000, players[2]),
+            ],
+        );
+        long.duration_ms = 90_000;
+        let mut short = fight(actors, vec![died(5_000, players[0])]);
+        short.duration_ms = 60_000;
+        let filter = FilterDto {
+            death_cutoff: Some(3),
+            ..WHOLE
+        };
+        let curated = openlogs_gamedata::Curated::bundled();
+        let mut acc = SetOverviewAcc::default();
+        for (index, pull) in [&long, &short].into_iter().enumerate() {
+            acc.add(
+                index as u32,
+                crate::quick_overview(pull, &curated, Some(filter)),
+            );
+        }
+        let set = acc.finish(3).expect("two pulls were added");
+        let pulls: Vec<_> = set
+            .pulls
+            .iter()
+            .map(|p| (p.cutoff_ms, p.kpis.duration_ms, p.pull_duration_ms))
+            .collect();
+        assert_eq!(
+            pulls,
+            [(Some(40_000), 40_001, 90_000), (None, 60_000, 60_000)]
+        );
+        assert_eq!(set.overview.kpis.duration_ms, 100_001);
+        assert_eq!(set.overview.timeline.cutoff_ms, None);
     }
 }

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { OverviewTimeline } from '../../api/types';
-import { compareChart } from './compareGeometry';
+import { compareChart, drawOrder } from './compareGeometry';
 
 const base: OverviewTimeline = {
   durationMs: 0,
+  cutoffMs: null,
   markers: { deaths: [], bloodlust: [], bossCasts: [] },
   bossHpStepMs: 1_000,
   bossHp: [],
@@ -27,5 +28,13 @@ describe('compareChart', () => {
     );
     expect(chart.a.dps).toBe('M 0 100 L 0 50 L 500 50 L 500 100 Z');
     expect(chart.b.dps).toBe('M 250 100 L 250 0 L 750 50 L 750 100 Z');
+  });
+
+  it('draws the pull cut earlier first, so the other pull stays above its shade', () => {
+    const at = (cutoffMs: number | null): OverviewTimeline => ({ ...base, durationMs: 10_000, cutoffMs });
+    expect(drawOrder(at(null), at(null))).toEqual(['a', 'b']);
+    expect(drawOrder(at(null), at(4_000))).toEqual(['b', 'a']);
+    expect(drawOrder(at(6_000), at(4_000))).toEqual(['b', 'a']);
+    expect(drawOrder(at(4_000), at(6_000))).toEqual(['a', 'b']);
   });
 });

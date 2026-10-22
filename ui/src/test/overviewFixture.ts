@@ -16,6 +16,7 @@ export const overviewFixture: QuickOverview = {
   },
   timeline: {
     durationMs: 478_610,
+    cutoffMs: null,
     markers: {
       deaths: [
         { t: 33_200, player: 3 },

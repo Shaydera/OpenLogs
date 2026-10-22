@@ -1,6 +1,7 @@
 import { t } from '../../i18n/i18n';
 import { replayOffered, useApp } from '../../store';
 import { ViewLens } from '../filters/ViewLens';
+import { DeathCutoffChip } from './DeathCutoffChip';
 import { OptionsMenu } from './OptionsMenu';
 import { ViewSwitch } from './ViewSwitch';
 
@@ -14,6 +15,7 @@ export function ReportToolbar() {
   return (
     <div className="report-toolbar" role="toolbar" aria-label={t('toolbar.label')}>
       <ViewLens />
+      <DeathCutoffChip />
       <span className="report-toolbar-spacer" />
       <OptionsMenu />
       <ViewSwitch />

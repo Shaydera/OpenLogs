@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use openlogs_analysis::{
     AbilityRow, ActorId, Attribution, BuffShare, DamageReport, DamageTakenReport, Fight,
     GroupAbilities, HealingReport, NO_SPELL, Overkill, ReportFilter, RowKind, SpellId,
-    TakenAbility, TargetKey, TargetShare,
+    TakenAbility, TargetKey, TargetShare, nth_death_ms,
 };
 use serde::{Deserialize, Serialize};
 
@@ -34,15 +34,70 @@ pub struct FilterDto {
     pub end_ms: Option<i32>,
     pub attribution: AttributionDto,
     pub include_overkill: bool,
+    /// Ends the analysis at this player death (1-based) of each pull.
+    #[serde(default)]
+    pub death_cutoff: Option<u32>,
+    /// That death's time once looked up for one pull; only valid for that pull.
+    #[serde(skip)]
+    pub known_cut_ms: Option<Option<i32>>,
 }
 
 impl FilterDto {
-    pub fn to_filter(self) -> ReportFilter {
+    pub fn to_filter(self, fight: &Fight) -> ReportFilter {
         ReportFilter {
             start_ms: self.start_ms.unwrap_or(0),
             end_ms: self.end_ms.unwrap_or(i32::MAX),
             attribution: self.attribution.to_attribution(),
             overkill: Overkill::included_if(self.include_overkill),
+        }
+        .cut_after(self.cut_ms(fight))
+    }
+
+    /// When the `death_cutoff`th player death of `fight` happened; `None` without a cutoff or
+    /// when the pull has fewer deaths.
+    pub fn cut_ms(&self, fight: &Fight) -> Option<i32> {
+        self.known_cut_ms
+            .unwrap_or_else(|| self.death_cutoff.and_then(|n| nth_death_ms(fight, n)))
+    }
+
+    /// This filter with its cut looked up once for `fight`, for several reports of that pull.
+    pub fn for_fight(self, fight: &Fight) -> Self {
+        Self {
+            known_cut_ms: Some(self.cut_ms(fight)),
+            ..self
+        }
+    }
+}
+
+/// The cuts of one pull's report filters: each cutoff's death is looked up once for all of them.
+pub struct PullCuts<'a> {
+    fight: &'a Fight,
+    known: Vec<(u32, Option<i32>)>,
+}
+
+impl<'a> PullCuts<'a> {
+    pub fn new(fight: &'a Fight) -> Self {
+        Self {
+            fight,
+            known: Vec::new(),
+        }
+    }
+
+    pub fn resolve(&mut self, filter: FilterDto) -> FilterDto {
+        let Some(n) = filter.death_cutoff else {
+            return filter;
+        };
+        let cut = match self.known.iter().find(|(known, _)| *known == n) {
+            Some(&(_, cut)) => cut,
+            None => {
+                let cut = nth_death_ms(self.fight, n);
+                self.known.push((n, cut));
+                cut
+            }
+        };
+        FilterDto {
+            known_cut_ms: Some(cut),
+            ..filter
         }
     }
 }
@@ -582,5 +637,66 @@ mod tests {
         let heals = healing_report_dto(&fight, &healing(&fight, &filter));
         assert_eq!(heals.players[0].targets[0].target.player, Some(tank));
         assert!(heals.roster.iter().any(|p| p.actor_id == tank));
+    }
+}
+
+#[cfg(test)]
+mod death_cutoff_tests {
+    use super::*;
+
+    #[test]
+    fn filter_without_death_cutoff_parses_as_none() {
+        let filter: FilterDto = serde_json::from_str(
+            r#"{"startMs":null,"endMs":null,"attribution":"augmented","includeOverkill":false}"#,
+        )
+        .unwrap();
+        assert_eq!(filter.death_cutoff, None);
+    }
+
+    #[test]
+    fn a_pulls_shared_cut_ends_its_reports_where_each_would() {
+        use openlogs_analysis::{Actors, Event, EventKind, NOBODY};
+
+        use crate::test_fight::{PLAYER_FLAGS, fight, unit};
+
+        let mut actors = Actors::new();
+        let raiders: Vec<_> = (1..=2)
+            .map(|i| {
+                unit(
+                    &mut actors,
+                    &format!("Player-{i}"),
+                    &format!("Raider{i}"),
+                    PLAYER_FLAGS,
+                )
+            })
+            .collect();
+        let died = |t: i32, target: ActorId| Event {
+            t,
+            source: NOBODY,
+            target,
+            spell: 0,
+            kind: EventKind::Died { unconscious: false },
+            source_hostile: false,
+            target_hostile: false,
+            unit_hp: None,
+        };
+        let pull = fight(
+            actors,
+            vec![died(4_000, raiders[0]), died(9_000, raiders[1])],
+        );
+        let filter = |death_cutoff| FilterDto {
+            start_ms: None,
+            end_ms: None,
+            attribution: AttributionDto::Augmented,
+            include_overkill: false,
+            death_cutoff,
+            known_cut_ms: None,
+        };
+        let mut cuts = PullCuts::new(&pull);
+        for n in [Some(1), Some(2), Some(3), None, Some(2)] {
+            let shared = cuts.resolve(filter(n));
+            assert_eq!(shared.to_filter(&pull), filter(n).to_filter(&pull));
+        }
+        assert_eq!(cuts.resolve(filter(Some(2))).to_filter(&pull).end_ms, 9_001);
     }
 }

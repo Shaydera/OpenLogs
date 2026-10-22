@@ -24,20 +24,42 @@ export function setRows(fights: FightRow[], pulls: SetPull[]): SetRow[] {
 
 const missingLast = (percent: number | null) => percent ?? Number.POSITIVE_INFINITY;
 
+/** Boss HP at the pull's analysed end: the last known sample that ends by its cut, else the last known sample. */
+export function hpAtEnd(pull: SetPull): number | null {
+  if (pull.bossHp.length === 0) return null;
+  const last = pull.bossHp.length - 1;
+  // A sample holds the last HP seen in its step, so the step the cut falls in may already hold HP from after it.
+  const at = pull.cutoffMs === null || pull.bossHpStepMs <= 0 ? last : Math.min(last, Math.floor((pull.cutoffMs + 1) / pull.bossHpStepMs) - 1);
+  for (let i = at; i >= 0; i--) {
+    const hp = pull.bossHp[i];
+    if (hp !== null) return hp;
+  }
+  return null;
+}
+
+/** A killed pull cut at a death ended with the boss alive, so it counts as a wipe. */
+const isKill = (row: SetRow) => row.view.status === 'kill' && row.pull.cutoffMs === null;
+
+/** Boss HP where the row's pull ends: the logged value for a whole pull, the HP at the cut for a cut one. */
+export function rowHpAtEnd(row: SetRow): number | null {
+  if (row.pull.cutoffMs !== null) return hpAtEnd(row.pull);
+  return isKill(row) ? 0 : row.view.bossHpPercent;
+}
+
 /** Best first: kills by duration, then wipes by the boss HP they reached. */
 export function sortRows(rows: SetRow[], order: SetOrder): SetRow[] {
   if (order === 'inOrder') return rows;
-  const kills = rows.filter((row) => row.view.status === 'kill').sort((a, b) => a.view.durationMs - b.view.durationMs);
-  const others = rows.filter((row) => row.view.status !== 'kill').sort((a, b) => missingLast(a.view.bossHpPercent) - missingLast(b.view.bossHpPercent));
+  const kills = rows.filter(isKill).sort((a, b) => a.view.durationMs - b.view.durationMs);
+  const others = rows.filter((row) => !isKill(row)).sort((a, b) => missingLast(rowHpAtEnd(a)) - missingLast(rowHpAtEnd(b)));
   return [...kills, ...others];
 }
 
 /** The wipe that took the boss lowest, else the fastest kill when no wipe has a known boss HP. */
 export function bestPull(rows: SetRow[]): BestPull | null {
   const ordered = sortRows(rows, 'bestFirst');
-  const wipe = ordered.find((row) => row.view.status !== 'kill' && row.view.bossHpPercent !== null);
+  const wipe = ordered.find((row) => !isKill(row) && rowHpAtEnd(row) !== null);
   if (wipe) return { kind: 'wipe', row: wipe };
-  const kill = ordered.find((row) => row.view.status === 'kill');
+  const kill = ordered.find(isKill);
   return kill ? { kind: 'kill', row: kill } : null;
 }
 

@@ -271,8 +271,8 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
       report<EventsPage>(logId, [fightIndex], 'events', { fightIndex, filter, scope, metric, options, page }),
     timeline: (logId: string, fightIndex: number, filter: ReportFilter, scope: Scope, metric: ScopeMetric, lanes: Dimension, options: ViewOptions, window: { startMs: number; endMs: number }) =>
       report<Timeline>(logId, [fightIndex], 'timeline', { fightIndex, filter, scope, metric, lanes, options, window }),
-    comparePulls: (logId: string, fightA: number, fightB: number, attribution: Attribution, includeOverkill: boolean) =>
-      report<PullComparison>(logId, [fightA, fightB], 'compare_pulls', { fightA, fightB, attribution, includeOverkill }),
+    comparePulls: (logId: string, fightA: number, fightB: number, attribution: Attribution, includeOverkill: boolean, deathCutoff: number | null) =>
+      report<PullComparison>(logId, [fightA, fightB], 'compare_pulls', { fightA, fightB, attribution, includeOverkill, deathCutoff }),
   };
 }
 

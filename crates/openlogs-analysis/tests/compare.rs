@@ -123,6 +123,7 @@ fn players_are_matched_by_guid_and_sorted_by_the_dps_difference() {
         &Curated::bundled(),
         Attribution::Augmented,
         Overkill::Excluded,
+        None,
     );
     assert_eq!(
         rows(&wipe_pull, &kill_pull, &comparison),
@@ -169,6 +170,7 @@ fn the_aug_mode_moves_support_to_the_evoker() {
         &curated,
         Attribution::Augmented,
         Overkill::Excluded,
+        None,
     );
     let reattributed = compare_pulls(
         &wipe_pull,
@@ -176,6 +178,7 @@ fn the_aug_mode_moves_support_to_the_evoker() {
         &curated,
         Attribution::Reattributed,
         Overkill::Excluded,
+        None,
     );
     assert_eq!(
         kill_dps(&kill_pull, &augmented, "Faelan-Emberfall-EU"),
@@ -196,5 +199,34 @@ fn the_aug_mode_moves_support_to_the_evoker() {
     assert_eq!(
         augmented.b.kpis, reattributed.b.kpis,
         "KPIs do not depend on the mode"
+    );
+}
+
+#[test]
+fn comparison_cuts_each_pull_at_its_own_death() {
+    let pull = |duration, death_at| {
+        let mut b = FightBuilder::new(duration);
+        let faelan = b.player("Player-1", "Faelan-Emberfall-EU", 62);
+        b.push(
+            death_at,
+            NOBODY,
+            faelan,
+            MELEE,
+            EventKind::Died { unconscious: false },
+        );
+        b.build()
+    };
+    let (a, b) = (pull(60_000, 30_000), pull(60_000, 50_000));
+    let comparison = compare_pulls(
+        &a,
+        &b,
+        &Curated::bundled(),
+        Attribution::Augmented,
+        Overkill::Excluded,
+        Some(1),
+    );
+    assert_eq!(
+        (comparison.a.kpis.duration_ms, comparison.b.kpis.duration_ms),
+        (30_001, 50_001)
     );
 }

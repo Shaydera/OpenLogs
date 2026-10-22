@@ -1,6 +1,6 @@
 import { type MouseEvent as ReactMouseEvent, type RefObject, useEffect, useRef, useState } from 'react';
 import type { TimeRange } from '../../store';
-import { type Edge, MIN_DRAG_PX, brushToRange, normalizeRange, sameRange, snapToSecond, timeAt, withEdge } from './rangeGeometry';
+import { type Edge, MIN_DRAG_PX, brushToRange, rangeInPull, sameRange, snapToSecond, timeAt, withEdge } from './rangeGeometry';
 
 /** `brush` draws a new selection across the plot; an edge moves that handle. */
 export type DragMode = 'brush' | Edge;
@@ -15,7 +15,7 @@ export interface Brush {
 /**
  * Pointer selection on a plot: a drag across the plot selects a range in whole seconds, a drag of a
  * handle moves that edge, a click without a drag goes to `onClick` with its x position and the plot
- * width. `onChange` gets each new selection; one that covers the whole pull is `null`.
+ * width. Selections stop at `limitMs` (the analysed end); `onChange` gets each new one, `null` when it covers 0 → `limitMs`.
  */
 export function useBrush(
   plotRef: RefObject<HTMLElement | null>,
@@ -23,6 +23,7 @@ export function useBrush(
   current: TimeRange | null,
   onChange: (range: TimeRange | null) => void,
   onClick: (x: number, width: number) => void,
+  limitMs = durationMs,
 ): Brush {
   const [preview, setPreview] = useState<TimeRange | null | undefined>(undefined);
   /** Removes the listeners of a drag in progress. */
@@ -42,9 +43,9 @@ export function useBrush(
     const dragged = (x: number) => Math.abs(x - x0) >= MIN_DRAG_PX;
     /** The selection a drag to `x` makes; `undefined` when it makes none. */
     const selection = (x: number): TimeRange | null | undefined => {
-      if (mode !== 'brush') return withEdge(current, mode, snapToSecond(timeAt(x, width, durationMs), durationMs), durationMs);
+      if (mode !== 'brush') return withEdge(current, mode, snapToSecond(timeAt(x, width, durationMs), durationMs), limitMs);
       const brushed = brushToRange(x0, x, width, durationMs);
-      return brushed === null ? undefined : normalizeRange(brushed, durationMs);
+      return brushed === null ? undefined : rangeInPull(brushed, limitMs);
     };
     const stop = () => {
       document.removeEventListener('mousemove', move);

@@ -85,7 +85,7 @@ pub fn deaths_set_part(
     filter: FilterDto,
     scope: ScopeDto,
 ) -> SetDeathsDto {
-    let (filter, scope) = (filter.to_filter(), scope.to_scope());
+    let (filter, scope) = (filter.to_filter(fight), scope.to_scope());
     let analysed = deaths_report(fight, curated, &filter, &scope);
     let mut report = deaths_report_dto(fight, curated, &analysed);
     let (blows, lifetime, dead_players): (Vec<Option<Hit>>, Vec<LifeDto>, BTreeSet<ActorId>) =
@@ -122,7 +122,7 @@ pub fn deaths_set_part(
     SetDeathsDto {
         pulls: vec![SetDeathsPullDto {
             fight_index,
-            duration_ms: fight.duration_ms,
+            duration_ms: filter.duration_ms(fight),
             deaths: take(&mut report.deaths),
             kills: take(&mut report.kills),
             lifetime,
@@ -489,5 +489,27 @@ mod tests {
         assert_eq!(set.no_lethal, 1);
         assert_eq!(set.report.most_lethal.map(|l| l.count), Some(2));
         assert_eq!(set.report.dead_units, 2);
+    }
+
+    #[test]
+    fn set_deaths_lifetime_uses_the_analysed_time() {
+        let raid = raid();
+        let (a, b, boss) = (raid.a, raid.b, raid.boss);
+        let mut events = vec![
+            event(11_000, b, a, RESURRECTION, EventKind::Resurrect),
+            event(13_000, a, b, RESURRECTION, EventKind::Resurrect),
+        ];
+        for (t, player) in [(10_000, a), (12_000, b), (14_000, a), (16_000, b)] {
+            events.extend(killed(t, boss, player, KILLER_SPELL));
+        }
+        let mut pull = pull_with(&raid, &[a, b], events);
+        pull.duration_ms = 90_000;
+        let filter = FilterDto {
+            death_cutoff: Some(3),
+            ..WHOLE
+        };
+        let part = deaths_set_part(0, &pull, &Curated::bundled(), filter, ScopeDto::default());
+        assert_eq!(part.pulls[0].duration_ms, 14_001);
+        assert_eq!(part.pulls[0].deaths.len(), 3);
     }
 }

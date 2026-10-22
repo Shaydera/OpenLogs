@@ -11,7 +11,7 @@ use openlogs_service::log_dto::log_view;
 use openlogs_service::meter_dto::MeterCategoryDto;
 use openlogs_service::player_dto::MetricDto;
 use openlogs_service::report_dto::{
-    AttributionDto, DamageReportDto, DamageTakenReportDto, FilterDto, HealingReportDto,
+    AttributionDto, DamageReportDto, DamageTakenReportDto, FilterDto, HealingReportDto, PullCuts,
 };
 use openlogs_service::scope_dto::{BreakdownDto, DimensionDto, ScopeDto, ScopeMetricDto};
 use openlogs_service::views_dto::{PageDto, ViewOptionsDto, WindowDto};
@@ -179,8 +179,9 @@ impl Engine {
         }
         let summary = summary_of(&self.index, fight_index)?;
         let fight = load_fight_slice_with(part, base_offset, summary, pass.actors.carried_over());
+        let mut cuts = PullCuts::new(&fight);
         for command in &mut pass.commands {
-            command.add(fight_index, &fight, &self.curated);
+            command.add(fight_index, &fight, &self.curated, &mut cuts);
         }
         pass.next += 1;
         pass.actors = fight.actors;
@@ -356,6 +357,7 @@ impl Engine {
                     (args.fight_b, self.fight(args.fight_b)?),
                     args.attribution,
                     args.include_overkill,
+                    args.death_cutoff,
                 ))
             }
             "events" => {
@@ -535,20 +537,26 @@ enum SetCommand {
 }
 
 impl SetCommand {
-    fn add(&mut self, fight_index: u32, fight: &Fight, curated: &Curated) {
+    fn add(&mut self, fight_index: u32, fight: &Fight, curated: &Curated, cuts: &mut PullCuts) {
         match self {
             Self::QuickOverview { filter, set } => set.add(
                 fight_index,
-                openlogs_service::quick_overview(fight, curated, *filter),
+                openlogs_service::quick_overview(fight, curated, filter.map(|f| cuts.resolve(f))),
             ),
             Self::DamageDoneReport { filter, set } => {
-                fold(set, openlogs_service::damage_done_set_part(fight, *filter));
+                fold(
+                    set,
+                    openlogs_service::damage_done_set_part(fight, cuts.resolve(*filter)),
+                );
             }
             Self::HealingReport { filter, set } => {
-                fold(set, openlogs_service::healing(fight, *filter));
+                fold(set, openlogs_service::healing(fight, cuts.resolve(*filter)));
             }
             Self::DamageTakenReport { filter, set } => {
-                fold(set, openlogs_service::damage_taken_set_part(fight, *filter));
+                fold(
+                    set,
+                    openlogs_service::damage_taken_set_part(fight, cuts.resolve(*filter)),
+                );
             }
             Self::BreakdownReport {
                 filter,
@@ -561,7 +569,7 @@ impl SetCommand {
                 openlogs_service::breakdown_report(
                     fight,
                     curated,
-                    *filter,
+                    cuts.resolve(*filter),
                     scope.clone(),
                     *metric,
                     *group,
@@ -578,7 +586,7 @@ impl SetCommand {
                 FilterOptionsDto(openlogs_service::filter_options(
                     fight,
                     curated,
-                    *filter,
+                    cuts.resolve(*filter),
                     scope.clone(),
                     *metric,
                     *dimension,
@@ -590,7 +598,7 @@ impl SetCommand {
                     fight_index,
                     fight,
                     curated,
-                    *filter,
+                    cuts.resolve(*filter),
                     scope.clone(),
                 ),
             ),
@@ -605,7 +613,7 @@ impl SetCommand {
                 openlogs_service::casts(
                     fight,
                     curated,
-                    *filter,
+                    cuts.resolve(*filter),
                     scope.clone(),
                     *group,
                     *hide_procs,
@@ -622,7 +630,7 @@ impl SetCommand {
                 openlogs_service::auras_set_part(
                     fight_index,
                     fight,
-                    *filter,
+                    cuts.resolve(*filter),
                     scope.clone(),
                     *kind,
                     *group,
@@ -638,7 +646,7 @@ impl SetCommand {
                 openlogs_service::interrupts_set_part(
                     fight_index,
                     fight,
-                    *filter,
+                    cuts.resolve(*filter),
                     scope.clone(),
                     *group,
                 ),
@@ -822,6 +830,8 @@ struct CompareArgs {
     fight_b: u32,
     attribution: AttributionDto,
     include_overkill: bool,
+    #[serde(default)]
+    death_cutoff: Option<u32>,
 }
 
 #[derive(Deserialize)]

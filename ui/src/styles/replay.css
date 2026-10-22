@@ -211,6 +211,11 @@
   margin-left: -1px;
   background: var(--death);
 }
+.replay-scrubber .cutoff-shade {
+  justify-content: center;
+  padding-block: 0;
+  border-radius: 0 4px 4px 0;
+}
 .replay-playhead {
   position: absolute;
   top: -3px;

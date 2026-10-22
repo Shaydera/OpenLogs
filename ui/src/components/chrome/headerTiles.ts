@@ -15,13 +15,13 @@ import {
 } from '../../i18n/format';
 import { type MessageKey, t } from '../../i18n/i18n';
 import { SIDES } from '../../scopeSides';
-import type { FightTab, MetricTab, ReportData, TimeRange } from '../../store';
+import { type FightTab, type MetricTab, type ReportData, type TimeRange, analysedEndMs } from '../../store';
 import { rowLabel, valueLabel } from '../filters/labels';
 import { deathWindowMs, medianMs } from '../deaths/set/lifetimeModel';
 import { kickTotals } from '../interrupts/kickTotals';
 import type { KpiTone } from '../Kpi';
 import { shortName } from '../overview/players';
-import { type PullFirst, type SetRow, averageFirstDeath, bestPull, earliestOfPulls, pullFirstDeaths } from '../overview/setOverviewModel';
+import { type PullFirst, type SetRow, averageFirstDeath, bestPull, earliestOfPulls, pullFirstDeaths, rowHpAtEnd } from '../overview/setOverviewModel';
 import { formatCapTime, powerName } from '../resources/powerNames';
 import { hitName, reportSpellName } from '../reports/reportData';
 
@@ -137,7 +137,7 @@ function setTiles(kpis: Kpis | null, rows: SetRow[]): HeaderTile[] {
   const best = bestPull(rows);
   const labels = [t('kpi.raidDps'), t(best?.kind === 'kill' ? 'kpi.bestKill' : 'kpi.bestWipe'), t('kpi.deaths'), t('kpi.firstDeathLabel')];
   if (!kpis) return labels.map(pendingTile);
-  const bestValue = best ? (best.kind === 'kill' ? formatDuration(best.row.view.durationMs) : formatPercent(best.row.view.bossHpPercent ?? 0)) : '—';
+  const bestValue = best ? (best.kind === 'kill' ? formatDuration(best.row.view.durationMs) : formatPercent(rowHpAtEnd(best.row) ?? 0)) : '—';
   return [
     { label: labels[0], value: formatAmount(kpis.raidDps), sub: t('kpi.damageOver', { damage: formatAmount(kpis.raidDamage), duration: formatDuration(kpis.durationMs) }) },
     { label: labels[1], value: bestValue, sub: best ? t('kpi.pullNumber', { n: best.row.view.n }) : '' },
@@ -230,9 +230,14 @@ function breakdownTiles(tab: MetricTab, input: HeaderInput): HeaderTile[] {
   ];
 }
 
-/** The Overview's rule: a range from 0:00 also holds what happened before the pull (prepull lust). */
-const inRange = (range: TimeRange | null, at: number, durationMs: number) =>
-  range === null || ((at < range.endMs || (at === range.endMs && range.endMs >= durationMs)) && (at >= range.startMs || range.startMs === 0));
+/** The Overview's rule: a range from 0:00 also holds what happened before the pull (prepull lust); nothing after the analysed end counts. */
+function inRange(range: TimeRange | null, at: number, overview: QuickOverview): boolean {
+  const { durationMs } = overview.timeline;
+  const startMs = range?.startMs ?? 0;
+  const endMs = Math.min(range?.endMs ?? durationMs, analysedEndMs(overview));
+  if (startMs === 0 && endMs >= durationMs) return true;
+  return (at < endMs || (at === endMs && endMs >= durationMs)) && (at >= startMs || startMs === 0);
+}
 
 function deathsTile(times: number[]): HeaderTile {
   return {
@@ -256,7 +261,7 @@ function takenTiles(report: ReportOf['taken'] | null, input: HeaderInput): Heade
       ? pendingTile(labels[3])
       : input.setRows
         ? setDeathsTile(input.overview.kpis.deaths, input.setRows.length)
-        : deathsTile(input.overview.timeline.markers.deaths.map((d) => d.t).filter((at) => inRange(input.range, at, input.overview!.timeline.durationMs))),
+        : deathsTile(input.overview.timeline.markers.deaths.map((d) => d.t).filter((at) => inRange(input.range, at, input.overview!))),
   ];
 }
 
@@ -345,7 +350,7 @@ function aurasTiles(report: ReportOf['buffs'] | null, input: HeaderInput): Heade
   const labels = [t('kpi.bloodlust'), t('kpi.ebonMight'), t(byTarget ? 'kpi.targets' : 'kpi.auras'), t('kpi.players')];
   if (!report) return (inSet ? labels.slice(1) : labels).map(pendingTile);
   const overview = input.overview;
-  const lust = overview?.timeline.markers.bloodlust.find((l) => inRange(input.range, l.t, overview.timeline.durationMs));
+  const lust = overview?.timeline.markers.bloodlust.find((l) => inRange(input.range, l.t, overview));
   const ebon = report.ebonMight;
   const onEnemies = input.scope.perspective === 'enemy';
   const lustTile: HeaderTile = !overview

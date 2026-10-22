@@ -1,7 +1,7 @@
 import { type KeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { EffectInstance, ReplayData } from '../../api/types';
 import { t } from '../../i18n/i18n';
-import { replaySplitShown, useApp } from '../../store';
+import { analysedEndMs, replaySplitShown, useApp } from '../../store';
 import { rangeWindow } from '../views/zoomGeometry';
 import { BossFrames } from './BossFrames';
 import { EffectList } from './EffectList';
@@ -88,6 +88,7 @@ export function ReplayTab({ compact = false, rangePanel }: { compact?: boolean; 
 
 function ReplayPanel({ data, compact, rangePanel }: { data: ReplayData; compact: boolean; rangePanel: ReactNode }) {
   const range = useApp((s) => s.range);
+  const overview = useApp((s) => s.overview);
   const setReplayTime = useApp((s) => s.setReplayTime);
   const toggleReplayPlay = useApp((s) => s.toggleReplayPlay);
   const [highlight, setHighlight] = useState<number[] | null>(null);
@@ -98,6 +99,7 @@ function ReplayPanel({ data, compact, rangePanel }: { data: ReplayData; compact:
   const dense = useDenseStage(plot);
   const bounds = rangeWindow(range, data.durationMs);
   const { startMs, endMs } = bounds;
+  const limitMs = overview && overview.timeline.cutoffMs !== null ? Math.min(endMs, analysedEndMs(overview)) : endMs;
 
   useLayoutEffect(() => {
     const { width, height } = plot.current?.getBoundingClientRect() ?? { width: 0, height: 0 };
@@ -108,8 +110,8 @@ function ReplayPanel({ data, compact, rangePanel }: { data: ReplayData; compact:
 
   useEffect(() => {
     const { time } = useApp.getState().replay;
-    if (time < startMs || time > endMs) setReplayTime(time);
-  }, [startMs, endMs, setReplayTime]);
+    if (time < startMs || time > limitMs) setReplayTime(time);
+  }, [startMs, limitMs, setReplayTime]);
 
   function onKey(event: KeyboardEvent<HTMLElement>) {
     if (event.ctrlKey || event.altKey || event.metaKey || event.target instanceof HTMLSelectElement) return;
@@ -143,7 +145,7 @@ function ReplayPanel({ data, compact, rangePanel }: { data: ReplayData; compact:
           <ReplayStage data={data} highlight={highlight} selectedEffect={selectedEffect} />
           {fit && (
             <div className="hud-layout">
-              <Meter hud={hud} bounds={bounds} defaultCollapsed={compact} />
+              <Meter hud={hud} bounds={{ startMs, endMs: limitMs }} defaultCollapsed={compact} />
               <div className="hud-side">
                 <BossFrames hud={hud} />
                 <EffectList hud={hud} selected={selectedEffect} onSelect={setSelectedEffect} defaultCollapsed={compact} />
@@ -155,7 +157,7 @@ function ReplayPanel({ data, compact, rangePanel }: { data: ReplayData; compact:
             </div>
           )}
         </div>
-        <ReplayControls data={data} bounds={bounds} compact={compact} />
+        <ReplayControls data={data} bounds={bounds} limitMs={limitMs} compact={compact} />
       </section>
     </>
   );

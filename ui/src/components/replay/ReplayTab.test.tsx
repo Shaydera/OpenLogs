@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../../i18n/i18n';
 import { initialState, useApp } from '../../store';
+import { overviewFixture } from '../../test/overviewFixture';
 import { replayFixture } from '../../test/replayFixture';
 import { ReplayTab } from './ReplayTab';
 
@@ -79,6 +80,19 @@ describe('ReplayTab', () => {
       expect(replay().time).toBe(76_000);
       useApp.getState().setReplayTime(0);
       expect(fireEvent.wheel(timeline, { deltaY: -100 })).toBe(true);
+    });
+
+    it('scrubber shades after the cut and End seeks to it', () => {
+      const overview = { ...overviewFixture, timeline: { ...overviewFixture.timeline, cutoffMs: 130_320 } };
+      const seek = vi.fn();
+      useApp.setState({ overview, deathCutoff: 3, setReplayTime: seek, replay: { ...initialState().replay, time: 130_321 } });
+      render(<ReplayTab />);
+      const timeline = screen.getByRole('slider', { name: 'Timeline' });
+      expect(within(timeline).getByText('not analysed · 2:49')).toBeInTheDocument();
+      fireEvent.keyDown(timeline, { key: 'End' });
+      expect(seek).toHaveBeenLastCalledWith(130_321);
+      // At the cut the wheel scrolls the page again.
+      expect(fireEvent.wheel(timeline, { deltaY: 100 })).toBe(true);
     });
   });
 

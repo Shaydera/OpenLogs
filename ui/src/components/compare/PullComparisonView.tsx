@@ -4,7 +4,9 @@ import { useFocusRequest } from '../../hooks/useFocusRequest';
 import { formatDuration, formatEventTime } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { type PullStatus, type PullView, pullView } from '../../pulls/groupPulls';
-import { useApp } from '../../store';
+import { analysedEndMs, useApp } from '../../store';
+import { ComparisonCutoffChip } from '../chrome/DeathCutoffChip';
+import { afterCutTitle } from '../reports/CutoffShade';
 import { AttributionToggle } from '../reports/AttributionToggle';
 import { CompareChart } from './CompareChart';
 import { CompareDeaths } from './CompareDeaths';
@@ -37,6 +39,16 @@ export function PullComparisonView({ row }: { row: FightRow }) {
         <h1 ref={titleRef} tabIndex={-1} className="fight-title">
           {t('compare.title', { boss: row.name, a: pullA.n, b: pullB.n })}
         </h1>
+        <ComparisonCutoffChip
+          pulls={
+            comparison.data
+              ? [
+                  { n: pullA.n, cutoffMs: comparison.data.a.overview.timeline.cutoffMs, deaths: comparison.data.a.overview.timeline.markers.deaths.length },
+                  { n: pullB.n, cutoffMs: comparison.data.b.overview.timeline.cutoffMs, deaths: comparison.data.b.overview.timeline.markers.deaths.length },
+                ]
+              : []
+          }
+        />
         <AttributionToggle label={t('compare.aug')} />
       </header>
       <div className="layout">
@@ -79,10 +91,22 @@ function PullCard({ pull, side }: { pull: PullView; side: 'a' | 'b' }) {
   );
 }
 
+function PhaseStart({ startMs, afterCut }: { startMs: number | null; afterCut: string | undefined }) {
+  return (
+    <td className={afterCut ? 'r num text-muted' : 'r num'} title={afterCut}>
+      {startLabel(startMs)}
+    </td>
+  );
+}
+
 function ComparisonBody({ data, nA, nB }: { data: PullComparison; nA: number; nB: number }) {
+  const deathCutoff = useApp((s) => s.deathCutoff);
   const labelA = t('compare.pull', { n: nA });
   const labelB = t('compare.pull', { n: nB });
   const phases = phaseRows(data.a.overview.timeline.phases, data.b.overview.timeline.phases);
+  const endA = analysedEndMs(data.a.overview);
+  const endB = analysedEndMs(data.b.overview);
+  const afterCut = (startMs: number | null, endMs: number) => (startMs === null ? undefined : afterCutTitle(startMs, endMs, deathCutoff));
   return (
     <>
       <section className="panel" aria-labelledby="cmp-kpis-title">
@@ -132,14 +156,18 @@ function ComparisonBody({ data, nA, nB }: { data: PullComparison; nA: number; nB
               </tr>
             </thead>
             <tbody>
-              {phases.map((phase) => (
-                <tr key={phase.label}>
-                  <th scope="row">{phase.label}</th>
-                  <td className="r num">{startLabel(phase.a)}</td>
-                  <td className="r num">{startLabel(phase.b)}</td>
-                  <td className="r num">{phase.a !== null && phase.b !== null ? durationDelta(phase.a, phase.b) : '—'}</td>
-                </tr>
-              ))}
+              {phases.map(({ label, a, b }) => {
+                const afterA = afterCut(a, endA);
+                const afterB = afterCut(b, endB);
+                return (
+                  <tr key={label}>
+                    <th scope="row">{label}</th>
+                    <PhaseStart startMs={a} afterCut={afterA} />
+                    <PhaseStart startMs={b} afterCut={afterB} />
+                    <td className="r num">{a !== null && b !== null && !afterA && !afterB ? durationDelta(a, b) : '—'}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

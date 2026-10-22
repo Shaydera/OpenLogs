@@ -2,8 +2,9 @@ import { Fragment, useId, useRef } from 'react';
 import type { QuickOverview } from '../../api/types';
 import { formatEventTime } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import { type TimeRange, useApp } from '../../store';
-import { clickToRange, fullRange, normalizeRange, rangeSpan, sameRange } from '../reports/rangeGeometry';
+import { type TimeRange, analysedEndMs, useApp } from '../../store';
+import { PullCutoffShade, afterCutTitle } from '../reports/CutoffShade';
+import { clickToRange, fullRange, phaseInPull, rangeSpan, sameRange } from '../reports/rangeGeometry';
 import { useBrush } from '../reports/useBrush';
 import { useRangeKeys } from '../reports/useRangeKeys';
 import { playerIndex, shortName, spellName } from './players';
@@ -18,10 +19,12 @@ import { TIMELINE_VIEW_BOX, percentOf, timelineGeometry, timelineSummary } from 
 export function Timeline({ overview, run = false }: { overview: QuickOverview; run?: boolean }) {
   const range = useApp((s) => s.range);
   const setRange = useApp((s) => s.setRange);
+  const deathCutoff = useApp((s) => s.deathCutoff);
   const duration = overview.timeline.durationMs;
+  const end = analysedEndMs(overview);
   const { markers, phases } = overview.timeline;
   const geometry = timelineGeometry(overview.timeline, duration);
-  const phaseRanges = phases.map((phase) => normalizeRange({ startMs: phase.startMs, endMs: phase.endMs }, duration));
+  const phaseRanges = phases.map((phase) => phaseInPull(phase, end));
   const players = playerIndex(overview);
   const nameOf = (actorId: number) => shortName(players.get(actorId)?.name ?? '');
   const plotRef = useRef<HTMLDivElement>(null);
@@ -30,13 +33,14 @@ export function Timeline({ overview, run = false }: { overview: QuickOverview; r
   const change = (next: TimeRange | null) => {
     if (!sameRange(next, range)) void setRange(next);
   };
-  const brush = useBrush(plotRef, duration, range, change, (x, width) => change(clickToRange(x, width, duration, phases, range)));
-  const keys = useRangeKeys(duration, range, change, hintId);
+  const brush = useBrush(plotRef, duration, range, change, (x, width) => change(clickToRange(x, width, duration, phases, range, end)), end);
+  const keys = useRangeKeys(end, range, change, hintId);
   const shown = keys.draft !== undefined ? keys.draft : brush.preview !== undefined ? brush.preview : range;
-  const selection = shown ?? fullRange(duration);
+  const selection = shown ?? fullRange(end);
   const from = percentOf(selection.startMs, duration);
   const to = percentOf(selection.endMs, duration);
-  const selectedPhase = shown === null ? -1 : phaseRanges.findIndex((phaseRange) => phaseRange !== null && sameRange(phaseRange, shown));
+  const cut = percentOf(end, duration);
+  const selectedPhase = shown === null ? -1 : phaseRanges.findIndex((phaseRange) => phaseRange !== undefined && sameRange(phaseRange, shown));
   const note =
     shown === null
       ? t(run ? 'timeline.fullRun' : 'timeline.fullFight')
@@ -86,9 +90,10 @@ export function Timeline({ overview, run = false }: { overview: QuickOverview; r
             type="button"
             className="tl-phase-label"
             style={{ left: `${phase.leftPct}%`, width: `${phase.widthPct}%` }}
-            title={phase.label}
+            title={afterCutTitle(phases[i].startMs, end, deathCutoff) ?? phase.label}
             aria-pressed={i === selectedPhase}
-            onClick={() => change(i === selectedPhase ? null : phaseRanges[i])}
+            disabled={phaseRanges[i] === undefined}
+            onClick={() => change(i === selectedPhase ? null : (phaseRanges[i] ?? null))}
           >
             <span>{phase.label}</span>
           </button>
@@ -146,10 +151,11 @@ export function Timeline({ overview, run = false }: { overview: QuickOverview; r
             </Fragment>
           );
         })}
+        <PullCutoffShade overview={overview} />
         {shown !== null && (
           <>
             <div className="tl-dim" style={{ left: 0, width: `${from}%` }} />
-            <div className="tl-dim" style={{ right: 0, width: `${100 - to}%` }} />
+            <div className="tl-dim" style={{ left: `${to}%`, width: `${cut - to}%` }} />
           </>
         )}
         <span

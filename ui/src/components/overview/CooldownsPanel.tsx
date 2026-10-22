@@ -3,6 +3,7 @@ import type { CooldownEntry, QuickOverview } from '../../api/types';
 import { spellIcon } from '../../icons';
 import { formatEventTime } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
+import { analysedEndMs } from '../../store';
 import { GameIcon } from '../GameIcon';
 import { PlayerName } from '../reports/PlayerName';
 import { ROLE_ORDER, roleTitle, sortedRoster, spellName } from './players';
@@ -24,12 +25,13 @@ function matches(filter: Filter, use: CooldownEntry): boolean {
 
 export function CooldownsPanel({ overview }: { overview: QuickOverview }) {
   const [filter, setFilter] = useState<Filter>('all');
-  const duration = overview.timeline.durationMs;
+  const duration = analysedEndMs(overview);
+  const { cutoffMs } = overview.timeline;
   const roster = sortedRoster(overview);
   const lines = [
     ...overview.timeline.markers.bloodlust.map((c) => ({ key: `l-${c.player}-${c.t}`, t: c.t, kind: 'lust' })),
     ...overview.timeline.markers.deaths.map((d) => ({ key: `d-${d.player}-${d.t}`, t: d.t, kind: 'death' })),
-  ];
+  ].filter((line) => cutoffMs === null || line.t <= cutoffMs);
 
   return (
     <section className="panel" aria-labelledby="cooldowns-title">

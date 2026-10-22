@@ -1,3 +1,4 @@
+use crate::deaths::nth_death_ms;
 use crate::fight::Fight;
 
 /// How Augmentation Evoker support is credited.
@@ -45,6 +46,23 @@ impl ReportFilter {
             end_ms: i32::MAX,
             attribution,
             overkill: Overkill::default(),
+        }
+    }
+
+    /// Ends the range with the whole millisecond of the `death`th player death; unchanged
+    /// when `death` is `None` or the pull has fewer deaths.
+    pub fn cut_at_death(self, fight: &Fight, death: Option<u32>) -> Self {
+        self.cut_after(death.and_then(|n| nth_death_ms(fight, n)))
+    }
+
+    /// Ends the range with the whole millisecond of a death at `death_ms`; unchanged for `None`.
+    pub fn cut_after(self, death_ms: Option<i32>) -> Self {
+        let Some(t) = death_ms else {
+            return self;
+        };
+        Self {
+            end_ms: self.end_ms.min(t.saturating_add(1)),
+            ..self
         }
     }
 

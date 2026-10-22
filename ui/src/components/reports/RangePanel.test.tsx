@@ -128,4 +128,25 @@ describe('RangePanel', () => {
     expect(setRange).not.toHaveBeenCalled();
     fireEvent.mouseUp(document, { clientX: 200 });
   });
+
+  it('shades the rest and disables later phases', async () => {
+    const phases = [
+      { kind: 'boss' as const, number: 1, startMs: 0, endMs: 90_000, name: null },
+      { kind: 'boss' as const, number: 2, startMs: 90_000, endMs: 150_000, name: null },
+      { kind: 'boss' as const, number: 3, startMs: 150_000, endMs: 168_729, name: null },
+    ];
+    const timeline = { ...overviewFixture.timeline, durationMs: 168_729, cutoffMs: 130_320, phases };
+    useApp.setState({ deathCutoff: 3 });
+    render(<RangePanel overview={{ ...overviewFixture, timeline }} rangeKey="3180:15" />);
+    expect(screen.getByRole('button', { name: 'Phase 3' })).toBeDisabled();
+    expect(screen.getByText('not analysed · 0:38')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Phase 2' }));
+    expect(setRange).toHaveBeenLastCalledWith({ startMs: 90_000, endMs: 130_321 });
+
+    act(() => useApp.setState({ range: { startMs: 30_000, endMs: 60_000 } }));
+    const end = screen.getByRole('slider', { name: 'Selection end' });
+    fireEvent.keyDown(end, { key: 'End' });
+    fireEvent.keyUp(end, { key: 'End' });
+    expect(setRange).toHaveBeenLastCalledWith({ startMs: 30_000, endMs: 130_321 });
+  });
 });

@@ -81,6 +81,14 @@ export function formatAmount(value: number): string {
   return whole.format(value);
 }
 
+const ordinalRules = new Intl.PluralRules(locale, { type: 'ordinal' });
+const ordinalKeys = { one: 'ordinal.one', two: 'ordinal.two', few: 'ordinal.few', many: 'ordinal.other', zero: 'ordinal.other', other: 'ordinal.other' } as const;
+
+/** A position as an ordinal, e.g. `1st`, `22nd`, `113th`. */
+export function formatOrdinal(n: number): string {
+  return t(ordinalKeys[ordinalRules.select(n)], { n: formatInteger(n) });
+}
+
 /** Time since the pull started as `m:ss`; prelude times are negative, e.g. `-0:02`. */
 export function formatEventTime(ms: number): string {
   return ms < 0 ? `-${formatDuration(-ms)}` : formatDuration(ms);

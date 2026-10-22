@@ -5,7 +5,7 @@ import { formatEventTime, formatSpan } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { lanesOf } from '../../reportViews';
 import type { FilterTab } from '../../scopeSides';
-import { type TimeRange, type ViewToggles, replaySplitShown, useApp } from '../../store';
+import { type TimeRange, type ViewToggles, analysedEndMs, replaySplitShown, useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
 import { GroupMenu } from '../filters/GroupMenu';
 import { NoMatch } from '../filters/NoMatch';
@@ -49,7 +49,7 @@ export function TimelineView({ tab }: { tab: FilterTab }) {
   const setZoom = useApp((s) => s.setZoom);
   const refreshTimeline = useApp((s) => s.refreshTimeline);
   const range = useApp((s) => s.range);
-  const durationMs = useApp((s) => s.overview?.timeline.durationMs ?? 0);
+  const durationMs = useApp((s) => (s.overview ? analysedEndMs(s.overview) : 0));
   const lanes = useApp((s) => s.lanes);
   const setLanes = useApp((s) => s.setLanes);
   const viewError = useApp((s) => s.viewError);

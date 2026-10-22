@@ -43,6 +43,7 @@ pub use cells::{Cell, CellKind, ScopeMetric, cells};
 pub use compare::{ComparedPlayer, PlayerSide, PullComparison, compare_pulls};
 pub use deaths::{
     AbilityAmount, BURST_GAP_MS, DEATH_WINDOW_MS, Death, Hit, LethalBurst, Resurrection, deaths,
+    nth_death_ms,
 };
 pub use deaths_report::{DeathsReport, Kill, deaths_report};
 pub use fight::{

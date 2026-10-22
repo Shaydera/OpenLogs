@@ -108,6 +108,8 @@ export interface TimelineMarkers {
 export interface OverviewTimeline {
   /** The whole pull, whatever the range. */
   durationMs: number;
+  /** The time of the filter's cut death; `null` without a cutoff or when the pull did not reach it. */
+  cutoffMs: number | null;
   /** Whole-pull markers. */
   markers: TimelineMarkers;
   bossHpStepMs: number;
@@ -249,7 +251,11 @@ export type SetCommand =
   | { command: 'filter_options'; args: { filter: ReportFilter; scope: Scope; metric: ScopeMetric; dimension: Dimension } };
 export interface SetPull {
   fightIndex: number;
+  /** `durationMs` is the analysed part of the pull, up to its cut. */
   kpis: Kpis;
+  /** The pull's own cut death; `null` when it did not reach the cutoff. */
+  cutoffMs: number | null;
+  pullDurationMs: number;
   bossHpStepMs: number;
   bossHp: (number | null)[];
 }
@@ -317,6 +323,8 @@ export interface ReportFilter {
   attribution: Attribution;
   /** Damage counts the overkill of killing hits. */
   includeOverkill: boolean;
+  /** Every view ends at this player death, as if the pull ended there; `null` = the whole pull. */
+  deathCutoff: number | null;
 }
 
 export type Side = 'friendly' | 'enemy';

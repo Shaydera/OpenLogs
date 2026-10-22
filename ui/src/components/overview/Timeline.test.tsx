@@ -53,4 +53,12 @@ describe('Timeline', () => {
     click(element, 400);
     expect(setRange).toHaveBeenLastCalledWith(null);
   });
+
+  it('shades the rest after the cut', () => {
+    useApp.setState({ deathCutoff: 2 });
+    const { rerender } = render(<Timeline overview={{ ...overviewFixture, timeline: { ...overviewFixture.timeline, cutoffMs: 239_100 } }} />);
+    expect(screen.getByText('not analysed · 3:59')).toBeInTheDocument();
+    rerender(<Timeline overview={overviewFixture} />);
+    expect(screen.queryByText(/not analysed/)).toBeNull();
+  });
 });

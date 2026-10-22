@@ -269,6 +269,35 @@
 .range-value {
   color: var(--text);
 }
+.cutoff-shade {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 4px 6px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-left: 2px dashed var(--death);
+  background: color-mix(in srgb, var(--bg) 66%, transparent);
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.cutoff-mark {
+  margin-bottom: auto;
+  color: var(--death);
+  font-weight: 600;
+}
+.cutoff-rest {
+  color: var(--faint);
+}
 .input {
   background: var(--panel);
   color: var(--text);

@@ -84,14 +84,23 @@ export function phaseAt(phases: Phase[], ms: number): Phase | null {
   return phases.find((phase, i) => ms >= phase.startMs && (ms < phase.endMs || (i === last && ms <= phase.endMs))) ?? null;
 }
 
+/** Whether something starting at `startMs` lies wholly after the analysed end `endMs`. */
+export const startsAfterCut = (startMs: number, endMs: number) => startMs >= endMs;
+
+/** A phase cut at `endMs` (the analysed end): `null` when it covers 0 → `endMs`, `undefined` when it starts at `endMs` or later. */
+export function phaseInPull(phase: TimeRange, endMs: number): TimeRange | null | undefined {
+  if (startsAfterCut(phase.startMs, endMs)) return undefined;
+  return normalizeRange({ startMs: phase.startMs, endMs: Math.min(phase.endMs, endMs) }, endMs);
+}
+
 /**
- * A click without a drag at `x`: the phase under the pointer, or the full pull (`null`) when that
+ * A click without a drag at `x`: the phase under the pointer up to `limitMs`, or the full pull (`null`) when that
  * phase is already selected or no phase is there.
  */
-export function clickToRange(x: number, width: number, durationMs: number, phases: Phase[], current: TimeRange | null): TimeRange | null {
+export function clickToRange(x: number, width: number, durationMs: number, phases: Phase[], current: TimeRange | null, limitMs = durationMs): TimeRange | null {
   const phase = phaseAt(phases, timeAt(x, width, durationMs));
-  if (!phase) return null;
-  const range = normalizeRange({ startMs: phase.startMs, endMs: phase.endMs }, durationMs);
+  const range = phase ? phaseInPull(phase, limitMs) : undefined;
+  if (range === undefined) return null;
   return sameRange(range, current) ? null : range;
 }
 

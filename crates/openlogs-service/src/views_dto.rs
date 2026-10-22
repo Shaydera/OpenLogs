@@ -771,6 +771,8 @@ mod tests {
             end_ms: None,
             attribution: AttributionDto::Augmented,
             include_overkill: false,
+            death_cutoff: None,
+            known_cut_ms: None,
         }
     }
 

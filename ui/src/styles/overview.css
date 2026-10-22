@@ -82,6 +82,10 @@
   text-align: left;
   cursor: pointer;
 }
+.tl-phase-label:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
 .tl-phase-label span {
   white-space: nowrap;
   overflow: hidden;
@@ -584,6 +588,15 @@
   padding: 8px 18px;
   text-align: left;
 }
+.set-cut {
+  min-width: 1160px;
+}
+.set-cut .set-row {
+  grid-template-columns: 44px 76px 112px minmax(180px, 1fr) 72px 84px 64px 88px 88px 150px 24px;
+}
+.set-ends-cut {
+  color: var(--death);
+}
 .set-pull {
   font: inherit;
   color: var(--text);
@@ -603,6 +616,7 @@
   white-space: nowrap;
 }
 .set-track {
+  position: relative;
   display: block;
   height: 34px;
   background: var(--plot);

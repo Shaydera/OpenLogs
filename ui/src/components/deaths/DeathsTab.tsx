@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 import { type DeathsReport, type Kill, type SetDeaths, isSetReport } from '../../api/types';
-import { formatDuration, formatEventTime } from '../../i18n/format';
+import { formatDuration, formatEventTime, formatOrdinal } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import type { PullView } from '../../pulls/groupPulls';
-import { useApp } from '../../store';
+import { pullCutDeath, useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
 import { valueLabel } from '../filters/labels';
 import { NoMatch } from '../filters/NoMatch';
@@ -40,6 +40,7 @@ function SetKillList({ report }: { report: SetDeaths }) {
 function KillList({ report, groups }: { report: DeathsReport; groups: KillGroup[] }) {
   const scope = useApp((s) => s.scope);
   const range = useApp((s) => s.range);
+  const cutDeath = useApp(pullCutDeath);
   const roster = rosterIndex(report.roster);
   const spellName = (id: number) => reportSpellName(report.spells, id);
   const pinnedUnit = scope.target.length === 1 && scope.target[0].kind === 'instance';
@@ -113,7 +114,7 @@ function KillList({ report, groups }: { report: DeathsReport; groups: KillGroup[
     <section className="panel panel-clip" aria-labelledby="kills-title">
       <ReportHead tab="deaths" id="kills-title" title={title} />
       {count === 0 ? (
-        <NoMatch nothing={t(inSet ? 'kills.noneInSet' : range ? 'kills.noneInRange' : 'kills.none')} />
+        <NoMatch nothing={inSet ? t('kills.noneInSet') : range ? t('kills.noneInRange') : cutDeath !== null ? t('kills.noneBeforeCut', { nth: formatOrdinal(cutDeath) }) : t('kills.none')} />
       ) : inSet ? (
         groups.map(
           (group) =>

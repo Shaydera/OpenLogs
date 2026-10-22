@@ -30,18 +30,20 @@ pub fn quick_overview(
     curated: &Curated,
     filter: Option<FilterDto>,
 ) -> QuickOverviewDto {
+    let filter = filter.map(|f| f.for_fight(fight));
+    let cut_ms = filter.and_then(|f| f.cut_ms(fight));
     let filter = filter.map_or_else(
         || ReportFilter::whole(Attribution::Augmented),
-        FilterDto::to_filter,
+        |f| f.to_filter(fight),
     );
     let overview = openlogs_analysis::quick_overview_in(fight, curated, &filter);
-    quick_overview_dto(fight, curated, &overview)
+    quick_overview_dto(fight, curated, &overview, cut_ms)
 }
 
 pub fn damage_done(fight: &Fight, filter: FilterDto) -> DamageReportDto {
     damage_report_dto(
         fight,
-        &openlogs_analysis::damage_done(fight, &filter.to_filter()),
+        &openlogs_analysis::damage_done(fight, &filter.to_filter(fight)),
     )
 }
 
@@ -49,14 +51,14 @@ pub fn damage_done(fight: &Fight, filter: FilterDto) -> DamageReportDto {
 pub fn damage_done_set_part(fight: &Fight, filter: FilterDto) -> DamageReportDto {
     damage_report_dto(
         fight,
-        &openlogs_analysis::damage_done_set_part(fight, &filter.to_filter()),
+        &openlogs_analysis::damage_done_set_part(fight, &filter.to_filter(fight)),
     )
 }
 
 pub fn healing(fight: &Fight, filter: FilterDto) -> HealingReportDto {
     healing_report_dto(
         fight,
-        &openlogs_analysis::healing(fight, &filter.to_filter()),
+        &openlogs_analysis::healing(fight, &filter.to_filter(fight)),
     )
 }
 
@@ -64,14 +66,14 @@ pub fn healing(fight: &Fight, filter: FilterDto) -> HealingReportDto {
 pub fn damage_taken_set_part(fight: &Fight, filter: FilterDto) -> DamageTakenReportDto {
     taken_set_part_dto(
         fight,
-        &openlogs_analysis::damage_taken(fight, &filter.to_filter()),
+        &openlogs_analysis::damage_taken(fight, &filter.to_filter(fight)),
     )
 }
 
 pub fn damage_taken(fight: &Fight, filter: FilterDto) -> DamageTakenReportDto {
     taken_report_dto(
         fight,
-        &openlogs_analysis::damage_taken(fight, &filter.to_filter()),
+        &openlogs_analysis::damage_taken(fight, &filter.to_filter(fight)),
     )
 }
 
@@ -88,7 +90,7 @@ pub fn player_detail(
         curated,
         player,
         metric.to_metric(),
-        &filter.to_filter(),
+        &filter.to_filter(fight),
         &scope.to_scope(),
     )
     .ok_or_else(|| format!("Actor {player} is not a player of this pull"))?;
@@ -119,7 +121,7 @@ pub fn ability_detail(
         spell,
         pet,
         metric.to_metric(),
-        &filter.to_filter(),
+        &filter.to_filter(fight),
         &scope.to_scope(),
     )
     .ok_or_else(|| format!("Actor {player} is not a player of this pull"))?;
@@ -133,7 +135,7 @@ pub fn target_detail(
     filter: FilterDto,
     scope: ScopeDto,
 ) -> Result<TargetDetailDto, String> {
-    let filter = filter.to_filter();
+    let filter = filter.to_filter(fight);
     let enemies = openlogs_analysis::enemy_groups(fight, &filter);
     let name = if name.is_empty() {
         enemies
@@ -154,8 +156,12 @@ pub fn deaths(
     filter: FilterDto,
     scope: ScopeDto,
 ) -> DeathsReportDto {
-    let report =
-        openlogs_analysis::deaths_report(fight, curated, &filter.to_filter(), &scope.to_scope());
+    let report = openlogs_analysis::deaths_report(
+        fight,
+        curated,
+        &filter.to_filter(fight),
+        &scope.to_scope(),
+    );
     deaths_report_dto(fight, curated, &report)
 }
 
@@ -181,7 +187,12 @@ pub fn replay_meter(
 ) -> MeterDto {
     meter_dto(
         fight,
-        &openlogs_analysis::meter(fight, &filter.to_filter(), category.to_category(), expand),
+        &openlogs_analysis::meter(
+            fight,
+            &filter.to_filter(fight),
+            category.to_category(),
+            expand,
+        ),
     )
 }
 
@@ -198,7 +209,7 @@ pub fn casts(
         &openlogs_analysis::casts_report(
             fight,
             curated,
-            &filter.to_filter(),
+            &filter.to_filter(fight),
             &scope.to_scope(),
             group.to_dimension(),
             hide_procs,
@@ -213,7 +224,7 @@ pub fn auras(
     kind: AuraKindDto,
     group: DimensionDto,
 ) -> AurasReportDto {
-    let filter = filter.to_filter();
+    let filter = filter.to_filter(fight);
     auras_report_dto(
         fight,
         &filter,
@@ -237,7 +248,7 @@ pub fn interrupts(
         fight,
         &openlogs_analysis::interrupts_report(
             fight,
-            &filter.to_filter(),
+            &filter.to_filter(fight),
             &scope.to_scope(),
             group.to_dimension(),
         ),
@@ -247,17 +258,19 @@ pub fn interrupts(
 pub fn resources(fight: &Fight, filter: FilterDto, scope: ScopeDto) -> ResourcesReportDto {
     resources_report_dto(
         fight,
-        &openlogs_analysis::resources_report(fight, &filter.to_filter(), &scope.to_scope()),
+        &openlogs_analysis::resources_report(fight, &filter.to_filter(fight), &scope.to_scope()),
     )
 }
 
-/// Two pulls compared as a whole (the time range never applies).
+/// Two pulls compared as a whole, each ended at its own `death_cutoff`th player death (the time
+/// range never applies).
 pub fn compare_pulls(
     curated: &Curated,
     a: (u32, &Fight),
     b: (u32, &Fight),
     attribution: AttributionDto,
     include_overkill: bool,
+    death_cutoff: Option<u32>,
 ) -> PullComparisonDto {
     let comparison = openlogs_analysis::compare_pulls(
         a.1,
@@ -265,6 +278,7 @@ pub fn compare_pulls(
         curated,
         attribution.to_attribution(),
         Overkill::included_if(include_overkill),
+        death_cutoff,
     );
     pull_comparison_dto(curated, a, b, &comparison)
 }
@@ -280,7 +294,7 @@ pub fn breakdown_report(
     let breakdown = openlogs_analysis::breakdown(
         fight,
         curated,
-        &filter.to_filter(),
+        &filter.to_filter(fight),
         &scope.to_scope(),
         metric.to_metric(),
         group.to_dimension(),
@@ -299,7 +313,7 @@ pub fn filter_options(
     openlogs_analysis::filter_options(
         fight,
         curated,
-        &filter.to_filter(),
+        &filter.to_filter(fight),
         &scope.to_scope(),
         metric.to_metric(),
         dimension.to_dimension(),
@@ -322,7 +336,7 @@ pub fn events(
     let page = openlogs_analysis::events(
         fight,
         curated,
-        &filter.to_filter(),
+        &filter.to_filter(fight),
         &scope.to_scope(),
         metric.to_metric(),
         &options.to_options(),
@@ -348,7 +362,7 @@ pub fn timeline(
         fight,
         curated,
         channels,
-        &filter.to_filter(),
+        &filter.to_filter(fight),
         &scope.to_scope(),
         metric.to_metric(),
         lanes.to_dimension(),

@@ -13,14 +13,18 @@ function Harness({
   current,
   onChange,
   onClick,
+  durationMs,
+  limitMs,
 }: {
   current: TimeRange | null;
   onChange: (range: TimeRange | null) => void;
   onClick: (x: number, width: number) => void;
+  durationMs: number;
+  limitMs: number;
 }) {
   const plotRef = useRef<HTMLDivElement>(null);
-  const brush = useBrush(plotRef, DURATION, current, onChange, onClick);
-  const keys = useRangeKeys(DURATION, current, onChange, 'hint');
+  const brush = useBrush(plotRef, durationMs, current, onChange, onClick, limitMs);
+  const keys = useRangeKeys(limitMs, current, onChange, 'hint');
   const shown = keys.draft !== undefined ? keys.draft : brush.preview !== undefined ? brush.preview : current;
   return (
     <div ref={plotRef} data-testid="plot" onMouseDown={(event) => brush.start(event, 'brush')}>
@@ -31,10 +35,10 @@ function Harness({
   );
 }
 
-function setup(current: TimeRange | null = null) {
+function setup(current: TimeRange | null = null, durationMs = DURATION, limitMs = durationMs) {
   const onChange = vi.fn();
   const onClick = vi.fn();
-  render(<Harness current={current} onChange={onChange} onClick={onClick} />);
+  render(<Harness current={current} onChange={onChange} onClick={onClick} durationMs={durationMs} limitMs={limitMs} />);
   vi.spyOn(screen.getByTestId('plot'), 'getBoundingClientRect').mockReturnValue(BOX);
   return { onChange, onClick };
 }
@@ -77,6 +81,17 @@ describe('useBrush', () => {
     fireEvent.mouseUp(document, { clientX: 351 });
     expect(onChange).toHaveBeenCalledWith({ startMs: 25_000, endMs: 100_000 });
     expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('brush stops at the limit', () => {
+    const { onChange } = setup({ startMs: 10_000, endMs: 20_000 }, 168_729, 130_321);
+    const plot = screen.getByTestId('plot');
+    fireEvent.mouseDown(plot, { clientX: 693, button: 0 });
+    fireEvent.mouseUp(document, { clientX: 1_150 });
+    expect(onChange).toHaveBeenLastCalledWith({ startMs: 100_000, endMs: 130_321 });
+    fireEvent.mouseDown(plot, { clientX: 100, button: 0 });
+    fireEvent.mouseUp(document, { clientX: 1_150 });
+    expect(onChange).toHaveBeenLastCalledWith(null);
   });
 });
 

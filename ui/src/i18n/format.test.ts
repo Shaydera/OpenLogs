@@ -13,6 +13,7 @@ import {
   formatEventTimeTenths,
   formatList,
   formatMillions,
+  formatOrdinal,
   formatOffsetSeconds,
   formatPercent,
   formatSeconds,
@@ -77,5 +78,22 @@ describe('formatScaled', () => {
 
   it('signs a difference', () => {
     expect([87_290_000, -8_280_000, 0].map(formatSignedScaled)).toEqual(['+87.29M', '−8.28M', '±0']);
+  });
+});
+
+describe('formatOrdinal (en-US)', () => {
+  it.each([
+    [1, '1st'],
+    [2, '2nd'],
+    [3, '3rd'],
+    [4, '4th'],
+    [11, '11th'],
+    [12, '12th'],
+    [13, '13th'],
+    [21, '21st'],
+    [22, '22nd'],
+    [101, '101st'],
+  ])('writes %i as %s', (n, expected) => {
+    expect(formatOrdinal(n)).toBe(expected);
   });
 });
