@@ -32,7 +32,7 @@ jobs:
       - name: Test Rust crates
         run: cargo test --workspace --exclude openlogs --locked
 
-  ui:
+  ui-build:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -63,6 +63,23 @@ jobs:
       - name: Build WASM, type-check and bundle
         working-directory: ui
         run: npm run build
+
+  # The frontend tests do not import the WASM engine, so they run without the Rust toolchain.
+  ui-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Install UI dependencies
+        working-directory: ui
+        run: npm ci
       - name: Test frontend
         working-directory: ui
         run: npm test

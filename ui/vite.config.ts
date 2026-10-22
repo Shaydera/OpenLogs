@@ -10,6 +10,8 @@ export default defineConfig({
   build: { target: 'es2022' },
   test: {
     environment: 'jsdom',
+    // Creates jsdom once per worker instead of once per test file, which took most of the test run.
+    pool: 'vmThreads',
     setupFiles: ['./src/test/setup.ts'],
     // Lets tests read stylesheets with `?raw` (otherwise CSS imports are empty in Vitest).
     css: true,
