@@ -37,29 +37,26 @@ export function hpAtEnd(pull: SetPull): number | null {
   return null;
 }
 
-/** A killed pull cut at a death ended with the boss alive, so it counts as a wipe. */
-const isKill = (row: SetRow) => row.view.status === 'kill' && row.pull.cutoffMs === null;
-
 /** Boss HP where the row's pull ends: the logged value for a whole pull, the HP at the cut for a cut one. */
 export function rowHpAtEnd(row: SetRow): number | null {
   if (row.pull.cutoffMs !== null) return hpAtEnd(row.pull);
-  return isKill(row) ? 0 : row.view.bossHpPercent;
+  return row.view.status === 'kill' ? 0 : row.view.bossHpPercent;
 }
 
-/** Best first: kills by duration, then wipes by the boss HP they reached. */
+/** Best first: kills by duration, then wipes by the boss HP they reached; the death cutoff changes neither. */
 export function sortRows(rows: SetRow[], order: SetOrder): SetRow[] {
   if (order === 'inOrder') return rows;
-  const kills = rows.filter(isKill).sort((a, b) => a.view.durationMs - b.view.durationMs);
-  const others = rows.filter((row) => !isKill(row)).sort((a, b) => missingLast(rowHpAtEnd(a)) - missingLast(rowHpAtEnd(b)));
+  const kills = rows.filter((row) => row.view.status === 'kill').sort((a, b) => a.view.durationMs - b.view.durationMs);
+  const others = rows.filter((row) => row.view.status !== 'kill').sort((a, b) => missingLast(a.view.bossHpPercent) - missingLast(b.view.bossHpPercent));
   return [...kills, ...others];
 }
 
 /** The wipe that took the boss lowest, else the fastest kill when no wipe has a known boss HP. */
 export function bestPull(rows: SetRow[]): BestPull | null {
   const ordered = sortRows(rows, 'bestFirst');
-  const wipe = ordered.find((row) => !isKill(row) && rowHpAtEnd(row) !== null);
+  const wipe = ordered.find((row) => row.view.status !== 'kill' && row.view.bossHpPercent !== null);
   if (wipe) return { kind: 'wipe', row: wipe };
-  const kill = ordered.find(isKill);
+  const kill = ordered.find((row) => row.view.status === 'kill');
   return kill ? { kind: 'kill', row: kill } : null;
 }
 
