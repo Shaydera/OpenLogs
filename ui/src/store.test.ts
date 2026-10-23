@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { api } from './api/client';
 import { replayClock } from './components/replay/replayClock';
 import type { ChosenLog, LogSource } from './api/logSource';
-import type { BreakdownRow, DamageReport, LogView, PullComparison, PullSet, QuickOverview, ReplayData, RecentLog, Scope, SetOverview, Timeline, UnitRef } from './api/types';
+import type { BreakdownRow, DamageReport, FightRow, LogView, PullComparison, PullSet, QuickOverview, ReplayData, RecentLog, Scope, SetOverview, Timeline, UnitRef } from './api/types';
 import { comparisonFixture } from './test/compareFixture';
 import { overviewFixture } from './test/overviewFixture';
 import { runLogFixture } from './test/runFixture';
@@ -48,6 +48,8 @@ vi.mock('./api/client', () => ({
     events: vi.fn(),
     timeline: vi.fn(),
     pullSet: vi.fn(),
+    followLog: vi.fn(),
+    canFollow: vi.fn(),
   },
 }));
 
@@ -83,6 +85,7 @@ beforeEach(() => {
   Object.values(api).forEach((fn) => (fn as Mock).mockReset());
   vi.mocked(api.recentLogs).mockResolvedValue([]);
   vi.mocked(api.openLog).mockResolvedValue(LOG);
+  vi.mocked(api.canFollow).mockReturnValue(false);
   vi.mocked(api.quickOverview).mockResolvedValue(overviewFixture);
   vi.mocked(api.breakdownReport).mockResolvedValue(breakdownFixture);
   vi.mocked(api.damageDoneReport).mockResolvedValue(damageReportFixture);
@@ -1593,5 +1596,148 @@ describe('ui size', () => {
 
     useApp.getState().setUiSize(7);
     expect(useApp.getState().uiSize).toBe(100);
+  });
+});
+
+describe('live refresh', () => {
+  function wipe(index: number): FightRow {
+    return {
+      index,
+      encounterId: 3492,
+      name: 'Vexie and the Geargrinders',
+      difficulty: 15,
+      difficultyLabel: 'Heroic',
+      outcome: 'wipe',
+      durationMs: 120_000,
+      bossHpPercent: 40,
+      playerCount: 20,
+      startUnixMs: Date.UTC(2026, 9, 7, 19, index),
+      zone: 'The Venomous Abyss',
+      run: null,
+      runIndex: null,
+    };
+  }
+  const LIVE: LogView = { ...LOG, fights: [wipe(1), wipe(2)] };
+  const GROWN: LogView = { ...LIVE, fights: [...LIVE.fights, wipe(3)] };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.mocked(api.openLog).mockResolvedValue(LIVE);
+    vi.mocked(api.canFollow).mockReturnValue(true);
+    vi.mocked(api.followLog).mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    useApp.getState().setLiveRefresh(false);
+    vi.useRealTimers();
+  });
+
+  it('moves a viewer of the newest pull to the new one, keeping tab, view and death cutoff', async () => {
+    await useApp.getState().openLog(chosen(LIVE));
+    await useApp.getState().openFight(2);
+    await useApp.getState().setTab('deaths');
+    await useApp.getState().setReportView('timeline');
+    await useApp.getState().setDeathCutoff(3);
+    vi.mocked(api.followLog).mockResolvedValueOnce(GROWN);
+    await vi.advanceTimersByTimeAsync(2000);
+    const s = useApp.getState();
+    expect(s.view).toEqual({ kind: 'fight', fightIndex: 3 });
+    expect([s.tab, s.reportView, s.deathCutoff]).toEqual(['deaths', 'timeline', 3]);
+    expect(s.liveNotice).toMatchObject({ kind: 'pull', status: 'wipe' });
+    const cut = { ...WHOLE_PULL, deathCutoff: 3 };
+    expect(api.quickOverview).toHaveBeenLastCalledWith(LIVE.id, 3, cut);
+    expect(api.deathsReport).toHaveBeenLastCalledWith(LIVE.id, 3, cut, OPEN);
+    expect(s).toMatchObject({ overview: overviewFixture, overviewCutoff: 3, report: { tab: 'deaths', data: deathsReportFixture }, timeline: timelineFixture });
+  });
+
+  it('leaves a viewer of an older pull where they are', async () => {
+    await useApp.getState().openLog(chosen(LIVE));
+    await useApp.getState().openFight(1);
+    vi.mocked(api.followLog).mockResolvedValueOnce(GROWN);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(useApp.getState().view).toEqual({ kind: 'fight', fightIndex: 1 });
+    expect(useApp.getState().log?.fights).toHaveLength(3);
+  });
+
+  it('keeps the shown log while a refresh lists the same pulls', async () => {
+    await useApp.getState().openLog(chosen(LIVE));
+    const shownLog = useApp.getState().log;
+    vi.mocked(api.followLog).mockResolvedValueOnce({ ...LIVE, sizeBytes: LIVE.sizeBytes + 4096, fights: LIVE.fights.map((fight) => ({ ...fight })) });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(useApp.getState().log).toBe(shownLog);
+  });
+
+  it('takes a viewer of a pull that is no longer listed back to the pull list', async () => {
+    await useApp.getState().openLog(chosen(LIVE));
+    await useApp.getState().openFight(2);
+    vi.mocked(api.followLog).mockResolvedValueOnce({ ...LIVE, fights: [wipe(1)] });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(useApp.getState().view).toEqual({ kind: 'start' });
+  });
+
+  it('stops refreshing once the option is turned off', async () => {
+    await useApp.getState().openLog(chosen(LIVE));
+    await vi.advanceTimersByTimeAsync(2000);
+    useApp.getState().setLiveRefresh(false);
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(api.followLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps refreshing after a failed read and gives up after five in a row', async () => {
+    await useApp.getState().openLog(chosen(LIVE));
+    vi.mocked(api.followLog).mockRejectedValueOnce(new Error('read failed')).mockResolvedValueOnce(null).mockRejectedValue(new Error('read failed'));
+    await vi.advanceTimersByTimeAsync(12_000);
+    expect(api.followLog).toHaveBeenCalledTimes(6);
+    expect(useApp.getState().canFollow).toBe(true);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(api.followLog).toHaveBeenCalledTimes(7);
+    expect(useApp.getState().canFollow).toBe(false);
+  });
+
+  it('runs one refresh at a time', async () => {
+    await useApp.getState().openLog(chosen(LIVE));
+    vi.mocked(api.followLog).mockReturnValue(new Promise(() => {}));
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(api.followLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('adds a new pull to the open set and reads the set again', async () => {
+    const overviewOf = (fights: number[]): SetOverview => ({
+      overview: overviewFixture,
+      pulls: fights.map((fightIndex) => ({ fightIndex, kpis: overviewFixture.kpis, pullDurationMs: 120_000, cutoffMs: null, bossHpStepMs: 1000, bossHp: [100, 40] })),
+    });
+    const set: PullSet = { kind: 'wipes', encounterId: 3492, difficulty: 15, fights: [1, 2] };
+    await useApp.getState().openLog(chosen(LIVE));
+    vi.mocked(api.pullSet).mockResolvedValueOnce([overviewOf([1, 2])]);
+    await useApp.getState().openSet(set);
+    vi.mocked(api.pullSet).mockResolvedValueOnce([damageReportFixture, breakdownFixture]);
+    await useApp.getState().setTab('damage');
+    const grown = overviewOf([1, 2, 3]);
+    vi.mocked(api.pullSet).mockResolvedValueOnce([grown, damageReportFixture, breakdownFixture]);
+    vi.mocked(api.followLog).mockResolvedValueOnce(GROWN);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(useApp.getState()).toMatchObject({ view: { kind: 'set', set: { ...set, fights: [1, 2, 3] } }, tab: 'damage', setPulls: grown.pulls });
+    expect(api.pullSet).toHaveBeenLastCalledWith(
+      LIVE.id,
+      [1, 2, 3],
+      [
+        { command: 'quick_overview', args: { filter: WHOLE_PULL } },
+        { command: 'damage_done_report', args: { filter: WHOLE_PULL } },
+        { command: 'breakdown_report', args: { filter: WHOLE_PULL, scope: OPEN, metric: 'damageDone', group: 'source' } },
+      ],
+      expect.anything(),
+    );
+  });
+
+  it('settles the last pull once the log has not grown for 30 s', async () => {
+    await useApp.getState().openLog(chosen(LIVE));
+    vi.mocked(api.followLog).mockResolvedValueOnce(GROWN);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(api.followLog).not.toHaveBeenCalledWith(LIVE.id, true);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(api.followLog).toHaveBeenLastCalledWith(LIVE.id, true);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(api.followLog).toHaveBeenLastCalledWith(LIVE.id, false);
+    expect(vi.mocked(api.followLog).mock.calls.filter(([, settleAll]) => settleAll)).toHaveLength(1);
   });
 });

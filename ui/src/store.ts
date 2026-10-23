@@ -52,6 +52,7 @@ import { type GameDataManifest, gameDataManifest } from './gameData';
 import { replayClock } from './components/replay/replayClock';
 import { t } from './i18n/i18n';
 import { rowValue } from './components/filters/labels';
+import { followUpdate, type LiveNotice, liveNoticeOf } from './pulls/follow';
 import { effectiveView, lanesOf } from './reportViews';
 import { type FilterTab, isFilterTab, SIDES } from './scopeSides';
 import { readStored, writeStored } from './storage';
@@ -63,6 +64,11 @@ const AUG_DELTA_KEY = 'showAugDelta';
 const COLOR_BY_TARGET_KEY = 'colorByTarget';
 const HIDE_PROCS_KEY = 'hideProcs';
 const INCLUDE_OVERKILL_KEY = 'includeOverkill';
+const LIVE_REFRESH_KEY = 'liveRefresh';
+const FOLLOW_TICK_MS = 2000;
+/** A log quiet for this long has its last pull settled, as if the log ended there. */
+const SETTLE_AFTER_MS = 30_000;
+const MAX_FAILED_REFRESHES = 5;
 export type FightTab =
   | 'overview'
   | 'damage'
@@ -352,6 +358,12 @@ interface State {
   replayRequest: number;
   /** Why the current pull's replay could not be loaded. */
   replayError: string | null;
+  /** Follow the open log while the game appends to it; remembered for every log. */
+  liveRefresh: boolean;
+  /** The shown log can be read again as it grows. */
+  canFollow: boolean;
+  /** What the view moved on to by itself. */
+  liveNotice: LiveNotice | null;
 }
 
 interface Actions {
@@ -435,6 +447,8 @@ interface Actions {
   setReplayMeter(meter: Partial<ReplayMeter>): void;
   setReplayFollow(on: boolean): void;
   openReplayAt(ms: number): void;
+  setLiveRefresh(on: boolean): void;
+  dismissLiveNotice(): void;
 }
 
 function readFlag(key: string, fallback: boolean): boolean {
@@ -559,6 +573,9 @@ export function initialState(): State {
     replayData: null,
     replayRequest: 0,
     replayError: null,
+    liveRefresh: readFlag(LIVE_REFRESH_KEY, true),
+    canFollow: false,
+    liveNotice: null,
   };
 }
 
@@ -1045,6 +1062,120 @@ function originFor(state: State): FightTab | null {
   return state.tab === 'damage' || state.tab === 'healing' ? null : state.tab;
 }
 
+interface FollowLoop {
+  logId: string;
+  timer: ReturnType<typeof setInterval>;
+  busy: boolean;
+  /** The last growth, or the start: a restart may have dropped a refresh whose growth is still to settle. */
+  grewAt: number;
+  settled: boolean;
+  failedInARow: number;
+}
+let following: FollowLoop | null = null;
+
+function stopFollowing() {
+  if (following) clearInterval(following.timer);
+  following = null;
+}
+
+/** Follows the shown log while the option is on and the log can be read again; stops otherwise. */
+function followShownLog(get: () => Store, set: SetState) {
+  const { log, liveRefresh } = get();
+  const canFollow = log !== null && api.canFollow(log.id);
+  set({ canFollow });
+  if (!liveRefresh || !canFollow) stopFollowing();
+  else if (following?.logId !== log.id) {
+    stopFollowing();
+    const loop: FollowLoop = {
+      logId: log.id,
+      timer: setInterval(() => void followTick(get, set, loop), FOLLOW_TICK_MS),
+      busy: false,
+      grewAt: Date.now(),
+      settled: false,
+      failedInARow: 0,
+    };
+    following = loop;
+  }
+}
+
+async function followTick(get: () => Store, set: SetState, loop: FollowLoop) {
+  if (loop.busy) return;
+  loop.busy = true;
+  const settleAll = !loop.settled && Date.now() - loop.grewAt >= SETTLE_AFTER_MS;
+  try {
+    const grown = await api.followLog(loop.logId, settleAll);
+    if (following !== loop) return;
+    loop.failedInARow = 0;
+    if (settleAll) loop.settled = true;
+    if (grown === null) {
+      if (!api.canFollow(loop.logId)) {
+        stopFollowing();
+        set({ canFollow: false });
+      }
+      return;
+    }
+    // A settling refresh returns the log even when it did not grow.
+    if (!settleAll) {
+      loop.grewAt = Date.now();
+      loop.settled = false;
+    }
+    showGrownLog(get, set, grown);
+  } catch {
+    // A read can fail once and work on the next tick; a log that stays unreadable (permission withdrawn) stops following, what is loaded stays.
+    if (following !== loop || ++loop.failedInARow < MAX_FAILED_REFRESHES) return;
+    stopFollowing();
+    set({ canFollow: false });
+  } finally {
+    loop.busy = false;
+  }
+}
+
+function showGrownLog(get: () => Store, set: SetState, grown: LogView) {
+  const { log, view, hideAborted, comparison } = get();
+  if (!log || sameLogButSize(log, grown)) return;
+  const update = followUpdate(log.fights, grown.fights, view, hideAborted, comparison !== null);
+  set({ log: grown });
+  if (update.jumpTo !== null) void followToFight(get, set, update.jumpTo);
+  else if (update.set) void followSet(get, set, update.set);
+  else if (update.shownVanished) get().backToPulls();
+}
+
+/** The size grows on every tick; a new `log` for it alone would re-render the open pull each time. */
+function sameLogButSize(shown: LogView, grown: LogView): boolean {
+  return JSON.stringify({ ...shown, sizeBytes: grown.sizeBytes }) === JSON.stringify(grown);
+}
+
+/** Moves on to a new pull like `openFight`, but keeps the tab, the report view and the death cutoff where the pull offers them. */
+async function followToFight(get: () => Store, set: SetState, fightIndex: number) {
+  const { log, tab, reportView, deathCutoff } = get();
+  if (!log) return;
+  const view: View = { kind: 'fight', fightIndex };
+  const liveNotice = liveNoticeOf(log.fights, fightIndex);
+  const request = startFightLoad(set, get, view);
+  const target = { log, view };
+  // Not a navigation of the user's: focus stays where it is.
+  set({
+    tab: tabOffered(target, tab) ? tab : 'overview',
+    reportView,
+    deathCutoff: cutoffOffered(target) ? deathCutoff : null,
+    focusRequest: null,
+    liveNotice,
+  });
+  await settleFightLoad(set, request, async () => {
+    const filter = reportFilter(get());
+    return { overview: await api.quickOverview(log.id, fightIndex, filter), overviewCutoff: filter.deathCutoff };
+  });
+  if (request === fightRequest && get().overview) await loadReport(get, set);
+}
+
+/** Shows the open set with its changed pulls; its figures are read again, overview included. */
+async function followSet(get: () => Store, set: SetState, grown: PullSet) {
+  set({ view: { kind: 'set', set: grown } });
+  setOverviewShown = null;
+  setCache = { fightRequest, results: new Map(), pending: new Map() };
+  await loadReport(get, set);
+}
+
 // Many actions move the tab; deriving the scope on every write, the store's setState included, keeps it from going stale.
 function derivingScope(actions: (set: SetState, get: () => Store) => Store): StateCreator<Store> {
   return (_set, get, store) => {
@@ -1079,11 +1210,13 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
       dropPendingReports(set);
       dropPendingComparison();
       dropReplay(set, get);
-      set({ log, view: { kind: 'start' }, overview: null, setPulls: null, setProgress: null, reportLoading: false, fightLoading: false, fightError: null, comparison: null });
+      set({ log, view: { kind: 'start' }, overview: null, setPulls: null, setProgress: null, reportLoading: false, fightLoading: false, fightError: null, comparison: null, liveNotice: null });
+      followShownLog(get, set);
     };
     try {
       const source = await chosen.open();
       replacing = true;
+      stopFollowing();
       const log = await api.openLog(source, (bytesRead, totalBytes) => {
         if (request === logRequest) set({ opening: { file, bytesRead, totalBytes } });
       });
@@ -1543,6 +1676,16 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   setShowAugDelta(show) {
     writeFlag(AUG_DELTA_KEY, show);
     set({ showAugDelta: show });
+  },
+
+  setLiveRefresh(on) {
+    writeFlag(LIVE_REFRESH_KEY, on);
+    set({ liveRefresh: on });
+    followShownLog(get, set);
+  },
+
+  dismissLiveNotice() {
+    set({ liveNotice: null });
   },
 
   async openSettings() {
