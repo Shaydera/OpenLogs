@@ -9,6 +9,8 @@ export type EngineMethod =
   | 'finish_index'
   | 'index_json'
   | 'restore_index'
+  | 'refresh_index'
+  | 'snapshot_json'
   | 'fight_range'
   | 'touch_fight'
   | 'load_fight'

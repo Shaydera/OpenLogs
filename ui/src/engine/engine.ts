@@ -17,6 +17,10 @@ export interface Engine {
   finishIndex(logId: string, fileName: string, sizeBytes: number): Promise<LogView>;
   indexJson(): Promise<string>;
   restoreIndex(indexJson: string, logId: string, fileName: string, sizeBytes: number): Promise<LogView>;
+  /** The pull list from everything fed so far; `settleAll` also takes the entries still open at the log's end. */
+  refreshIndex(logId: string, fileName: string, sizeBytes: number, settleAll: boolean): Promise<LogView>;
+  /** The index of everything fed so far, as `indexJson` returns it. */
+  snapshotJson(): Promise<string>;
   /** `[prelude, end)` byte offsets the pull needs. */
   fightRange(fight: number): Promise<[number, number]>;
   /** Keeps a loaded pull loaded for longer; `false` when it is not loaded. */
@@ -81,6 +85,9 @@ export function workerEngine(): Engine {
     indexJson: () => send('index_json'),
     restoreIndex: async (indexJson, logId, fileName, sizeBytes) =>
       JSON.parse(await send<string>('restore_index', [indexJson, logId, fileName, sizeBytes])),
+    refreshIndex: async (logId, fileName, sizeBytes, settleAll) =>
+      JSON.parse(await send<string>('refresh_index', [logId, fileName, sizeBytes, settleAll])),
+    snapshotJson: () => send('snapshot_json'),
     fightRange: async (fight) => {
       const [start, end] = await send<number[]>('fight_range', [fight]);
       return [start, end];

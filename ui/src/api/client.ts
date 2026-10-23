@@ -42,6 +42,7 @@ import type {
 const CHUNK_BYTES = 8 << 20;
 /** Logs whose index is kept, so they open again without being read. */
 const MAX_STORED_INDEXES = 20;
+const FOLLOW_STORE_INTERVAL_MS = 60_000;
 
 interface StoredIndex {
   key: string;
@@ -75,7 +76,16 @@ async function quietly<T>(task: () => Promise<T>): Promise<T | undefined> {
 export class SetCancelled extends Error {}
 
 export function createClient({ engine: getEngine, dungeons, channelSpells, spellClasses, db, now }: ClientDeps) {
-  let current: { source: LogSource; engineRestarts: number } | null = null;
+  let current: {
+    source: LogSource;
+    /** The `openLog` call that opened it; a later one supersedes it. */
+    open: number;
+    engineRestarts: number;
+    followedBytes: number;
+    followed: boolean;
+    storedKey: string;
+    lastStoredAtMs: number | null;
+  } | null = null;
   const gameDataLoaded = { dungeons: false, channelSpells: false, spellClasses: false };
   let latestOpen = 0;
   let queue: Promise<unknown> = Promise.resolve();
@@ -123,7 +133,7 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
     source: LogSource,
     onProgress: (bytesRead: number, totalBytes: number) => void,
     superseded: () => boolean,
-  ): Promise<LogView> {
+  ): Promise<{ view: LogView; key: string; followedBytes: number }> {
     const engine = getEngine();
     await loadGameData(engine);
     const key = `${source.id}|${source.size}|${source.lastModified}|${await engine.indexFormatVersion()}`;
@@ -132,7 +142,7 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
       const view = await quietly(() => engine.restoreIndex(stored.json, source.id, source.name, source.size));
       if (view) {
         await quietly(() => useIndex(key));
-        return view;
+        return { view, key, followedBytes: 0 };
       }
     }
     await engine.beginIndex();
@@ -148,7 +158,7 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
     const view = await engine.finishIndex(source.id, source.name, source.size);
     const json = await engine.indexJson();
     await quietly(() => storeIndex(key, json));
-    return view;
+    return { view, key, followedBytes: source.size };
   }
 
   /** Runs `command` once the pulls it needs are loaded from the open log. */
@@ -202,20 +212,70 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
     });
   }
 
+  /** A restored index leaves the engine's indexer empty, so its first growth feeds the log from byte 0. */
+  function followLog(logId: string, settleAll: boolean): Promise<LogView | null> {
+    return serial(async () => {
+      const engine = getEngine();
+      if (current && current.engineRestarts !== engine.restarts()) current = null;
+      if (current?.source.id !== logId) return null;
+      const log = current;
+      const source = log.source;
+      try {
+        const grew = (await source.refresh?.()) ?? false;
+        if (grew) log.followed = true;
+        // A feed that failed left bytes behind, and `refresh` has already taken the new size.
+        const behind = log.followedBytes < source.size;
+        if (!grew && !(log.followed && (settleAll || behind))) return null;
+        for (let offset = log.followedBytes; offset < source.size; offset += CHUNK_BYTES) {
+          if (log.open !== latestOpen) return null;
+          const bytes = await source.read(offset, Math.min(CHUNK_BYTES, source.size - offset));
+          await engine.feed(bytes);
+          log.followedBytes = offset + bytes.length;
+        }
+        const view = await engine.refreshIndex(source.id, source.name, source.size, settleAll);
+        await storeFollowed(engine, log, view, settleAll);
+        return view;
+      } finally {
+        if (current && current.engineRestarts !== engine.restarts()) current = null;
+      }
+    });
+  }
+
+  /** Losing the stored index must not fail a refresh. A settling refresh, once per quiet period, always stores: no later write would. */
+  function storeFollowed(engine: Engine, log: NonNullable<typeof current>, view: LogView, settled: boolean) {
+    return quietly(async () => {
+      const at = now();
+      if (!settled && log.lastStoredAtMs !== null && at - log.lastStoredAtMs < FOLLOW_STORE_INTERVAL_MS) return;
+      const { source, storedKey } = log;
+      const key = `${source.id}|${source.size}|${source.lastModified}|${await engine.indexFormatVersion()}`;
+      await storeIndex(key, await engine.snapshotJson());
+      log.lastStoredAtMs = at;
+      log.storedKey = key;
+      if (key !== storedKey) {
+        await db.delete('indexes', storedKey);
+        await db.delete('indexes-used', storedKey);
+      }
+      await rememberLog(db, source, view, at);
+    });
+  }
+
   const pull =
     <T>(command: string) =>
     (logId: string, fightIndex: number, filter: ReportFilter) =>
       report<T>(logId, [fightIndex], command, { fightIndex, filter });
 
   return {
+    followLog,
+    canFollow: (logId: string) =>
+      current?.source.id === logId && current.source.refresh !== undefined && current.engineRestarts === getEngine().restarts(),
     pullSet,
     /** A later call supersedes an open that is still reading; it fails without reading on. */
     openLog: (source: LogSource, onProgress: (bytesRead: number, totalBytes: number) => void = () => {}) => {
       const open = ++latestOpen;
       return serial(async () => {
         current = null;
-        const view = await index(source, onProgress, () => open !== latestOpen);
-        current = { source, engineRestarts: getEngine().restarts() };
+        const { view, key, followedBytes } = await index(source, onProgress, () => open !== latestOpen);
+        current = { source, open, engineRestarts: getEngine().restarts(), followedBytes, followed: false, storedKey: key, lastStoredAtMs: null };
         // Only real combat logs are remembered.
         if (view.logVersion !== null) await quietly(() => rememberLog(db, source, view, now()));
         return view;
