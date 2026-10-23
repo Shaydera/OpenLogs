@@ -129,6 +129,37 @@ fn opening_a_log_lists_its_pulls_and_a_stored_index_reopens_it() {
 }
 
 #[test]
+fn a_grown_log_lists_settled_pulls_and_reloads_pulls_read_before_their_tail() {
+    let pull_2_start = FIXTURE.find("19:10:00.0000").unwrap();
+    let cut = pull_2_start + FIXTURE[pull_2_start..].find('\n').unwrap() + 1;
+    let (head, rest) = FIXTURE.split_at(cut);
+    let (mut engine, first) = open(head);
+    assert_eq!(first["fights"][1]["outcome"], "incomplete");
+    load(&mut engine, head, 1);
+
+    engine.index_feed(rest.as_bytes());
+    let refreshed: Value = serde_json::from_str(&engine.refresh_index(
+        "log-1",
+        "WoWCombatLog-100726_185823.txt",
+        FIXTURE.len() as u64,
+        false,
+    ))
+    .unwrap();
+    let (reference, whole) = open(FIXTURE);
+    let listed = refreshed["fights"].as_array().unwrap();
+    assert_eq!(listed.len(), 2);
+    assert_eq!(listed[1]["outcome"], "wipe");
+    for (grown, complete) in listed.iter().zip(whole["fights"].as_array().unwrap()) {
+        assert_eq!(grown, complete);
+    }
+    assert!(!engine.touch_fight(1));
+    assert_eq!(
+        serde_json::from_str::<Value>(&engine.snapshot_json()).unwrap(),
+        serde_json::from_str::<Value>(&reference.index_json()).unwrap()
+    );
+}
+
+#[test]
 fn unusable_input_fails_with_a_message() {
     let (_, view) = open("shopping list\nmilk, eggs\n");
     assert_eq!(view["fights"], json!([]));

@@ -60,6 +60,21 @@ impl Session {
             .finish_index(log_id, file_name, size_bytes as u64)
     }
 
+    pub fn refresh_index(
+        &mut self,
+        log_id: &str,
+        file_name: &str,
+        size_bytes: f64,
+        settle_all: bool,
+    ) -> String {
+        self.engine
+            .refresh_index(log_id, file_name, size_bytes as u64, settle_all)
+    }
+
+    pub fn snapshot_json(&self) -> String {
+        self.engine.snapshot_json()
+    }
+
     pub fn index_json(&self) -> String {
         self.engine.index_json()
     }

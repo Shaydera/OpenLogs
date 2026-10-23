@@ -48,8 +48,9 @@ pub use deaths::{
 pub use deaths_report::{DeathsReport, Kill, deaths_report};
 pub use fight::{
     Absorbed, AuraAction, AuraType, Damage, DamageVia, Energize, Event, EventKind, FailReason,
-    Fight, FightKind, Heal, MarkerInterval, MissType, Missed, NO_SPELL, POWER_SAMPLE_MS,
-    PositionSample, PowerSample, RunEncounter, SpellId, SpellInfo, UnitHp, WorldMarkerInterval,
+    Fight, FightKind, Heal, LANDED_MATCH_MS, MarkerInterval, MissType, Missed, NO_SPELL,
+    POWER_SAMPLE_MS, PositionSample, PowerSample, RunEncounter, SpellId, SpellInfo, UnitHp,
+    WorldMarkerInterval,
 };
 pub use filter::{Attribution, Overkill, ReportFilter};
 pub use interrupts::{

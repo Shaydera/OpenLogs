@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use openlogs_analysis::{
-    Actors, Fight, LANDED_TAIL_BYTES, load_fight_slice, load_fight_slice_with,
+    Actors, Fight, LANDED_MATCH_MS, LANDED_TAIL_BYTES, load_fight_slice, load_fight_slice_with,
 };
 use openlogs_gamedata::{ChannelSpells, Curated, DungeonTable, SpellClasses};
 use openlogs_index::{FightSummary, Indexer, LogIndex};
@@ -30,7 +30,7 @@ pub struct Engine {
     indexer: Indexer,
     index: LogIndex,
     /// Most recently loaded first; at most [`LOADED_PULLS`] entries.
-    fights: Vec<(u32, Fight)>,
+    fights: Vec<LoadedPull>,
     curated: Curated,
     dungeons: Option<DungeonTable>,
     channels: ChannelSpells,
@@ -83,8 +83,32 @@ impl Engine {
 
     /// Finishes indexing and returns the pull list as JSON.
     pub fn finish_index(&mut self, log_id: &str, file_name: &str, size_bytes: u64) -> String {
-        self.index = std::mem::take(&mut self.indexer).finish();
+        self.index = self.indexer.snapshot();
         self.view_json(log_id, file_name, size_bytes, false)
+    }
+
+    /// Re-lists the pulls of a log that grew, keeping only pulls whose end has settled; with
+    /// `settle_all` every closed pull counts. Loaded pulls that no longer match the log are dropped.
+    pub fn refresh_index(
+        &mut self,
+        log_id: &str,
+        file_name: &str,
+        size_bytes: u64,
+        settle_all: bool,
+    ) -> String {
+        let settle_ms = (!settle_all).then(|| i64::from(LANDED_MATCH_MS));
+        self.index = self.indexer.settled_index(settle_ms);
+        let index = &self.index;
+        self.fights.retain(|pulled| {
+            !pulled.cut_tail
+                && summary_of(index, pulled.index).is_ok_and(|summary| *summary == pulled.summary)
+        });
+        self.view_json(log_id, file_name, size_bytes, false)
+    }
+
+    /// The index of everything fed so far, open pulls included.
+    pub fn snapshot_json(&self) -> String {
+        serde_json::to_string(&self.indexer.snapshot()).expect("the index serializes")
     }
 
     /// The index in the form [`Engine::restore_index`] reads back.
@@ -120,7 +144,7 @@ impl Engine {
         let Some(position) = self
             .fights
             .iter()
-            .position(|(index, _)| *index == fight_index)
+            .position(|pulled| pulled.index == fight_index)
         else {
             return false;
         };
@@ -136,9 +160,19 @@ impl Engine {
         base_offset: u64,
         fight_index: u32,
     ) -> Result<(), String> {
-        let fight = load_fight_slice(part, base_offset, self.summary(fight_index)?);
-        self.fights.retain(|(index, _)| *index != fight_index);
-        self.fights.insert(0, (fight_index, fight));
+        let summary = self.summary(fight_index)?.clone();
+        let fight = load_fight_slice(part, base_offset, &summary);
+        let cut_tail = base_offset + (part.len() as u64) < summary.end_offset + LANDED_TAIL_BYTES;
+        self.fights.retain(|pulled| pulled.index != fight_index);
+        self.fights.insert(
+            0,
+            LoadedPull {
+                index: fight_index,
+                fight,
+                summary,
+                cut_tail,
+            },
+        );
         self.fights.truncate(LOADED_PULLS);
         Ok(())
     }
@@ -429,10 +463,19 @@ impl Engine {
         self.summary(fight_index)?;
         self.fights
             .iter()
-            .find(|(index, _)| *index == fight_index)
-            .map(|(_, fight)| fight)
+            .find(|pulled| pulled.index == fight_index)
+            .map(|pulled| &pulled.fight)
             .ok_or_else(|| format!("Pull {fight_index} is not loaded."))
     }
+}
+
+/// A pull read from the log, with what it was read against.
+struct LoadedPull {
+    index: u32,
+    fight: Fight,
+    summary: FightSummary,
+    /// The file ended before the pull's landed tail did, so later lines may change it.
+    cut_tail: bool,
 }
 
 fn summary_of(index: &LogIndex, fight_index: u32) -> Result<&FightSummary, String> {
