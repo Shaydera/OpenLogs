@@ -40,17 +40,22 @@ function fakeEngine() {
   const loaded: number[] = [];
   const fed: number[] = [];
   const setFeeds: number[] = [];
-  const state = { restarts: 0 };
+  const state = { restarts: 0, beginIndexCalls: 0 };
   const engine: Engine = {
     indexFormatVersion: async () => 5,
     setDungeons: async () => {},
     setChannelSpells: async () => {},
     setSpellClasses: async () => {},
-    beginIndex: async () => void fed.splice(0),
+    beginIndex: async () => {
+      state.beginIndexCalls += 1;
+      fed.splice(0);
+    },
     feed: async (bytes) => void fed.push(bytes.length),
     finishIndex: async (logId) => view(logId),
     indexJson: async () => '{"fights":[]}',
     restoreIndex: async (_, logId) => ({ ...view(logId), cacheHit: true }),
+    refreshIndex: async (logId) => view(logId),
+    snapshotJson: async () => '{"fights":[]}',
     fightRange: async (fight) => [fight * 100, fight * 100 + 100],
     touchFight: async (fight) => loaded.includes(fight),
     loadFight: async (_, __, fight) => void loaded.push(fight),
@@ -65,6 +70,22 @@ function fakeEngine() {
 
 function source(id: string, size: number, lastModified = 1): LogSource & { read: ReturnType<typeof vi.fn> } {
   return { id, name: id, size, lastModified, read: vi.fn(async (_: number, length: number) => new Uint8Array(length)) };
+}
+
+/** A log on disk that `grow` appends to; `refresh` picks the growth up like a fresh handle read. */
+function growable(id: string, size: number, lastModified = 1) {
+  let onDisk = size;
+  const log: LogSource & { grow(to: number): void } = {
+    ...source(id, size, lastModified),
+    grow: (to) => void (onDisk = to),
+    refresh: async () => {
+      const grew = onDisk > log.size;
+      log.size = onDisk;
+      log.lastModified += 1;
+      return grew;
+    },
+  };
+  return log;
 }
 
 function client() {
@@ -231,5 +252,146 @@ describe('failures', () => {
     state.restarts = 1;
     const filter = { startMs: null, endMs: null, attribution: 'reattributed' as const, includeOverkill: false, deathCutoff: null };
     await expect(api.damageDoneReport('raid.txt', 1, filter)).rejects.toBe('This log is no longer open. Open it again.');
+  });
+});
+
+describe('following a log that grows', () => {
+  it('feeds only the bytes appended since the last read', async () => {
+    const { api, fed } = client();
+    const log = growable('raid.txt', 10 * MiB);
+    await api.openLog(log);
+    fed.splice(0);
+
+    log.grow(13 * MiB);
+    const result = await api.followLog('raid.txt', false);
+
+    expect(fed).toEqual([3 * MiB]);
+    expect(result).not.toBeNull();
+  });
+
+  it('feeds a restored log from its start on its first growth, without beginning a new index', async () => {
+    const { api, fed, state } = client();
+    await api.openLog(growable('raid.txt', 10 * MiB));
+    const log = growable('raid.txt', 10 * MiB);
+    expect((await api.openLog(log)).cacheHit).toBe(true);
+    fed.splice(0);
+    state.beginIndexCalls = 0;
+
+    log.grow(11 * MiB);
+    await api.followLog('raid.txt', false);
+
+    expect(fed.reduce((a, b) => a + b, 0)).toBe(11 * MiB);
+    expect(state.beginIndexCalls).toBe(0);
+  });
+
+  it('stops feeding a restored log from its start once another log is opened', async () => {
+    const { api } = client();
+    await api.openLog(growable('raid.txt', 40 * MiB));
+    const log = growable('raid.txt', 40 * MiB);
+    await api.openLog(log);
+    let other: Promise<LogView> | null = null;
+    const read = vi.mocked(log.read);
+    read.mockImplementation(async (_: number, length: number) => {
+      if (read.mock.calls.length === 2) other = api.openLog(source('other.txt', 10));
+      return new Uint8Array(length);
+    });
+
+    log.grow(41 * MiB);
+
+    expect(await api.followLog('raid.txt', false)).toBeNull();
+    expect(log.read).toHaveBeenCalledTimes(2);
+    await expect(other).resolves.toMatchObject({ id: 'other.txt' });
+  });
+
+  it('stops following once the engine has restarted', async () => {
+    const { api, state } = client();
+    const log = growable('raid.txt', 10 * MiB);
+    await api.openLog(log);
+    state.restarts = 1;
+
+    log.grow(11 * MiB);
+
+    expect(await api.followLog('raid.txt', false)).toBeNull();
+    expect(api.canFollow('raid.txt')).toBe(false);
+  });
+
+  it('has nothing to refresh when the log did not grow, unless a followed growth is still to settle', async () => {
+    const { api } = client();
+    const log = growable('raid.txt', 10 * MiB);
+    await api.openLog(log);
+
+    expect(await api.followLog('raid.txt', false)).toBeNull();
+    expect(await api.followLog('raid.txt', true)).toBeNull();
+
+    log.grow(11 * MiB);
+    await api.followLog('raid.txt', false);
+    expect(await api.followLog('raid.txt', false)).toBeNull();
+    expect(await api.followLog('raid.txt', true)).not.toBeNull();
+  });
+
+  it('feeds the rest of a growth whose read failed on the next refresh', async () => {
+    const { api, engine, fed } = client();
+    const log = growable('raid.txt', 10 * MiB);
+    await api.openLog(log);
+    fed.splice(0);
+    let feeds = 0;
+    engine.feed = async (bytes) => {
+      if (++feeds === 2) throw new Error('read failed');
+      fed.push(bytes.length);
+    };
+
+    log.grow(22 * MiB);
+    await expect(api.followLog('raid.txt', false)).rejects.toThrow('read failed');
+    expect(await api.followLog('raid.txt', false)).not.toBeNull();
+    expect(fed).toEqual([8 * MiB, 4 * MiB]);
+  });
+
+  it('cannot follow a log without a handle, or one that is not open', async () => {
+    const { api } = client();
+    await api.openLog(source('plain.txt', 10));
+    expect(api.canFollow('plain.txt')).toBe(false);
+    expect(api.canFollow('other.txt')).toBe(false);
+    expect(await api.followLog('other.txt', false)).toBeNull();
+  });
+
+  it('stores the grown index at most once a minute, and once more when it settles, dropping the one it replaces', async () => {
+    const fake = fakeEngine();
+    let clock = 0;
+    const db = memoryDatabase();
+    const api = createClient({
+      engine: () => fake.engine,
+      dungeons: async () => null,
+      channelSpells: async () => null,
+      spellClasses: async () => null,
+      db,
+      now: () => clock,
+    });
+    const log = growable('raid.txt', 10);
+    await api.openLog(log);
+    const keys = async () => (await db.all<{ key: string }>('indexes')).map((entry) => entry.key);
+    expect(await keys()).toEqual(['raid.txt|10|1|5']);
+
+    log.grow(20);
+    await api.followLog('raid.txt', false);
+    expect(await keys()).toEqual(['raid.txt|20|2|5']);
+
+    clock = 30_000;
+    log.grow(30);
+    await api.followLog('raid.txt', false);
+    expect(await keys()).toEqual(['raid.txt|20|2|5']);
+
+    clock = 60_000;
+    log.grow(40);
+    await api.followLog('raid.txt', false);
+    expect(await keys()).toEqual(['raid.txt|40|4|5']);
+
+    clock = 70_000;
+    log.grow(50);
+    await api.followLog('raid.txt', false);
+    expect(await keys()).toEqual(['raid.txt|40|4|5']);
+
+    clock = 72_000;
+    await api.followLog('raid.txt', true);
+    expect(await keys()).toEqual(['raid.txt|50|6|5']);
   });
 });

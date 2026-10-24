@@ -90,6 +90,9 @@ export function OptionsMenu() {
   const setAttribution = useApp((s) => s.setAttribution);
   const includeOverkill = useApp((s) => s.includeOverkill);
   const setIncludeOverkill = useApp((s) => s.setIncludeOverkill);
+  const liveRefresh = useApp((s) => s.liveRefresh);
+  const canFollow = useApp((s) => s.canFollow);
+  const setLiveRefresh = useApp((s) => s.setLiveRefresh);
   const showAugDelta = useApp((s) => s.showAugDelta);
   const setShowAugDelta = useApp((s) => s.setShowAugDelta);
   const colorByTarget = useApp((s) => s.colorByTarget);
@@ -160,6 +163,13 @@ export function OptionsMenu() {
             <span>
               {t('options.overkill')}
               <span className="options-hint">{t('options.overkillHint')}</span>
+            </span>
+          </label>
+          <label className="options-row" title={canFollow ? undefined : t('options.liveRefreshUnavailable')}>
+            <input type="checkbox" checked={liveRefresh} disabled={!canFollow} onChange={() => setLiveRefresh(!liveRefresh)} />
+            <span>
+              {t('options.liveRefresh')}
+              <span className="options-hint">{t('options.liveRefreshHint')}</span>
             </span>
           </label>
           {sections.map((section) => (

@@ -5,12 +5,15 @@ export interface LogSource {
   /** Identifies the log across sessions: its file name. */
   id: string;
   name: string;
+  /** Grows while the game appends and `refresh` follows it. */
   size: number;
   lastModified: number;
   /** Up to `length` bytes from `offset`, in a buffer of their own. */
   read(offset: number, length: number): Promise<Uint8Array>;
   /** The file's handle where the browser has them (Chromium), so the recent list can open it again. */
   handle?: FileSystemFileHandle;
+  /** Takes the file's current state from its handle; whether it grew. */
+  refresh?(): Promise<boolean>;
 }
 
 /** A log the user chose. Its file is only reached by `open`, which can still fail. */
@@ -30,7 +33,7 @@ export function fileSource(file: File, handle?: FileSystemFileHandle): LogSource
   let current = file;
   const slice = async (offset: number, length: number) =>
     new Uint8Array(await current.slice(offset, offset + length).arrayBuffer());
-  return {
+  const source: LogSource = {
     id: file.name,
     name: file.name,
     size: file.size,
@@ -47,6 +50,16 @@ export function fileSource(file: File, handle?: FileSystemFileHandle): LogSource
       }
     },
   };
+  if (handle) {
+    source.refresh = async () => {
+      const grownFrom = source.size;
+      current = await handle.getFile();
+      source.size = current.size;
+      source.lastModified = current.lastModified;
+      return source.size > grownFrom;
+    };
+  }
+  return source;
 }
 
 export function chosenFile(file: File): ChosenLog {

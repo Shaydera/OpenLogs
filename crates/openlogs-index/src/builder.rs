@@ -20,6 +20,7 @@ pub struct LineSpan {
 }
 
 /// Builds a [`LogIndex`] from lines fed in file order.
+#[derive(Clone)]
 pub struct IndexBuilder {
     index: LogIndex,
     open: Option<OpenFight>,
@@ -203,6 +204,42 @@ impl IndexBuilder {
         // A run closes after its boss pulls but is numbered before them.
         self.index.fights.sort_by_key(|fight| fight.index);
         self.index
+    }
+
+    /// The closed entries that no later line can change, as an index. With `settle_ms`, only
+    /// those with a line more than `settle_ms` past their end, which the analysis may still read;
+    /// measured as it does, in whole ms from their start against `duration_ms`. Boss pulls of the
+    /// open run wait for it.
+    pub fn settled(&self, settle_ms: Option<i64>) -> LogIndex {
+        let open_run = self.run.as_ref().map(|run| run.summary.index);
+        let latest = self.recent.back().map(|&(timestamp, _)| timestamp);
+        let mut fights: Vec<FightSummary> = self
+            .index
+            .fights
+            .iter()
+            .filter(|fight| fight.run_index.is_none() || fight.run_index != open_run)
+            .filter(|fight| match (settle_ms, latest) {
+                (None, _) => true,
+                (Some(settle), Some(latest)) => {
+                    let duration = i64::try_from(fight.duration_ms).unwrap_or(i64::MAX);
+                    latest.millis_since(fight.start) > duration.saturating_add(settle)
+                }
+                (Some(_), None) => false,
+            })
+            .cloned()
+            .collect();
+        fights.sort_by_key(|fight| fight.index);
+        LogIndex {
+            format_version: self.index.format_version,
+            log_version: self.index.log_version,
+            build: self.index.build.clone(),
+            advanced_logging: self.index.advanced_logging,
+            line_count: self.index.line_count,
+            broken_lines: self.index.broken_lines,
+            unhandled_in_fights: self.index.unhandled_in_fights.clone(),
+            warnings: self.index.warnings.clone(),
+            fights,
+        }
     }
 
     /// Ends, at the previous line, what this line leaves behind: leaving the instance or
@@ -532,6 +569,7 @@ fn add_combatant(roster: &mut Vec<RosterEntry>, info: &CombatantInfo<'_>) {
     }
 }
 
+#[derive(Clone)]
 struct OpenFight {
     summary: FightSummary,
     /// Every hostile NPC seen in advanced info or hit by damage, by GUID.
@@ -627,6 +665,7 @@ impl OpenFight {
 
 /// An open pull as of an earlier line: everything later lines may change in its summary,
 /// including the index's count of unhandled events, which only the open pull adds to.
+#[derive(Clone)]
 struct PullSnapshot {
     summary: FightSummary,
     hostile: HashMap<String, HostileUnit>,
@@ -635,6 +674,7 @@ struct PullSnapshot {
 }
 
 /// A run's `CHALLENGE_MODE_END` that came while one of its boss pulls was open.
+#[derive(Clone)]
 struct HeldEnd {
     end: ChallengeModeEnd,
     at: Timestamp,
@@ -648,6 +688,7 @@ struct HeldEnd {
     run_end_offset: u64,
 }
 
+#[derive(Clone)]
 struct OpenRun {
     summary: FightSummary,
     /// Player names seen in the run's boss pulls.

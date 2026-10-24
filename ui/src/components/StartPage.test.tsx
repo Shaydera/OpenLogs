@@ -11,7 +11,7 @@ import { overviewFixture } from '../test/overviewFixture';
 import { runLogFixture } from '../test/runFixture';
 
 vi.mock('../api/client', () => ({
-  api: { openLog: vi.fn(), recentLogs: vi.fn(), reopenRecent: vi.fn(), removeRecent: vi.fn(), quickOverview: vi.fn(), pullSet: vi.fn() },
+  api: { openLog: vi.fn(), recentLogs: vi.fn(), reopenRecent: vi.fn(), removeRecent: vi.fn(), quickOverview: vi.fn(), pullSet: vi.fn(), canFollow: vi.fn(() => false) },
 }));
 vi.mock('../api/logSource', () => ({ chooseLog: vi.fn() }));
 

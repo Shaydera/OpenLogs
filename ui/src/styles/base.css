@@ -273,3 +273,18 @@ html {
   color: var(--death);
   border-bottom: 1px solid var(--death-tint-line);
 }
+.live-notice {
+  position: fixed;
+  z-index: 40;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel-raised);
+  color: var(--text);
+  font-size: 13px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--shadow) 45%, transparent);
+  pointer-events: none;
+}

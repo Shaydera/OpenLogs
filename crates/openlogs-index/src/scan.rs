@@ -27,7 +27,7 @@ const MAX_LINE_BYTES: u64 = 1 << 20;
 /// Indexes a log that arrives in chunks of any size, e.g. while streaming a file. Lines
 /// outside fights are only read up to their event name, which keeps indexing fast on
 /// trash-heavy logs.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Indexer {
     builder: IndexBuilder,
     partial_line: Vec<u8>,
@@ -64,6 +64,18 @@ impl Indexer {
     pub fn finish(mut self) -> LogIndex {
         self.push_partial();
         self.builder.finish()
+    }
+
+    /// The index of everything fed so far, the open pull and run ended as incomplete and a
+    /// trailing partial line counted as a line. Feeding can go on afterwards.
+    pub fn snapshot(&self) -> LogIndex {
+        self.clone().finish()
+    }
+
+    /// The closed pulls and runs of everything fed so far that no later line can change; see
+    /// [`IndexBuilder::settled`]. A trailing partial line is ignored.
+    pub fn settled_index(&self, settle_ms: Option<i64>) -> LogIndex {
+        self.builder.settled(settle_ms)
     }
 
     fn keep_partial(&mut self, bytes: &[u8]) {
