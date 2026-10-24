@@ -11,8 +11,12 @@ vi.mock('../api/client', () => ({
   api: { recentLogs: vi.fn(), openLog: vi.fn() },
 }));
 vi.mock('../gameData', () => ({ gameDataManifest: vi.fn() }));
+const build = vi.hoisted(() => ({ IS_WEBSITE: false, PRIVACY_NOTICE_URL: undefined as string | undefined }));
+vi.mock('../build', () => build);
 
 beforeEach(() => {
+  build.IS_WEBSITE = false;
+  build.PRIVACY_NOTICE_URL = undefined;
   vi.mocked(api.recentLogs).mockReset().mockResolvedValue([]);
   vi.mocked(gameDataManifest).mockReset().mockResolvedValue(gameDataFixture);
   localStorage.clear();
@@ -44,6 +48,21 @@ describe('Settings dialog', () => {
     const dialog = await openDialog();
     expect(await within(dialog).findByText('410,805 spells')).toBeInTheDocument();
     expect(within(dialog).queryByText('Channel spells')).toBeNull();
+  });
+
+  describe('privacy', () => {
+    it("links the deployment's privacy notice on the website", async () => {
+      build.IS_WEBSITE = true;
+      build.PRIVACY_NOTICE_URL = 'https://example.test/privacy';
+      const dialog = await openDialog();
+      expect(within(dialog).getByRole('link', { name: 'Privacy notice' })).toHaveAttribute('href', 'https://example.test/privacy');
+    });
+
+    it('links no notice from a website build that names none', async () => {
+      build.IS_WEBSITE = true;
+      const dialog = await openDialog();
+      expect(within(dialog).queryByRole('link', { name: 'Privacy notice' })).toBeNull();
+    });
   });
 
   describe('UI size', () => {

@@ -107,6 +107,8 @@ jobs:
         run: npm run images
       - name: Build WASM and React
         working-directory: ui
+        env:
+          VITE_PRIVACY_URL: https://openlogs.gg/privacy.html
         run: npm run build:web
       - name: Create verifiable web release archive
         shell: bash

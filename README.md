@@ -96,6 +96,10 @@ Spell, class and boss images and map art come from the Wowhead CDN; spell icon n
 
 World of Warcraft is a trademark of Blizzard Entertainment. OpenLogs is not affiliated with Blizzard or Warcraft Logs.
 
+## Privacy
+
+Logs, settings and indexes stay on your device; there are no cookies and no tracking. The website and web app are covered by the [privacy notice on openlogs.gg](https://openlogs.gg/privacy.html), the desktop app and your own builds by [PRIVACY.md](PRIVACY.md).
+
 ## Contributing
 
 Pull requests go against `development`; `main` holds the latest release. See [CONTRIBUTING.md](CONTRIBUTING.md), including the contributor license agreement.
