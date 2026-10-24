@@ -7,12 +7,18 @@ import type { LogView } from './types';
 
 const MiB = 1 << 20;
 
+/** IndexedDB clones what it stores; a file handle survives that in the browser, but not `structuredClone` here. */
+function cloneLikeIndexedDb(value: object): object {
+  const { handle, ...rest } = value as { handle?: unknown };
+  return handle === undefined ? structuredClone(rest) : { ...structuredClone(rest), handle };
+}
+
 function memoryDatabase(): Database {
   const stores: Record<StoreName, Map<string, object>> = { indexes: new Map(), 'indexes-used': new Map(), recent: new Map() };
   const keyOf = (store: StoreName, value: object) => (value as Record<string, string>)[store === 'recent' ? 'id' : 'key'];
   return {
     get: async <T>(store: StoreName, key: string) => stores[store].get(key) as T | undefined,
-    put: async (store, value) => void stores[store].set(keyOf(store, value), structuredClone(value)),
+    put: async (store, value) => void stores[store].set(keyOf(store, value), cloneLikeIndexedDb(value)),
     delete: async (store, key) => void stores[store].delete(key),
     all: async <T>(store: StoreName) => [...stores[store].values()] as T[],
   };
@@ -86,6 +92,20 @@ function growable(id: string, size: number, lastModified = 1) {
     },
   };
   return log;
+}
+
+/** A remembered file; `permission` is what the browser grants without asking. */
+function fileHandle(permission: PermissionState = 'granted') {
+  const file = { gone: false, permission };
+  const handle = {
+    queryPermission: async () => file.permission,
+    requestPermission: async () => 'granted',
+    getFile: async () => {
+      if (file.gone) throw new DOMException('The file could not be found.', 'NotFoundError');
+      return new File(['log'], 'log.txt');
+    },
+  } as unknown as FileSystemFileHandle;
+  return { handle, file };
 }
 
 function client() {
@@ -170,6 +190,64 @@ describe('opening logs', () => {
       ['newer.txt', false],
       ['older.txt', false],
     ]);
+  });
+});
+
+describe('recent logs', () => {
+  it('forgets a removed log together with its stored index', async () => {
+    const { api } = client();
+    await api.openLog(source('raid', 10));
+    await api.openLog(source('raid|old.txt', 10));
+    await api.removeRecent('raid');
+    expect((await api.recentLogs()).map((entry) => entry.id)).toEqual(['raid|old.txt']);
+    expect((await api.openLog(source('raid', 10))).cacheHit).toBe(false);
+    expect((await api.openLog(source('raid|old.txt', 10))).cacheHit).toBe(true);
+  });
+
+  it('keeps a log removed while it was being opened out of the list, without an index', async () => {
+    const { api } = client();
+    const opened = api.openLog(source('raid.txt', 10));
+    await api.removeRecent('raid.txt');
+    await opened;
+    expect(await api.recentLogs()).toEqual([]);
+    expect((await api.openLog(source('raid.txt', 10))).cacheHit).toBe(false);
+  });
+
+  it('keeps a log removed while its growth is being stored out of the list, without an index', async () => {
+    const { api, engine } = client();
+    const log = growable('raid.txt', 10);
+    await api.openLog(log);
+    engine.snapshotJson = async () => {
+      void api.removeRecent('raid.txt');
+      return '{"fights":[]}';
+    };
+    log.grow(20);
+    expect(await api.followLog('raid.txt', true)).not.toBeNull();
+    expect(await api.recentLogs()).toEqual([]);
+    expect((await api.openLog(source('raid.txt', 20, 2))).cacheHit).toBe(false);
+  });
+
+  it('drops logs whose file is gone but keeps their index, and keeps those it may not check yet', async () => {
+    const { api } = client();
+    const present = fileHandle();
+    const deleted = fileHandle();
+    const unchecked = fileHandle('prompt');
+    await api.openLog({ ...source('present.txt', 10), handle: present.handle });
+    await api.openLog({ ...source('deleted.txt', 10), handle: deleted.handle });
+    await api.openLog({ ...source('unchecked.txt', 10), handle: unchecked.handle });
+    deleted.file.gone = true;
+    unchecked.file.gone = true;
+    expect((await api.recentLogs()).map((entry) => entry.id)).toEqual(['unchecked.txt', 'present.txt']);
+    expect((await api.openLog(source('deleted.txt', 10))).cacheHit).toBe(true);
+  });
+
+  it('forgets a log whose file turns out to be gone when it is opened again', async () => {
+    const { api } = client();
+    const remembered = fileHandle('prompt');
+    await api.openLog({ ...source('raid.txt', 10), handle: remembered.handle });
+    remembered.file.gone = true;
+    await expect(api.reopenRecent('raid.txt')).rejects.toBe('The file no longer exists.');
+    expect(await api.recentLogs()).toEqual([]);
   });
 });
 

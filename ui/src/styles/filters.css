@@ -32,7 +32,8 @@
 .options { position: relative; }
 .options-btn { position: relative; }
 .options-dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--panel); }
-.options-pop { position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; width: 320px; padding: 6px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--panel-raised); box-shadow: 0 14px 34px color-mix(in srgb, var(--shadow) 55%, transparent); }
+.options-pop, .recent-menu { position: absolute; z-index: 30; padding: 6px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--panel-raised); box-shadow: 0 14px 34px color-mix(in srgb, var(--shadow) 55%, transparent); }
+.options-pop { top: calc(100% + 6px); right: 0; width: 320px; }
 .options-head { margin: 0; padding: 6px 8px 2px; font-size: 11px; }
 .options-split { border-top: 1px solid var(--line-strong); margin-top: 4px; padding-top: 10px; }
 .options-row { display: flex; gap: 10px; align-items: flex-start; padding: 8px; border-radius: 7px; font-size: 13px; cursor: pointer; }

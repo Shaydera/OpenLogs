@@ -27,6 +27,9 @@ export function App() {
 
   useEffect(() => {
     void refreshRecent();
+    const dropLogsDeletedMeanwhile = () => void refreshRecent();
+    window.addEventListener('focus', dropLogsDeletedMeanwhile);
+    return () => window.removeEventListener('focus', dropLogsDeletedMeanwhile);
   }, [refreshRecent]);
 
   useEffect(() => {
