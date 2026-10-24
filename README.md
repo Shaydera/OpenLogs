@@ -35,7 +35,7 @@ Enable *Advanced Combat Logging* in the game (System → Network) and start logg
 
 ## Building
 
-Requirements: Rust 1.95 or newer with the `wasm32-unknown-unknown` target, [`wasm-bindgen-cli`](https://github.com/wasm-bindgen/wasm-bindgen) in the version `crates/openlogs-wasm/Cargo.toml` pins, and Node.js 22 or newer. The desktop app also needs the [Tauri prerequisites](https://tauri.app/start/prerequisites/) (on Windows: WebView2 and the MSVC build tools).
+Requirements: Rust 1.95 or newer with the `wasm32-unknown-unknown` target, [`wasm-bindgen-cli`](https://github.com/wasm-bindgen/wasm-bindgen) in the version `crates/openlogs-wasm/Cargo.toml` pins, and Node.js 22.18 or newer. The desktop app also needs the [Tauri prerequisites](https://tauri.app/start/prerequisites/) (on Windows: WebView2 and the MSVC build tools).
 
 ```sh
 rustup target add wasm32-unknown-unknown
@@ -49,8 +49,11 @@ Website:
 
 ```sh
 npm --prefix ui run dev        # run with hot reload on http://localhost:5173
-npm --prefix ui run build      # static site in ui/dist
+npm --prefix ui run images     # download the game images the website serves itself
+npm --prefix ui run build:web  # static site in ui/dist, with the images
 ```
+
+`npm --prefix ui run build` builds the same site without the images; it loads them from the Wowhead CDN instead, like the desktop app.
 
 Desktop app:
 
@@ -89,7 +92,7 @@ cargo run -p openlogs-cli -- dump-fights path/to/WoWCombatLog.txt
 
 ## Data sources
 
-Spell, class and boss images come from the Wowhead CDN; spell icon names, dungeon and boss data from [wago.tools](https://wago.tools). The game data is exported with each release (`npm --prefix ui run gamedata`) and ships with the app. Without a network connection the app still works; missing images show the initials of their name instead.
+Spell, class and boss images and map art come from the Wowhead CDN; spell icon names, dungeon and boss data from [wago.tools](https://wago.tools). The game data is exported with each release (`npm --prefix ui run gamedata`) and ships with the app. The website also ships the images, so it sends no requests to third parties; the desktop app loads them from the Wowhead CDN. Without a network connection the app still works; missing images show the initials of their name instead.
 
 World of Warcraft is a trademark of Blizzard Entertainment. OpenLogs is not affiliated with Blizzard or Warcraft Logs.
 

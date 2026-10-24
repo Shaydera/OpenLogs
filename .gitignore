@@ -19,6 +19,7 @@ Thumbs.db
 ui/dist/
 ui/src/engine/pkg/
 ui/public/game-data/
+ui/images/
 
 # Tauri generated schemas
 src-tauri/gen/
