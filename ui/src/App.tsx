@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { LiveNotice } from './components/chrome/LiveNotice';
 import { FightView } from './components/FightView';
 import { SettingsDialog } from './components/SettingsDialog';
 import { StartPage } from './components/StartPage';
@@ -49,6 +50,7 @@ export function App() {
         </div>
       )}
       {view.kind === 'start' ? <StartPage dragOver={dragOver} /> : <FightView />}
+      <LiveNotice />
       {settingsOpen && <SettingsDialog />}
     </>
   );
