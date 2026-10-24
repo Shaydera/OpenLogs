@@ -60,9 +60,12 @@ jobs:
       - name: Install UI dependencies
         working-directory: ui
         run: npm ci
-      - name: Build WASM, type-check and bundle
+      # An empty images/ stands in for `npm run images`, which needs the exported game data.
+      - name: Build WASM, type-check and bundle the website
         working-directory: ui
-        run: npm run build
+        run: |
+          mkdir images
+          npm run build:web
 
   # The frontend tests do not import the WASM engine, so they run without the Rust toolchain.
   ui-tests:

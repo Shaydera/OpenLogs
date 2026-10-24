@@ -1,4 +1,6 @@
 import type { MapArtTable, ReplayData } from '../../api/types';
+import { imageUrl } from '../../imageBase';
+import { mapPath } from '../../imagePaths';
 import type { Bounds } from './camera';
 import { UNKNOWN_MAP, deathAt, groupBy, isDeadAt } from './playback';
 
@@ -7,7 +9,6 @@ export const ARENA_SIZE_YD = 110;
 /** Below this share of the pull's player samples the pin's floor is not shown. */
 export const PIN_SHARE_MIN = 0.5;
 const TRIM_SHARE = 0.05;
-const MAP_IMAGE_BASE = 'https://wow.zamimg.com/images/wow/maps/enus/original/';
 
 export type MapBoundsYd = { minX: number; maxX: number; minY: number; maxY: number };
 export type StageMap = {
@@ -94,7 +95,7 @@ export function robustBounds(data: ReplayData, uiMapId: number | null): Bounds |
 }
 
 export function mapImageUrl(entry: { zone: number; floor: number | null }): string {
-  return `${MAP_IMAGE_BASE}${entry.floor === null ? entry.zone : `${entry.zone}-${entry.floor}`}.jpg`;
+  return imageUrl(mapPath(entry));
 }
 
 function squareAround(x: number, y: number, size: number): Bounds {

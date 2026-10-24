@@ -102,9 +102,12 @@ jobs:
       - name: Test frontend
         working-directory: ui
         run: npm test
+      - name: Fetch the images the website serves itself
+        working-directory: ui
+        run: npm run images
       - name: Build WASM and React
         working-directory: ui
-        run: npm run build
+        run: npm run build:web
       - name: Create verifiable web release archive
         shell: bash
         run: |

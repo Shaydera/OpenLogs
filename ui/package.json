@@ -7,8 +7,10 @@
   "scripts": {
     "wasm": "node scripts/build-wasm.mjs",
     "gamedata": "cargo run --release -p openlogs-cli -- export-game-data public/game-data",
+    "images": "node scripts/fetch-images.mjs",
     "dev": "npm run wasm && vite",
     "build": "npm run wasm && tsc --noEmit && vite build",
+    "build:web": "node scripts/copy-images.mjs --check && npm run wasm && tsc --noEmit && vite build --mode web && node scripts/copy-images.mjs",
     "lint": "tsc --noEmit",
     "test": "vitest run"
   },

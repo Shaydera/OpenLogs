@@ -1,5 +1,6 @@
 import type { PlayerRef } from '../../api/types';
 import { namedIcon, spellIcon } from '../../icons';
+import { ENVIRONMENT_ICON, MELEE_ICON } from '../../imagePaths';
 import { t } from '../../i18n/i18n';
 
 export type SpellNames = Record<string, { name: string }>;
@@ -25,10 +26,6 @@ export function reportSpellName(spells: SpellNames, spellId: number): string {
   if (spellId === 0) return t('overview.melee');
   return spells[String(spellId)]?.name ?? t('overview.unknownSpell', { id: spellId });
 }
-
-/** Named icons for hits without a spell icon of their own. */
-const MELEE_ICON = 'ability_meleedamage';
-const ENVIRONMENT_ICON = 'spell_nature_earthquake';
 
 /** Icon of a hit: melee swings and world damage (both spell 0) get named icons. */
 export function hitIcon(hit: { spellId: number; environmental: boolean }): string {
