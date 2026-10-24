@@ -586,6 +586,8 @@ let viewQuery = 0;
 /** The view request whose timeline is shown. */
 let shownTimelineRequest = 0;
 let logRequest = 0;
+let recentRequest = 0;
+let shownRecentRequest = 0;
 let fightRequest = 0;
 let overviewRequest = 0;
 let comparisonRequest = 0;
@@ -1193,8 +1195,12 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
   ...initialState(),
 
   async refreshRecent() {
+    const request = ++recentRequest;
     try {
-      set({ recent: await api.recentLogs() });
+      const recent = await api.recentLogs();
+      if (request < shownRecentRequest) return;
+      shownRecentRequest = request;
+      set({ recent });
     } catch {
       // Without a browser database (private windows, tests) there is no recent list.
     }

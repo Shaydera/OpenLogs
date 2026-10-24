@@ -19,6 +19,7 @@ export function StartPage({ dragOver }: { dragOver: boolean }) {
   const opening = useApp((s) => s.opening);
   const openLog = useApp((s) => s.openLog);
   const openRecent = useApp((s) => s.openRecent);
+  const removeRecent = useApp((s) => s.removeRecent);
   const showError = useApp((s) => s.showError);
   const openSettings = useApp((s) => s.openSettings);
 
@@ -53,7 +54,7 @@ export function StartPage({ dragOver }: { dragOver: boolean }) {
       <div className="layout">
         <aside className="sidebar">
           <DropZone over={dragOver} opening={opening} />
-          <RecentLogs recent={recent} selectedId={log?.id ?? null} onOpen={(entry) => void openRecent(entry)} />
+          <RecentLogs recent={recent} selectedId={log?.id ?? null} onOpen={(entry) => void openRecent(entry)} onRemove={(entry) => void removeRecent(entry)} />
         </aside>
         <main className="content">{log ? <LogPulls log={log} /> : <EmptyState title={t('start.emptyTitle')} text={t('start.empty')} />}</main>
       </div>

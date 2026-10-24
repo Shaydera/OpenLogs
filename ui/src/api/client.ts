@@ -1,7 +1,8 @@
 import { type Engine, workerEngine } from '../engine/engine';
 import { channelSpellsJson, dungeonsJson, spellClassesJson } from '../gameData';
+import { t } from '../i18n/i18n';
 import { browserDatabase, type Database } from './db';
-import { type LogSource, reopenHandle } from './logSource';
+import { fileGone, fileMissing, type LogSource, reopenHandle } from './logSource';
 import { type RecentRecord, recentRecords, rememberLog } from './recent';
 import type {
   Attribution,
@@ -85,7 +86,9 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
     followed: boolean;
     storedKey: string;
     lastStoredAtMs: number | null;
+    forgotten: boolean;
   } | null = null;
+  const openings = new Set<{ logId: string; forgotten: boolean }>();
   const gameDataLoaded = { dungeons: false, channelSpells: false, spellClasses: false };
   let latestOpen = 0;
   let queue: Promise<unknown> = Promise.resolve();
@@ -97,16 +100,40 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
     return run;
   }
 
+  const indexKey = async (engine: Engine, source: LogSource) =>
+    `${source.id}|${source.size}|${source.lastModified}|${await engine.indexFormatVersion()}`;
+  /** A file name may itself contain '|', so the log id is everything before the last three fields. */
+  const isIndexOf = (key: string, logId: string) => key.split('|').slice(0, -3).join('|') === logId;
+
   const useIndex = (key: string) => db.put('indexes-used', { key, usedAtUnixMs: now() } satisfies IndexUse);
+
+  async function dropIndex(key: string) {
+    await db.delete('indexes', key);
+    await db.delete('indexes-used', key);
+  }
+
+  /**
+   * The open or opening log stays open, but its later writes must not bring the entry back.
+   * Keeps the stored index: a file that seems gone may only be unreachable for now, such as on an unmounted drive.
+   */
+  async function unlist(logId: string) {
+    if (current?.source.id === logId) current.forgotten = true;
+    for (const pending of openings) if (pending.logId === logId) pending.forgotten = true;
+    await db.delete('recent', logId);
+  }
+
+  async function forgetLog(logId: string) {
+    await unlist(logId);
+    for (const { key } of await db.all<IndexUse>('indexes-used')) {
+      if (isIndexOf(key, logId)) await dropIndex(key);
+    }
+  }
 
   /** Evicts first, so a full quota does not keep the newest index out. */
   async function storeIndex(key: string, json: string) {
     const uses = await db.all<IndexUse>('indexes-used');
     uses.sort((a, b) => b.usedAtUnixMs - a.usedAtUnixMs);
-    for (const stale of uses.slice(MAX_STORED_INDEXES - 1)) {
-      await db.delete('indexes', stale.key);
-      await db.delete('indexes-used', stale.key);
-    }
+    for (const stale of uses.slice(MAX_STORED_INDEXES - 1)) await dropIndex(stale.key);
     await db.put('indexes', { key, json } satisfies StoredIndex);
     await useIndex(key);
   }
@@ -136,7 +163,7 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
   ): Promise<{ view: LogView; key: string; followedBytes: number }> {
     const engine = getEngine();
     await loadGameData(engine);
-    const key = `${source.id}|${source.size}|${source.lastModified}|${await engine.indexFormatVersion()}`;
+    const key = await indexKey(engine, source);
     const stored = await quietly(() => db.get<StoredIndex>('indexes', key));
     if (stored) {
       const view = await quietly(() => engine.restoreIndex(stored.json, source.id, source.name, source.size));
@@ -244,17 +271,17 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
   /** Losing the stored index must not fail a refresh. A settling refresh, once per quiet period, always stores: no later write would. */
   function storeFollowed(engine: Engine, log: NonNullable<typeof current>, view: LogView, settled: boolean) {
     return quietly(async () => {
+      if (log.forgotten) return;
       const at = now();
       if (!settled && log.lastStoredAtMs !== null && at - log.lastStoredAtMs < FOLLOW_STORE_INTERVAL_MS) return;
       const { source, storedKey } = log;
-      const key = `${source.id}|${source.size}|${source.lastModified}|${await engine.indexFormatVersion()}`;
+      const key = await indexKey(engine, source);
       await storeIndex(key, await engine.snapshotJson());
       log.lastStoredAtMs = at;
       log.storedKey = key;
-      if (key !== storedKey) {
-        await db.delete('indexes', storedKey);
-        await db.delete('indexes-used', storedKey);
-      }
+      if (key !== storedKey) await dropIndex(storedKey);
+      // Removed from the list while the index was being stored.
+      if (log.forgotten) return dropIndex(key);
       await rememberLog(db, source, view, at);
     });
   }
@@ -272,17 +299,28 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
     /** A later call supersedes an open that is still reading; it fails without reading on. */
     openLog: (source: LogSource, onProgress: (bytesRead: number, totalBytes: number) => void = () => {}) => {
       const open = ++latestOpen;
+      const pending = { logId: source.id, forgotten: false };
+      openings.add(pending);
       return serial(async () => {
         current = null;
-        const { view, key, followedBytes } = await index(source, onProgress, () => open !== latestOpen);
-        current = { source, open, engineRestarts: getEngine().restarts(), followedBytes, followed: false, storedKey: key, lastStoredAtMs: null };
-        // Only real combat logs are remembered.
-        if (view.logVersion !== null) await quietly(() => rememberLog(db, source, view, now()));
-        return view;
+        try {
+          const { view, key, followedBytes } = await index(source, onProgress, () => open !== latestOpen);
+          const { forgotten } = pending;
+          current = { source, open, engineRestarts: getEngine().restarts(), followedBytes, followed: false, storedKey: key, lastStoredAtMs: null, forgotten };
+          if (forgotten) await quietly(() => dropIndex(key));
+          // Only real combat logs are remembered.
+          else if (view.logVersion !== null) await quietly(() => rememberLog(db, source, view, now()));
+          return view;
+        } finally {
+          openings.delete(pending);
+        }
       });
     },
-    recentLogs: async (): Promise<RecentLog[]> =>
-      (await recentRecords(db)).map((record) => ({
+    recentLogs: async (): Promise<RecentLog[]> => {
+      const records = await recentRecords(db);
+      const gone = await Promise.all(records.map((record) => record.handle !== undefined && fileGone(record.handle)));
+      await Promise.all(records.filter((_, i) => gone[i]).map((record) => quietly(() => unlist(record.id))));
+      return records.filter((_, i) => !gone[i]).map((record) => ({
         id: record.id,
         fileName: record.fileName,
         sizeBytes: record.sizeBytes,
@@ -291,13 +329,20 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
         pullCount: record.pullCount,
         openedAtUnixMs: record.openedAtUnixMs,
         exists: record.handle !== undefined,
-      })),
+      }));
+    },
     reopenRecent: async (id: string): Promise<LogSource> => {
       const record = await db.get<RecentRecord>('recent', id);
       if (!record) throw 'This log is no longer in the recent list.';
-      return reopenHandle(record.handle);
+      try {
+        return await reopenHandle(record.handle);
+      } catch (err) {
+        if (!fileMissing(err)) throw err;
+        await quietly(() => unlist(id));
+        throw t('error.fileGone');
+      }
     },
-    removeRecent: (id: string) => db.delete('recent', id),
+    removeRecent: forgetLog,
     quickOverview: (logId: string, fightIndex: number, filter: ReportFilter | null) =>
       report<QuickOverview>(logId, [fightIndex], 'quick_overview', { fightIndex, filter }),
     damageDoneReport: pull<DamageReport>('damage_done_report'),

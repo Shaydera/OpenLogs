@@ -78,7 +78,22 @@ interface FilePickerWindow {
 }
 
 interface PermissionHandle {
+  queryPermission?(descriptor: { mode: 'read' }): Promise<PermissionState>;
   requestPermission?(descriptor: { mode: 'read' }): Promise<PermissionState>;
+}
+
+export const fileMissing = (err: unknown) => err instanceof DOMException && err.name === 'NotFoundError';
+
+/** Only a file the browser may read without asking can be checked; any other is not known to be gone. */
+export async function fileGone(handle: FileSystemFileHandle): Promise<boolean> {
+  try {
+    const permission = await (handle as PermissionHandle).queryPermission?.({ mode: 'read' });
+    if (permission !== undefined && permission !== 'granted') return false;
+    await handle.getFile();
+    return false;
+  } catch (err) {
+    return fileMissing(err);
+  }
 }
 
 let fileInput: HTMLInputElement | null = null;

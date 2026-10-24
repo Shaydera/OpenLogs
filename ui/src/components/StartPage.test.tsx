@@ -73,6 +73,7 @@ beforeEach(() => {
   vi.mocked(api.recentLogs).mockReset().mockResolvedValue(RECENT);
   vi.mocked(api.openLog).mockReset().mockResolvedValue(LOG);
   vi.mocked(api.reopenRecent).mockReset().mockResolvedValue(SOURCE);
+  vi.mocked(api.removeRecent).mockReset().mockResolvedValue(undefined);
   vi.mocked(api.quickOverview).mockReset().mockResolvedValue(overviewFixture);
   vi.mocked(api.pullSet).mockReset().mockResolvedValue([{ overview: overviewFixture, pulls: [] }]);
   vi.mocked(chooseLog).mockReset();
@@ -96,7 +97,19 @@ describe('start page', () => {
     render(<App />);
     const entry = await screen.findByRole('button', { name: /^WoWCombatLog/ });
     expect(entry).toHaveTextContent('Choose the file again to open it');
-    expect(entry).toBeDisabled();
+    expect(entry).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('removes a recent log from the list by its × or its context menu', async () => {
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: `Remove ${LOG_ID} from the list` }));
+    expect(api.removeRecent).toHaveBeenCalledWith(LOG_ID);
+
+    const entry = await screen.findByRole('button', { name: /^WoWCombatLog/ });
+    await userEvent.pointer({ keys: '[MouseRight]', target: entry });
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Remove from list' }));
+    expect(api.removeRecent).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 
   it('opens a log chosen in the file dialog', async () => {
