@@ -1,4 +1,5 @@
 import { type CSSProperties, type KeyboardEvent, useEffect, useId, useRef } from 'react';
+import { IS_WEBSITE, PRIVACY_NOTICE_URL } from '../build';
 import type { GameDataManifest } from '../gameData';
 import { formatLocalDate } from '../i18n/format';
 import { type MessageKey, t } from '../i18n/i18n';
@@ -22,7 +23,7 @@ const THEME_TEXT: Record<ThemeName, { name: MessageKey; hint: MessageKey }> = {
 
 const percentOfBase = (scale: number) => Math.round((scale / SCALE_AT_BASE) * 100);
 
-/** The theme, the UI size and the shipped game data. */
+/** The theme, the UI size, the shipped game data and what stays on the device. */
 export function SettingsDialog() {
   const closeSettings = useApp((s) => s.closeSettings);
   const theme = useApp((s) => s.theme);
@@ -157,6 +158,25 @@ export function SettingsDialog() {
               <p className="settings-note settings-source">{t('settings.source', { date: formatLocalDate(gameData.fetchedUnixMs) })}</p>
             </>
           )}
+          <h3 className="cap settings-label">{t('settings.privacy')}</h3>
+          <div className="settings-privacy">
+            <p className="settings-note">{t('settings.privacyLocal')}</p>
+            {IS_WEBSITE ? (
+              <>
+                <p className="settings-note">{t('settings.privacyWebsite')}</p>
+                {PRIVACY_NOTICE_URL && (
+                  <a className="settings-note settings-link" href={PRIVACY_NOTICE_URL} target="_blank">
+                    {t('settings.privacyNotice')}
+                  </a>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="settings-note">{t('settings.privacyImages')}</p>
+                <p className="settings-note">{t('settings.privacyDelete')}</p>
+              </>
+            )}
+          </div>
         </div>
       </section>
     </div>
