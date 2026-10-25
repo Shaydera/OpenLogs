@@ -119,6 +119,17 @@ describe('start page', () => {
     expect(api.openLog).toHaveBeenCalledWith(SOURCE, expect.any(Function));
   });
 
+  it('points to dropping the log when the file dialog returns without one, until a log opens', async () => {
+    vi.mocked(chooseLog).mockResolvedValue(null);
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Open log…' }));
+    expect(await screen.findByRole('status', { name: "Couldn't open the log?" })).toHaveTextContent('Drag the log onto this page');
+
+    await userEvent.click(await screen.findByRole('button', { name: /^WoWCombatLog/ }));
+    await screen.findByRole('region', { name: "Ula'tek" });
+    expect(screen.queryByRole('status', { name: "Couldn't open the log?" })).not.toBeInTheDocument();
+  });
+
   it('groups pulls and hides aborted ones until the toggle is cleared', async () => {
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: /^WoWCombatLog/ }));
