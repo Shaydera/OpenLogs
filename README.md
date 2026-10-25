@@ -5,33 +5,61 @@
   </picture>
 </h1>
 
-<p align="center">World of Warcraft combat logs, analysed on your own machine</p>
+<p align="center"><b>Know why you wiped before you pull again.</b></p>
 
-OpenLogs analyses World of Warcraft combat logs on your own machine, in the browser or as a desktop app. Open a `WoWCombatLog-*.txt`, pick a pull and dig into it — no upload, no account, no waiting for a server. The log never leaves your computer: even the website reads and analyses it locally.
+<p align="center">
+  <a href="https://app.openlogs.gg">Open in browser</a> ·
+  <a href="https://github.com/Shaydera/OpenLogs/releases">Download for Windows</a> ·
+  <a href="https://openlogs.gg">openlogs.gg</a>
+</p>
 
-It reads raids and Mythic+ runs, and it was built with Augmentation Evokers in mind: support damage can be shown as logged or credited back to the Evoker.
+![OpenLogs showing a Vashnik the Malignant kill: overview, deaths, damage done and one player's casts, with the replay running beside them](.github/readme/clip.gif)
+
+OpenLogs reads your World of Warcraft combat log straight from disk and analyses it on your own machine, in the browser or as a desktop app. Nothing is uploaded, there is no account, and a raid night of several gigabytes is ready in a few seconds. It reads raids and Mythic+ runs, and it is free and open source.
+
+## Raid night, pull by pull
+
+Open the log after a wipe and the new pull is already in the list. Everything else works on one pull, on all pulls of a boss together, or on any stretch of time you drag over the timeline.
+
+### Why someone died
+
+The last seconds before a death: every hit and heal, the HP line, and which defensives and potions were still available or on cooldown.
+
+![Death recap of a Demon Hunter on Sszorak: the HP line over the last seconds, the events before the death and the unused healthstone](.github/readme/death-recap.webp)
+
+### All pulls of a boss in one table
+
+Boss HP over each pull, deaths, first death, raid DPS and potions side by side, so you see whether the raid is getting closer and what keeps ending the pull.
+
+![Nine wipes and the kill on Sszorak side by side, with boss HP, deaths, first death, raid DPS and combat potions per pull](.github/readme/all-pulls.webp)
 
 ## Features
 
-- **Pull list** grouped by boss and Mythic+ run, with kill/wipe, duration and boss HP at the end
+- **Pull list** grouped by boss and Mythic+ run, with kill/wipe, duration and boss HP at the end; while the game is still writing the log, new pulls appear on their own (desktop app, Chrome and Edge)
 - **Quick overview** of a pull: timeline with boss HP, raid DPS, deaths and Bloodlust; the first deaths with their killing blow; consumables; major cooldowns per player
-- **Damage done, healing and damage taken** with breakdowns by ability and target, per-player and per-ability pages, and an *Augmented / Reattributed* switch for Evoker support
+- **All pulls, all wipes or all kills** of a boss analysed together
+- **Damage done, healing and damage taken** with breakdowns by ability and target, per-player and per-ability pages, and full Augmentation Evoker support: their support damage shown as logged or credited back to the Evoker
 - **Deaths** with a recap of the last seconds: hits, heals, HP and the defensives that were (not) used
 - **Buffs & debuffs, casts, interrupts & dispels and resources** tabs
-- **Time ranges**: drag over the timeline or pick a phase, and every view recalculates for that range; ranges can be saved per boss
+- **Time ranges**: drag over the timeline or pick a phase, and every view recalculates for that range; ranges can be saved per boss. Pulls can also be cut off at the Nth player death
+- **Replay** of positions on the boss map, on its own or next to any report
 - **Compare two pulls** side by side
 - Light and dark themes
 
-## Website and desktop app
+## Your log stays on your PC
 
-Both run the same app: the analysis is written in Rust and runs as WebAssembly in a background worker. A log is indexed once and the index is stored in the browser, so opening it again is instant.
+The analysis runs right where the file is: in your browser as WebAssembly or in the desktop app. OpenLogs never sends the log anywhere. It is indexed once and the index is kept locally, so opening it again is instant; a 3–4 GiB raid log is indexed in under 5 seconds.
 
-- **Website**: works in current Chrome, Edge and Firefox. In Chrome and Edge the recent list reopens a log with one click (the browser may ask to allow reading it); other browsers ask you to choose the file again.
-- **Desktop app**: the same app in its own window (Tauri), installable and usable offline.
+- **In the browser** at [app.openlogs.gg](https://app.openlogs.gg): nothing to install. Works in current Chrome, Edge and Firefox; Chrome and Edge reopen recent logs with one click (the browser may ask to allow reading the file), other browsers ask you to choose the file again.
+- **Desktop app** from the [releases](https://github.com/Shaydera/OpenLogs/releases): the same app in its own window (Tauri). Installs like any Windows program on Windows 10 and 11 and works offline.
 
-## Recording logs
+## Get started
 
-Enable *Advanced Combat Logging* in the game (System → Network) and start logging with `/combatlog`. The game writes the file to `World of Warcraft/_retail_/Logs`. Logs are only complete once an encounter has ended.
+1. In the game, turn on *Advanced Combat Logging* under System, Network.
+2. Type `/combatlog` before the pull. The game writes the log to `World of Warcraft/_retail_/Logs`.
+3. Open the `WoWCombatLog` file in OpenLogs, in the browser or the desktop app.
+
+A pull shows up once its encounter has ended.
 
 ## Building
 
@@ -94,7 +122,7 @@ cargo run -p openlogs-cli -- dump-fights path/to/WoWCombatLog.txt
 
 Spell, class and boss images and map art come from the Wowhead CDN; spell icon names, dungeon and boss data from [wago.tools](https://wago.tools). The game data is exported with each release (`npm --prefix ui run gamedata`) and ships with the app. The website also ships the images, so it sends no requests to third parties; the desktop app loads them from the Wowhead CDN. Without a network connection the app still works; missing images show the initials of their name instead.
 
-World of Warcraft is a trademark of Blizzard Entertainment. OpenLogs is not affiliated with Blizzard or Warcraft Logs.
+World of Warcraft is a trademark of Blizzard Entertainment. OpenLogs is not affiliated with Blizzard or RPGLogs.
 
 ## Privacy
 
