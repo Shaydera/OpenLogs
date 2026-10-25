@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/openlogs-parser", "crates/openlogs-index", "crates/openlogs-cli", "crates/openlogs-analysis", "crates/openlogs-gamedata", "crates/openlogs-service", "crates/openlogs-wasm", "src-tauri"]
 
 [workspace.package]
-version = "0.1.0-beta2"
+version = "0.1.0-beta3"
 edition = "2024"
 rust-version = "1.95"
 license = "AGPL-3.0-or-later"
