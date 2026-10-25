@@ -13,7 +13,7 @@
   <a href="https://openlogs.gg">openlogs.gg</a>
 </p>
 
-https://github.com/user-attachments/assets/16ae26c1-b5c7-473b-99b6-23c4224f4bf0
+![OpenLogs showing a Vashnik the Malignant kill: overview, deaths, damage done and one player's casts, with the replay running beside them](.github/readme/clip.gif)
 
 OpenLogs reads your World of Warcraft combat log straight from disk and analyses it on your own machine, in the browser or as a desktop app. Nothing is uploaded, there is no account, and a raid night of several gigabytes is ready in a few seconds. It reads raids and Mythic+ runs, and it is free and open source.
 
