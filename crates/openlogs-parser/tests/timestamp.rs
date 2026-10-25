@@ -12,6 +12,18 @@ fn parses_microseconds_since_the_epoch() {
 }
 
 #[test]
+fn a_utc_offset_suffix_keeps_the_local_time() {
+    assert_eq!(
+        ts("10/24/2026 20:43:21.034-4"),
+        ts("10/24/2026 20:43:21.034")
+    );
+    assert_eq!(
+        ts("10/24/2026 20:43:21.0340+10"),
+        ts("10/24/2026 20:43:21.034")
+    );
+}
+
+#[test]
 fn encounter_duration_matches_the_log() {
     // ENCOUNTER_START / ENCOUNTER_END of a real Ula'tek kill (logged duration 478610 ms).
     let start = ts("10/7/2026 19:03:02.0762");
@@ -36,6 +48,9 @@ fn rejects_malformed_timestamps_and_impossible_dates() {
         "10/7/2026 24:00:00.0000",
         "10/7/2026 19:03:02",
         "10/7/2026 19:03:02.12x4",
+        "10/7/2026 19:03:02.0762-",
+        "10/7/2026 19:03:02.0762+4x",
+        "10/7/2026 19:03:02.-4",
         "10/7/2026  19:03:02.0762",
         "1/1/300000 00:00:00.000",
         "2/31/2026 00:00:00.0000",

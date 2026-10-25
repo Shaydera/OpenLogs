@@ -15,7 +15,7 @@ const MICROS_PER_DAY: i64 = 86_400 * MICROS_PER_SECOND;
 pub struct Timestamp(pub i64);
 
 impl Timestamp {
-    /// Parses `M/D/YYYY HH:MM:SS.fff[f]` as written at the start of every log line.
+    /// Parses `M/D/YYYY HH:MM:SS.fff[f][±H]` as written at the start of every log line.
     pub fn parse(text: &str) -> Result<Self, ParseError> {
         parse_parts(text).ok_or_else(|| ParseError::InvalidTimestamp(text.to_string()))
     }
@@ -51,6 +51,16 @@ fn parse_parts(text: &str) -> Option<Timestamp> {
     }
 
     let (clock, fraction) = time.split_once('.')?;
+    // Some clients append their UTC offset; the local time before it is what the log means.
+    let fraction = match fraction.split_once(['+', '-']) {
+        Some((fraction, offset))
+            if !offset.is_empty() && offset.bytes().all(|b| b.is_ascii_digit()) =>
+        {
+            fraction
+        }
+        Some(_) => return None,
+        None => fraction,
+    };
     let mut clock_parts = clock.split(':');
     let hour: u32 = clock_parts.next()?.parse().ok()?;
     let minute: u32 = clock_parts.next()?.parse().ok()?;
