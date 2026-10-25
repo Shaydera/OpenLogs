@@ -1,0 +1,54 @@
+name: Bug report
+description: Something does not work or shows the wrong result.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe what you saw. Screenshots help a lot; you can paste them here.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the log
+        2. Select the third pull on ...
+        3. Open the Deaths tab
+  - type: dropdown
+    id: app
+    attributes:
+      label: Where do you use OpenLogs?
+      options:
+        - In the browser (app.openlogs.gg)
+        - Desktop app (Windows)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version and browser
+      description: The desktop app release you installed, or the browser and its version.
+      placeholder: 0.1.0-beta1, or Chrome 141
+  - type: input
+    id: content
+    attributes:
+      label: Raid boss or Mythic+ dungeon
+      description: Where in the log it happens, if it depends on the content.
+      placeholder: Mythic Sszorak, pull 4
+  - type: textarea
+    id: log-excerpt
+    attributes:
+      label: Log excerpt
+      description: >-
+        A few lines from the combat log around the problem, if you can narrow it down.
+        Combat logs contain character names: only share what you are fine with being public.
+      render: text
