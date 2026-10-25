@@ -11,7 +11,11 @@ vi.mock('../api/client', () => ({
   api: { recentLogs: vi.fn(), openLog: vi.fn() },
 }));
 vi.mock('../gameData', () => ({ gameDataManifest: vi.fn() }));
-const build = vi.hoisted(() => ({ IS_WEBSITE: false, PRIVACY_NOTICE_URL: undefined as string | undefined }));
+const build = vi.hoisted(() => ({
+  IS_WEBSITE: false,
+  PRIVACY_NOTICE_URL: undefined as string | undefined,
+  SOURCE_URL: 'https://example.test/openlogs',
+}));
 vi.mock('../build', () => build);
 
 beforeEach(() => {
@@ -63,6 +67,12 @@ describe('Settings dialog', () => {
       const dialog = await openDialog();
       expect(within(dialog).queryByRole('link', { name: 'Privacy notice' })).toBeNull();
     });
+  });
+
+  it('offers the source code on the website', async () => {
+    build.IS_WEBSITE = true;
+    const dialog = await openDialog();
+    expect(within(dialog).getByRole('link', { name: 'Source code' })).toHaveAttribute('href', 'https://example.test/openlogs');
   });
 
   describe('UI size', () => {

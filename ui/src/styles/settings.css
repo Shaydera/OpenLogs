@@ -48,7 +48,7 @@
   font-size: 12px;
   color: var(--muted);
 }
-.settings-privacy {
+.settings-notes {
   display: flex;
   flex-direction: column;
   gap: 8px;

@@ -1,5 +1,5 @@
 import { type CSSProperties, type KeyboardEvent, useEffect, useId, useRef } from 'react';
-import { IS_WEBSITE, PRIVACY_NOTICE_URL } from '../build';
+import { IS_WEBSITE, PRIVACY_NOTICE_URL, SOURCE_URL } from '../build';
 import type { GameDataManifest } from '../gameData';
 import { formatLocalDate } from '../i18n/format';
 import { type MessageKey, t } from '../i18n/i18n';
@@ -159,7 +159,7 @@ export function SettingsDialog() {
             </>
           )}
           <h3 className="cap settings-label">{t('settings.privacy')}</h3>
-          <div className="settings-privacy">
+          <div className="settings-notes">
             <p className="settings-note">{t('settings.privacyLocal')}</p>
             {IS_WEBSITE ? (
               <>
@@ -175,6 +175,18 @@ export function SettingsDialog() {
                 <p className="settings-note">{t('settings.privacyImages')}</p>
                 <p className="settings-note">{t('settings.privacyDelete')}</p>
               </>
+            )}
+          </div>
+          <h3 className="cap settings-label">{t('settings.license')}</h3>
+          <div className="settings-notes">
+            <p className="settings-note">{t('settings.licenseText')}</p>
+            {IS_WEBSITE ? (
+              <a className="settings-note settings-link" href={SOURCE_URL} target="_blank">
+                {t('settings.sourceCode')}
+              </a>
+            ) : (
+              // The desktop app opens no external links, so the address is shown to copy.
+              <p className="settings-note">{t('settings.sourceCodeAt', { address: SOURCE_URL.replace(/^https:\/\//, '') })}</p>
             )}
           </div>
         </div>
