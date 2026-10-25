@@ -1,0 +1,21 @@
+name: Feature request
+description: An idea for something OpenLogs should do.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to find out or do?
+      description: The question you have about a pull or the task you are trying to get done.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: How could OpenLogs help?
+      description: What you imagine seeing or doing in the app.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: How do you do it today?
+      description: Other tools or workarounds you use for this, if any.
