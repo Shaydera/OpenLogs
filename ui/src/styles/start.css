@@ -331,3 +331,23 @@
   font-size: 13px;
   color: var(--muted);
 }
+.folder-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  border-color: var(--accent-tint-line);
+  background: var(--accent-tint-soft);
+}
+.folder-notice-headline {
+  margin: 0;
+  font: 600 26px var(--font-text);
+  color: var(--text);
+}
+.folder-notice p {
+  margin: 0 0 4px;
+  max-width: 62ch;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}

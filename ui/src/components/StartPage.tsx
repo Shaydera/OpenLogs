@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusRequest } from '../hooks/useFocusRequest';
 import { type ChosenLog, chooseLog as pickLog } from '../api/logSource';
 import type { LogView } from '../api/types';
@@ -22,6 +22,13 @@ export function StartPage({ dragOver }: { dragOver: boolean }) {
   const removeRecent = useApp((s) => s.removeRecent);
   const showError = useApp((s) => s.showError);
   const openSettings = useApp((s) => s.openSettings);
+  // Chromium's picker refuses system folders such as Program Files, where WoW is installed by
+  // default, and reports that like a cancelled dialog; a dropped file still opens.
+  const [pickedNothing, setPickedNothing] = useState(false);
+  useEffect(() => {
+    if (opening) setPickedNothing(false);
+  }, [opening]);
+  const showFolderNotice = pickedNothing && !opening;
 
   async function chooseLog() {
     let chosen: ChosenLog | null;
@@ -31,6 +38,7 @@ export function StartPage({ dragOver }: { dragOver: boolean }) {
       showError(t('error.dialogFailed', { reason: String(err) }));
       return;
     }
+    setPickedNothing(chosen === null);
     if (chosen) await openLog(chosen);
   }
 
@@ -53,10 +61,13 @@ export function StartPage({ dragOver }: { dragOver: boolean }) {
       </header>
       <div className="layout">
         <aside className="sidebar">
-          <DropZone over={dragOver} opening={opening} />
+          <DropZone over={dragOver || showFolderNotice} opening={opening} />
           <RecentLogs recent={recent} selectedId={log?.id ?? null} onOpen={(entry) => void openRecent(entry)} onRemove={(entry) => void removeRecent(entry)} />
         </aside>
-        <main className="content">{log ? <LogPulls log={log} /> : <EmptyState title={t('start.emptyTitle')} text={t('start.empty')} />}</main>
+        <main className="content">
+          {showFolderNotice && <FolderNotice onDismiss={() => setPickedNothing(false)} />}
+          {log ? <LogPulls log={log} /> : !showFolderNotice && <EmptyState title={t('start.emptyTitle')} text={t('start.empty')} />}
+        </main>
       </div>
     </div>
   );
@@ -110,6 +121,19 @@ function LogPulls({ log }: { log: LogView }) {
         runs.length === 0 && <EmptyState title={t('pulls.noneTitle')} text={t('pulls.none')} />
       )}
     </>
+  );
+}
+
+function FolderNotice({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <section className="panel panel-pad folder-notice" role="status" aria-label={t('start.folderNoticeTitle')}>
+      <div className="cap">{t('start.folderNoticeTitle')}</div>
+      <h2 className="folder-notice-headline">{t('start.folderNoticeHeadline')}</h2>
+      <p>{t('start.folderNoticeText')}</p>
+      <button type="button" className="btn" onClick={onDismiss}>
+        {t('error.dismiss')}
+      </button>
+    </section>
   );
 }
 
