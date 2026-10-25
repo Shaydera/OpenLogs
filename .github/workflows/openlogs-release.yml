@@ -189,6 +189,10 @@ jobs:
       contents: write
     timeout-minutes: 20
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
       - uses: actions/download-artifact@v4
         with:
           pattern: openlogs-release-*
@@ -228,3 +232,15 @@ jobs:
           gh release upload "$RELEASE_TAG" --repo "$GH_REPO" release-assets/*
           gh release edit "$RELEASE_TAG" --repo "$GH_REPO" "${publish_flags[@]}"
           echo "Published unified OpenLogs release $RELEASE_TAG"
+      # Lives here because a release published with github.token never triggers `on: release` workflows.
+      # A failed post must not fail the run: rerunning publish would stop at "Release already exists".
+      - name: Announce the release on Discord
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+          PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+          DISCORD_RELEASE_WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+          DISCORD_ROLE_ID: ${{ secrets.DISCORD_RELEASE_ROLE_ID }}
+        run: python3 .github/scripts/announce-release.py
