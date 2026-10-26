@@ -8,7 +8,7 @@ const dash = <span className="dash">—</span>;
 
 const cell = (text: string | null) => <span className="num rrow-end">{text ?? dash}</span>;
 
-const castsColumn = (): ExtraColumn => ({
+export const castsColumn = (): ExtraColumn => ({
   label: t('report.casts'),
   width: 64,
   hasValue: (row) => row.casts > 0,
