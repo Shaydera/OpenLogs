@@ -16,8 +16,9 @@ export const VALUE_CAPTION: Record<FilterTab, MessageKey> = {
   resources: 'events.value.amount',
 };
 
-/** The event in plain words; an aura row says whether the log calls it a buff or a debuff. */
+/** The event in plain words; an aura row says whether the log calls it a buff or a debuff, a miss how it missed. */
 export function typeLabel(row: EventRow): string {
+  if (row.type === 'missed' && row.missType) return t(`missType.${row.missType}`);
   if (row.auraKind && (row.type === 'apply' || row.type === 'remove' || row.type === 'refresh')) return t(`events.type.${row.auraKind}.${row.type}`);
   return t(`events.type.${row.type}`);
 }
@@ -96,6 +97,7 @@ export function fieldsOf(row: EventRow, names: ViewNames): { key: MessageKey; va
     { key: 'events.field.resisted', value: row.resisted > 0 ? formatInteger(row.resisted) : null },
     { key: 'events.field.overheal', value: row.overheal > 0 ? formatInteger(row.overheal) : null },
     { key: 'events.field.critical', value: row.critical ? t('events.field.yes') : null },
+    { key: 'events.field.missType', value: row.missType && t(`missType.${row.missType}`) },
     { key: 'events.field.targetHp', value: row.targetHp && t('events.field.hp', { current: formatInteger(row.targetHp[0]), max: formatInteger(row.targetHp[1]) }) },
     { key: 'events.field.stacks', value: row.stacks === null ? null : formatInteger(row.stacks) },
     { key: 'events.field.stage', value: row.stage === null ? null : formatInteger(row.stage) },
@@ -118,6 +120,8 @@ export function sentenceOf(tab: FilterTab, row: EventRow, names: ViewNames): str
       return t(row.target === 0 ? 'events.text.cast' : 'events.text.castOn', values);
     case 'rejected':
       return t('events.text.rejected', { ...values, reason: row.reason ?? '' });
+    case 'missed':
+      return t('events.text.missed', { ...values, miss: row.missType ? t(`missType.${row.missType}`) : '' });
     case 'died':
       if (row.event === 'ENCOUNTER_END') return t('events.text.diedAtEnd', values);
       if (row.unknownBlow) return t('events.text.diedNoBlow', values);

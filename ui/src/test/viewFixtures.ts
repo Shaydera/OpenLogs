@@ -43,6 +43,7 @@ const row: Omit<EventRow, 'index' | 't' | 'type' | 'event' | 'source' | 'spellId
   by: null,
   unknownBlow: false,
   environmental: false,
+  missType: null,
   aliveMs: null,
   contextOf: null,
 };

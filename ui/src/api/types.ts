@@ -975,6 +975,7 @@ export type EventRowType =
   | 'melee'
   | 'ranged'
   | 'absorbed'
+  | 'missed'
   | 'heal'
   | 'hotTick'
   | 'absorb'
@@ -1032,6 +1033,7 @@ export interface EventRow {
   by: ActorSpell | null;
   unknownBlow: boolean;
   environmental: boolean;
+  missType: MissType | null;
   aliveMs: number | null;
   /** A recap row: the index of the death it leads up to. */
   contextOf: number | null;
