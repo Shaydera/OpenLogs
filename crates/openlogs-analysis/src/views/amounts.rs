@@ -130,7 +130,7 @@ pub(crate) fn rows(
         }
         let mut own = None;
         facts.parts(fight, index, reattributed, filter.overkill, &mut |part| {
-            if part.hit && part.row == Some(index) {
+            if (part.hit || part.miss.is_some()) && part.row == Some(index) {
                 own = Some(part);
             }
         });
@@ -184,6 +184,7 @@ fn amount_row(fight: &Fight, index: usize, own: &Part) -> EventRow {
             DamageVia::Range => RowType::Ranged,
             _ => RowType::Damage,
         },
+        EventKind::Missed(_) if own.miss.is_some() => RowType::Missed,
         EventKind::Missed(_) => RowType::Absorbed,
         EventKind::Heal(heal) if heal.periodic => RowType::HotTick,
         EventKind::Heal(_) => RowType::Heal,
@@ -196,7 +197,8 @@ fn amount_row(fight: &Fight, index: usize, own: &Part) -> EventRow {
         log_name(event),
         (own.source, own.spell, own.target),
     );
-    row.amount = Some(own.amount.max(0) as u64);
+    row.amount = own.miss.is_none().then_some(own.amount.max(0) as u64);
+    row.miss = own.miss;
     row.target_hp = event
         .unit_hp
         .filter(|hp| hp.actor == event.target)
@@ -367,9 +369,9 @@ impl ItemAcc {
     }
 }
 
-/// The parts of the event at `index` a timeline amount reads: every part the table books, and
-/// with Aug credit off the deductions too, which name the support inside a hit. `booked` says
-/// whether the table counts the part.
+/// The parts of the event at `index` a timeline amount reads: every part the table books but
+/// misses, and with Aug credit off the deductions too, which name the support inside a hit.
+/// `booked` says whether the table counts the part.
 pub(crate) fn timeline_parts(
     fight: &Fight,
     facts: AmountFacts,
@@ -379,6 +381,9 @@ pub(crate) fn timeline_parts(
     each: &mut impl FnMut(Part, bool),
 ) {
     facts.parts(fight, index, true, overkill, &mut |part| {
+        if part.miss.is_some() {
+            return;
+        }
         let credit = part.kind == CellKind::Support;
         if reattributed || part.hit {
             each(part, true);

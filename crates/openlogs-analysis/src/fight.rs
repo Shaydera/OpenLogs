@@ -250,7 +250,7 @@ pub struct Missed {
     pub amount_missed: u64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MissType {
     Absorb,
     Block,

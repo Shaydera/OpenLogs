@@ -3,7 +3,9 @@ use std::collections::{BTreeMap, HashMap};
 
 use openlogs_gamedata::Curated;
 
-use crate::cells::{Cell, CellKind, ScopeMetric, cells, in_scope};
+use crate::cells::{
+    Cell, CellKind, Misses, ScopeMetric, ability_casts, cast_in_scope, cells, in_scope,
+};
 use crate::fight::{Fight, SpellId};
 use crate::filter::ReportFilter;
 use crate::scope::{AbilityRef, Scope, UnitRef};
@@ -39,6 +41,14 @@ pub struct BreakdownRow {
     pub absorbed: i64,
     pub hits: u32,
     pub crits: u32,
+    /// Ability rows: melee swings, and the presses of the ability on top-level rows; 0 for unit
+    /// rows.
+    pub casts: u32,
+    /// What the hits booked with their Aug deductions; Aug credit is no hit's.
+    pub hit_amount: i64,
+    pub ticks: u32,
+    pub tick_amount: i64,
+    pub misses: Misses,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,6 +137,11 @@ struct Acc {
     absorbed: i64,
     hits: u32,
     crits: u32,
+    casts: u32,
+    hit_amount: i64,
+    ticks: u32,
+    tick_amount: i64,
+    misses: Misses,
     by_spell: BTreeMap<SpellId, i64>,
     pets: Vec<UnitRef>,
 }
@@ -137,10 +152,22 @@ impl Acc {
         self.absorbed += cell.absorbed;
         self.hits += cell.hits;
         self.crits += cell.crits;
+        self.ticks += cell.ticks;
+        self.tick_amount += cell.tick_amount;
+        self.misses.merge(&cell.misses);
+        self.casts += cell.casts;
+        if cell.kind != CellKind::Support {
+            self.hit_amount += cell.amount;
+        }
         *self.by_spell.entry(cell.spell).or_default() += cell.amount;
         if matches!(cell.source, UnitRef::Pet { .. }) && !self.pets.contains(&cell.source) {
             self.pets.push(cell.source.clone());
         }
+    }
+
+    /// `cast`: a cell of [`ability_casts`].
+    fn add_casts(&mut self, cast: &Cell) {
+        self.casts += cast.casts;
     }
 
     fn into_row(mut self, key: RowKey) -> BreakdownRow {
@@ -166,11 +193,19 @@ impl Acc {
                 RowKey::Unit(_) => 0,
             },
             pets,
+            casts: match key {
+                RowKey::Ability { .. } => self.casts,
+                RowKey::Unit(_) => 0,
+            },
             key,
             amount: self.amount,
             absorbed: self.absorbed,
             hits: self.hits,
             crits: self.crits,
+            hit_amount: self.hit_amount,
+            ticks: self.ticks,
+            tick_amount: self.tick_amount,
+            misses: self.misses,
         }
     }
 }
@@ -194,6 +229,7 @@ fn rows_of<'a>(
     let mut rows: Vec<BreakdownRow> = map
         .into_iter()
         .map(|(key, acc)| acc.into_row(key))
+        .filter(ranked)
         .collect();
     rows.sort_by(by_amount);
     rows
@@ -208,16 +244,28 @@ pub fn breakdown(
     wanted: Dimension,
 ) -> Breakdown {
     let all = cells(fight, curated, filter, scope.perspective, metric);
-    group_cells(fight, filter, scope, metric, &all, wanted)
+    let casts = if effective_group(scope, metric, wanted) == Dimension::Ability {
+        ability_casts(fight, curated, filter, scope.perspective, metric)
+    } else {
+        Vec::new()
+    };
+    group_cells(fight, filter, scope, metric, &all, &casts, wanted)
 }
 
-/// `all`: the metric's cells in the range, before the selections.
+/// A unit that was only ever missed is no row; an ability that only missed is one.
+fn ranked(row: &BreakdownRow) -> bool {
+    matches!(row.key, RowKey::Ability { .. }) || row.amount != 0 || row.hits > 0
+}
+
+/// `all`: the metric's cells in the range, before the selections; `casts`: the presses of its
+/// top-level ability rows, from [`ability_casts`].
 pub(crate) fn group_cells(
     fight: &Fight,
     filter: &ReportFilter,
     scope: &Scope,
     metric: ScopeMetric,
     all: &[Cell],
+    casts: &[Cell],
     wanted: Dimension,
 ) -> Breakdown {
     let group = effective_group(scope, metric, wanted);
@@ -231,12 +279,23 @@ pub(crate) fn group_cells(
             .or_default()
             .push(cell);
     }
+    let mut cast_buckets: HashMap<RowKey, Vec<&Cell>> = HashMap::new();
+    for cast in casts.iter().filter(|c| cast_in_scope(scope, fight, c)) {
+        cast_buckets
+            .entry(key_of(fight, cast, group, metric))
+            .or_default()
+            .push(cast);
+    }
     let mut rows: Vec<GroupedRow> = buckets
         .into_iter()
         .map(|(key, mine)| {
+            let my_casts = cast_buckets.get(&key).map_or(&[][..], Vec::as_slice);
             let mut acc = Acc::default();
             for cell in &mine {
                 acc.add(cell);
+            }
+            for cast in my_casts {
+                acc.add_casts(cast);
             }
             let splits = side
                 .iter()
@@ -250,6 +309,7 @@ pub(crate) fn group_cells(
                 splits,
             }
         })
+        .filter(|grouped| ranked(&grouped.row))
         .collect();
     rows.sort_by(|a, b| by_amount(&a.row, &b.row));
     Breakdown {

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::overview_dto::{PlayerRef, SpellRef};
 use crate::refs::Refs;
-use crate::scope_dto::{DimensionDto, RowKeyDto, key_dto, unit_name};
+use crate::scope_dto::{DimensionDto, MissTypeDto, RowKeyDto, key_dto, unit_name};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -96,6 +96,7 @@ pub enum RowTypeDto {
     Melee,
     Ranged,
     Absorbed,
+    Missed,
     Heal,
     HotTick,
     Absorb,
@@ -164,6 +165,7 @@ pub struct EventRowDto {
     pub by: Option<ActorSpellDto>,
     pub unknown_blow: bool,
     pub environmental: bool,
+    pub miss_type: Option<MissTypeDto>,
     pub alive_ms: Option<i32>,
     pub context_of: Option<usize>,
 }
@@ -412,6 +414,7 @@ fn row_type(row_type: RowType) -> RowTypeDto {
         RowType::Melee => RowTypeDto::Melee,
         RowType::Ranged => RowTypeDto::Ranged,
         RowType::Absorbed => RowTypeDto::Absorbed,
+        RowType::Missed => RowTypeDto::Missed,
         RowType::Heal => RowTypeDto::Heal,
         RowType::HotTick => RowTypeDto::HotTick,
         RowType::Absorb => RowTypeDto::Absorb,
@@ -485,6 +488,7 @@ fn row_dto(names: &mut Names<'_>, row: &EventRow) -> EventRowDto {
         by: names.by(row.by),
         unknown_blow: row.unknown_blow,
         environmental: row.environmental,
+        miss_type: row.miss.map(MissTypeDto::of),
         alive_ms: row.alive_ms,
         context_of: row.context_of,
     }

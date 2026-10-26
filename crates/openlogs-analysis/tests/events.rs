@@ -170,6 +170,51 @@ fn amounts_add_up_to_the_table_under_every_selection() {
 }
 
 #[test]
+fn misses_are_rows_without_an_amount_on_both_sides() {
+    let mut b = FightBuilder::new(10_000);
+    let warrior = b.player("Player-1", "Washed-Frostwolf-EU", 71);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let miss = |via, miss_type| {
+        EventKind::Missed(Missed {
+            via,
+            miss_type,
+            amount_missed: 0,
+        })
+    };
+    b.push(
+        1_000,
+        boss,
+        warrior,
+        MELEE,
+        miss(DamageVia::Swing, MissType::Parry),
+    );
+    b.push(
+        2_000,
+        warrior,
+        boss,
+        MELEE,
+        miss(DamageVia::Swing, MissType::Immune),
+    );
+    let fight = b.build();
+    let f = filter(Attribution::Reattributed);
+    let only_row = |metric| {
+        let page = page_of(&fight, &f, &Scope::default(), metric);
+        assert_eq!(page.rows.len(), 1);
+        let row = &page.rows[0];
+        (row.row_type, row.miss, row.amount)
+    };
+
+    assert_eq!(
+        only_row(ScopeMetric::DamageTaken),
+        (RowType::Missed, Some(MissType::Parry), None)
+    );
+    assert_eq!(
+        only_row(ScopeMetric::DamageDone),
+        (RowType::Missed, Some(MissType::Immune), None)
+    );
+}
+
+#[test]
 fn support_shares_stay_inline_in_the_hit_they_belong_to() {
     let r = raid();
     let f = filter(Attribution::Reattributed);

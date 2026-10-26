@@ -37,13 +37,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* 570px: the fixed columns with their gaps and the row padding. */
 .report-rows {
-  min-width: 680px;
+  min-width: max(680px, calc(570px + var(--extra-width, 0px) + var(--extra-count, 0) * 12px));
 }
 /* A ranked player row; border-box, so the caption row fits as well. */
 .rrow {
   display: grid;
-  grid-template-columns: 34px minmax(150px, 190px) minmax(160px, 1fr) 92px 84px 58px;
+  grid-template-columns: 34px minmax(150px, 190px) minmax(160px, 1fr) 92px var(--extra-columns,) 58px;
   gap: 12px;
   align-items: center;
   min-height: 40px;
@@ -65,9 +66,6 @@
 .rrow.rrow-sel {
   background: var(--tile);
   box-shadow: inset 3px 0 0 var(--accent);
-}
-.rrow.rrow-nodelta {
-  grid-template-columns: 34px minmax(150px, 190px) minmax(160px, 1fr) 92px 58px;
 }
 .rrow.rrow-head {
   min-height: 30px;
@@ -315,15 +313,6 @@
 }
 .aug-tip-mode {
   color: var(--accent-hover);
-}
-.report-rows.report-rows-wide {
-  min-width: 860px;
-}
-.rrow.rrow-extra3 {
-  grid-template-columns: 34px minmax(150px, 190px) minmax(160px, 1fr) 92px 84px 84px 84px 58px;
-}
-.rrow.rrow-extra2 {
-  grid-template-columns: 34px minmax(150px, 190px) minmax(160px, 1fr) 92px 84px 84px 58px;
 }
 .casts-layout {
   display: flex;

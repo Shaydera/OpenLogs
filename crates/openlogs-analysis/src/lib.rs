@@ -39,7 +39,7 @@ pub use breakdown::{
     Breakdown, BreakdownRow, Dimension, GroupedRow, RowKey, Split, breakdown, effective_group,
 };
 pub use casts::{CastExtra, CastsReport, casts_report};
-pub use cells::{Cell, CellKind, ScopeMetric, cells};
+pub use cells::{Cell, CellKind, Misses, ScopeMetric, cells};
 pub use compare::{ComparedPlayer, PlayerSide, PullComparison, compare_pulls};
 pub use deaths::{
     AbilityAmount, BURST_GAP_MS, DEATH_WINDOW_MS, Death, Hit, LethalBurst, Resurrection, deaths,

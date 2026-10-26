@@ -17,7 +17,7 @@ use openlogs_gamedata::{ChannelSpells, Curated};
 use crate::actors::{ActorId, NOBODY};
 use crate::breakdown::{Dimension, RowKey};
 use crate::cells::ScopeMetric;
-use crate::fight::{AuraType, FailReason, Fight, SpellId};
+use crate::fight::{AuraType, FailReason, Fight, MissType, SpellId};
 use crate::filter::{Attribution, ReportFilter};
 use crate::scope::{Scope, Side, UnitRef};
 use crate::timeline::boss_units;
@@ -60,6 +60,8 @@ pub enum RowType {
     Ranged,
     /// A hit a shield swallowed completely (`SPELL_MISSED` with ABSORB).
     Absorbed,
+    /// Any other `*_MISSED`: dodged, parried, immune, …
+    Missed,
     Heal,
     HotTick,
     Absorb,
@@ -143,6 +145,7 @@ pub struct EventRow {
     /// Deaths: the log holds no lethal hit, so source and spell are unknown.
     pub unknown_blow: bool,
     pub environmental: bool,
+    pub miss: Option<MissType>,
     /// Kills: from the unit's first hit to its death.
     pub alive_ms: Option<i32>,
     /// A recap row: the index of the death it leads up to.
@@ -185,6 +188,7 @@ impl EventRow {
             by: None,
             unknown_blow: false,
             environmental: false,
+            miss: None,
             alive_ms: None,
             context_of: None,
         }

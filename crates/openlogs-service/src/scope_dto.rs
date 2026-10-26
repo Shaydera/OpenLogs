@@ -1,6 +1,7 @@
 use openlogs_analysis::{
     AbilityRef, ActorId, ActorKind, Breakdown, BreakdownRow, CellKind, Dimension, Fight,
-    FilterOption, OptionValue, RowKey, Scope, ScopeMetric, Side, SpellId, UnitRef,
+    FilterOption, MissType, Misses, OptionValue, RowKey, Scope, ScopeMetric, Side, SpellId,
+    UnitRef,
 };
 use serde::{Deserialize, Serialize};
 
@@ -125,8 +126,69 @@ pub struct BreakdownRowDto {
     pub absorbed: i64,
     pub hits: u32,
     pub crits: u32,
+    /// Ability rows: melee swings, and presses on top-level rows; 0 for unit rows.
+    pub casts: u32,
+    /// What the hits booked; Aug credit is no hit's.
+    pub hit_amount: i64,
+    /// The hits that were periodic ticks and what they booked; the rest were direct hits.
+    pub ticks: u32,
+    pub tick_amount: i64,
+    pub misses: Vec<MissCountDto>,
     /// Pet ability rows: the pets the amounts come from, what "Show only" selects as the source.
     pub pets: Vec<UnitRefDto>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MissTypeDto {
+    Absorb,
+    Block,
+    Deflect,
+    Dodge,
+    Evade,
+    Immune,
+    Miss,
+    Parry,
+    Reflect,
+    Resist,
+    Other,
+}
+
+impl MissTypeDto {
+    pub(crate) fn of(miss: MissType) -> Self {
+        match miss {
+            MissType::Absorb => Self::Absorb,
+            MissType::Block => Self::Block,
+            MissType::Deflect => Self::Deflect,
+            MissType::Dodge => Self::Dodge,
+            MissType::Evade => Self::Evade,
+            MissType::Immune => Self::Immune,
+            MissType::Miss => Self::Miss,
+            MissType::Parry => Self::Parry,
+            MissType::Reflect => Self::Reflect,
+            MissType::Resist => Self::Resist,
+            MissType::Other => Self::Other,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MissCountDto {
+    #[serde(rename = "type")]
+    pub miss_type: MissTypeDto,
+    pub count: u32,
+}
+
+fn misses_dto(misses: &Misses) -> Vec<MissCountDto> {
+    misses
+        .by_type()
+        .iter()
+        .map(|&(miss, count)| MissCountDto {
+            miss_type: MissTypeDto::of(miss),
+            count,
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -454,6 +516,11 @@ impl RowDtos<'_> {
             absorbed: row.absorbed,
             hits: row.hits,
             crits: row.crits,
+            casts: row.casts,
+            hit_amount: row.hit_amount,
+            ticks: row.ticks,
+            tick_amount: row.tick_amount,
+            misses: misses_dto(&row.misses),
             pets: row.pets.iter().map(UnitRefDto::of).collect(),
         }
     }

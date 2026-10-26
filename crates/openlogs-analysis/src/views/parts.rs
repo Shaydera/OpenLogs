@@ -1,10 +1,13 @@
 use crate::actors::{ActorId, ActorKind, NOBODY};
 use crate::cells::{CellKind, ScopeMetric};
-use crate::fight::{DamageVia, Event, EventKind, Fight, LANDED_MATCH_MS, NO_SPELL, SpellId};
+use crate::fight::{
+    DamageVia, Event, EventKind, Fight, LANDED_MATCH_MS, MissType, NO_SPELL, SpellId,
+};
 use crate::filter::Overkill;
 use crate::reports::taken::taken_amount;
 use crate::reports::{Share, buffed_hit, damage_share, healing_share};
 use crate::scope::Side;
+use crate::timeline::hits_hostile_npc;
 
 /// The amount rule of Damage Done, Healing and Damage Taken from one side's point of view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,6 +34,10 @@ pub(crate) struct Part {
     pub absorbed: i64,
     pub hit: bool,
     pub crit: bool,
+    /// A periodic hit or miss, or a deduction from a periodic hit.
+    pub periodic: bool,
+    /// An attack that did no damage: no amount, no hit.
+    pub miss: Option<MissType>,
     /// The logged hit the part belongs to; `None` for support no hit matches.
     pub row: Option<usize>,
 }
@@ -64,13 +71,10 @@ impl AmountFacts {
     ) {
         let event = &fight.events[index];
         match self {
-            Self::DamageDone => own_side(
-                fight,
-                index,
-                damage_share(fight, event, overkill),
-                reattributed,
-                book,
-            ),
+            Self::DamageDone => match damage_share(fight, event, overkill) {
+                None => damage_done_miss(fight, index, book),
+                share => own_side(fight, index, share, reattributed, book),
+            },
             Self::Healing => own_side(
                 fight,
                 index,
@@ -100,6 +104,7 @@ fn own_side(
             spell,
             amount,
             critical,
+            periodic,
             ..
         }) => book(Part {
             source: actor,
@@ -110,12 +115,15 @@ fn own_side(
             absorbed: logged_absorbed(event),
             hit: true,
             crit: critical,
+            periodic,
+            miss: None,
             row: Some(index),
         }),
         Some(Share::Support(support)) if reattributed => {
             let amount = support.amount as i64;
             let hit = buffed_hit(fight, index);
             let row = hit.and_then(|(hit, _)| listed_row(fight, hit));
+            let periodic = hit.is_some_and(|(hit, _)| is_periodic(&fight.events[hit]));
             book(Part {
                 source: support.evoker,
                 spell: support.buff,
@@ -125,6 +133,8 @@ fn own_side(
                 absorbed: 0,
                 hit: false,
                 crit: false,
+                periodic: false,
+                miss: None,
                 row,
             });
             let (spell, kind) = match hit {
@@ -140,6 +150,8 @@ fn own_side(
                 absorbed: 0,
                 hit: false,
                 crit: false,
+                periodic,
+                miss: None,
                 row,
             });
         }
@@ -171,6 +183,55 @@ pub(crate) fn listed_row(fight: &Fight, index: usize) -> Option<usize> {
         .map(|(i, _)| i)
 }
 
+/// The type of a logged attack that did no damage; a hit a shield swallowed is a hit.
+pub(crate) fn missed_attack(event: &Event) -> Option<MissType> {
+    match event.kind {
+        EventKind::Missed(missed)
+            if missed.miss_type != MissType::Absorb
+                && !matches!(missed.via, DamageVia::SwingLanded | DamageVia::Split) =>
+        {
+            Some(missed.miss_type)
+        }
+        _ => None,
+    }
+}
+
+fn is_periodic(event: &Event) -> bool {
+    match event.kind {
+        EventKind::Damage(damage) => damage.via == DamageVia::Periodic,
+        EventKind::Missed(missed) => missed.via == DamageVia::Periodic,
+        EventKind::Heal(heal) => heal.periodic,
+        _ => false,
+    }
+}
+
+fn miss_part(event: &Event, index: usize, miss: MissType) -> Part {
+    Part {
+        source: event.source,
+        spell: event.spell,
+        kind: CellKind::Own,
+        target: event.target,
+        amount: 0,
+        absorbed: 0,
+        hit: false,
+        crit: false,
+        periodic: is_periodic(event),
+        miss: Some(miss),
+        row: Some(index),
+    }
+}
+
+/// A player's or pet's attack on a hostile NPC that did no damage.
+fn damage_done_miss(fight: &Fight, index: usize, book: &mut impl FnMut(Part)) {
+    let event = &fight.events[index];
+    if let Some(miss) = missed_attack(event)
+        && hits_hostile_npc(fight, event)
+        && fight.actors.credited_player(event.source).is_some()
+    {
+        book(miss_part(event, index, miss));
+    }
+}
+
 fn logged_absorbed(event: &Event) -> i64 {
     match event.kind {
         EventKind::Damage(damage) => damage.absorbed as i64,
@@ -186,26 +247,34 @@ fn taken(
     book: &mut impl FnMut(Part),
 ) {
     let event = &fight.events[index];
-    let Some((amount, absorbed)) = taken_amount(event, overkill) else {
+    let amounts = taken_amount(event, overkill);
+    let miss = missed_attack(event);
+    if amounts.is_none() && miss.is_none() {
         return;
-    };
+    }
     if fight.actors.get(event.target).kind != ActorKind::Player {
         return;
     }
     if hostile_sources_only && (event.source == NOBODY || !event.source_hostile) {
         return;
     }
-    book(Part {
-        source: event.source,
-        spell: event.spell,
-        kind: CellKind::Own,
-        target: event.target,
-        amount: amount as i64,
-        absorbed: absorbed as i64,
-        hit: true,
-        crit: matches!(event.kind, EventKind::Damage(d) if d.critical),
-        row: Some(index),
-    });
+    if let Some((amount, absorbed)) = amounts {
+        book(Part {
+            source: event.source,
+            spell: event.spell,
+            kind: CellKind::Own,
+            target: event.target,
+            amount: amount as i64,
+            absorbed: absorbed as i64,
+            hit: true,
+            crit: matches!(event.kind, EventKind::Damage(d) if d.critical),
+            periodic: is_periodic(event),
+            miss: None,
+            row: Some(index),
+        });
+    } else if let Some(miss) = miss {
+        book(miss_part(event, index, miss));
+    }
 }
 
 fn enemy_healing(index: usize, event: &Event, book: &mut impl FnMut(Part)) {
@@ -224,6 +293,8 @@ fn enemy_healing(index: usize, event: &Event, book: &mut impl FnMut(Part)) {
         absorbed: 0,
         hit: true,
         crit: heal.critical,
+        periodic: heal.periodic,
+        miss: None,
         row: Some(index),
     });
 }

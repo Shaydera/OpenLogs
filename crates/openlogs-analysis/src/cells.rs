@@ -7,12 +7,12 @@ use crate::aura_report::book_auras;
 use crate::breakdown::Dimension;
 use crate::casts::{book_casts, presses};
 use crate::deaths_report::book_deaths;
-use crate::fight::{AuraType, Fight, SpellId};
+use crate::fight::{AuraType, DamageVia, Event, EventKind, Fight, MissType, SpellId};
 use crate::filter::{Attribution, ReportFilter};
 use crate::interrupts::book_kicks;
 use crate::resources::book_resources;
 use crate::scope::{Scope, Side, UnitRef, unit_of};
-use crate::views::parts::AmountFacts;
+use crate::views::parts::{AmountFacts, Part};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScopeMetric {
@@ -106,6 +106,40 @@ pub struct Cell {
     pub absorbed: i64,
     pub hits: u32,
     pub crits: u32,
+    /// The hits that were periodic ticks, and what they booked with their Aug deductions.
+    pub ticks: u32,
+    pub tick_amount: i64,
+    pub misses: Misses,
+    /// Melee swings, landed or not; presses in the cells of [`ability_casts`].
+    pub casts: u32,
+}
+
+/// Attacks that did no damage, by type. A hit a shield swallowed completely is a hit.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Misses(Vec<(MissType, u32)>);
+
+impl Misses {
+    pub fn total(&self) -> u32 {
+        self.0.iter().map(|(_, count)| count).sum()
+    }
+
+    /// In type order.
+    pub fn by_type(&self) -> &[(MissType, u32)] {
+        &self.0
+    }
+
+    pub fn add(&mut self, miss: MissType, count: u32) {
+        match self.0.binary_search_by_key(&miss, |(t, _)| *t) {
+            Ok(i) => self.0[i].1 += count,
+            Err(i) => self.0.insert(i, (miss, count)),
+        }
+    }
+
+    pub fn merge(&mut self, other: &Misses) {
+        for &(miss, count) in &other.0 {
+            self.add(miss, count);
+        }
+    }
 }
 
 impl Cell {
@@ -126,6 +160,10 @@ impl Cell {
             absorbed: 0,
             hits: 0,
             crits: 0,
+            ticks: 0,
+            tick_amount: 0,
+            misses: Misses::default(),
+            casts: 0,
         }
     }
 
@@ -161,6 +199,14 @@ pub(crate) fn in_scope(scope: &Scope, fight: &Fight, cell: &Cell) -> bool {
     scope.accepts(fight, cell.source(), cell.ability(), cell.target())
 }
 
+/// A cast without a target (an area spell) passes any target selection.
+pub(crate) fn cast_in_scope(scope: &Scope, fight: &Fight, cast: &Cell) -> bool {
+    match cast.target() {
+        Some(_) => in_scope(scope, fight, cast),
+        None => scope.accepts_any_target(fight, cast.source(), cast.ability()),
+    }
+}
+
 type Key = (UnitRef, SpellId, CellKind, UnitRef);
 pub(crate) type Facts = HashMap<Key, Acc>;
 
@@ -170,14 +216,36 @@ pub(crate) struct Acc {
     absorbed: i64,
     hits: u32,
     crits: u32,
+    ticks: u32,
+    tick_amount: i64,
+    misses: Misses,
+    casts: u32,
+}
+
+impl Acc {
+    fn add(&mut self, amount: i64, absorbed: i64, hit: bool, crit: bool) {
+        self.amount += amount;
+        self.absorbed += absorbed;
+        self.hits += u32::from(hit);
+        self.crits += u32::from(hit && crit);
+    }
 }
 
 pub(crate) fn book(map: &mut Facts, key: Key, amount: i64, absorbed: i64, hit: bool, crit: bool) {
+    map.entry(key).or_default().add(amount, absorbed, hit, crit);
+}
+
+fn book_part(map: &mut Facts, key: Key, part: &Part, swing: bool) {
     let acc = map.entry(key).or_default();
-    acc.amount += amount;
-    acc.absorbed += absorbed;
-    acc.hits += u32::from(hit);
-    acc.crits += u32::from(hit && crit);
+    acc.add(part.amount, part.absorbed, part.hit, part.crit);
+    acc.casts += u32::from(swing && (part.hit || part.miss.is_some()));
+    if part.periodic {
+        acc.ticks += u32::from(part.hit);
+        acc.tick_amount += part.amount;
+    }
+    if let Some(miss) = part.miss {
+        acc.misses.add(miss, 1);
+    }
 }
 
 /// Amounts of `metric` in the range, from `side`'s point of view. Selections are not applied here.
@@ -212,11 +280,39 @@ pub fn cells(
     into_cells(map)
 }
 
+/// The presses of the side that deals `metric`'s damage; none for healing. Melee has no presses:
+/// its cells count swings.
+pub(crate) fn ability_casts(
+    fight: &Fight,
+    curated: &Curated,
+    filter: &ReportFilter,
+    side: Side,
+    metric: ScopeMetric,
+) -> Vec<Cell> {
+    let casters = match AmountFacts::of(side, metric) {
+        Some(AmountFacts::DamageDone) => Side::Friendly,
+        Some(AmountFacts::Taken { .. }) => Side::Enemy,
+        _ => return Vec::new(),
+    };
+    let mut map = Facts::new();
+    for event in presses(fight, curated, filter, casters) {
+        let key = (
+            unit_of(fight, event.source),
+            event.spell,
+            CellKind::Own,
+            unit_of(fight, event.target),
+        );
+        map.entry(key).or_default().casts += 1;
+    }
+    into_cells(map)
+}
+
 fn book_amounts(fight: &Fight, filter: &ReportFilter, facts: AmountFacts, map: &mut Facts) {
     let reattributed = filter.attribution == Attribution::Reattributed;
     for index in in_range(fight, filter) {
+        let swing = is_swing(&fight.events[index]);
         facts.parts(fight, index, reattributed, filter.overkill, &mut |part| {
-            book(
+            book_part(
                 map,
                 (
                     unit_of(fight, part.source),
@@ -224,12 +320,19 @@ fn book_amounts(fight: &Fight, filter: &ReportFilter, facts: AmountFacts, map: &
                     part.kind,
                     unit_of(fight, part.target),
                 ),
-                part.amount,
-                part.absorbed,
-                part.hit,
-                part.crit,
+                &part,
+                swing,
             )
         });
+    }
+}
+
+/// Its landed copy is not a swing of its own.
+fn is_swing(event: &Event) -> bool {
+    match event.kind {
+        EventKind::Damage(damage) => damage.via == DamageVia::Swing,
+        EventKind::Missed(missed) => missed.via == DamageVia::Swing,
+        _ => false,
     }
 }
 
@@ -243,7 +346,9 @@ pub(crate) fn in_range(fight: &Fight, filter: &ReportFilter) -> std::ops::Range<
 pub(crate) fn into_cells(map: Facts) -> Vec<Cell> {
     let mut list: Vec<Cell> = map
         .into_iter()
-        .filter(|(_, acc)| acc.amount != 0 || acc.hits > 0)
+        .filter(|(_, acc)| {
+            acc.amount != 0 || acc.hits > 0 || acc.misses.total() > 0 || acc.casts > 0
+        })
         .map(|((source, spell, kind, target), acc)| Cell {
             source,
             spell,
@@ -253,6 +358,10 @@ pub(crate) fn into_cells(map: Facts) -> Vec<Cell> {
             absorbed: acc.absorbed,
             hits: acc.hits,
             crits: acc.crits,
+            ticks: acc.ticks,
+            tick_amount: acc.tick_amount,
+            misses: acc.misses,
+            casts: acc.casts,
         })
         .collect();
     list.sort_by(|a, b| {

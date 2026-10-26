@@ -1,11 +1,11 @@
 mod support;
 
 use openlogs_analysis::{
-    AbilityRef, Attribution, CellKind, Damage, DamageVia, Dimension, EventKind, ReportFilter,
-    RowKey, Scope, ScopeMetric, Side, UnitRef, breakdown, effective_group,
+    AbilityRef, Attribution, CellKind, Damage, DamageVia, Dimension, EventKind, MissType, Missed,
+    NOBODY, ReportFilter, RowKey, Scope, ScopeMetric, Side, UnitRef, breakdown, effective_group,
 };
 use openlogs_gamedata::Curated;
-use support::{FightBuilder, HOSTILE_FLAGS, MELEE, PET_FLAGS, damage};
+use support::{FightBuilder, HOSTILE_FLAGS, MELEE, PET_FLAGS, damage, heal};
 
 fn hit(amount: u64) -> EventKind {
     EventKind::Damage(damage(DamageVia::Spell, amount, 0))
@@ -272,7 +272,6 @@ fn selecting_melee_leaves_out_unmatched_support() {
 
 #[test]
 fn damage_taken_rows_carry_hits_and_absorbed_damage_on_both_sides() {
-    use openlogs_analysis::{MissType, Missed};
     let mut b = FightBuilder::new(10_000);
     let tank = b.player("Player-1", "Edrin-Emberfall-EU", 581);
     let mage = b.player("Player-2", "Faelan-Emberfall-EU", 62);
@@ -421,4 +420,191 @@ fn pet_abilities_get_rows_of_their_own_that_narrow_to_the_pets() {
     );
     assert_eq!(narrowed.group, Dimension::Target);
     assert_eq!(narrowed.total, 550);
+}
+
+fn missed(via: DamageVia, miss_type: MissType) -> EventKind {
+    EventKind::Missed(Missed {
+        via,
+        miss_type,
+        amount_missed: 0,
+    })
+}
+
+#[test]
+fn damage_taken_ability_rows_count_casts_ticks_and_misses() {
+    let mut b = FightBuilder::new(10_000);
+    let tank = b.player("Player-1", "Edrin-Emberfall-EU", 581);
+    let mage = b.player("Player-2", "Faelan-Emberfall-EU", 62);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let rite = b.spell(5, "Soulcoil Rite");
+    let swing = |amount| EventKind::Damage(damage(DamageVia::Swing, amount, 0));
+    b.push(1_000, boss, tank, MELEE, swing(400));
+    b.push(
+        2_000,
+        boss,
+        tank,
+        MELEE,
+        missed(DamageVia::Swing, MissType::Parry),
+    );
+    b.push(3_000, boss, tank, MELEE, swing(600));
+    b.push(4_000, boss, NOBODY, rite, EventKind::CastSuccess);
+    b.push(4_100, boss, mage, rite, EventKind::CastSuccess);
+    b.push(4_200, boss, tank, rite, hit(900));
+    b.push(
+        5_000,
+        boss,
+        tank,
+        rite,
+        EventKind::Damage(damage(DamageVia::Periodic, 100, 0)),
+    );
+    b.push(
+        6_000,
+        boss,
+        tank,
+        rite,
+        EventKind::Damage(damage(DamageVia::Periodic, 200, 0)),
+    );
+    b.push(
+        7_000,
+        boss,
+        tank,
+        rite,
+        missed(DamageVia::Periodic, MissType::Immune),
+    );
+    b.push(
+        8_000,
+        boss,
+        mage,
+        rite,
+        missed(DamageVia::Spell, MissType::Immune),
+    );
+    let fight = b.build();
+    let filter = ReportFilter::whole(Attribution::Reattributed);
+    let rows = |target: Vec<UnitRef>| {
+        let scope = Scope {
+            target,
+            ..Scope::default()
+        };
+        breakdown(
+            &fight,
+            &Curated::bundled(),
+            &filter,
+            &scope,
+            ScopeMetric::DamageTaken,
+            Dimension::Ability,
+        )
+        .rows
+        .into_iter()
+        .map(|r| {
+            let row = r.row;
+            let misses = row.misses.by_type().to_vec();
+            (
+                row.spell,
+                row.amount,
+                row.casts,
+                row.hits,
+                row.ticks,
+                row.tick_amount,
+                misses,
+            )
+        })
+        .collect::<Vec<_>>()
+    };
+
+    assert_eq!(
+        rows(vec![UnitRef::Player(tank)]),
+        vec![
+            (rite, 1_200, 1, 3, 2, 300, vec![(MissType::Immune, 1)]),
+            (MELEE, 1_000, 3, 2, 0, 0, vec![(MissType::Parry, 1)]),
+        ]
+    );
+    let mage_rows = rows(vec![UnitRef::Player(mage)]);
+    assert_eq!(
+        mage_rows,
+        vec![(rite, 0, 2, 0, 0, 0, vec![(MissType::Immune, 1)])]
+    );
+    assert_eq!(rows(Vec::new())[0].2, 2);
+}
+
+#[test]
+fn damage_done_counts_presses_and_immunities_but_healing_no_casts() {
+    let mut b = FightBuilder::new(10_000);
+    let mage = b.player("Player-1", "Faelan-Emberfall-EU", 63);
+    let priest = b.player("Player-2", "Seren-Emberfall-EU", 257);
+    let evoker = b.player("Player-3", "Speronis-Stonevale-EU", 1473);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let fireball = b.spell(133, "Fireball");
+    let renew = b.spell(139, "Renew");
+    let ebon_might = b.spell(395152, "Ebon Might");
+    b.push(1_000, mage, boss, fireball, EventKind::CastSuccess);
+    b.push(1_500, mage, boss, fireball, hit(1_000));
+    b.push(
+        1_500,
+        mage,
+        boss,
+        ebon_might,
+        EventKind::Damage(Damage {
+            supporter: evoker,
+            ..damage(DamageVia::Spell, 100, 0)
+        }),
+    );
+    b.push(
+        1_800,
+        priest,
+        boss,
+        MELEE,
+        missed(DamageVia::Swing, MissType::Parry),
+    );
+    b.push(2_000, mage, boss, fireball, EventKind::CastSuccess);
+    b.push(
+        2_500,
+        mage,
+        boss,
+        fireball,
+        missed(DamageVia::Spell, MissType::Immune),
+    );
+    b.push(3_000, priest, mage, renew, EventKind::CastSuccess);
+    b.push(4_000, priest, mage, renew, EventKind::Heal(heal(300, 0)));
+    let fight = b.build();
+    let filter = ReportFilter::whole(Attribution::Reattributed);
+    let row_of = |metric| {
+        breakdown(
+            &fight,
+            &Curated::bundled(),
+            &filter,
+            &Scope::default(),
+            metric,
+            Dimension::Ability,
+        )
+        .rows[0]
+            .row
+            .clone()
+    };
+
+    let fire = row_of(ScopeMetric::DamageDone);
+    assert_eq!(
+        (fire.casts, fire.hits, fire.misses.by_type()),
+        (2, 1, &[(MissType::Immune, 1)][..])
+    );
+    assert_eq!(row_of(ScopeMetric::Healing).casts, 0);
+
+    let by_player: Vec<(RowKey, i64, i64)> = breakdown(
+        &fight,
+        &Curated::bundled(),
+        &filter,
+        &Scope::default(),
+        ScopeMetric::DamageDone,
+        Dimension::Source,
+    )
+    .rows
+    .into_iter()
+    .map(|r| (r.row.key, r.row.amount, r.row.hit_amount))
+    .collect();
+    assert_eq!(
+        by_player,
+        vec![
+            (RowKey::Unit(UnitRef::Player(mage)), 900, 900),
+            (RowKey::Unit(UnitRef::Player(evoker)), 100, 0),
+        ]
+    );
 }
