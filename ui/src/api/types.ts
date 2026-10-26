@@ -358,8 +358,22 @@ export interface BreakdownRow {
   absorbed: number;
   hits: number;
   crits: number;
+  /** Ability rows: melee swings, and presses on top-level rows; 0 for unit rows. */
+  casts: number;
+  /** What the hits booked; Aug credit is no hit's. */
+  hitAmount: number;
+  /** The hits that were periodic ticks and what they booked; the rest were direct hits. */
+  ticks: number;
+  tickAmount: number;
+  /** In type order; a hit a shield swallowed completely is a hit. */
+  misses: MissCount[];
   /** Pet ability rows: the pets the amounts come from, what "Show only" selects as the source. */
   pets: UnitRef[];
+}
+export type MissType = 'absorb' | 'block' | 'deflect' | 'dodge' | 'evade' | 'immune' | 'miss' | 'parry' | 'reflect' | 'resist' | 'other';
+export interface MissCount {
+  type: MissType;
+  count: number;
 }
 export interface GroupedRow extends BreakdownRow {
   perSecond: number;

@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode, type Ref, useState } from 'react';
+import { type CSSProperties, Fragment, type ReactNode, type Ref, useState } from 'react';
 import type { Breakdown, BreakdownRow, Dimension, GroupedRow } from '../../api/types';
 import { formatScaled, formatShare } from '../../i18n/format';
 import { type MessageKey, t } from '../../i18n/i18n';
@@ -22,7 +22,7 @@ interface Props {
   unit: string;
   hint?: string;
   sideExtras?: (row: GroupedRow) => ReactNode;
-  /** Numeric columns between the per-second column and Share; up to three. */
+  /** Numeric columns between the per-second column and Share. */
   extraColumns?: ExtraColumn[];
   /** The bar's fill; `undefined` keeps the plain fill (class-coloured for players). */
   fill?: (row: GroupedRow, barPct: number) => ReactNode | undefined;
@@ -45,14 +45,28 @@ interface Props {
 export interface ExtraColumn {
   label: string;
   render: (row: GroupedRow) => ReactNode;
+  /** With it, the column shows only when a row has a value. */
+  hasValue?: (row: GroupedRow) => boolean;
+  /** In px. */
+  width?: number;
 }
 
 export type PreviewHandler = (name: HTMLElement | null, row: HTMLElement | null) => void;
 
 const SIDE_ROWS = 7;
 const SIDE_ICON = 36;
-/** The row grid by the number of extra columns. */
-const GRID = ['rrow rrow-nodelta', 'rrow', 'rrow rrow-extra2', 'rrow rrow-extra3'];
+const COLUMN_WIDTH = 84;
+
+/** The extra columns of the rows' grid, which reports.css lays out around the fixed ones. */
+function extraGrid(columns: ExtraColumn[]): CSSProperties | undefined {
+  if (columns.length === 0) return undefined;
+  const widths = columns.map((column) => column.width ?? COLUMN_WIDTH);
+  return {
+    '--extra-columns': widths.map((w) => `${w}px`).join(' '),
+    '--extra-width': `${widths.reduce((sum, w) => sum + w, 0)}px`,
+    '--extra-count': widths.length,
+  } as CSSProperties;
+}
 const NOTHING_LOGGED: Record<MetricTab, MessageKey> = { damage: 'report.noDamage', healing: 'report.noHealing', taken: 'report.noDamageTaken' };
 
 const keyOf = (row: BreakdownRow) => JSON.stringify(row.key);
@@ -60,6 +74,8 @@ const playerIdOf = (row: BreakdownRow) => (row.key.kind === 'unit' && row.key.un
 
 export function BreakdownPanel(props: Props) {
   const { tab, breakdown, title, unit, hint, sideExtras, extraColumns = [], fill, total, onPreview, describedBy, legend, panelRef, popup } = props;
+  const columns = extraColumns.filter((column) => !column.hasValue || breakdown.rows.some(column.hasValue));
+  const grid = extraGrid(columns);
   const scope = useApp((s) => s.scope);
   const showOnly = useApp((s) => s.showOnly);
   const openPlayer = useApp((s) => s.openPlayer);
@@ -73,7 +89,6 @@ export function BreakdownPanel(props: Props) {
   const split = splits.find((s) => s.dimension === splitDimension) ?? splits[0];
   const playerPageOf = (row: BreakdownRow) => (hasPlayerPages ? playerIdOf(row) : null);
   const selectedPlayer = selected ? playerPageOf(selected) : null;
-  const grid = GRID[extraColumns.length];
   const narrowable = (row: BreakdownRow) => scope[breakdown.group].length === 0 && !(row.key.kind === 'ability' && row.key.rowKind === 'unmatched');
   const narrowTo = (row: BreakdownRow) => void showOnly(breakdown.group, row);
   const nameAction = (row: BreakdownRow) => {
@@ -133,15 +148,14 @@ export function BreakdownPanel(props: Props) {
           <NoMatch nothing={t(NOTHING_LOGGED[tab])} />
         ) : (
           <div className="scroll-x">
-            <div className={extraColumns.length > 1 ? 'report-rows report-rows-wide' : 'report-rows'} role="group" aria-label={t('breakdown.rowsOf', { title })}>
+            <div className="report-rows" style={grid} role="group" aria-label={t('breakdown.rowsOf', { title })}>
               <RankedHead
-                grid={grid}
                 columns={[
                   { label: t('report.rank') },
                   { label: captionOf(tab, breakdown.group) },
                   { label: title },
                   { label: unit, end: true },
-                  ...extraColumns.map((column) => ({ label: column.label, end: true })),
+                  ...columns.map((column) => ({ label: column.label, end: true })),
                   { label: t('report.share'), end: true },
                 ]}
               />
@@ -155,7 +169,7 @@ export function BreakdownPanel(props: Props) {
                   <button
                     key={keyOf(row)}
                     type="button"
-                    className={row === selected ? `${grid} rrow-sel` : grid}
+                    className={row === selected ? 'rrow rrow-sel' : 'rrow'}
                     aria-pressed={row === selected}
                     aria-describedby={describedBy?.(row)}
                     onClick={() => {
@@ -191,7 +205,7 @@ export function BreakdownPanel(props: Props) {
                       <span className="rrow-total num">{total?.(row, amount) ?? amount}</span>
                     </span>
                     <span className="num rrow-end">{formatScaled(row.perSecond)}</span>
-                    {extraColumns.map((column) => (
+                    {columns.map((column) => (
                       <Fragment key={column.label}>{column.render(row)}</Fragment>
                     ))}
                     <span className="num rrow-share">{formatShare(row.share * 100)}</span>

@@ -4,6 +4,7 @@ import { t } from '../../i18n/i18n';
 import type { AugSplit } from './augSplit';
 import { useAugExtras } from './augExtras';
 import { BreakdownPanel, type ExtraColumn } from './BreakdownPanel';
+import { hitColumns } from './hitColumns';
 
 const healingSplit = (p: PlayerHealing): AugSplit => ({
   own: p.healing + p.absorbs,
@@ -28,8 +29,15 @@ export function HealingTab({ report, breakdown }: { report: HealingReport; break
     const healed = p.healing + p.overheal;
     return <span className="num rrow-end">{healed > 0 ? formatShare((p.overheal / healed) * 100) : <span className="dash">—</span>}</span>;
   };
-  const columns: ExtraColumn[] = aug.plain
-    ? [{ label: t('report.absorbs'), render: absorbs }, { label: t('report.overheal'), render: overheal }, ...aug.deltaColumns]
-    : [];
+  const columns: ExtraColumn[] = [
+    ...hitColumns(false),
+    ...(aug.plain
+      ? [
+          { label: t('report.absorbs'), hasValue: (row: GroupedRow) => (aug.playerOf(row)?.absorbs ?? 0) > 0, render: absorbs },
+          { label: t('report.overheal'), hasValue: (row: GroupedRow) => (aug.playerOf(row)?.overheal ?? 0) > 0, render: overheal },
+          ...aug.deltaColumns,
+        ]
+      : []),
+  ];
   return <BreakdownPanel tab="healing" breakdown={breakdown} title={t('tabs.healing')} unit={t('report.hps')} extraColumns={columns} {...aug.panel} />;
 }

@@ -1001,6 +1001,11 @@ describe('view filters', () => {
       absorbed: 0,
       hits: 2,
       crits: 0,
+      casts: 0,
+      hitAmount: 0,
+      ticks: 0,
+      tickAmount: 0,
+      misses: [],
       pets: wolves,
     };
     await openPull();

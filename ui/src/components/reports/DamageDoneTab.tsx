@@ -2,6 +2,7 @@ import type { Breakdown, DamageReport, PlayerDamage } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { useAugExtras } from './augExtras';
 import { BreakdownPanel } from './BreakdownPanel';
+import { hitColumns } from './hitColumns';
 
 const damageSplit = (p: PlayerDamage) => p;
 
@@ -14,7 +15,7 @@ export function DamageDoneTab({ report, breakdown }: { report: DamageReport; bre
       breakdown={breakdown}
       title={t('tabs.damageDone')}
       unit={t('report.dps')}
-      extraColumns={aug.deltaColumns}
+      extraColumns={[...hitColumns(true), ...aug.deltaColumns]}
       {...aug.panel}
     />
   );
