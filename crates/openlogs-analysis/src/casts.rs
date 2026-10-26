@@ -191,7 +191,7 @@ pub fn casts_report(
     let hidden =
         |cell: &Cell| hide_procs && scope.ability.is_empty() && cell.kind == CellKind::Proc;
     let all: Vec<Cell> = into_cells(map).into_iter().filter(|c| !hidden(c)).collect();
-    let breakdown = group_cells(fight, filter, scope, ScopeMetric::Casts, &all, wanted);
+    let breakdown = group_cells(fight, filter, scope, ScopeMetric::Casts, &all, &[], wanted);
 
     // Casts per cast ID of each player and ability row.
     let mut rows: HashMap<(ActorId, AbilityRef, CellKind), HashMap<SpellId, u32>> = HashMap::new();

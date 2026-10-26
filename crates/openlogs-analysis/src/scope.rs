@@ -128,14 +128,23 @@ impl Scope {
         spell: Option<SpellId>,
         target: Option<&UnitRef>,
     ) -> bool {
-        let units = |list: &[UnitRef], unit: Option<&UnitRef>| {
-            list.is_empty() || unit.is_some_and(|unit| list.iter().any(|s| unit.is_in(fight, s)))
-        };
-        units(&self.source, source)
-            && units(&self.target, target)
+        units(fight, &self.target, target) && self.accepts_any_target(fight, source, spell)
+    }
+
+    pub(crate) fn accepts_any_target(
+        &self,
+        fight: &Fight,
+        source: Option<&UnitRef>,
+        spell: Option<SpellId>,
+    ) -> bool {
+        units(fight, &self.source, source)
             && (self.ability.is_empty()
                 || spell.is_some_and(|spell| self.ability.iter().any(|a| a.matches(fight, spell))))
     }
+}
+
+fn units(fight: &Fight, list: &[UnitRef], unit: Option<&UnitRef>) -> bool {
+    list.is_empty() || unit.is_some_and(|unit| list.iter().any(|s| unit.is_in(fight, s)))
 }
 
 /// The side of `actor` at an event that saw it `hostile`: players and what they own are always

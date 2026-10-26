@@ -367,9 +367,9 @@ impl ItemAcc {
     }
 }
 
-/// The parts of the event at `index` a timeline amount reads: every part the table books, and
-/// with Aug credit off the deductions too, which name the support inside a hit. `booked` says
-/// whether the table counts the part.
+/// The parts of the event at `index` a timeline amount reads: every part the table books but
+/// misses, and with Aug credit off the deductions too, which name the support inside a hit.
+/// `booked` says whether the table counts the part.
 pub(crate) fn timeline_parts(
     fight: &Fight,
     facts: AmountFacts,
@@ -379,6 +379,9 @@ pub(crate) fn timeline_parts(
     each: &mut impl FnMut(Part, bool),
 ) {
     facts.parts(fight, index, true, overkill, &mut |part| {
+        if part.miss.is_some() {
+            return;
+        }
         let credit = part.kind == CellKind::Support;
         if reattributed || part.hit {
             each(part, true);

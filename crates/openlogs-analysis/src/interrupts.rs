@@ -89,14 +89,9 @@ pub(crate) fn kicks<'a>(
 
 pub(crate) fn cell_of(fight: &Fight, event: &Event, stopped: SpellId) -> Cell {
     Cell {
-        source: unit_of(fight, event.source),
-        spell: stopped,
-        kind: CellKind::Own,
-        target: unit_of(fight, event.target),
         amount: 1,
-        absorbed: 0,
         hits: 1,
-        crits: 0,
+        ..Cell::scope_probe(fight, event.source, stopped, CellKind::Own, event.target)
     }
 }
 

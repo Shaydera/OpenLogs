@@ -133,6 +133,7 @@ pub fn filter_options(
         .iter()
         .filter(|c| in_scope(&open, fight, c))
         .filter(|c| c.names(dimension))
+        .filter(|c| dimension == Dimension::Ability || c.amount != 0 || c.hits > 0)
         .collect();
     let mut amounts: HashMap<OptionValue, i64> = HashMap::new();
     let mut instances: HashMap<String, BTreeSet<ActorId>> = HashMap::new();

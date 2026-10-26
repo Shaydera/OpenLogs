@@ -284,6 +284,17 @@ fn add_row(row: &mut BreakdownRowDto, next: BreakdownRowDto) {
     row.absorbed += next.absorbed;
     row.hits += next.hits;
     row.crits += next.crits;
+    row.casts += next.casts;
+    row.hit_amount += next.hit_amount;
+    row.ticks += next.ticks;
+    row.tick_amount += next.tick_amount;
+    merge_rows(
+        &mut row.misses,
+        next.misses,
+        |a, b| a.miss_type == b.miss_type,
+        |a, b| a.count += b.count,
+    );
+    row.misses.sort_by_key(|m| m.miss_type);
     for pet in next.pets {
         if !row.pets.contains(&pet) {
             row.pets.push(pet);
@@ -647,12 +658,16 @@ fn sort_taken(rows: &mut [TakenAbilityDto]) {
 
 #[cfg(test)]
 mod tests {
-    use openlogs_analysis::{Actors, Event, EventKind, Fight, NOBODY, SpellInfo};
+    use openlogs_analysis::{
+        Actors, DamageVia, Event, EventKind, Fight, MissType, Missed, NOBODY, SpellInfo,
+    };
 
     use super::*;
     use crate::overview_dto::TimelineDto;
     use crate::report_dto::{AttributionDto, FilterDto, RowKindDto};
-    use crate::scope_dto::{AbilityRefDto, DimensionDto, ScopeDto, ScopeMetricDto};
+    use crate::scope_dto::{
+        AbilityRefDto, DimensionDto, MissCountDto, MissTypeDto, ScopeDto, ScopeMetricDto,
+    };
     use crate::test_fight::{HOSTILE_FLAGS, PET_FLAGS, PLAYER_FLAGS, damage_event, fight, unit};
     use crate::{breakdown_report, damage_done_set_part, damage_taken_set_part, filter_options};
 
@@ -888,6 +903,75 @@ mod tests {
             ]
         );
         assert_eq!(set.per_second, 175.0);
+    }
+
+    #[test]
+    fn ability_rows_sum_casts_ticks_and_misses_by_type_across_pulls() {
+        let mut actors = Actors::new();
+        let mage = unit(&mut actors, "Player-1", "Faelan-Emberfall-EU", PLAYER_FLAGS);
+        let boss = unit(
+            &mut actors,
+            "Creature-0-1-1-1-1-01",
+            "Ula'tek",
+            HOSTILE_FLAGS,
+        );
+        let miss = |t, miss_type| Event {
+            kind: EventKind::Missed(Missed {
+                via: DamageVia::Spell,
+                miss_type,
+                amount_missed: 0,
+            }),
+            ..damage_event(t, mage, boss, 1, 0, NOBODY)
+        };
+        let mut tick = damage_event(1_000, mage, boss, 1, 300, NOBODY);
+        if let EventKind::Damage(damage) = &mut tick.kind {
+            damage.via = DamageVia::Periodic;
+        }
+        let cast = Event {
+            kind: EventKind::CastSuccess,
+            ..damage_event(1_000, mage, boss, 1, 0, NOBODY)
+        };
+        let pull_1 = fight(actors.clone(), vec![tick, miss(2_000, MissType::Parry)]);
+        let pull_2 = fight(
+            actors,
+            vec![
+                cast,
+                damage_event(1_500, mage, boss, 1, 1_000, NOBODY),
+                miss(2_000, MissType::Parry),
+                miss(3_000, MissType::Dodge),
+            ],
+        );
+        let part = |fight| {
+            breakdown_report(
+                fight,
+                &openlogs_gamedata::Curated::bundled(),
+                WHOLE,
+                ScopeDto::default(),
+                ScopeMetricDto::DamageDone,
+                DimensionDto::Ability,
+            )
+        };
+        let set = merged(vec![part(&pull_1), part(&pull_2)]);
+        let row = &set.rows[0].row;
+        assert_eq!(
+            (
+                row.casts,
+                row.hits,
+                row.hit_amount,
+                row.ticks,
+                row.tick_amount
+            ),
+            (1, 2, 1_300, 1, 300)
+        );
+        let parry = |count| MissCountDto {
+            miss_type: MissTypeDto::Parry,
+            count,
+        };
+        let dodge = MissCountDto {
+            miss_type: MissTypeDto::Dodge,
+            count: 1,
+        };
+        assert_eq!(row.misses, [dodge, parry(2)]);
     }
 
     #[test]
