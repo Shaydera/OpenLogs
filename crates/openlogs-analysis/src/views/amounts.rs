@@ -130,7 +130,7 @@ pub(crate) fn rows(
         }
         let mut own = None;
         facts.parts(fight, index, reattributed, filter.overkill, &mut |part| {
-            if part.hit && part.row == Some(index) {
+            if (part.hit || part.miss.is_some()) && part.row == Some(index) {
                 own = Some(part);
             }
         });
@@ -184,6 +184,7 @@ fn amount_row(fight: &Fight, index: usize, own: &Part) -> EventRow {
             DamageVia::Range => RowType::Ranged,
             _ => RowType::Damage,
         },
+        EventKind::Missed(_) if own.miss.is_some() => RowType::Missed,
         EventKind::Missed(_) => RowType::Absorbed,
         EventKind::Heal(heal) if heal.periodic => RowType::HotTick,
         EventKind::Heal(_) => RowType::Heal,
@@ -196,7 +197,8 @@ fn amount_row(fight: &Fight, index: usize, own: &Part) -> EventRow {
         log_name(event),
         (own.source, own.spell, own.target),
     );
-    row.amount = Some(own.amount.max(0) as u64);
+    row.amount = own.miss.is_none().then_some(own.amount.max(0) as u64);
+    row.miss = own.miss;
     row.target_hp = event
         .unit_hp
         .filter(|hp| hp.actor == event.target)
