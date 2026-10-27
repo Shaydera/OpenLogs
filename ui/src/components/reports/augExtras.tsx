@@ -70,8 +70,6 @@ export function useAugExtras<P extends AugPlayer>(report: AugReport<P>, breakdow
   };
 
   return {
-    plain,
-    playerOf,
     deltaColumns: plain && showAugDelta ? [deltaColumn] : [],
     panel: {
       sideExtras,

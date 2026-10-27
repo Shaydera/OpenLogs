@@ -106,6 +106,9 @@ pub struct Cell {
     pub absorbed: i64,
     /// Healing: the part of `amount` heal absorbs took.
     pub heal_absorbed: i64,
+    /// Heals: their overheal, and what they healed before Aug support moved.
+    pub overheal: i64,
+    pub healed: i64,
     pub hits: u32,
     pub crits: u32,
     /// The hits that were periodic ticks, and what they booked with their Aug deductions.
@@ -161,6 +164,8 @@ impl Cell {
             amount: 0,
             absorbed: 0,
             heal_absorbed: 0,
+            overheal: 0,
+            healed: 0,
             hits: 0,
             crits: 0,
             ticks: 0,
@@ -218,6 +223,8 @@ pub(crate) struct Acc {
     amount: i64,
     absorbed: i64,
     heal_absorbed: i64,
+    overheal: i64,
+    healed: i64,
     hits: u32,
     crits: u32,
     ticks: u32,
@@ -243,6 +250,8 @@ fn book_part(map: &mut Facts, key: Key, part: &Part, swing: bool) {
     let acc = map.entry(key).or_default();
     acc.add(part.amount, part.absorbed, part.hit, part.crit);
     acc.heal_absorbed += part.heal_absorbed;
+    acc.overheal += part.overheal;
+    acc.healed += part.healed;
     acc.casts += u32::from(swing && (part.hit || part.miss.is_some()));
     if part.periodic {
         acc.ticks += u32::from(part.hit);
@@ -362,6 +371,8 @@ pub(crate) fn into_cells(map: Facts) -> Vec<Cell> {
             amount: acc.amount,
             absorbed: acc.absorbed,
             heal_absorbed: acc.heal_absorbed,
+            overheal: acc.overheal,
+            healed: acc.healed,
             hits: acc.hits,
             crits: acc.crits,
             ticks: acc.ticks,

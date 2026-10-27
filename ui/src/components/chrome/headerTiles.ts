@@ -23,6 +23,7 @@ import type { KpiTone } from '../Kpi';
 import { shortName } from '../overview/players';
 import { type PullFirst, type SetRow, averageFirstDeath, bestPull, earliestOfPulls, pullFirstDeaths } from '../overview/setOverviewModel';
 import { formatCapTime, powerName } from '../resources/powerNames';
+import { overhealShare } from '../reports/overheal';
 import { hitName, reportSpellName } from '../reports/reportData';
 
 export interface HeaderTile {
@@ -203,7 +204,7 @@ function healingTiles(report: ReportOf['healing'] | null): HeaderTile[] {
   const top = report.players[0];
   return [
     { label: labels[0], value: formatScaled(perSecond(report.total, report.durationMs)), sub: t('kpi.raidHealing', { healing: formatScaled(report.total) }) },
-    { label: labels[1], value: share(report.overheal, healed + report.overheal), sub: t('kpi.overhealed', { amount: formatScaled(report.overheal) }) },
+    { label: labels[1], value: formatShare((overhealShare(report.overheal, healed) ?? 0) * 100), sub: t('kpi.overhealed', { amount: formatScaled(report.overheal) }) },
     { label: labels[2], value: formatScaled(absorbs), sub: t('kpi.ofHealing', { share: share(absorbs, report.total) }) },
     { label: labels[3], value: top ? formatScaled(top.perSecond) : '—', sub: top ? playerName(report.roster, top.player) : '' },
   ];

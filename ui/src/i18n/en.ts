@@ -422,7 +422,6 @@ export const en = {
   'report.ability': 'Ability',
   'report.amount': 'Amount',
   'report.share': 'Share',
-  'report.absorbs': 'Absorbs',
   'report.absorbed': 'Absorbed',
   'report.shieldsShare': 'Shields {share}',
   'report.intoShieldsShare': 'Into shields {share}',

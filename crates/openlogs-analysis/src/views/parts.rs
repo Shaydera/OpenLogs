@@ -35,6 +35,9 @@ pub(crate) struct Part {
     pub absorbed: i64,
     /// Healing: the part of `amount` heal absorbs took.
     pub heal_absorbed: i64,
+    /// Heals: the overheal of the logged heal, and what it healed before Aug support moved.
+    pub overheal: i64,
+    pub healed: i64,
     pub hit: bool,
     pub crit: bool,
     /// A periodic hit or miss, or a deduction from a periodic hit.
@@ -106,11 +109,16 @@ fn own_side(
             actor,
             spell,
             amount,
+            overheal,
             critical,
             periodic,
             ..
         }) => {
             let absorbs = Absorbs::of(event);
+            let healed = match event.kind {
+                EventKind::Heal(_) => amount as i64,
+                _ => 0,
+            };
             book(Part {
                 source: actor,
                 spell,
@@ -119,6 +127,8 @@ fn own_side(
                 amount: amount as i64,
                 absorbed: absorbs.absorbed as i64,
                 heal_absorbed: absorbs.heal_absorbed as i64,
+                overheal: overheal as i64,
+                healed,
                 hit: true,
                 crit: critical,
                 periodic,
@@ -142,6 +152,8 @@ fn own_side(
                 amount,
                 absorbed: 0,
                 heal_absorbed: 0,
+                overheal: 0,
+                healed: 0,
                 hit: false,
                 crit: false,
                 periodic: false,
@@ -160,6 +172,8 @@ fn own_side(
                 amount: -amount,
                 absorbed: -(deducted.absorbed as i64),
                 heal_absorbed: -(deducted.heal_absorbed as i64),
+                overheal: 0,
+                healed: 0,
                 hit: false,
                 crit: false,
                 periodic,
@@ -226,6 +240,8 @@ fn miss_part(event: &Event, index: usize, miss: MissType) -> Part {
         amount: 0,
         absorbed: 0,
         heal_absorbed: 0,
+        overheal: 0,
+        healed: 0,
         hit: false,
         crit: false,
         periodic: is_periodic(event),
@@ -273,6 +289,8 @@ fn taken(
             amount: amount as i64,
             absorbed: absorbed as i64,
             heal_absorbed: 0,
+            overheal: 0,
+            healed: 0,
             hit: true,
             crit: matches!(event.kind, EventKind::Damage(d) if d.critical),
             periodic: is_periodic(event),
@@ -291,14 +309,17 @@ fn enemy_healing(index: usize, event: &Event, book: &mut impl FnMut(Part)) {
     if !(event.source_hostile && event.target_hostile) || heal.supporter != NOBODY {
         return;
     }
+    let amount = healing_amount(&heal) as i64;
     book(Part {
         source: event.source,
         spell: event.spell,
         kind: CellKind::Own,
         target: event.target,
-        amount: healing_amount(&heal) as i64,
+        amount,
         absorbed: 0,
         heal_absorbed: heal.absorbed as i64,
+        overheal: heal.overheal as i64,
+        healed: amount,
         hit: true,
         crit: heal.critical,
         periodic: heal.periodic,

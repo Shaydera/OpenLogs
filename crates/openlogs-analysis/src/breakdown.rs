@@ -42,6 +42,9 @@ pub struct BreakdownRow {
     pub absorbed: i64,
     /// Healing: the part of `amount` heal absorbs took.
     pub heal_absorbed: i64,
+    /// Heals: their overheal, and what they healed before Aug support moved.
+    pub overheal: i64,
+    pub healed: i64,
     pub hits: u32,
     pub crits: u32,
     /// Ability rows: melee swings, and the presses of the ability on top-level rows; 0 for unit
@@ -139,6 +142,8 @@ struct Acc {
     amount: i64,
     absorbed: i64,
     heal_absorbed: i64,
+    overheal: i64,
+    healed: i64,
     hits: u32,
     crits: u32,
     casts: u32,
@@ -155,6 +160,8 @@ impl Acc {
         self.amount += cell.amount;
         self.absorbed += cell.absorbed;
         self.heal_absorbed += cell.heal_absorbed;
+        self.overheal += cell.overheal;
+        self.healed += cell.healed;
         self.hits += cell.hits;
         self.crits += cell.crits;
         self.ticks += cell.ticks;
@@ -206,6 +213,8 @@ impl Acc {
             amount: self.amount,
             absorbed: self.absorbed,
             heal_absorbed: self.heal_absorbed,
+            overheal: self.overheal,
+            healed: self.healed,
             hits: self.hits,
             crits: self.crits,
             hit_amount: self.hit_amount,

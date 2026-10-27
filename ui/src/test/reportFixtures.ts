@@ -301,6 +301,8 @@ const castRow = (key: ReturnType<typeof playerKey> | ReturnType<typeof spellKey>
   share: amount / total,
   absorbed: 0,
   healAbsorbed: 0,
+  overheal: 0,
+  healed: 0,
   hits: amount,
   crits: 0,
   casts: 0,
@@ -527,18 +529,18 @@ export const breakdownFixture: Breakdown = {
   rows: [
     {
       key: { kind: 'unit', unit: { kind: 'player', actorId: 3 } },
-      name: 'Wendel', number: null, spellId: 0, amount: 2_000_000, share: 2 / 3, absorbed: 250_000, healAbsorbed: 0, hits: 10, crits: 3, casts: 0, hitAmount: 0, ticks: 0, tickAmount: 0, misses: [], pets: [], perSecond: 200_000,
+      name: 'Wendel', number: null, spellId: 0, amount: 2_000_000, share: 2 / 3, absorbed: 250_000, healAbsorbed: 0, overheal: 0, healed: 0, hits: 10, crits: 3, casts: 0, hitAmount: 0, ticks: 0, tickAmount: 0, misses: [], pets: [], perSecond: 200_000,
       splits: [
-        { dimension: 'ability', rows: [{ key: { kind: 'ability', ability: { kind: 'name', name: 'Mortal Strike' }, rowKind: 'own', pet: null }, name: 'Mortal Strike', number: null, spellId: 12294, amount: 2_000_000, share: 1, absorbed: 0, healAbsorbed: 0, hits: 10, crits: 3, casts: 0, hitAmount: 0, ticks: 0, tickAmount: 0, misses: [], pets: [] }] },
-        { dimension: 'target', rows: [{ key: { kind: 'unit', unit: { kind: 'unit', name: "Ula'tek" } }, name: "Ula'tek", number: null, spellId: 0, amount: 2_000_000, share: 1, absorbed: 0, healAbsorbed: 0, hits: 10, crits: 3, casts: 0, hitAmount: 0, ticks: 0, tickAmount: 0, misses: [], pets: [] }] },
+        { dimension: 'ability', rows: [{ key: { kind: 'ability', ability: { kind: 'name', name: 'Mortal Strike' }, rowKind: 'own', pet: null }, name: 'Mortal Strike', number: null, spellId: 12294, amount: 2_000_000, share: 1, absorbed: 0, healAbsorbed: 0, overheal: 0, healed: 0, hits: 10, crits: 3, casts: 0, hitAmount: 0, ticks: 0, tickAmount: 0, misses: [], pets: [] }] },
+        { dimension: 'target', rows: [{ key: { kind: 'unit', unit: { kind: 'unit', name: "Ula'tek" } }, name: "Ula'tek", number: null, spellId: 0, amount: 2_000_000, share: 1, absorbed: 0, healAbsorbed: 0, overheal: 0, healed: 0, hits: 10, crits: 3, casts: 0, hitAmount: 0, ticks: 0, tickAmount: 0, misses: [], pets: [] }] },
       ],
     },
     {
       key: { kind: 'unit', unit: { kind: 'player', actorId: 5 } },
-      name: 'Speronis', number: null, spellId: 0, amount: 1_000_000, share: 1 / 3, absorbed: 0, healAbsorbed: 0, hits: 5, crits: 1, casts: 0, hitAmount: 0, ticks: 0, tickAmount: 0, misses: [], pets: [], perSecond: 100_000,
+      name: 'Speronis', number: null, spellId: 0, amount: 1_000_000, share: 1 / 3, absorbed: 0, healAbsorbed: 0, overheal: 0, healed: 0, hits: 5, crits: 1, casts: 0, hitAmount: 0, ticks: 0, tickAmount: 0, misses: [], pets: [], perSecond: 100_000,
       splits: [
-        { dimension: 'ability', rows: [{ key: { kind: 'ability', ability: { kind: 'name', name: 'Ebon Might' }, rowKind: 'support', pet: null }, name: 'Ebon Might', number: null, spellId: 395152, amount: 1_000_000, share: 1, absorbed: 0, healAbsorbed: 0, hits: 0, crits: 0, casts: 0, hitAmount: 0, ticks: 0, tickAmount: 0, misses: [], pets: [] }] },
-        { dimension: 'target', rows: [{ key: { kind: 'unit', unit: { kind: 'unit', name: "Ula'tek" } }, name: "Ula'tek", number: null, spellId: 0, amount: 1_000_000, share: 1, absorbed: 0, healAbsorbed: 0, hits: 5, crits: 1, casts: 0, hitAmount: 0, ticks: 0, tickAmount: 0, misses: [], pets: [] }] },
+        { dimension: 'ability', rows: [{ key: { kind: 'ability', ability: { kind: 'name', name: 'Ebon Might' }, rowKind: 'support', pet: null }, name: 'Ebon Might', number: null, spellId: 395152, amount: 1_000_000, share: 1, absorbed: 0, healAbsorbed: 0, overheal: 0, healed: 0, hits: 0, crits: 0, casts: 0, hitAmount: 0, ticks: 0, tickAmount: 0, misses: [], pets: [] }] },
+        { dimension: 'target', rows: [{ key: { kind: 'unit', unit: { kind: 'unit', name: "Ula'tek" } }, name: "Ula'tek", number: null, spellId: 0, amount: 1_000_000, share: 1, absorbed: 0, healAbsorbed: 0, overheal: 0, healed: 0, hits: 5, crits: 1, casts: 0, hitAmount: 0, ticks: 0, tickAmount: 0, misses: [], pets: [] }] },
       ],
     },
   ],
