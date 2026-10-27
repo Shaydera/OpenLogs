@@ -999,6 +999,7 @@ describe('view filters', () => {
       amount: 500,
       share: 1,
       absorbed: 0,
+      healAbsorbed: 0,
       hits: 2,
       crits: 0,
       casts: 0,

@@ -6,6 +6,7 @@ import { formatCount, formatMillions, formatScaled, formatShare } from '../../i1
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
+import { AbsorbMarks, absorbNote } from './absorbMarks';
 import type { BreakdownRow } from './breakdown';
 import { PlayerName } from './PlayerName';
 import { barWidth, reportSpellName, type SpellNames } from './reportData';
@@ -92,7 +93,9 @@ export function StackedFill({
           style={{ width: barWidth(total > 0 ? (part.amount / total) * 100 : 0), background: part.group.color }}
           onMouseEnter={onSegment && ((event) => onSegment(part, event.currentTarget))}
           onMouseLeave={onSegment && (() => onSegment(part, null))}
-        />
+        >
+          <AbsorbMarks amount={part.amount} absorbed={part.absorbed} healAbsorbed={part.healAbsorbed} />
+        </span>
       ))}
     </span>
   );
@@ -298,7 +301,9 @@ export function SegmentPopup({
   const hits = part.targets.reduce((sum, share) => sum + share.hits, 0);
   const crits = part.targets.reduce((sum, share) => sum + share.crits, 0);
   const hitsNote = withHits && hits > 0 ? ` · ${t('targets.hitsCrit', { hits: formatCount(hits), crit: formatShare((crits / hits) * 100) })}` : '';
-  const sub = t('targets.shareOf', { share: formatShare(total > 0 ? (part.amount / total) * 100 : 0), name: ofName }) + single + hitsNote;
+  const absorbs = absorbNote(part, metric);
+  const sub =
+    t('targets.shareOf', { share: formatShare(total > 0 ? (part.amount / total) * 100 : 0), name: ofName }) + single + hitsNote + (absorbs ? ` · ${absorbs}` : '');
   const listsTargets = list === 'targets' && (metric === 'healing' || part.targets.length > 1);
   const rows: { key: string; icon: ReactNode; name: string; nameColor: string | null; amount: number; barColor: string }[] =
     list === 'targets'

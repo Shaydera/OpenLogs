@@ -8,6 +8,7 @@ use crate::deaths::{Death, deaths, hp_pct};
 use crate::fight::{AuraType, DamageVia, Event, EventKind, Fight, SpellId};
 use crate::filter::{Overkill, ReportFilter};
 use crate::reports::taken::taken_amount;
+use crate::timeline::healing_amount;
 use crate::usage::{
     ContextItem, ContextState, DeathContext, consumable_uses, death_context, defensive_uses,
 };
@@ -178,7 +179,7 @@ pub(crate) fn recap_event(fight: &Fight, event: &Event, player: ActorId) -> Opti
             spell: event.spell,
             source: event.source,
             kind: RecapKind::Heal,
-            amount: heal.amount.saturating_sub(heal.overheal),
+            amount: healing_amount(&heal),
             absorbed: 0,
             excess: heal.overheal,
             hp_pct,

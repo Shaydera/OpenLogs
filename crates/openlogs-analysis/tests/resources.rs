@@ -171,7 +171,7 @@ fn an_ability_keeps_the_units_that_gained_from_it() {
 }
 
 #[test]
-fn health_keeps_the_lowest_logged_hp_and_counts_support_heals_once() {
+fn health_keeps_the_lowest_logged_hp_and_gains_only_restored_hp() {
     let mut b = FightBuilder::new(10_000);
     let mage = b.player("Player-1", "Faelan-Emberfall-EU", 62);
     let priest = b.player("Player-2", "Ulvara-Emberfall-EU", 256);
@@ -183,6 +183,15 @@ fn health_keeps_the_lowest_logged_hp_and_counts_support_heals_once() {
     let mut support = heal(60, 0);
     support.supporter = priest;
     b.push(3_000, priest, mage, 2061, EventKind::Heal(support));
+    let mut absorbed_by_debuff = heal(0, 0);
+    absorbed_by_debuff.absorbed = 400;
+    b.push(
+        4_000,
+        priest,
+        mage,
+        2061,
+        EventKind::Heal(absorbed_by_debuff),
+    );
     let report = report(&b.build(), &Scope::default());
     let health = &report.units[0].tracks[0];
     assert_eq!(health.power_type, HEALTH);

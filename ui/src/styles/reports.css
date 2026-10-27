@@ -97,10 +97,10 @@
   color: var(--muted);
 }
 .bar.bar-lg {
+  --track: var(--bar-track);
   flex: 1;
   height: 16px;
   border-radius: 3px;
-  background: var(--bar-track);
 }
 .bar.bar-lg > span {
   border-radius: 3px;
@@ -236,6 +236,21 @@
 }
 .bar-fill-negative {
   background: var(--wipe-tint-line);
+}
+/* Overlays at the end of a fill: the track shows through the shielded part, stripes through what heal absorbs took. */
+.absorb-shields,
+.absorb-heal {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+}
+.absorb-shields {
+  background: var(--track);
+  opacity: 0.5;
+}
+.absorb-heal {
+  background: repeating-linear-gradient(135deg, var(--track) 0 3px, transparent 3px 6px);
 }
 /* A small tag after a name: PROC, DOT, SUPPORT. */
 .rtag {

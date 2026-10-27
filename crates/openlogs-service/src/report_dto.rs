@@ -190,6 +190,8 @@ pub struct GroupAbilitiesDto {
 pub struct TargetShareDto {
     pub target: TargetRefDto,
     pub amount: i64,
+    pub absorbed: i64,
+    pub heal_absorbed: i64,
     pub hits: u32,
     pub crits: u32,
 }
@@ -355,6 +357,8 @@ impl<'a> Names<'a> {
                     },
                 },
                 amount: share.amount,
+                absorbed: share.absorbed,
+                heal_absorbed: share.heal_absorbed,
                 hits: share.hits,
                 crits: share.crits,
             })

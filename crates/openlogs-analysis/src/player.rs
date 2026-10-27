@@ -14,11 +14,12 @@ use crate::reports::healing::healing_in;
 use crate::reports::taken::taken_amount;
 use crate::reports::{
     AbilityRow, AbilityTargets, BuffShare, BuffedAbility, RowKind, Share, Support, SupportShare,
-    TargetKey, TargetShare, buff_totals, buffed_spell, damage_share, healing_share, keeps_own,
-    keeps_support, sorted_by_amount,
+    TargetShare, buff_totals, buffed_spell, damage_share, healing_share, keeps_own, keeps_support,
+    merged_targets, sorted_by_amount,
 };
 use crate::resources::power_series;
 use crate::scope::Scope;
+use crate::timeline::healing_amount;
 use crate::usage::{ConsumableUse, DeathContext, consumable_uses, death_context, defensive_uses};
 
 /// Step of the player's damage or healing over time.
@@ -535,29 +536,6 @@ fn absorb(into: &mut PlayerAbility, part: &PlayerAbility) {
     into.targets = merged_targets(into.targets.iter().chain(&part.targets));
 }
 
-/// Sums target shares by target, largest first.
-fn merged_targets<'a>(parts: impl Iterator<Item = &'a TargetShare>) -> Vec<TargetShare> {
-    let mut sums: HashMap<&TargetKey, (i64, u32, u32)> = HashMap::new();
-    for part in parts {
-        let sum = sums.entry(&part.target).or_default();
-        sum.0 += part.amount;
-        sum.1 += part.hits;
-        sum.2 += part.crits;
-    }
-    let mut list: Vec<TargetShare> = sums
-        .into_iter()
-        .filter(|(_, sum)| sum.0 != 0)
-        .map(|(target, (amount, hits, crits))| TargetShare {
-            target: target.clone(),
-            amount,
-            hits,
-            crits,
-        })
-        .collect();
-    list.sort_by(|a, b| b.amount.cmp(&a.amount).then(a.target.cmp(&b.target)));
-    list
-}
-
 /// The spell that summoned the player's pet of this name, if the log has it.
 fn summon_spell(fight: &Fight, player: ActorId, pet_name: &str) -> Option<SpellId> {
     fight
@@ -804,9 +782,7 @@ pub(crate) fn received_healing(event: &Event, player: ActorId) -> Option<u64> {
         return None;
     }
     match event.kind {
-        EventKind::Heal(heal) if heal.supporter == NOBODY => {
-            Some(heal.amount.saturating_sub(heal.overheal))
-        }
+        EventKind::Heal(heal) if heal.supporter == NOBODY => Some(healing_amount(&heal)),
         EventKind::Absorbed(absorbed) if absorbed.supporter == NOBODY => Some(absorbed.amount),
         _ => None,
     }

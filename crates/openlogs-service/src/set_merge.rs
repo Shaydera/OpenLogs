@@ -282,6 +282,7 @@ fn add_row(row: &mut BreakdownRowDto, next: BreakdownRowDto) {
     row.number = row.number.or(next.number);
     row.amount += next.amount;
     row.absorbed += next.absorbed;
+    row.heal_absorbed += next.heal_absorbed;
     row.hits += next.hits;
     row.crits += next.crits;
     row.casts += next.casts;
@@ -475,6 +476,8 @@ impl Breakdown<'_> {
             |a, b| target_key(&a.target) == target_key(&b.target),
             |a, b| {
                 a.amount += b.amount;
+                a.absorbed += b.absorbed;
+                a.heal_absorbed += b.heal_absorbed;
                 a.hits += b.hits;
                 a.crits += b.crits;
                 a.target.units = a.target.units.max(b.target.units);

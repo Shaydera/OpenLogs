@@ -4,16 +4,16 @@ use crate::actors::ActorId;
 use crate::fight::Fight;
 use crate::filter::{Attribution, ReportFilter};
 use crate::reports::{
-    AbilityRow, AbilityTargets, BuffShare, PetNames, RowKind, Share, SupportAcc, SupportLedger,
-    SupportShare, TargetShare, credit_support, heal_target, healing_share, keeps_own,
-    keeps_support, per_second, sorted_by_amount, support_entry,
+    AbilityRow, AbilityTargets, Absorbs, BuffShare, PetNames, RowKind, Share, SupportAcc,
+    SupportLedger, SupportShare, TargetShare, credit_support, heal_target, healing_share,
+    keeps_own, keeps_support, per_second, sorted_by_amount, support_entry,
 };
 use crate::scope::Scope;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerHealing {
     pub player: ActorId,
-    /// Effective healing (without overheal) of own and pet heals, as logged.
+    /// Effective healing of own and pet heals, as logged.
     pub healing: u64,
     /// Damage prevented by the player's absorbs.
     pub absorbs: u64,
@@ -105,6 +105,7 @@ pub(crate) fn healing_in(fight: &Fight, filter: &ReportFilter, scope: &Scope) ->
                     kind,
                     heal_target(fight, event.target),
                     amount as i64,
+                    Absorbs::of(event),
                     overheal,
                     critical,
                     periodic,

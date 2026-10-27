@@ -44,6 +44,7 @@
   overflow: hidden;
 }
 .tstack > .tseg {
+  position: relative;
   display: block;
   height: 100%;
   box-sizing: border-box;
