@@ -11,6 +11,7 @@ import { ReportPickers } from '../filters/ReportPickers';
 import { RowsMenu } from '../filters/RowsMenu';
 import { captionOf } from '../filters/sides';
 import { classColor } from '../overview/players';
+import { AbsorbMarks, absorbNote } from './absorbMarks';
 import { PlayerIcon } from './PlayerName';
 import { RankedHead, SideActions } from './ReportParts';
 import { barWidth, rosterIndex } from './reportData';
@@ -110,10 +111,14 @@ export function BreakdownPanel(props: Props) {
 
   const plainFill = (row: BreakdownRow, barPct: number) => {
     const player = playerOf(row);
-    return player ? (
-      <span style={{ width: barWidth(barPct), background: classColor(player.classToken) }} />
-    ) : (
-      <span style={{ width: barWidth(barPct) }} className="bar-fill-normal" />
+    return (
+      <span
+        style={player ? { width: barWidth(barPct), background: classColor(player.classToken) } : { width: barWidth(barPct) }}
+        className={player ? undefined : 'bar-fill-normal'}
+        title={absorbNote(row, tab)}
+      >
+        <AbsorbMarks amount={row.amount} absorbed={row.absorbed} healAbsorbed={row.healAbsorbed} />
+      </span>
     );
   };
   const selectedSpec = selected ? playerOf(selected)?.specName : null;
@@ -254,7 +259,7 @@ export function BreakdownPanel(props: Props) {
               ))}
             </div>
           )}
-          {split ? <SplitList rows={split.rows} icon={icon} name={name} /> : <p className="muted side-empty">{t('breakdown.nothingLeft')}</p>}
+          {split ? <SplitList tab={tab} rows={split.rows} icon={icon} name={name} /> : <p className="muted side-empty">{t('breakdown.nothingLeft')}</p>}
           {sideExtras?.(selected)}
         </aside>
       )}
@@ -263,6 +268,7 @@ export function BreakdownPanel(props: Props) {
 }
 
 interface SplitListProps {
+  tab: MetricTab;
   rows: BreakdownRow[];
   icon: (row: BreakdownRow) => ReactNode;
   name: (row: BreakdownRow) => ReactNode;
@@ -273,7 +279,7 @@ function sideFill(row: BreakdownRow): string {
   return row.key.kind === 'ability' && row.key.rowKind === 'support' ? 'bar-fill-support' : 'bar-fill-normal';
 }
 
-function SplitList({ rows, icon, name }: SplitListProps) {
+function SplitList({ tab, rows, icon, name }: SplitListProps) {
   const shown = rows.slice(0, SIDE_ROWS);
   const rest = rows.slice(SIDE_ROWS);
   const restAmount = rest.reduce((sum, r) => sum + r.amount, 0);
@@ -286,7 +292,9 @@ function SplitList({ rows, icon, name }: SplitListProps) {
           <span className="side-cell">
             <span className="side-label">{name(row)}</span>
             <span className="bar bar-thin" aria-hidden="true">
-              <span className={sideFill(row)} style={{ width: barWidth((Math.abs(row.amount) / top) * 100) }} />
+              <span className={sideFill(row)} style={{ width: barWidth((Math.abs(row.amount) / top) * 100) }} title={absorbNote(row, tab)}>
+                <AbsorbMarks amount={row.amount} absorbed={row.absorbed} healAbsorbed={row.healAbsorbed} />
+              </span>
             </span>
           </span>
           <span className={row.amount < 0 ? 'num side-amount side-amount-negative' : 'num side-amount'}>{formatScaled(row.amount)}</span>

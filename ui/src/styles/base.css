@@ -149,10 +149,11 @@ html {
   box-shadow: inset 0 0 0 1px var(--accent-tint-line);
 }
 .bar {
+  --track: var(--line-soft);
   position: relative;
   height: 8px;
   border-radius: 4px;
-  background: var(--line-soft);
+  background: var(--track);
   overflow: hidden;
 }
 .bar > span {

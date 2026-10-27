@@ -53,17 +53,21 @@ export function targetColors(metric: TargetMetric, colorGroups: string[], roster
 export interface GroupPart {
   group: TargetGroup;
   amount: number;
+  absorbed: number;
+  healAbsorbed: number;
   /** The group's targets, largest first. */
   targets: TargetShare[];
 }
 
 /** Targets summed by group, in legend order; groups without a positive amount are left out. */
 export function splitByGroup(targets: TargetShare[], groups: TargetGroup[], keyOf: (target: TargetRef) => string): GroupPart[] {
-  const parts = new Map<string, GroupPart>(groups.map((group) => [group.key, { group, amount: 0, targets: [] }]));
+  const parts = new Map<string, GroupPart>(groups.map((group) => [group.key, { group, amount: 0, absorbed: 0, healAbsorbed: 0, targets: [] }]));
   for (const share of targets) {
     const part = parts.get(keyOf(share.target)) ?? parts.get(OTHER);
     if (!part) continue;
     part.amount += share.amount;
+    part.absorbed += share.absorbed;
+    part.healAbsorbed += share.healAbsorbed;
     part.targets.push(share);
   }
   return [...parts.values()].filter((part) => part.amount > 0);

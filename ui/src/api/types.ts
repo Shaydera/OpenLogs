@@ -354,8 +354,10 @@ export interface BreakdownRow {
   spellId: number;
   amount: number;
   share: number;
-  /** Damage: the absorbed amount logged on these hits; 0 for healing and Aug support rows. */
+  /** The part of `amount` that went into or came from shields; 0 for Aug support rows. */
   absorbed: number;
+  /** Healing: the part of `amount` heal absorbs took. */
+  healAbsorbed: number;
   hits: number;
   crits: number;
   /** Ability rows: melee swings, and presses on top-level rows; 0 for unit rows. */
@@ -440,6 +442,10 @@ export interface TargetShare {
   target: TargetRef;
   /** Net of Aug support in Reattributed mode. */
   amount: number;
+  /** The part of `amount` that went into or came from shields. */
+  absorbed: number;
+  /** Healing: the part of `amount` heal absorbs took. */
+  healAbsorbed: number;
   hits: number;
   crits: number;
 }
