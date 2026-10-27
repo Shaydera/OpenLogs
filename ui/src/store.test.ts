@@ -1000,6 +1000,8 @@ describe('view filters', () => {
       share: 1,
       absorbed: 0,
       healAbsorbed: 0,
+      overheal: 0,
+      healed: 0,
       hits: 2,
       crits: 0,
       casts: 0,

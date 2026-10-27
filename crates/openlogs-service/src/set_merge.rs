@@ -283,6 +283,8 @@ fn add_row(row: &mut BreakdownRowDto, next: BreakdownRowDto) {
     row.amount += next.amount;
     row.absorbed += next.absorbed;
     row.heal_absorbed += next.heal_absorbed;
+    row.overheal += next.overheal;
+    row.healed += next.healed;
     row.hits += next.hits;
     row.crits += next.crits;
     row.casts += next.casts;

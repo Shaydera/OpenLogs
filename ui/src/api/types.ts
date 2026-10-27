@@ -358,6 +358,9 @@ export interface BreakdownRow {
   absorbed: number;
   /** Healing: the part of `amount` heal absorbs took. */
   healAbsorbed: number;
+  /** Heals: their overheal, and what they healed before Aug support moved. */
+  overheal: number;
+  healed: number;
   hits: number;
   crits: number;
   /** Ability rows: melee swings, and presses on top-level rows; 0 for unit rows. */

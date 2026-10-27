@@ -125,6 +125,9 @@ pub struct BreakdownRowDto {
     pub share: f64,
     pub absorbed: i64,
     pub heal_absorbed: i64,
+    /// Heals: their overheal, and what they healed before Aug support moved.
+    pub overheal: i64,
+    pub healed: i64,
     pub hits: u32,
     pub crits: u32,
     /// Ability rows: melee swings, and presses on top-level rows; 0 for unit rows.
@@ -516,6 +519,8 @@ impl RowDtos<'_> {
             share: share_of(row.amount, total),
             absorbed: row.absorbed,
             heal_absorbed: row.heal_absorbed,
+            overheal: row.overheal,
+            healed: row.healed,
             hits: row.hits,
             crits: row.crits,
             casts: row.casts,

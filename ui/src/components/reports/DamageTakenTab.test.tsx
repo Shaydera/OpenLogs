@@ -34,6 +34,8 @@ describe('DamageTakenTab', () => {
       share: 0,
       absorbed: 0,
       healAbsorbed: 0,
+      overheal: 0,
+      healed: 0,
       hits: 0,
       crits: 0,
       casts: 0,

@@ -403,6 +403,34 @@ fn healing_rows_carry_shields_and_what_heal_absorbs_took() {
 }
 
 #[test]
+fn enemy_heals_carry_their_overheal() {
+    let mut b = FightBuilder::new(10_000);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let add = b.unit(
+        "Creature-0-1-1-1-261874-0001",
+        "Blightscale Rawling",
+        HOSTILE_FLAGS,
+    );
+    b.spell(1064, "Chain Heal");
+    b.push(1_000, add, boss, 1064, EventKind::Heal(heal(1_000, 250)));
+    let enemy = Scope {
+        perspective: Side::Enemy,
+        ..Scope::default()
+    };
+    let rows = breakdown(
+        &b.build(),
+        &Curated::bundled(),
+        &ReportFilter::whole(Attribution::Reattributed),
+        &enemy,
+        ScopeMetric::Healing,
+        Dimension::Source,
+    )
+    .rows;
+    let row = &rows[0].row;
+    assert_eq!((row.amount, row.overheal, row.healed), (750, 250, 750));
+}
+
+#[test]
 fn pet_abilities_get_rows_of_their_own_that_narrow_to_the_pets() {
     let mut b = FightBuilder::new(10_000);
     let first = b.player("Player-1", "Tarvo-Emberfall-EU", 253);

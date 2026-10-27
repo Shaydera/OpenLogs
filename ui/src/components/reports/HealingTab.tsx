@@ -1,10 +1,12 @@
 import type { Breakdown, GroupedRow, HealingReport, PlayerHealing } from '../../api/types';
-import { formatScaled, formatShare } from '../../i18n/format';
+import { formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
+import { useApp } from '../../store';
 import type { AugSplit } from './augSplit';
 import { useAugExtras } from './augExtras';
 import { BreakdownPanel, type ExtraColumn } from './BreakdownPanel';
 import { hitColumns } from './hitColumns';
+import { overhealShare } from './overheal';
 
 const healingSplit = (p: PlayerHealing): AugSplit => ({
   own: p.healing + p.absorbs,
@@ -16,28 +18,22 @@ const healingSplit = (p: PlayerHealing): AugSplit => ({
   supportCreditedByBuff: p.supportCreditedByBuff,
 });
 
-/** Healing through the breakdown panel; absorbs, overheal and the Aug extras of today's report show in the unfiltered source view. */
+const overheal = (row: GroupedRow) => {
+  const share = overhealShare(row.overheal, row.healed);
+  return <span className="num rrow-end">{share === null ? <span className="dash">—</span> : formatShare(share * 100)}</span>;
+};
+
+/**
+ * Healing through the breakdown panel with overheal; hits only for a single source, the Aug extras of today's report
+ * in the unfiltered source view.
+ */
 export function HealingTab({ report, breakdown }: { report: HealingReport; breakdown: Breakdown }) {
   const aug = useAugExtras(report, breakdown, 'healing', healingSplit);
-  const absorbs = (row: GroupedRow) => {
-    const p = aug.playerOf(row);
-    return <span className="num rrow-end">{p ? formatScaled(p.absorbs) : ''}</span>;
-  };
-  const overheal = (row: GroupedRow) => {
-    const p = aug.playerOf(row);
-    if (!p) return <span className="num rrow-end" />;
-    const healed = p.healing + p.overheal;
-    return <span className="num rrow-end">{healed > 0 ? formatShare((p.overheal / healed) * 100) : <span className="dash">—</span>}</span>;
-  };
+  const singleSource = useApp((s) => s.scope.source.length === 1);
   const columns: ExtraColumn[] = [
-    ...hitColumns(false),
-    ...(aug.plain
-      ? [
-          { label: t('report.absorbs'), hasValue: (row: GroupedRow) => (aug.playerOf(row)?.absorbs ?? 0) > 0, render: absorbs },
-          { label: t('report.overheal'), hasValue: (row: GroupedRow) => (aug.playerOf(row)?.overheal ?? 0) > 0, render: overheal },
-          ...aug.deltaColumns,
-        ]
-      : []),
+    ...(singleSource ? hitColumns(false) : []),
+    { label: t('report.overheal'), hasValue: (row: GroupedRow) => row.overheal > 0, render: overheal },
+    ...aug.deltaColumns,
   ];
   return <BreakdownPanel tab="healing" breakdown={breakdown} title={t('tabs.healing')} unit={t('report.hps')} extraColumns={columns} {...aug.panel} />;
 }

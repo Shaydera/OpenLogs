@@ -290,6 +290,71 @@ fn heals_and_absorbs_own_their_support() {
 }
 
 #[test]
+fn a_heal_keeps_its_overheal_and_what_it_healed_when_support_moves() {
+    let mut b = FightBuilder::new(10_000);
+    let shaman = b.player("Player-1", "Elowyn-Emberfall-EU", 264);
+    let evoker = b.player("Player-2", "Speronis-Stonevale-EU", 1473);
+    let tank = b.player("Player-3", "Edrin-Emberfall-EU", 581);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    b.push(
+        1_000,
+        shaman,
+        tank,
+        77472,
+        EventKind::Heal(heal(1_000, 400)),
+    );
+    b.push(
+        1_000,
+        shaman,
+        tank,
+        EBON_MIGHT,
+        EventKind::Heal(Heal {
+            supporter: evoker,
+            ..heal(50, 0)
+        }),
+    );
+    b.push(
+        2_000,
+        boss,
+        tank,
+        9,
+        EventKind::Absorbed(Absorbed {
+            absorber: shaman,
+            absorb_spell: 114893,
+            amount: 300,
+            supporter: NOBODY,
+        }),
+    );
+    let fight = b.build();
+    let one_healer = Scope {
+        source: vec![UnitRef::Player(shaman)],
+        ..Scope::default()
+    };
+    let rows = |attribution| -> Vec<_> {
+        breakdown(
+            &fight,
+            &Curated::bundled(),
+            &whole(attribution),
+            &one_healer,
+            ScopeMetric::Healing,
+            Dimension::Ability,
+        )
+        .rows
+        .into_iter()
+        .map(|r| (r.row.spell, r.row.amount, r.row.overheal, r.row.healed))
+        .collect()
+    };
+    assert_eq!(
+        rows(Attribution::Reattributed),
+        [(77472, 550, 400, 600), (114893, 300, 0, 0)]
+    );
+    assert_eq!(
+        rows(Attribution::Augmented),
+        [(77472, 600, 400, 600), (114893, 300, 0, 0)]
+    );
+}
+
+#[test]
 fn every_row_set_adds_up_to_its_total() {
     let mut r = raid();
     r.b.push(1_000, r.mage, r.boss, PYROBLAST, spell_hit(1_000));
