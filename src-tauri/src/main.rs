@@ -3,6 +3,7 @@
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .run(context())
         .expect("error while running OpenLogs");
 }
