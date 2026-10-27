@@ -5,7 +5,7 @@ use crate::fight::{
 };
 use crate::filter::Overkill;
 use crate::reports::taken::taken_amount;
-use crate::reports::{Share, buffed_hit, damage_share, healing_share};
+use crate::reports::{Absorbs, Share, buffed_hit, damage_share, healing_share};
 use crate::scope::Side;
 use crate::timeline::{healing_amount, hits_hostile_npc};
 
@@ -31,7 +31,10 @@ pub(crate) struct Part {
     pub kind: CellKind,
     pub target: ActorId,
     pub amount: i64,
+    /// The part of `amount` that went into or came from shields.
     pub absorbed: i64,
+    /// Healing: the part of `amount` heal absorbs took.
+    pub heal_absorbed: i64,
     pub hit: bool,
     pub crit: bool,
     /// A periodic hit or miss, or a deduction from a periodic hit.
@@ -106,22 +109,29 @@ fn own_side(
             critical,
             periodic,
             ..
-        }) => book(Part {
-            source: actor,
-            spell,
-            kind: CellKind::Own,
-            target: event.target,
-            amount: amount as i64,
-            absorbed: logged_absorbed(event),
-            hit: true,
-            crit: critical,
-            periodic,
-            miss: None,
-            row: Some(index),
-        }),
+        }) => {
+            let absorbs = Absorbs::of(event);
+            book(Part {
+                source: actor,
+                spell,
+                kind: CellKind::Own,
+                target: event.target,
+                amount: amount as i64,
+                absorbed: absorbs.absorbed as i64,
+                heal_absorbed: absorbs.heal_absorbed as i64,
+                hit: true,
+                crit: critical,
+                periodic,
+                miss: None,
+                row: Some(index),
+            });
+        }
         Some(Share::Support(support)) if reattributed => {
             let amount = support.amount as i64;
             let hit = buffed_hit(fight, index);
+            let deducted = hit
+                .map(|(hit, _)| Absorbs::of_part(&fight.events[hit], support.amount))
+                .unwrap_or_default();
             let row = hit.and_then(|(hit, _)| listed_row(fight, hit));
             let periodic = hit.is_some_and(|(hit, _)| is_periodic(&fight.events[hit]));
             book(Part {
@@ -131,6 +141,7 @@ fn own_side(
                 target: support.target,
                 amount,
                 absorbed: 0,
+                heal_absorbed: 0,
                 hit: false,
                 crit: false,
                 periodic: false,
@@ -147,7 +158,8 @@ fn own_side(
                 kind,
                 target: support.target,
                 amount: -amount,
-                absorbed: 0,
+                absorbed: -(deducted.absorbed as i64),
+                heal_absorbed: -(deducted.heal_absorbed as i64),
                 hit: false,
                 crit: false,
                 periodic,
@@ -213,6 +225,7 @@ fn miss_part(event: &Event, index: usize, miss: MissType) -> Part {
         target: event.target,
         amount: 0,
         absorbed: 0,
+        heal_absorbed: 0,
         hit: false,
         crit: false,
         periodic: is_periodic(event),
@@ -229,13 +242,6 @@ fn damage_done_miss(fight: &Fight, index: usize, book: &mut impl FnMut(Part)) {
         && fight.actors.credited_player(event.source).is_some()
     {
         book(miss_part(event, index, miss));
-    }
-}
-
-fn logged_absorbed(event: &Event) -> i64 {
-    match event.kind {
-        EventKind::Damage(damage) => damage.absorbed as i64,
-        _ => 0,
     }
 }
 
@@ -266,6 +272,7 @@ fn taken(
             target: event.target,
             amount: amount as i64,
             absorbed: absorbed as i64,
+            heal_absorbed: 0,
             hit: true,
             crit: matches!(event.kind, EventKind::Damage(d) if d.critical),
             periodic: is_periodic(event),
@@ -291,6 +298,7 @@ fn enemy_healing(index: usize, event: &Event, book: &mut impl FnMut(Part)) {
         target: event.target,
         amount: healing_amount(&heal) as i64,
         absorbed: 0,
+        heal_absorbed: heal.absorbed as i64,
         hit: true,
         crit: heal.critical,
         periodic: heal.periodic,

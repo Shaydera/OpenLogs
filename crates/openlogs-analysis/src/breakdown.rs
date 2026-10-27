@@ -38,7 +38,10 @@ pub struct BreakdownRow {
     /// Pet ability rows: the pets the amounts come from, one per owner.
     pub pets: Vec<UnitRef>,
     pub amount: i64,
+    /// The part of `amount` that went into or came from shields.
     pub absorbed: i64,
+    /// Healing: the part of `amount` heal absorbs took.
+    pub heal_absorbed: i64,
     pub hits: u32,
     pub crits: u32,
     /// Ability rows: melee swings, and the presses of the ability on top-level rows; 0 for unit
@@ -135,6 +138,7 @@ pub(crate) fn key_of(
 struct Acc {
     amount: i64,
     absorbed: i64,
+    heal_absorbed: i64,
     hits: u32,
     crits: u32,
     casts: u32,
@@ -150,6 +154,7 @@ impl Acc {
     fn add(&mut self, cell: &Cell) {
         self.amount += cell.amount;
         self.absorbed += cell.absorbed;
+        self.heal_absorbed += cell.heal_absorbed;
         self.hits += cell.hits;
         self.crits += cell.crits;
         self.ticks += cell.ticks;
@@ -200,6 +205,7 @@ impl Acc {
             key,
             amount: self.amount,
             absorbed: self.absorbed,
+            heal_absorbed: self.heal_absorbed,
             hits: self.hits,
             crits: self.crits,
             hit_amount: self.hit_amount,

@@ -2,8 +2,9 @@ mod support;
 
 use openlogs_analysis::{
     AbilityRow, Absorbed, ActorId, Attribution, BuffedAbility, Damage, DamageReport, DamageVia,
-    EventKind, Fight, Heal, Metric, NO_SPELL, NOBODY, Overkill, ReportFilter, RowKind, Scope,
-    SupportShare, damage_done, healing, player_detail,
+    Dimension, EventKind, Fight, Heal, Metric, NO_SPELL, NOBODY, Overkill, ReportFilter, RowKey,
+    RowKind, Scope, ScopeMetric, SupportShare, UnitRef, breakdown, damage_done, healing,
+    player_detail,
 };
 use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS, damage, heal};
@@ -80,6 +81,51 @@ fn share(
         ability: spell.map(|(spell, actor)| BuffedAbility { spell, actor }),
         amount,
     }
+}
+
+#[test]
+fn moved_support_takes_its_share_of_the_shielded_part() {
+    let mut r = raid();
+    r.b.push(
+        1_000,
+        r.mage,
+        r.boss,
+        PYROBLAST,
+        EventKind::Damage(Damage {
+            absorbed: 300,
+            ..damage(DamageVia::Spell, 700, 0)
+        }),
+    );
+    r.b.push(
+        1_000,
+        r.mage,
+        r.boss,
+        EBON_MIGHT,
+        supported(DamageVia::Spell, 100, r.evoker),
+    );
+    let fight = r.b.build();
+
+    let report = damage_done(&fight, &whole(Attribution::Reattributed));
+    let mage = report.players.iter().find(|p| p.player == r.mage).unwrap();
+    assert_eq!(
+        (mage.targets[0].amount, mage.targets[0].absorbed),
+        (900, 270)
+    );
+
+    let rows = breakdown(
+        &fight,
+        &Curated::bundled(),
+        &whole(Attribution::Reattributed),
+        &Scope::default(),
+        ScopeMetric::DamageDone,
+        Dimension::Source,
+    )
+    .rows;
+    let mage_row = rows
+        .iter()
+        .find(|row| row.row.key == RowKey::Unit(UnitRef::Player(r.mage)))
+        .unwrap();
+    assert_eq!((mage_row.row.amount, mage_row.row.absorbed), (900, 270));
 }
 
 #[test]

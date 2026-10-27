@@ -61,6 +61,10 @@ pub struct TargetShare {
     pub target: TargetKey,
     /// Net of Aug support in Reattributed mode, like the rows.
     pub amount: i64,
+    /// The part of `amount` that went into or came from shields.
+    pub absorbed: i64,
+    /// Healing: the part of `amount` heal absorbs took.
+    pub heal_absorbed: i64,
     pub hits: u32,
     pub crits: u32,
 }
@@ -117,8 +121,47 @@ type RowKey = (SpellId, ActorId, RowKind);
 #[derive(Default, Clone, Copy)]
 struct TargetAcc {
     amount: i64,
+    absorbed: i64,
+    heal_absorbed: i64,
     hits: u32,
     crits: u32,
+}
+
+impl TargetAcc {
+    fn add(&mut self, amount: i64, absorbs: Absorbs) {
+        self.amount += amount;
+        self.absorbed += absorbs.absorbed as i64;
+        self.heal_absorbed += absorbs.heal_absorbed as i64;
+    }
+
+    fn merge(&mut self, other: &TargetAcc) {
+        self.amount += other.amount;
+        self.absorbed += other.absorbed;
+        self.heal_absorbed += other.heal_absorbed;
+        self.hits += other.hits;
+        self.crits += other.crits;
+    }
+
+    fn of(share: &TargetShare) -> Self {
+        Self {
+            amount: share.amount,
+            absorbed: share.absorbed,
+            heal_absorbed: share.heal_absorbed,
+            hits: share.hits,
+            crits: share.crits,
+        }
+    }
+
+    fn share(&self, target: TargetKey) -> TargetShare {
+        TargetShare {
+            target,
+            amount: self.amount,
+            absorbed: self.absorbed,
+            heal_absorbed: self.heal_absorbed,
+            hits: self.hits,
+            crits: self.crits,
+        }
+    }
 }
 
 /// Accumulates ability rows keyed by (spell, actor, kind), each split by target.
@@ -139,6 +182,23 @@ pub(crate) struct RowsOut {
 
 fn by_amount(list: &mut [TargetShare]) {
     list.sort_by(|a, b| b.amount.cmp(&a.amount).then(a.target.cmp(&b.target)));
+}
+
+/// Sums target shares by target, largest first.
+pub(crate) fn merged_targets<'a>(parts: impl Iterator<Item = &'a TargetShare>) -> Vec<TargetShare> {
+    let mut sums: HashMap<&TargetKey, TargetAcc> = HashMap::new();
+    for part in parts {
+        sums.entry(&part.target)
+            .or_default()
+            .merge(&TargetAcc::of(part));
+    }
+    let mut list: Vec<TargetShare> = sums
+        .into_iter()
+        .filter(|(_, acc)| acc.amount != 0)
+        .map(|(target, acc)| acc.share(target.clone()))
+        .collect();
+    by_amount(&mut list);
+    list
 }
 
 impl Rows {
@@ -165,6 +225,7 @@ impl Rows {
         kind: RowKind,
         target: RawTarget,
         amount: i64,
+        absorbs: Absorbs,
         overheal: u64,
         critical: bool,
         periodic: bool,
@@ -180,7 +241,7 @@ impl Rows {
             .targets
             .entry(((spell, actor, kind), target))
             .or_default();
-        split.amount += amount;
+        split.add(amount, absorbs);
         split.hits += 1;
         split.crits += u32::from(critical);
     }
@@ -192,6 +253,7 @@ impl Rows {
         player: ActorId,
         target: RawTarget,
         amount: u64,
+        absorbs: Absorbs,
     ) {
         let key = match ability {
             Some(a) => {
@@ -207,7 +269,10 @@ impl Rows {
         let row = self.row(key.0, key.1, key.2);
         row.amount -= amount as i64;
         row.support += amount;
-        self.targets.entry((key, target)).or_default().amount -= amount as i64;
+        let split = self.targets.entry((key, target)).or_default();
+        split.amount -= amount as i64;
+        split.absorbed -= absorbs.absorbed as i64;
+        split.heal_absorbed -= absorbs.heal_absorbed as i64;
     }
 
     /// The units the rows booked an amount on.
@@ -230,10 +295,10 @@ impl Rows {
 
         let mut named: HashMap<(RowKey, TargetKey), TargetAcc> = HashMap::new();
         for ((key, target), acc) in self.targets {
-            let sum = named.entry((key, resolve(fight, target))).or_default();
-            sum.amount += acc.amount;
-            sum.hits += acc.hits;
-            sum.crits += acc.crits;
+            named
+                .entry((key, resolve(fight, target)))
+                .or_default()
+                .merge(&acc);
         }
         let mut per_row: HashMap<RowKey, Vec<TargetShare>> = HashMap::new();
         let mut per_target: HashMap<TargetKey, TargetAcc> = HashMap::new();
@@ -242,29 +307,19 @@ impl Rows {
             if acc.amount == 0 {
                 continue;
             }
-            per_row.entry(key).or_default().push(TargetShare {
-                target: target.clone(),
-                amount: acc.amount,
-                hits: acc.hits,
-                crits: acc.crits,
-            });
+            per_row
+                .entry(key)
+                .or_default()
+                .push(acc.share(target.clone()));
             if key.2 != RowKind::Unmatched {
                 *per_spell.entry((target.clone(), key.0)).or_default() += acc.amount;
             }
-            let total = per_target.entry(target).or_default();
-            total.amount += acc.amount;
-            total.hits += acc.hits;
-            total.crits += acc.crits;
+            per_target.entry(target).or_default().merge(&acc);
         }
         let mut targets: Vec<TargetShare> = per_target
             .into_iter()
             .filter(|(_, acc)| acc.amount != 0)
-            .map(|(target, acc)| TargetShare {
-                target,
-                amount: acc.amount,
-                hits: acc.hits,
-                crits: acc.crits,
-            })
+            .map(|(target, acc)| acc.share(target))
             .collect();
         by_amount(&mut targets);
         let ability_targets = rows
@@ -552,6 +607,8 @@ pub(crate) struct SupportEntry {
     pub ability: Option<BuffedAbility>,
     pub target: RawTarget,
     pub amount: u64,
+    /// What of `amount` the buffed hit had in shields or lost to heal absorbs, in proportion.
+    pub absorbs: Absorbs,
 }
 
 /// Whether a scope keeps an own share: `actor`'s `spell` on `target`.
@@ -626,6 +683,7 @@ pub(crate) fn credit_support<A: Default>(
         ability,
         target,
         amount,
+        absorbs,
     } = entry;
     if !(parts.buffed || parts.credit) {
         return;
@@ -642,7 +700,7 @@ pub(crate) fn credit_support<A: Default>(
             *buffed.by_buff.entry((buff, evoker)).or_default() += amount;
         }
         if reattributed {
-            buffed.rows.deduct(ability, player, target, amount);
+            buffed.rows.deduct(ability, player, target, amount, absorbs);
         }
     }
     if !parts.credit {
@@ -663,6 +721,7 @@ pub(crate) fn credit_support<A: Default>(
             RowKind::SupportGiven,
             target,
             amount as i64,
+            Absorbs::default(),
             0,
             false,
             false,
@@ -685,7 +744,8 @@ pub(crate) fn support_entry<'a>(
         amount,
         ..
     } = support;
-    let ability = buffed_spell(fight, index).map(|spell| BuffedAbility {
+    let hit = buffed_hit(fight, index);
+    let ability = hit.map(|(_, spell)| BuffedAbility {
         spell,
         actor: pets.representative(fight, player, doer),
     });
@@ -696,6 +756,9 @@ pub(crate) fn support_entry<'a>(
         ability,
         target,
         amount,
+        absorbs: hit
+            .map(|(hit, _)| Absorbs::of_part(&fight.events[hit], amount))
+            .unwrap_or_default(),
     }
 }
 
@@ -760,6 +823,56 @@ pub(crate) struct Support {
     pub buff: SpellId,
     pub target: ActorId,
     pub amount: u64,
+}
+
+/// The parts of an amount that went into or came from shields, and that heal absorbs took.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct Absorbs {
+    pub absorbed: u64,
+    pub heal_absorbed: u64,
+}
+
+impl Absorbs {
+    /// A hit's shielded part, a whole absorb, or what heal absorbs took of a heal.
+    pub(crate) fn of(event: &Event) -> Self {
+        match event.kind {
+            EventKind::Damage(damage) => Self {
+                absorbed: damage.absorbed,
+                heal_absorbed: 0,
+            },
+            EventKind::Heal(heal) => Self {
+                absorbed: 0,
+                heal_absorbed: heal.absorbed,
+            },
+            EventKind::Absorbed(absorbed) => Self {
+                absorbed: absorbed.amount,
+                heal_absorbed: 0,
+            },
+            _ => Self::default(),
+        }
+    }
+
+    /// The same split for `part` of the event's amount, in proportion.
+    pub(crate) fn of_part(event: &Event, part: u64) -> Self {
+        let whole = match event.kind {
+            EventKind::Damage(damage) => damage_done_amount(&damage, Overkill::Included),
+            EventKind::Heal(heal) => healing_amount(&heal),
+            EventKind::Absorbed(absorbed) => absorbed.amount,
+            _ => 0,
+        };
+        let scaled = |value: u64| {
+            if whole == 0 {
+                0
+            } else {
+                (u128::from(value) * u128::from(part.min(whole)) / u128::from(whole)) as u64
+            }
+        };
+        let own = Self::of(event);
+        Self {
+            absorbed: scaled(own.absorbed),
+            heal_absorbed: scaled(own.heal_absorbed),
+        }
+    }
 }
 
 /// Damage done: hits on units that were hostile at the hit, credited through pets.

@@ -1,8 +1,9 @@
 mod support;
 
 use openlogs_analysis::{
-    AbilityRef, Attribution, CellKind, Damage, DamageVia, Dimension, EventKind, MissType, Missed,
-    NOBODY, ReportFilter, RowKey, Scope, ScopeMetric, Side, UnitRef, breakdown, effective_group,
+    AbilityRef, Absorbed, Attribution, CellKind, Damage, DamageVia, Dimension, EventKind, Heal,
+    MissType, Missed, NOBODY, ReportFilter, RowKey, Scope, ScopeMetric, Side, UnitRef, breakdown,
+    effective_group,
 };
 use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS, MELEE, PET_FLAGS, damage, heal};
@@ -353,6 +354,52 @@ fn damage_taken_rows_carry_hits_and_absorbed_damage_on_both_sides() {
     .rows[0]
         .row;
     assert_eq!((boss_row.amount, boss_row.absorbed), (2_300, 300));
+}
+
+#[test]
+fn healing_rows_carry_shields_and_what_heal_absorbs_took() {
+    let mut b = FightBuilder::new(10_000);
+    let priest = b.player("Player-1", "Mirelle-Emberfall-EU", 256);
+    let tank = b.player("Player-2", "Edrin-Emberfall-EU", 581);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    b.spell(17, "Power Word: Shield");
+    b.spell(2061, "Flash Heal");
+    b.push(
+        1_000,
+        boss,
+        tank,
+        5,
+        EventKind::Absorbed(Absorbed {
+            absorber: priest,
+            absorb_spell: 17,
+            amount: 400,
+            supporter: NOBODY,
+        }),
+    );
+    b.push(
+        2_000,
+        priest,
+        tank,
+        2061,
+        EventKind::Heal(Heal {
+            absorbed: 100,
+            ..heal(300, 0)
+        }),
+    );
+    let rows = breakdown(
+        &b.build(),
+        &Curated::bundled(),
+        &ReportFilter::whole(Attribution::Reattributed),
+        &Scope::default(),
+        ScopeMetric::Healing,
+        Dimension::Source,
+    )
+    .rows;
+    let row = &rows[0].row;
+    assert_eq!(
+        (row.amount, row.absorbed, row.heal_absorbed),
+        (800, 400, 100)
+    );
 }
 
 #[test]
