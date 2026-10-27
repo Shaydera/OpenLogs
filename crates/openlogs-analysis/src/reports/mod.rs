@@ -4,7 +4,9 @@ use crate::actors::{ActorId, NOBODY};
 use crate::fight::{DamageVia, Event, EventKind, Fight, NO_SPELL, SpellId};
 use crate::filter::Overkill;
 use crate::scope::{Scope, UnitRef, unit_of};
-use crate::timeline::{credited_as_damage_done, damage_done_amount, hits_hostile_npc};
+use crate::timeline::{
+    credited_as_damage_done, damage_done_amount, healing_amount, hits_hostile_npc,
+};
 
 pub mod damage;
 pub mod healing;
@@ -803,7 +805,7 @@ pub(crate) fn healing_share(fight: &Fight, event: &Event) -> Option<Share> {
         EventKind::Heal(heal) => (
             event.source,
             event.spell,
-            heal.amount.saturating_sub(heal.overheal),
+            healing_amount(&heal),
             heal.overheal,
             heal.critical,
             heal.periodic,

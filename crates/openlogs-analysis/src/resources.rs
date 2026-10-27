@@ -175,6 +175,7 @@ pub(crate) fn gains(fight: &Fight, start: i32, end: i32) -> Gains {
             // Some spells drain power through a negative energize; that is no gain.
             EventKind::Energize(e) if e.amount >= 0.0 => (e.power_type, e.amount, e.over_energize),
             // The Evoker's share of a heal is logged on top of the full heal.
+            // What a heal absorb took is healing (`healing_amount`) but restores no HP.
             EventKind::Heal(heal) if heal.supporter == NOBODY => (
                 HEALTH,
                 heal.amount.saturating_sub(heal.overheal) as f64,

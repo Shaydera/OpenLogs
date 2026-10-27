@@ -91,7 +91,7 @@ fn death_with_killing_blow_window_and_hp_before() {
 }
 
 #[test]
-fn healing_before_death_counts_shields_but_no_support_shares() {
+fn healing_before_death_counts_shields_and_absorbed_heals_but_no_support_shares() {
     let mut b = FightBuilder::new(60_000);
     let player = b.player("Player-1", "Faelan-Emberfall-EU", 62);
     let priest = b.player("Player-2", "Mirelle-Emberfall-EU", 256);
@@ -116,6 +116,16 @@ fn healing_before_death_counts_shields_but_no_support_shares() {
         }),
     );
     b.push(
+        36_500,
+        priest,
+        player,
+        flash_heal,
+        EventKind::Heal(Heal {
+            absorbed: 120,
+            ..heal(0, 0)
+        }),
+    );
+    b.push(
         37_000,
         boss,
         player,
@@ -136,7 +146,7 @@ fn healing_before_death_counts_shields_but_no_support_shares() {
     );
     let fight = b.build();
 
-    assert_eq!(deaths(&fight)[0].healing_taken_5s, 350);
+    assert_eq!(deaths(&fight)[0].healing_taken_5s, 470);
 }
 
 #[test]

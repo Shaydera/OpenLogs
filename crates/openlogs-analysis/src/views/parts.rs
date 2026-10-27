@@ -7,7 +7,7 @@ use crate::filter::Overkill;
 use crate::reports::taken::taken_amount;
 use crate::reports::{Share, buffed_hit, damage_share, healing_share};
 use crate::scope::Side;
-use crate::timeline::hits_hostile_npc;
+use crate::timeline::{healing_amount, hits_hostile_npc};
 
 /// The amount rule of Damage Done, Healing and Damage Taken from one side's point of view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -289,7 +289,7 @@ fn enemy_healing(index: usize, event: &Event, book: &mut impl FnMut(Part)) {
         spell: event.spell,
         kind: CellKind::Own,
         target: event.target,
-        amount: heal.amount.saturating_sub(heal.overheal) as i64,
+        amount: healing_amount(&heal) as i64,
         absorbed: 0,
         hit: true,
         crit: heal.critical,

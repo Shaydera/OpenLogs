@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::actors::{ActorId, ActorKind, NOBODY};
-use crate::fight::{Damage, DamageVia, Event, EventKind, Fight, FightKind};
+use crate::fight::{Damage, DamageVia, Event, EventKind, Fight, FightKind, Heal};
 use crate::filter::Overkill;
 use openlogs_gamedata::Curated;
 use openlogs_index::Outcome;
@@ -29,6 +29,11 @@ pub fn damage_done_amount(damage: &Damage, overkill: Overkill) -> u64 {
         Overkill::Excluded => damage.amount.saturating_sub(damage.overkill),
     };
     landed + damage.absorbed
+}
+
+/// Effective healing counts the part a heal absorb took as well.
+pub(crate) fn healing_amount(heal: &Heal) -> u64 {
+    heal.amount.saturating_sub(heal.overheal) + heal.absorbed
 }
 
 fn is_npc(fight: &Fight, actor: ActorId) -> bool {

@@ -57,6 +57,27 @@ fn effective_healing_overheal_and_absorbs() {
 }
 
 #[test]
+fn a_heal_taken_by_a_heal_absorb_is_healing() {
+    let mut b = FightBuilder::new(10_000);
+    let druid = b.player("Player-1", "Pyrrin-Emberfall-EU", 105);
+    let tank = b.player("Player-3", "Edrin-Emberfall-EU", 581);
+    b.spell(774, "Rejuvenation");
+    b.push(
+        1_000,
+        druid,
+        tank,
+        774,
+        EventKind::Heal(Heal {
+            absorbed: 500,
+            ..heal(200, 50)
+        }),
+    );
+    let report = healing(&b.build(), &whole(Attribution::Augmented));
+    let druid_row = report.players.iter().find(|p| p.player == druid).unwrap();
+    assert_eq!((druid_row.healing, druid_row.overheal), (650, 50));
+}
+
+#[test]
 fn heal_and_absorb_support_move_to_the_evoker() {
     let mut b = FightBuilder::new(10_000);
     let shaman = b.player("Player-1", "Elowyn-Emberfall-EU", 264);

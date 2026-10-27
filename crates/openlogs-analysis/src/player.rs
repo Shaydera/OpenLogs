@@ -19,6 +19,7 @@ use crate::reports::{
 };
 use crate::resources::power_series;
 use crate::scope::Scope;
+use crate::timeline::healing_amount;
 use crate::usage::{ConsumableUse, DeathContext, consumable_uses, death_context, defensive_uses};
 
 /// Step of the player's damage or healing over time.
@@ -804,9 +805,7 @@ pub(crate) fn received_healing(event: &Event, player: ActorId) -> Option<u64> {
         return None;
     }
     match event.kind {
-        EventKind::Heal(heal) if heal.supporter == NOBODY => {
-            Some(heal.amount.saturating_sub(heal.overheal))
-        }
+        EventKind::Heal(heal) if heal.supporter == NOBODY => Some(healing_amount(&heal)),
         EventKind::Absorbed(absorbed) if absorbed.supporter == NOBODY => Some(absorbed.amount),
         _ => None,
     }

@@ -13,7 +13,7 @@ use crate::scope::Scope;
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerHealing {
     pub player: ActorId,
-    /// Effective healing (without overheal) of own and pet heals, as logged.
+    /// Effective healing of own and pet heals, as logged.
     pub healing: u64,
     /// Damage prevented by the player's absorbs.
     pub absorbs: u64,
