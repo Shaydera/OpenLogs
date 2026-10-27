@@ -1,8 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::actors::{ActorId, ActorKind};
-use crate::fight::{DamageVia, Event, EventKind, Fight, FightKind, SpellId, UnitHp};
+use crate::fight::{
+    Damage, DamageVia, Event, EventKind, Fight, FightKind, Missed, SpellId, UnitHp,
+};
+use crate::filter::Overkill;
 use crate::phases::run_phases;
+use crate::player::received_healing;
+use crate::reports::taken::taken_amount;
 use crate::timeline::is_distinct_hit;
 
 /// Look-back window of the death context.
@@ -70,7 +75,7 @@ pub struct Death {
     /// Damage taken in the last 5 s by spell, largest first.
     pub damage_last_5s: Vec<AbilityAmount>,
     pub damage_taken_5s: u64,
-    /// Effective healing (without overheal) in the last 5 s.
+    /// Effective healing and absorbs in the last 5 s, without Aug support shares.
     pub healing_taken_5s: u64,
     pub hp_5s_before_pct: Option<f32>,
     pub resurrected_at: Option<i32>,
@@ -198,11 +203,14 @@ pub(crate) fn death_at(fight: &Fight, player: ActorId, t: i32, life_start: i32) 
         if event.target != player {
             continue;
         }
+        if let Some((amount, _)) = taken_amount(event, Overkill::Included) {
+            *by_spell
+                .entry((event.spell, from_environment(event)))
+                .or_default() += amount;
+        }
+        healing += received_healing(event, player).unwrap_or(0);
         match event.kind {
             EventKind::Damage(damage) if is_distinct_hit(&damage) => {
-                *by_spell
-                    .entry((event.spell, damage.via == DamageVia::Environmental))
-                    .or_default() += damage.amount;
                 hits.push((event.t, event.spell, damage.via == DamageVia::Environmental));
                 let left_at_zero = event
                     .unit_hp
@@ -230,7 +238,6 @@ pub(crate) fn death_at(fight: &Fight, player: ActorId, t: i32, life_start: i32) 
                     periodic: false,
                 });
             }
-            EventKind::Heal(heal) => healing += heal.amount.saturating_sub(heal.overheal),
             _ => {}
         }
     }
@@ -308,6 +315,19 @@ pub(crate) fn death_at(fight: &Fight, player: ActorId, t: i32, life_start: i32) 
         dead_until: None,
         lethal_burst,
     }
+}
+
+fn from_environment(event: &Event) -> bool {
+    matches!(
+        event.kind,
+        EventKind::Damage(Damage {
+            via: DamageVia::Environmental,
+            ..
+        }) | EventKind::Missed(Missed {
+            via: DamageVia::Environmental,
+            ..
+        })
+    )
 }
 
 /// HP percent of a snapshot, clamped: snapshots after a max-HP buff drops exceed 100 %.

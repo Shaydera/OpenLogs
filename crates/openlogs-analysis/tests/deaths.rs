@@ -1,7 +1,8 @@
 mod support;
 
 use openlogs_analysis::{
-    AbilityAmount, DamageVia, EventKind, LethalBurst, NOBODY, Resurrection, UnitHp, deaths,
+    AbilityAmount, Absorbed, Damage, DamageVia, EventKind, Heal, LethalBurst, MissType, Missed,
+    NOBODY, Resurrection, UnitHp, deaths,
 };
 use support::{FightBuilder, HOSTILE_FLAGS, MELEE, damage, heal};
 
@@ -87,6 +88,102 @@ fn death_with_killing_blow_window_and_hp_before() {
     );
     assert_eq!(death.hp_5s_before_pct, Some(83.0));
     assert_eq!(death.resurrected_at, None);
+}
+
+#[test]
+fn healing_before_death_counts_shields_but_no_support_shares() {
+    let mut b = FightBuilder::new(60_000);
+    let player = b.player("Player-1", "Faelan-Emberfall-EU", 62);
+    let priest = b.player("Player-2", "Mirelle-Emberfall-EU", 256);
+    let evoker = b.player("Player-3", "Ysolde-Emberfall-EU", 1473);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let flash_heal = b.spell(3, "Flash Heal");
+    b.push(
+        36_000,
+        priest,
+        player,
+        flash_heal,
+        EventKind::Heal(heal(300, 100)),
+    );
+    b.push(
+        36_000,
+        priest,
+        player,
+        flash_heal,
+        EventKind::Heal(Heal {
+            supporter: evoker,
+            ..heal(60, 0)
+        }),
+    );
+    b.push(
+        37_000,
+        boss,
+        player,
+        1,
+        EventKind::Absorbed(Absorbed {
+            absorber: priest,
+            absorb_spell: 17,
+            amount: 150,
+            supporter: NOBODY,
+        }),
+    );
+    b.push(
+        38_000,
+        NOBODY,
+        player,
+        MELEE,
+        EventKind::Died { unconscious: false },
+    );
+    let fight = b.build();
+
+    assert_eq!(deaths(&fight)[0].healing_taken_5s, 350);
+}
+
+#[test]
+fn damage_before_death_counts_what_shields_absorbed() {
+    let mut b = FightBuilder::new(60_000);
+    let player = b.player("Player-1", "Faelan-Emberfall-EU", 62);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let spit = b.spell(1, "Virulent Spit");
+    b.push(
+        36_000,
+        boss,
+        player,
+        spit,
+        EventKind::Damage(Damage {
+            absorbed: 100,
+            ..damage(DamageVia::Spell, 300, 0)
+        }),
+    );
+    b.push(
+        37_000,
+        boss,
+        player,
+        spit,
+        EventKind::Missed(Missed {
+            via: DamageVia::Spell,
+            miss_type: MissType::Absorb,
+            amount_missed: 250,
+        }),
+    );
+    b.push(
+        38_000,
+        NOBODY,
+        player,
+        MELEE,
+        EventKind::Died { unconscious: false },
+    );
+    let death = &deaths(&b.build())[0];
+
+    assert_eq!(
+        death.damage_last_5s,
+        [AbilityAmount {
+            spell: spit,
+            amount: 650,
+            environmental: false,
+        }]
+    );
+    assert_eq!(death.damage_taken_5s, 650);
 }
 
 #[test]
