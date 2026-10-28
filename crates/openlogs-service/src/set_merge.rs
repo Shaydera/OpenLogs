@@ -2,7 +2,9 @@ use std::cmp::Reverse;
 use std::collections::{BTreeMap, HashMap};
 use std::mem::take;
 
-use openlogs_analysis::{ActorId, COLOR_GROUPS, SpellId, TOP_ABILITIES_PER_GROUP, per_second};
+use openlogs_analysis::{
+    ActorId, COLOR_GROUPS, SpellId, TOP_ABILITIES_PER_GROUP, largest_first, per_second,
+};
 use serde::Serialize;
 
 use crate::overview_dto::{KpisDto, MarkersDto, PlayerRef, QuickOverviewDto, SpellRef};
@@ -190,10 +192,13 @@ impl Merge for BreakdownDto {
                     row.spell_id = top_spell(&row.spell_amounts).unwrap_or(row.spell_id);
                     row.share = share_of(row.amount, sum);
                 }
-                split.rows.sort_by(by_amount_then_key);
+                split
+                    .rows
+                    .sort_by_cached_key(|r| largest_first(r.amount, r.key.to_key()));
             }
         }
-        self.rows.sort_by(|a, b| by_amount_then_key(&a.row, &b.row));
+        self.rows
+            .sort_by_cached_key(|g| largest_first(g.row.amount, g.row.key.to_key()));
     }
 }
 
@@ -313,18 +318,8 @@ fn sum_spell_amounts<T: std::ops::AddAssign>(
     merge_rows(list, next, |a, b| a.0 == b.0, |a, b| a.1 += b.1);
 }
 
-/// The ID with the largest amount, the lowest on a tie.
 fn top_spell<T: Ord>(amounts: &[(SpellId, T)]) -> Option<SpellId> {
-    amounts
-        .iter()
-        .max_by(|x, y| x.1.cmp(&y.1).then(y.0.cmp(&x.0)))
-        .map(|(spell, _)| *spell)
-}
-
-fn by_amount_then_key(a: &BreakdownRowDto, b: &BreakdownRowDto) -> std::cmp::Ordering {
-    b.amount
-        .cmp(&a.amount)
-        .then_with(|| a.key.to_key().cmp(&b.key.to_key()))
+    openlogs_analysis::top_spell(amounts.iter().map(|(spell, amount)| (*spell, amount)))
 }
 
 /// The filter-menu options of a set; serialized as the plain option list.

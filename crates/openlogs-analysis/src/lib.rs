@@ -37,6 +37,7 @@ pub use aura_report::{AuraHolder, AuraLane, AuraRow, AurasReport, SourceSpec, au
 pub use auras::{AuraInterval, aura_intervals, coverage, union_ms};
 pub use breakdown::{
     Breakdown, BreakdownRow, Dimension, GroupedRow, RowKey, Split, breakdown, effective_group,
+    largest_first, top_spell,
 };
 pub use casts::{CastExtra, CastsReport, casts_report};
 pub use cells::{Cell, CellKind, Misses, ScopeMetric, cells};
