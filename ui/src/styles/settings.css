@@ -60,6 +60,9 @@
 .settings-link:hover {
   color: var(--accent-hover);
 }
+.settings-toggle {
+  margin: 4px -8px 0;
+}
 .settings-source {
   margin-top: 8px;
   padding-top: 12px;

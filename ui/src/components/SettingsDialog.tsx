@@ -1,5 +1,5 @@
 import { type CSSProperties, type KeyboardEvent, useEffect, useId, useRef } from 'react';
-import { IS_WEBSITE, PRIVACY_NOTICE_URL, SOURCE_URL } from '../build';
+import { APP_VERSION, IN_DESKTOP_APP, IS_WEBSITE, PRIVACY_NOTICE_URL, SOURCE_URL } from '../build';
 import type { GameDataManifest } from '../gameData';
 import { formatLocalDate } from '../i18n/format';
 import { type MessageKey, t } from '../i18n/i18n';
@@ -23,7 +23,7 @@ const THEME_TEXT: Record<ThemeName, { name: MessageKey; hint: MessageKey }> = {
 
 const percentOfBase = (scale: number) => Math.round((scale / SCALE_AT_BASE) * 100);
 
-/** The theme, the UI size, the shipped game data and what stays on the device. */
+/** The theme, the UI size, the shipped game data, the update check and what stays on the device. */
 export function SettingsDialog() {
   const closeSettings = useApp((s) => s.closeSettings);
   const theme = useApp((s) => s.theme);
@@ -32,6 +32,8 @@ export function SettingsDialog() {
   const loading = useApp((s) => s.gameDataLoading);
   const uiSize = useApp((s) => s.uiSize);
   const setUiSize = useApp((s) => s.setUiSize);
+  const updateCheck = useApp((s) => s.updateCheck);
+  const setUpdateCheck = useApp((s) => s.setUpdateCheck);
   const auto = useAutoScale();
   const closeRef = useRef<HTMLButtonElement>(null);
   const sliderRef = useRef<HTMLInputElement>(null);
@@ -158,6 +160,19 @@ export function SettingsDialog() {
               <p className="settings-note settings-source">{t('settings.source', { date: formatLocalDate(gameData.fetchedUnixMs) })}</p>
             </>
           )}
+          {IN_DESKTOP_APP && (
+            <>
+              <h3 className="cap settings-label">{t('settings.updates')}</h3>
+              <p className="settings-note">{t('settings.version', { version: APP_VERSION })}</p>
+              <label className="options-row settings-toggle">
+                <input type="checkbox" checked={updateCheck} onChange={() => setUpdateCheck(!updateCheck)} />
+                <span>
+                  {t('settings.updateCheck')}
+                  <span className="options-hint">{t('settings.updateCheckHint')}</span>
+                </span>
+              </label>
+            </>
+          )}
           <h3 className="cap settings-label">{t('settings.privacy')}</h3>
           <div className="settings-notes">
             <p className="settings-note">{t('settings.privacyLocal')}</p>
@@ -173,6 +188,7 @@ export function SettingsDialog() {
             ) : (
               <>
                 <p className="settings-note">{t('settings.privacyImages')}</p>
+                {IN_DESKTOP_APP && <p className="settings-note">{t('settings.privacyUpdates')}</p>}
                 <p className="settings-note">{t('settings.privacyDelete')}</p>
               </>
             )}
@@ -185,7 +201,7 @@ export function SettingsDialog() {
                 {t('settings.sourceCode')}
               </a>
             ) : (
-              // The desktop app opens no external links, so the address is shown to copy.
+              // The desktop app opens release pages only, so the address is shown to copy.
               <p className="settings-note">{t('settings.sourceCodeAt', { address: SOURCE_URL.replace(/^https:\/\//, '') })}</p>
             )}
           </div>
