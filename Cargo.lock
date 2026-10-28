@@ -2500,7 +2500,7 @@ dependencies = [
 
 [[package]]
 name = "openlogs"
-version = "0.1.0-beta8"
+version = "0.1.0-beta9"
 dependencies = [
  "tauri",
  "tauri-build",
@@ -2509,7 +2509,7 @@ dependencies = [
 
 [[package]]
 name = "openlogs-analysis"
-version = "0.1.0-beta8"
+version = "0.1.0-beta9"
 dependencies = [
  "memmap2",
  "openlogs-gamedata",
@@ -2520,7 +2520,7 @@ dependencies = [
 
 [[package]]
 name = "openlogs-cli"
-version = "0.1.0-beta8"
+version = "0.1.0-beta9"
 dependencies = [
  "clap",
  "openlogs-gamedata",
@@ -2530,7 +2530,7 @@ dependencies = [
 
 [[package]]
 name = "openlogs-gamedata"
-version = "0.1.0-beta8"
+version = "0.1.0-beta9"
 dependencies = [
  "csv",
  "serde",
@@ -2542,7 +2542,7 @@ dependencies = [
 
 [[package]]
 name = "openlogs-index"
-version = "0.1.0-beta8"
+version = "0.1.0-beta9"
 dependencies = [
  "memmap2",
  "openlogs-parser",
@@ -2553,7 +2553,7 @@ dependencies = [
 
 [[package]]
 name = "openlogs-parser"
-version = "0.1.0-beta8"
+version = "0.1.0-beta9"
 dependencies = [
  "memchr",
  "serde",
@@ -2562,7 +2562,7 @@ dependencies = [
 
 [[package]]
 name = "openlogs-service"
-version = "0.1.0-beta8"
+version = "0.1.0-beta9"
 dependencies = [
  "openlogs-analysis",
  "openlogs-gamedata",
@@ -2574,7 +2574,7 @@ dependencies = [
 
 [[package]]
 name = "openlogs-wasm"
-version = "0.1.0-beta8"
+version = "0.1.0-beta9"
 dependencies = [
  "openlogs-analysis",
  "openlogs-gamedata",
