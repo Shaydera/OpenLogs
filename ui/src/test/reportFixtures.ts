@@ -388,11 +388,12 @@ export const aurasReportFixture: AurasReport = {
 
 const reportPlayer = (actorId: number, name: string): ReportUnit => ({ unit: { kind: 'player', actorId }, name, number: null });
 const ulatek: ReportUnit = { unit: { kind: 'unit', name: "Ula'tek" }, name: "Ula'tek", number: null };
-const kickRow = (actorId: number, name: string, interrupts: number, dispels: number) => ({ key: playerKey(actorId), name, number: null, spellId: 0, interrupts, dispels });
+const kickRow = (actorId: number, name: string, count: number) => ({ key: playerKey(actorId), name, number: null, spellId: 0, count });
 
 export const interruptsReportFixture: InterruptsReport = {
   group: 'source',
-  rows: [kickRow(4, 'Faelan', 1, 0), kickRow(3, 'Wendel', 1, 0), kickRow(2, 'Pyrrin', 0, 1)],
+  interruptRows: [kickRow(4, 'Faelan', 1), kickRow(3, 'Wendel', 1)],
+  dispelRows: [kickRow(2, 'Pyrrin', 1)],
   roster,
   spells: { ...spells, '2139': { name: 'Counterspell' }, '6552': { name: 'Pummel' }, '527': { name: 'Purify' }, '5': { name: 'Venom Bolt' }, '9': { name: 'Toxic Spores' } },
   interrupts: [

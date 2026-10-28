@@ -228,14 +228,15 @@ fn kicks(
 ) -> (Vec<(ActorId, i64)>, Vec<MeterEntry>) {
     let report = interrupts_report(fight, filter, &Scope::default(), Dimension::Source);
     let dispels = category == MeterCategory::Dispels;
-    let amounts = report
-        .rows
+    let rows = if dispels {
+        &report.dispel_rows
+    } else {
+        &report.interrupt_rows
+    };
+    let amounts = rows
         .iter()
         .filter_map(|row| match row.key {
-            RowKey::Unit(UnitRef::Player(player)) => {
-                let count = if dispels { row.dispels } else { row.interrupts };
-                Some((player, i64::from(count)))
-            }
+            RowKey::Unit(UnitRef::Player(player)) => Some((player, i64::from(row.count))),
             _ => None,
         })
         .collect();

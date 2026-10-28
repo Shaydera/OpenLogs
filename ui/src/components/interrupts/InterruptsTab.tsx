@@ -13,9 +13,29 @@ import { PlayerIcon } from '../reports/PlayerName';
 import { reportSpellName, rosterIndex } from '../reports/reportData';
 import { PullHead } from '../set/PullHead';
 import { useSetPullViews } from '../set/useSetPullViews';
-import { kickTotals } from './kickTotals';
+import { type KickTotals, kickTotals } from './kickTotals';
 
-const TITLE = { source: 'kicks.byPlayer', ability: 'kicks.bySpell', target: 'kicks.byTarget' } as const;
+const KINDS = {
+  interrupts: {
+    titles: { source: 'kicks.interruptsByPlayer', ability: 'kicks.interruptsBySpell', target: 'kicks.interruptsByTarget' },
+    enemyTitle: 'kicks.interruptsByEnemy',
+    rows: 'interruptRows',
+    head: 'kicks.interrupts',
+    word: 'kicks.interruptWord',
+    nobody: 'kicks.noInterrupters',
+    nobodyInSet: 'kicks.noInterruptersInSet',
+  },
+  dispels: {
+    titles: { source: 'kicks.dispelsByPlayer', ability: 'kicks.dispelsBySpell', target: 'kicks.dispelsByTarget' },
+    enemyTitle: 'kicks.dispelsByEnemy',
+    rows: 'dispelRows',
+    head: 'kicks.dispels',
+    word: 'kicks.dispelWord',
+    nobody: 'kicks.noDispellers',
+    nobodyInSet: 'kicks.noDispellersInSet',
+  },
+} as const;
+type KickKind = keyof typeof KINDS;
 const FIRST_COLUMN = { source: 'scope.source', ability: 'casts.spell', target: 'ability.target' } as const;
 
 interface LogColumn<E> {
@@ -38,9 +58,6 @@ export function InterruptsTab({ report }: { report: InterruptsReport | SetInterr
   const totals = kickTotals(report);
   const roster = rosterIndex(report.roster);
   const spell = (id: number) => reportSpellName(report.spells, id);
-  const maxKicks = Math.max(1, ...report.rows.map((r) => r.interrupts));
-  const friendly = scope.perspective === 'friendly';
-  const title = report.group === 'source' && !friendly ? t('kicks.byEnemy') : t(TITLE[report.group]);
   const [sourceOpen, targetOpen, abilityOpen] = [scope.source.length === 0, scope.target.length === 0, scope.ability.length === 0];
 
   const unitCell = (unit: ReportUnit) => {
@@ -120,50 +137,7 @@ export function InterruptsTab({ report }: { report: InterruptsReport | SetInterr
   return (
     <div className="kicks-page">
       <div className="kicks-layout">
-        <section className="panel panel-clip kicks-players" aria-labelledby="kicks-players-title">
-          <ReportHead
-            tab="interrupts"
-            id="kicks-players-title"
-            title={title}
-            group={report.group}
-            summary={
-              <span className="kicks-summary">
-                <span className="num value-text">{formatInteger(totals.interrupts)}</span>{' '}
-                {t('kicks.interruptWord', { count: totals.interrupts })} ·{' '}
-                <span className="num value-text">{formatInteger(totals.dispels)}</span>{' '}
-                {t('kicks.dispelWord', { count: totals.dispels })}
-              </span>
-            }
-          />
-          {report.rows.length === 0 ? (
-            <NoMatch nothing={t(pulls ? 'kicks.noneByPlayerInSet' : 'kicks.noneByPlayer')} />
-          ) : (
-            <div className="scroll-x">
-              <div className="kick-prows" role="table" aria-label={title}>
-                <div role="row" className="kick-prow kick-prow-head">
-                  <span role="columnheader">
-                    <span className="sr-only">{t('recap.iconColumn')}</span>
-                  </span>
-                  <span role="columnheader" className="cap kick-cap">
-                    {t(FIRST_COLUMN[report.group])}
-                  </span>
-                  <span role="columnheader" className="cap kick-cap">
-                    {report.group === 'ability' ? '' : t('casts.role')}
-                  </span>
-                  <span role="columnheader" className="cap kick-cap">
-                    {t('kicks.interrupts')}
-                  </span>
-                  <span role="columnheader" className="cap kick-cap kick-cap-end">
-                    {t('kicks.dispels')}
-                  </span>
-                </div>
-                {report.rows.map((row) => (
-                  <KickRowView key={JSON.stringify(row.key)} row={row} roster={roster} maxKicks={maxKicks} />
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
+        <KickTable kind="interrupts" report={report} totals={totals} roster={roster} />
         <div className="kicks-logs">
           {totals.missed > 0 && (
             <section className="panel panel-clip" aria-labelledby="kicks-missed-title">
@@ -181,6 +155,11 @@ export function InterruptsTab({ report }: { report: InterruptsReport | SetInterr
           <KickLog id="kicks-interrupts-title" title={t('kicks.interrupts')} count={totals.interrupts} empty={t(pulls ? 'kicks.noInterruptsInSet' : 'kicks.noInterrupts')}>
             {log(t('kicks.interrupts'), kickColumns, report.interrupts, (part) => part.interrupts)}
           </KickLog>
+        </div>
+      </div>
+      <div className="kicks-layout">
+        <KickTable kind="dispels" report={report} totals={totals} roster={roster} />
+        <div className="kicks-logs">
           <KickLog id="kicks-dispels-title" title={t('kicks.dispels')} count={totals.dispels} empty={t(pulls ? 'kicks.noDispelsInSet' : 'kicks.noDispels')}>
             {log(t('kicks.dispels'), dispelColumns, report.dispels, (part) => part.dispels)}
           </KickLog>
@@ -190,7 +169,63 @@ export function InterruptsTab({ report }: { report: InterruptsReport | SetInterr
   );
 }
 
-function KickRowView({ row, roster, maxKicks }: { row: KickRow; roster: Map<number, PlayerRef>; maxKicks: number }) {
+function KickTable(props: { kind: KickKind; report: InterruptsReport | SetInterrupts; totals: KickTotals; roster: Map<number, PlayerRef> }) {
+  const { kind, report, totals, roster } = props;
+  const friendly = useApp((s) => s.scope.perspective === 'friendly');
+  const spec = KINDS[kind];
+  const { group } = report;
+  const rows = report[spec.rows];
+  const count = totals[kind];
+  const nothingMatches = report.interruptRows.length + report.dispelRows.length === 0;
+  const max = Math.max(1, ...rows.map((row) => row.count));
+  const title = group === 'source' && !friendly ? t(spec.enemyTitle) : t(spec.titles[group]);
+  const nobody = t(isSetReport(report) ? spec.nobodyInSet : spec.nobody);
+  const id = `kicks-${kind}-table-title`;
+  return (
+    <section className="panel panel-clip kicks-players" aria-labelledby={id}>
+      <ReportHead
+        tab="interrupts"
+        id={id}
+        title={title}
+        group={group}
+        summary={
+          <span className="kicks-summary">
+            <span className="num value-text">{formatInteger(count)}</span> {t(spec.word, { count })}
+          </span>
+        }
+      />
+      {nothingMatches ? (
+        <NoMatch nothing={nobody} />
+      ) : rows.length === 0 ? (
+        <p className="muted pad">{nobody}</p>
+      ) : (
+        <div className="scroll-x">
+          <div className="kick-prows" role="table" aria-label={title}>
+            <div role="row" className="kick-prow kick-prow-head">
+              <span role="columnheader">
+                <span className="sr-only">{t('recap.iconColumn')}</span>
+              </span>
+              <span role="columnheader" className="cap kick-cap">
+                {t(FIRST_COLUMN[group])}
+              </span>
+              <span role="columnheader" className="cap kick-cap">
+                {group === 'ability' ? '' : t('casts.role')}
+              </span>
+              <span role="columnheader" className="cap kick-cap">
+                {t(spec.head)}
+              </span>
+            </div>
+            {rows.map((row) => (
+              <KickRowView key={JSON.stringify(row.key)} row={row} roster={roster} max={max} />
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function KickRowView({ row, roster, max }: { row: KickRow; roster: Map<number, PlayerRef>; max: number }) {
   const unit = row.key.kind === 'unit' ? row.key.unit : null;
   const player = unit?.kind === 'player' ? roster.get(unit.actorId) : undefined;
   const colour = player ? classColor(player.classToken) : undefined;
@@ -211,12 +246,9 @@ function KickRowView({ row, roster, maxKicks }: { row: KickRow; roster: Map<numb
       <span role="cell">{player?.role ? <span className="role-pill">{t(`role.short.${player.role}`)}</span> : null}</span>
       <span role="cell" className="kick-bar">
         <span className="bar bar-lg" aria-hidden="true">
-          <span style={{ width: `${(row.interrupts / maxKicks) * 100}%`, background: colour }} className={colour ? undefined : 'bar-fill-normal'} />
+          <span style={{ width: `${(row.count / max) * 100}%`, background: colour }} className={colour ? undefined : 'bar-fill-normal'} />
         </span>
-        <span className={row.interrupts > 0 ? 'num kick-count' : 'num kick-count dash'}>{row.interrupts > 0 ? formatInteger(row.interrupts) : '—'}</span>
-      </span>
-      <span role="cell" className={row.dispels > 0 ? 'num kick-end' : 'num kick-end dash'}>
-        {row.dispels > 0 ? formatInteger(row.dispels) : '—'}
+        <span className="num kick-count">{formatInteger(row.count)}</span>
       </span>
     </div>
   );

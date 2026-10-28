@@ -2,6 +2,8 @@ import { type InterruptsReport, type SetInterrupts, isSetReport } from '../../ap
 
 type KickLists = Pick<InterruptsReport, 'interrupts' | 'dispels' | 'missed'>;
 
+export type KickTotals = ReturnType<typeof kickTotals>;
+
 /** How many interrupts, dispels and missed casts a report lists; a set lists them in its pulls. */
 export function kickTotals(report: InterruptsReport | SetInterrupts) {
   const lists: KickLists[] = isSetReport(report) ? report.pulls : [report];

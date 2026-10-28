@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use openlogs_analysis::{ActorId, Fight, InterruptsReport, SpellId, UnitRef, unit_of};
+use openlogs_analysis::{ActorId, Fight, InterruptsReport, KickRow, SpellId, UnitRef, unit_of};
 use serde::Serialize;
 
 use crate::overview_dto::{PlayerRef, SpellRef};
@@ -16,8 +16,7 @@ pub struct KickRowDto {
     pub spell_id: SpellId,
     #[serde(skip)]
     pub spell_counts: Vec<(SpellId, u32)>,
-    pub interrupts: u32,
-    pub dispels: u32,
+    pub count: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -60,7 +59,8 @@ pub struct SpellCountDto {
 #[serde(rename_all = "camelCase")]
 pub struct InterruptsReportDto {
     pub group: DimensionDto,
-    pub rows: Vec<KickRowDto>,
+    pub interrupt_rows: Vec<KickRowDto>,
+    pub dispel_rows: Vec<KickRowDto>,
     pub interrupts: Vec<InterruptDto>,
     pub dispels: Vec<DispelDto>,
     pub missed: Vec<MissedCastDto>,
@@ -69,6 +69,28 @@ pub struct InterruptsReportDto {
     pub dispellers: u32,
     pub roster: Vec<PlayerRef>,
     pub spells: BTreeMap<SpellId, SpellRef>,
+}
+
+fn kick_rows(fight: &Fight, refs: &mut Refs, rows: &[KickRow]) -> Vec<KickRowDto> {
+    rows.iter()
+        .map(|row| {
+            let (key, name, number) = key_dto(fight, &row.key);
+            if let RowKeyDto::Unit {
+                unit: UnitRefDto::Player { actor_id },
+            } = key
+            {
+                refs.player(actor_id);
+            }
+            KickRowDto {
+                key,
+                name,
+                number,
+                spell_id: refs.spell(fight, row.spell),
+                spell_counts: row.spell_counts.clone(),
+                count: row.count,
+            }
+        })
+        .collect()
 }
 
 /// A pet's action is its owner's on the rows, so sources fold into owners; a pet target keeps its own name; enemies go by name.
@@ -86,28 +108,8 @@ fn log_unit(fight: &Fight, refs: &mut Refs, actor: ActorId, fold_pets: bool) -> 
 
 pub fn interrupts_report_dto(fight: &Fight, report: &InterruptsReport) -> InterruptsReportDto {
     let mut refs = Refs::default();
-    let rows = report
-        .rows
-        .iter()
-        .map(|row| {
-            let (key, name, number) = key_dto(fight, &row.key);
-            if let RowKeyDto::Unit {
-                unit: UnitRefDto::Player { actor_id },
-            } = key
-            {
-                refs.player(actor_id);
-            }
-            KickRowDto {
-                key,
-                name,
-                number,
-                spell_id: refs.spell(fight, row.spell),
-                spell_counts: row.spell_counts.clone(),
-                interrupts: row.interrupts,
-                dispels: row.dispels,
-            }
-        })
-        .collect();
+    let interrupt_rows = kick_rows(fight, &mut refs, &report.interrupt_rows);
+    let dispel_rows = kick_rows(fight, &mut refs, &report.dispel_rows);
     let interrupts = report
         .interrupts
         .iter()
@@ -147,7 +149,8 @@ pub fn interrupts_report_dto(fight: &Fight, report: &InterruptsReport) -> Interr
     let (roster, spells) = refs.finish(fight);
     InterruptsReportDto {
         group: DimensionDto::of(report.group),
-        rows,
+        interrupt_rows,
+        dispel_rows,
         interrupts,
         dispels,
         missed,
@@ -206,7 +209,7 @@ mod tests {
             json["dispels"][1]["target"],
             serde_json::json!({ "unit": { "kind": "unit", "name": "Ula'tek" }, "name": "Ula'tek", "number": null })
         );
-        assert_eq!(json["rows"][0]["dispels"], 2);
+        assert_eq!(json["dispelRows"][0]["count"], 2);
         let roster: Vec<_> = json["roster"]
             .as_array()
             .unwrap()

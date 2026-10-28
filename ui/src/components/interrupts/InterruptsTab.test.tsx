@@ -13,15 +13,25 @@ beforeEach(() => {
 });
 
 const head = (name: string) => within(screen.getByRole('table', { name })).getAllByRole('columnheader').map((h) => h.textContent);
+const rows = (name: string) => within(screen.getByRole('table', { name })).getAllByRole('row').slice(1).map((r) => r.textContent);
 
 describe('InterruptsTab', () => {
-  it('lists interrupters and dispellers, and the interrupts and dispels in time order', () => {
+  it('lists interrupters and dispellers in their own tables, and the interrupts and dispels in time order', () => {
     render(<InterruptsTab report={interruptsReportFixture} />);
-    const players = within(screen.getByRole('table', { name: 'Interrupts and dispels by player' })).getAllByRole('row').slice(1);
-    expect(players.map((r) => r.textContent)).toEqual(['FaelanDPS1—', 'WendelDPS1—', 'PyrrinHeal—1']);
+    expect(rows('Interrupts by player')).toEqual(['FaelanDPS1', 'WendelDPS1']);
+    expect(rows('Dispels by player')).toEqual(['PyrrinHeal1']);
     const kicks = within(screen.getByRole('table', { name: 'Interrupts' })).getAllByRole('row').slice(1);
     expect(kicks.map((r) => r.textContent)).toEqual(["0:12FaelanCounterspellUla'tekVenom Bolt", "0:30WendelPummelUla'tekVenom Bolt"]);
     expect(within(screen.getByRole('table', { name: 'Dispels' })).getAllByRole('row')[1]).toHaveTextContent('0:20PyrrinPurifyWendelToxic Spores');
+  });
+
+  it('says nobody interrupted, not that the filters match nothing, when a filter only matches dispels', () => {
+    useApp.setState({ filters: { ...initialState().filters, own: [{ kind: 'player', actorId: 2 }] } });
+    render(<InterruptsTab report={{ ...interruptsReportFixture, interruptRows: [], interrupts: [], missed: [] }} />);
+    const interrupters = within(screen.getByRole('region', { name: 'Interrupts by player' }));
+    expect(interrupters.getByText('Nobody interrupted in this range.')).toBeInTheDocument();
+    expect(interrupters.queryByRole('button', { name: 'Clear filters' })).toBeNull();
+    expect(rows('Dispels by player')).toEqual(['PyrrinHeal1']);
   });
 
   it('leaves narrowed dimensions out of the logs', () => {

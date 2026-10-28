@@ -1,8 +1,8 @@
 mod support;
 
 use openlogs_analysis::{
-    AbilityRef, Attribution, AuraType, Dimension, EventKind, NOBODY, Overkill, ReportFilter,
-    RowKey, Scope, Side, UnitRef, interrupts_report,
+    AbilityRef, Attribution, AuraType, Dimension, EventKind, KickRow, NOBODY, Overkill,
+    ReportFilter, RowKey, Scope, Side, UnitRef, interrupts_report,
 };
 use support::{FightBuilder, HOSTILE_FLAGS, PET_FLAGS};
 
@@ -37,12 +37,8 @@ fn all(fight: &openlogs_analysis::Fight) -> openlogs_analysis::InterruptsReport 
     interrupts_report(fight, &whole(), &Scope::default(), Dimension::Source)
 }
 
-fn rows(report: &openlogs_analysis::InterruptsReport) -> Vec<(RowKey, u32, u32)> {
-    report
-        .rows
-        .iter()
-        .map(|r| (r.key.clone(), r.interrupts, r.dispels))
-        .collect()
+fn rows(rows: &[KickRow]) -> Vec<(RowKey, u32)> {
+    rows.iter().map(|r| (r.key.clone(), r.count)).collect()
 }
 
 #[test]
@@ -118,15 +114,59 @@ fn interrupts_and_dispels_list_friendly_units() {
         ]
     );
     assert_eq!(
-        rows(&report),
+        rows(&report.interrupt_rows),
         [
-            (RowKey::Unit(UnitRef::Player(s.mage)), 1, 1),
-            (RowKey::Unit(UnitRef::Player(s.warrior)), 1, 0),
-            (RowKey::Unit(UnitRef::Player(s.priest)), 0, 1),
+            (RowKey::Unit(UnitRef::Player(s.mage)), 1),
+            (RowKey::Unit(UnitRef::Player(s.warrior)), 1),
+        ]
+    );
+    assert_eq!(
+        rows(&report.dispel_rows),
+        [
+            (RowKey::Unit(UnitRef::Player(s.mage)), 1),
+            (RowKey::Unit(UnitRef::Player(s.priest)), 1),
         ]
     );
     assert_eq!(report.most_interrupted, Some((5, 2)));
     assert_eq!((report.kickers, report.dispellers), (2, 2));
+}
+
+#[test]
+fn each_table_ranks_its_own_kind_and_takes_its_icon_from_it() {
+    let mut s = scene();
+    s.b.spell(5, "Venom Bolt");
+    s.b.spell(6, "Venom Bolt");
+    s.b.push(
+        1_000,
+        s.mage,
+        s.boss,
+        2139,
+        EventKind::Interrupt { interrupted: 5 },
+    );
+    for (t, source) in [(2_000, s.priest), (3_000, s.priest), (4_000, s.mage)] {
+        s.b.push(
+            t,
+            source,
+            s.warrior,
+            527,
+            EventKind::Dispel {
+                removed: 6,
+                aura_type: AuraType::Debuff,
+            },
+        );
+    }
+    let fight = s.b.build();
+    assert_eq!(
+        rows(&all(&fight).dispel_rows),
+        [
+            (RowKey::Unit(UnitRef::Player(s.priest)), 2),
+            (RowKey::Unit(UnitRef::Player(s.mage)), 1),
+        ]
+    );
+    let by_spell = interrupts_report(&fight, &whole(), &Scope::default(), Dimension::Ability);
+    let icons = |rows: &[KickRow]| rows.iter().map(|r| r.spell).collect::<Vec<_>>();
+    assert_eq!(icons(&by_spell.interrupt_rows), [5]);
+    assert_eq!(icons(&by_spell.dispel_rows), [6]);
 }
 
 #[test]
@@ -197,7 +237,11 @@ fn the_stopped_spell_is_the_ability_and_missed_casts_follow_it() {
     };
     let bolt = interrupts_report(&fight, &whole(), &spell(5), Dimension::Ability);
     assert_eq!(bolt.group, Dimension::Source);
-    assert_eq!(rows(&bolt), [(RowKey::Unit(UnitRef::Player(s.mage)), 1, 0)]);
+    assert_eq!(
+        rows(&bolt.interrupt_rows),
+        [(RowKey::Unit(UnitRef::Player(s.mage)), 1)]
+    );
+    assert!(bolt.dispel_rows.is_empty());
     assert_eq!(bolt.missed.len(), 1);
     assert!(
         interrupts_report(&fight, &whole(), &spell(9), Dimension::Source)
@@ -243,8 +287,8 @@ fn the_enemy_side_lists_what_hostile_units_stopped() {
     };
     let report = interrupts_report(&s.b.build(), &whole(), &enemies, Dimension::Source);
     assert_eq!(
-        rows(&report),
-        [(RowKey::Unit(UnitRef::Unit("Ula'tek".into())), 1, 0)]
+        rows(&report.interrupt_rows),
+        [(RowKey::Unit(UnitRef::Unit("Ula'tek".into())), 1)]
     );
     assert!(report.missed.is_empty());
 }
@@ -262,7 +306,7 @@ fn a_friendly_npc_counts_on_the_friendly_side() {
     );
     let friendly = all(&s.b.build());
     assert_eq!(
-        rows(&friendly),
-        [(RowKey::Unit(UnitRef::Unit("Guard".into())), 1, 0)]
+        rows(&friendly.interrupt_rows),
+        [(RowKey::Unit(UnitRef::Unit("Guard".into())), 1)]
     );
 }
