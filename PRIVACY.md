@@ -12,7 +12,7 @@ The website [openlogs.gg](https://openlogs.gg) and the web app at [app.openlogs.
 
 | What | Kept until |
 |---|---|
-| Settings: theme, UI size, report and replay options, saved time ranges | You change or delete them |
+| Settings: theme, UI size, report and replay options, saved time ranges, the update check and the version of the last update notice you closed | You change or delete them |
 | The index of each opened log, so it opens again without being read twice; it contains the character names from that log | The 20 most recently used are kept, older ones are removed |
 | The recent list: file name, size, zone, start time, number of pulls and when you opened it, and a handle that lets the app reopen the file | The 12 most recent are kept |
 
@@ -20,10 +20,12 @@ None of it leaves your device. Removing a log from the recent list deletes its e
 
 **Images from the Wowhead CDN.** Unlike the web app, the desktop app loads spell, class and boss images and map art from `wow.zamimg.com`, the image server of Wowhead (ZAM Network LLC, USA). To load an image, the app sends the usual request data to that server: your IP address, the time, the image requested and browser details such as the user agent. See the [Wowhead privacy policy](https://www.wowhead.com/privacy) for how they handle this data. Without a network connection the app still works; missing images show the initials of their name instead.
 
-All other game data ships with the app. OpenLogs has no auto-updater and sends no other requests itself. It runs in Microsoft's WebView2 runtime, which can contact Microsoft on its own, for example for SmartScreen checks and its own updates; see the [Microsoft privacy statement](https://www.microsoft.com/privacy/privacystatement). Installers are downloaded from GitHub; see [GitHub's privacy statement](https://github.com/site/privacy).
+**Update check.** Unless you turn it off in the settings under Updates, the desktop app asks the GitHub API (`api.github.com`, GitHub, Inc., USA) for the list of OpenLogs releases when it starts and every 30 minutes while it runs, to tell you about a newer version. GitHub receives the usual request data: your IP address, the time and browser details such as the user agent. See [GitHub's privacy statement](https://github.com/site/privacy). The app does not update itself; a notice links to the release page, which opens in your browser.
+
+All other game data ships with the app, and OpenLogs sends no other requests itself. It runs in Microsoft's WebView2 runtime, which can contact Microsoft on its own, for example for SmartScreen checks and its own updates; see the [Microsoft privacy statement](https://www.microsoft.com/privacy/privacystatement). Installers are downloaded from GitHub; see [GitHub's privacy statement](https://github.com/site/privacy).
 
 ## Your own builds
 
 The dev server and `npm --prefix ui run build` load the images from the Wowhead CDN like the desktop app; `npm --prefix ui run build:web` serves them itself and links the privacy notice given in `VITE_PRIVACY_URL` at build time. If you host a build for others, you are responsible for its privacy notice.
 
-Last updated: 24 October 2026
+Last updated: 28 October 2026

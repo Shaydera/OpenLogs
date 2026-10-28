@@ -51,7 +51,7 @@ Boss HP over each pull, deaths, first death, raid DPS and potions side by side, 
 The analysis runs right where the file is: in your browser as WebAssembly or in the desktop app. OpenLogs never sends the log anywhere. It is indexed once and the index is kept locally, so opening it again is instant; a 3–4 GiB raid log is indexed in under 5 seconds.
 
 - **In the browser** at [app.openlogs.gg](https://app.openlogs.gg): nothing to install. Works in current Chrome, Edge and Firefox; Chrome and Edge reopen recent logs with one click (the browser may ask to allow reading the file), other browsers ask you to choose the file again.
-- **Desktop app** from the [releases](https://github.com/Shaydera/OpenLogs/releases): the same app in its own window (Tauri). Installs like any Windows program on Windows 10 and 11 and works offline.
+- **Desktop app** from the [releases](https://github.com/Shaydera/OpenLogs/releases): the same app in its own window (Tauri). Installs like any Windows program on Windows 10 and 11, works offline and tells you when a new release is out (you can turn that off in the settings).
 
 ## Get started
 
