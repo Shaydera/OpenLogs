@@ -52,12 +52,14 @@ import { type GameDataManifest, gameDataManifest } from './gameData';
 import { replayClock } from './components/replay/replayClock';
 import { t } from './i18n/i18n';
 import { rowValue } from './components/filters/labels';
+import { APP_VERSION } from './build';
 import { followUpdate, type LiveNotice, liveNoticeOf } from './pulls/follow';
 import { effectiveView, lanesOf } from './reportViews';
 import { type FilterTab, isFilterTab, SIDES } from './scopeSides';
 import { readStored, writeStored } from './storage';
 import { type ThemeMode, type ThemeName, readTheme, readThemeMode, storeTheme, storeThemeMode } from './theme';
 import { normalizeUiSize, readUiSize, storeUiSize } from './uiScale';
+import { type AvailableUpdate, fetchUpdate } from './updateCheck';
 
 const HIDE_ABORTED_KEY = 'hideAborted';
 const AUG_DELTA_KEY = 'showAugDelta';
@@ -65,6 +67,8 @@ const COLOR_BY_TARGET_KEY = 'colorByTarget';
 const HIDE_PROCS_KEY = 'hideProcs';
 const INCLUDE_OVERKILL_KEY = 'includeOverkill';
 const LIVE_REFRESH_KEY = 'liveRefresh';
+const UPDATE_CHECK_KEY = 'updateCheck';
+const DISMISSED_UPDATE_KEY = 'dismissedUpdate';
 const FOLLOW_TICK_MS = 2000;
 /** A log quiet for this long has its last pull settled, as if the log ended there. */
 const SETTLE_AFTER_MS = 30_000;
@@ -364,6 +368,11 @@ interface State {
   canFollow: boolean;
   /** What the view moved on to by itself. */
   liveNotice: LiveNotice | null;
+  /** Ask GitHub for a newer release; desktop app only. */
+  updateCheck: boolean;
+  availableUpdate: AvailableUpdate | null;
+  /** The version whose notice was closed. */
+  dismissedUpdate: string | null;
 }
 
 interface Actions {
@@ -449,6 +458,9 @@ interface Actions {
   openReplayAt(ms: number): void;
   setLiveRefresh(on: boolean): void;
   dismissLiveNotice(): void;
+  setUpdateCheck(on: boolean): void;
+  checkForUpdate(): Promise<void>;
+  dismissUpdate(): void;
 }
 
 function readFlag(key: string, fallback: boolean): boolean {
@@ -576,6 +588,9 @@ export function initialState(): State {
     liveRefresh: readFlag(LIVE_REFRESH_KEY, true),
     canFollow: false,
     liveNotice: null,
+    updateCheck: readFlag(UPDATE_CHECK_KEY, true),
+    availableUpdate: null,
+    dismissedUpdate: readStored(DISMISSED_UPDATE_KEY),
   };
 }
 
@@ -583,6 +598,7 @@ let reportRequest = 0;
 let viewRequest = 0;
 /** Changes with every view request that asks for more than another window: a superseded timeline of the same value answers the same query. */
 let viewQuery = 0;
+let updateCheckRunning: Promise<void> | null = null;
 /** The view request whose timeline is shown. */
 let shownTimelineRequest = 0;
 let logRequest = 0;
@@ -1692,6 +1708,32 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
 
   dismissLiveNotice() {
     set({ liveNotice: null });
+  },
+
+  setUpdateCheck(on) {
+    writeFlag(UPDATE_CHECK_KEY, on);
+    set(on ? { updateCheck: true } : { updateCheck: false, availableUpdate: null });
+  },
+
+  checkForUpdate() {
+    updateCheckRunning ??= (async () => {
+      try {
+        const update = await fetchUpdate(APP_VERSION);
+        if (get().updateCheck) set({ availableUpdate: update });
+      } catch {
+        // Offline or rate-limited: what the last check found still holds, and the next one tries again.
+      } finally {
+        updateCheckRunning = null;
+      }
+    })();
+    return updateCheckRunning;
+  },
+
+  dismissUpdate() {
+    const update = get().availableUpdate;
+    if (!update) return;
+    writeStored(DISMISSED_UPDATE_KEY, update.version);
+    set({ dismissedUpdate: update.version });
   },
 
   async openSettings() {

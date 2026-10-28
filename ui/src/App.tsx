@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 import { LiveNotice } from './components/chrome/LiveNotice';
+import { UpdateNotice } from './components/chrome/UpdateNotice';
 import { FightView } from './components/FightView';
 import { SettingsDialog } from './components/SettingsDialog';
 import { StartPage } from './components/StartPage';
 import { useAutoScale } from './hooks/useAutoScale';
 import { useLogDrop } from './hooks/useLogDrop';
+import { useUpdateCheck } from './hooks/useUpdateCheck';
 import { useZoomGestures } from './hooks/useZoomGestures';
 import { t } from './i18n/i18n';
 import { useApp } from './store';
@@ -24,6 +26,7 @@ export function App() {
   const uiSize = useApp((s) => s.uiSize);
   const auto = useAutoScale();
   useZoomGestures();
+  useUpdateCheck();
 
   useEffect(() => {
     void refreshRecent();
@@ -54,6 +57,7 @@ export function App() {
       )}
       {view.kind === 'start' ? <StartPage dragOver={dragOver} /> : <FightView />}
       <LiveNotice />
+      <UpdateNotice />
       {settingsOpen && <SettingsDialog />}
     </>
   );

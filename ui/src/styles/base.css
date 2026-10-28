@@ -289,3 +289,34 @@ html {
   box-shadow: 0 8px 24px color-mix(in srgb, var(--shadow) 45%, transparent);
   pointer-events: none;
 }
+.update-notice {
+  position: fixed;
+  z-index: 15;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel-raised);
+  color: var(--text);
+  font-size: 13px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--shadow) 45%, transparent);
+}
+body:has(.live-notice) .update-notice {
+  bottom: 72px;
+}
+.update-notice .btn {
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.update-notice .dd-clear {
+  font: 400 18px/1 var(--font-text);
+}
+.update-notice .dd-clear:hover {
+  background: var(--tile);
+  color: var(--text);
+}

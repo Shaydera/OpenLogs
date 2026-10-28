@@ -13,13 +13,19 @@ vi.mock('../api/client', () => ({
 vi.mock('../gameData', () => ({ gameDataManifest: vi.fn() }));
 const build = vi.hoisted(() => ({
   IS_WEBSITE: false,
+  IN_DESKTOP_APP: false,
+  APP_VERSION: '0.1.0-beta8',
   PRIVACY_NOTICE_URL: undefined as string | undefined,
   SOURCE_URL: 'https://example.test/openlogs',
 }));
-vi.mock('../build', () => build);
+vi.mock('../build', async (importOriginal) => {
+  const { RELEASES_URL, RELEASES_API_URL } = await importOriginal<typeof import('../build')>();
+  return Object.assign(build, { RELEASES_URL, RELEASES_API_URL });
+});
 
 beforeEach(() => {
   build.IS_WEBSITE = false;
+  build.IN_DESKTOP_APP = false;
   build.PRIVACY_NOTICE_URL = undefined;
   vi.mocked(api.recentLogs).mockReset().mockResolvedValue([]);
   vi.mocked(gameDataManifest).mockReset().mockResolvedValue(gameDataFixture);
