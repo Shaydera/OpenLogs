@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use openlogs_analysis::{
     AbilityRef, ActorId, AmountRule, AuraType, CastOutcome, Channel, EventRow, EventsPage, Fight,
     ItemAmount, ItemKind, Lane, LogLine, NOBODY, Page, RowKey, RowType, SpellId, Timeline,
-    TimelineItem, UnitRef, ViewOptions, Window, unit_of,
+    TimelineItem, UnitRef, ViewOptions, Window, top_spell, unit_of,
 };
 use serde::{Deserialize, Serialize};
 
@@ -621,10 +621,7 @@ fn lane_spell(fight: &Fight, lane: &Lane) -> SpellId {
             for item in &lane.items {
                 *counts.entry(item.spell).or_default() += 1;
             }
-            counts
-                .into_iter()
-                .max_by(|a, b| a.1.cmp(&b.1).then(b.0.cmp(&a.0)))
-                .map(|(spell, _)| spell)
+            top_spell(counts)
                 .or_else(|| {
                     fight
                         .spells

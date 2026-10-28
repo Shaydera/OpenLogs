@@ -829,7 +829,7 @@
   top: 3px;
 }
 
-/* Interrupts & Dispels tab: players and event logs; the totals sit in the fight header. */
+/* Interrupts & Dispels tab: each table beside its event log; the totals sit in the fight header. */
 .kicks-page {
   display: flex;
   flex-direction: column;
@@ -861,7 +861,7 @@
 }
 .kick-prow {
   display: grid;
-  grid-template-columns: 28px minmax(120px, 1fr) 46px minmax(120px, 1.4fr) 64px;
+  grid-template-columns: 28px minmax(120px, 1fr) 46px minmax(120px, 1.4fr);
   gap: 10px;
   align-items: center;
   min-height: 40px;
@@ -881,9 +881,6 @@
 .kick-cap {
   font-size: 11px;
 }
-.kick-cap.kick-cap-end {
-  text-align: right;
-}
 .kick-name {
   min-width: 0;
   font-size: 14px;
@@ -902,9 +899,6 @@
 }
 .kick-count {
   width: 40px;
-  text-align: right;
-}
-.kick-end {
   text-align: right;
 }
 .kick-log {

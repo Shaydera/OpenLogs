@@ -886,19 +886,20 @@ export interface ReportUnit {
   number: number | null;
 }
 
-/** Interrupts and dispels of one unit or one stopped spell. */
+/** The interrupts or the dispels of one unit or one stopped spell. */
 export interface KickRow {
   key: RowKey;
   name: string;
   number: number | null;
   spellId: number;
-  interrupts: number;
-  dispels: number;
+  count: number;
 }
 
 export interface InterruptsReport {
   group: Dimension;
-  rows: KickRow[];
+  /** Most first; each lists only rows with at least one of its kind. */
+  interruptRows: KickRow[];
+  dispelRows: KickRow[];
   interrupts: { t: number; source: ReportUnit; spellId: number; target: ReportUnit; interruptedId: number }[];
   dispels: { t: number; source: ReportUnit; spellId: number; target: ReportUnit; removedId: number; stolen: boolean }[];
   /** Friendlies only: casts of spells the raid interrupted at least once, completed without an interrupt. */

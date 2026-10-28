@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::actors::ActorId;
-use crate::breakdown::{Dimension, RowKey, effective_group, key_of};
+use crate::breakdown::{Dimension, RowKey, effective_group, key_of, largest_first, top_spell};
 use crate::cells::{Cell, CellKind, Facts, ScopeMetric, book, in_scope};
 use crate::fight::{Event, EventKind, Fight, SpellId};
 use crate::filter::ReportFilter;
@@ -36,7 +36,7 @@ pub struct MissedCast {
     pub spell: SpellId,
 }
 
-/// One row of the table: interrupts and dispels of one unit or one stopped spell.
+/// One row of the interrupts or the dispels table: one unit or one stopped spell.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KickRow {
     pub key: RowKey,
@@ -44,14 +44,15 @@ pub struct KickRow {
     pub spell: SpellId,
     /// Ability rows: how often each stopped spell ID was counted, by ID.
     pub spell_counts: Vec<(SpellId, u32)>,
-    pub interrupts: u32,
-    pub dispels: u32,
+    pub count: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterruptsReport {
     pub group: Dimension,
-    pub rows: Vec<KickRow>,
+    /// Most first; each table only lists rows with at least one of its kind.
+    pub interrupt_rows: Vec<KickRow>,
+    pub dispel_rows: Vec<KickRow>,
     pub interrupts: Vec<InterruptEntry>,
     pub dispels: Vec<DispelEntry>,
     /// Friendlies only: casts of spells the raid interrupted at least once, completed without an
@@ -159,6 +160,42 @@ fn distinct_units(fight: &Fight, sources: impl Iterator<Item = ActorId>) -> u32 
         .len() as u32
 }
 
+#[derive(Default)]
+struct Tally {
+    count: u32,
+    ability_spell_counts: HashMap<SpellId, u32>,
+}
+
+type RowTally = HashMap<RowKey, Tally>;
+
+fn tally(rows: &mut RowTally, key: RowKey, stopped: SpellId) {
+    let ability = matches!(key, RowKey::Ability { .. });
+    let tally = rows.entry(key).or_default();
+    tally.count += 1;
+    if ability {
+        *tally.ability_spell_counts.entry(stopped).or_default() += 1;
+    }
+}
+
+fn ranked(rows: RowTally) -> Vec<KickRow> {
+    let mut rows: Vec<KickRow> = rows
+        .into_iter()
+        .map(|(key, tally)| {
+            let mut spell_counts: Vec<(SpellId, u32)> =
+                tally.ability_spell_counts.into_iter().collect();
+            spell_counts.sort_by_key(|&(spell, _)| spell);
+            KickRow {
+                key,
+                spell: top_spell(spell_counts.iter().copied()).unwrap_or(0),
+                spell_counts,
+                count: tally.count,
+            }
+        })
+        .collect();
+    rows.sort_by(|a, b| largest_first(a.count, &a.key).cmp(&largest_first(b.count, &b.key)));
+    rows
+}
+
 /// The stopped spell is the ability: a selection answers "who kicked X" and "which X went through".
 pub fn interrupts_report(
     fight: &Fight,
@@ -169,29 +206,17 @@ pub fn interrupts_report(
     let group = effective_group(scope, ScopeMetric::Interrupts, wanted);
     let mut interrupts = Vec::new();
     let mut dispels = Vec::new();
-    let mut rows: HashMap<RowKey, (KickRow, HashMap<SpellId, u32>)> = HashMap::new();
+    let mut interrupt_rows = RowTally::new();
+    let mut dispel_rows = RowTally::new();
     for (_, event, stopped) in kicks(fight, filter, scope.perspective) {
         let cell = cell_of(fight, event, stopped);
         if !in_scope(scope, fight, &cell) {
             continue;
         }
         let key = key_of(fight, &cell, group, ScopeMetric::Interrupts);
-        let (row, spells) = rows.entry(key.clone()).or_insert_with(|| {
-            (
-                KickRow {
-                    key,
-                    spell: 0,
-                    spell_counts: Vec::new(),
-                    interrupts: 0,
-                    dispels: 0,
-                },
-                HashMap::new(),
-            )
-        });
-        *spells.entry(stopped).or_default() += 1;
         match event.kind {
             EventKind::Interrupt { .. } => {
-                row.interrupts += 1;
+                tally(&mut interrupt_rows, key, stopped);
                 interrupts.push(InterruptEntry {
                     t: event.t,
                     source: event.source,
@@ -201,7 +226,7 @@ pub fn interrupts_report(
                 });
             }
             _ => {
-                row.dispels += 1;
+                tally(&mut dispel_rows, key, stopped);
                 dispels.push(DispelEntry {
                     t: event.t,
                     source: event.source,
@@ -213,26 +238,6 @@ pub fn interrupts_report(
             }
         }
     }
-    let mut rows: Vec<KickRow> = rows
-        .into_values()
-        .map(|(mut row, spells)| {
-            if let RowKey::Ability { .. } = row.key {
-                row.spell = spells
-                    .iter()
-                    .max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0)))
-                    .map_or(0, |(&spell, _)| spell);
-                row.spell_counts = spells.into_iter().collect();
-                row.spell_counts.sort_by_key(|&(spell, _)| spell);
-            }
-            row
-        })
-        .collect();
-    rows.sort_by(|a, b| {
-        (b.interrupts + b.dispels)
-            .cmp(&(a.interrupts + a.dispels))
-            .then(b.interrupts.cmp(&a.interrupts))
-            .then_with(|| a.key.cmp(&b.key))
-    });
     let missed = match scope.perspective {
         Side::Friendly => missed_casts(fight, filter)
             .into_iter()
@@ -260,7 +265,8 @@ pub fn interrupts_report(
     let dispellers = distinct_units(fight, dispels.iter().map(|d| d.source));
     InterruptsReport {
         group,
-        rows,
+        interrupt_rows: ranked(interrupt_rows),
+        dispel_rows: ranked(dispel_rows),
         interrupts,
         dispels,
         missed,

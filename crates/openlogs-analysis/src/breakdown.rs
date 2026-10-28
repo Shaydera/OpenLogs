@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::cmp::{Ordering, Reverse};
 use std::collections::{BTreeMap, HashMap};
 
 use openlogs_gamedata::Curated;
@@ -197,11 +197,9 @@ impl Acc {
         BreakdownRow {
             by_spell,
             spell: match key {
-                RowKey::Ability { .. } => self
-                    .by_spell
-                    .iter()
-                    .max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0)))
-                    .map_or(0, |(spell, _)| *spell),
+                RowKey::Ability { .. } => {
+                    top_spell(self.by_spell.iter().map(|(&s, &a)| (s, a))).unwrap_or(0)
+                }
                 RowKey::Unit(_) => 0,
             },
             pets,
@@ -225,8 +223,22 @@ impl Acc {
     }
 }
 
+/// The sort key for largest amount first; equal amounts in key order, so they sort the same
+/// every time.
+pub fn largest_first<A: Ord, K: Ord>(amount: A, key: K) -> (Reverse<A>, K) {
+    (Reverse(amount), key)
+}
+
+/// The spell ID with the largest amount, the lowest on a tie: the icon of an ability row.
+pub fn top_spell<A: Ord>(amounts: impl IntoIterator<Item = (SpellId, A)>) -> Option<SpellId> {
+    amounts
+        .into_iter()
+        .max_by(|x, y| x.1.cmp(&y.1).then(y.0.cmp(&x.0)))
+        .map(|(spell, _)| spell)
+}
+
 fn by_amount(a: &BreakdownRow, b: &BreakdownRow) -> Ordering {
-    b.amount.cmp(&a.amount).then_with(|| a.key.cmp(&b.key))
+    largest_first(a.amount, &a.key).cmp(&largest_first(b.amount, &b.key))
 }
 
 fn rows_of<'a>(
@@ -333,5 +345,23 @@ pub(crate) fn group_cells(
         total,
         duration_ms: filter.duration_ms(fight),
         rows,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_icon_is_the_largest_amount_and_the_lowest_id_on_a_tie() {
+        assert_eq!(top_spell([(7, 2), (9, 5), (3, 5)]), Some(3));
+    }
+
+    #[test]
+    fn larger_amounts_come_first_and_equal_ones_go_by_key() {
+        let key = |name: &str| RowKey::Unit(UnitRef::Unit(name.into()));
+        let mut rows = [(1, key("b")), (2, key("c")), (1, key("a"))];
+        rows.sort_by(|a, b| largest_first(a.0, &a.1).cmp(&largest_first(b.0, &b.1)));
+        assert_eq!(rows, [(2, key("c")), (1, key("a")), (1, key("b"))]);
     }
 }

@@ -1,6 +1,6 @@
 use std::mem::take;
 
-use openlogs_analysis::Fight;
+use openlogs_analysis::{Fight, largest_first};
 use serde::Serialize;
 
 use super::{Merge, merge_roster, merge_rows, merge_spells, sum_spell_amounts, top_spell};
@@ -55,16 +55,8 @@ pub fn interrupts_set_part(
 impl Merge for SetInterruptsDto {
     fn merge(&mut self, next: Self) {
         let report = &mut self.report;
-        merge_rows(
-            &mut report.rows,
-            next.report.rows,
-            |a, b| a.key == b.key,
-            |a, b| {
-                a.interrupts += b.interrupts;
-                a.dispels += b.dispels;
-                sum_spell_amounts(&mut a.spell_counts, b.spell_counts);
-            },
-        );
+        merge_kick_rows(&mut report.interrupt_rows, next.report.interrupt_rows);
+        merge_kick_rows(&mut report.dispel_rows, next.report.dispel_rows);
         merge_roster(&mut report.roster, next.report.roster);
         merge_spells(&mut report.spells, next.report.spells);
         self.pulls.extend(next.pulls);
@@ -72,12 +64,8 @@ impl Merge for SetInterruptsDto {
 
     fn finish(&mut self) {
         let report = &mut self.report;
-        for row in &mut report.rows {
-            if let RowKeyDto::Ability { .. } = row.key {
-                row.spell_id = top_spell(&row.spell_counts).unwrap_or(row.spell_id);
-            }
-        }
-        report.rows.sort_by(by_actions);
+        rank_kick_rows(&mut report.interrupt_rows);
+        rank_kick_rows(&mut report.dispel_rows);
 
         let interrupts = || self.pulls.iter().flat_map(|p| &p.interrupts);
         let mut stopped: Vec<SpellCountDto> = Vec::new();
@@ -105,11 +93,25 @@ impl Merge for SetInterruptsDto {
     }
 }
 
-fn by_actions(a: &KickRowDto, b: &KickRowDto) -> std::cmp::Ordering {
-    (b.interrupts + b.dispels)
-        .cmp(&(a.interrupts + a.dispels))
-        .then(b.interrupts.cmp(&a.interrupts))
-        .then_with(|| a.key.to_key().cmp(&b.key.to_key()))
+fn merge_kick_rows(rows: &mut Vec<KickRowDto>, next: Vec<KickRowDto>) {
+    merge_rows(
+        rows,
+        next,
+        |a, b| a.key == b.key,
+        |a, b| {
+            a.count += b.count;
+            sum_spell_amounts(&mut a.spell_counts, b.spell_counts);
+        },
+    );
+}
+
+fn rank_kick_rows(rows: &mut [KickRowDto]) {
+    for row in rows.iter_mut() {
+        if let RowKeyDto::Ability { .. } = row.key {
+            row.spell_id = top_spell(&row.spell_counts).unwrap_or(row.spell_id);
+        }
+    }
+    rows.sort_by_cached_key(|r| largest_first(r.count, r.key.to_key()));
 }
 
 fn distinct_units<'a>(sources: impl Iterator<Item = &'a UnitDto>) -> u32 {
@@ -124,7 +126,9 @@ fn distinct_units<'a>(sources: impl Iterator<Item = &'a UnitDto>) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use openlogs_analysis::{ActorId, Actors, Event, EventKind, Fight, SpellId, SpellInfo};
+    use openlogs_analysis::{
+        ActorId, Actors, AuraType, Event, EventKind, Fight, SpellId, SpellInfo,
+    };
 
     use super::*;
     use crate::scope_dto::{DimensionDto, ScopeDto};
@@ -132,6 +136,7 @@ mod tests {
     use crate::test_fight::{HOSTILE_FLAGS, PLAYER_FLAGS, fight, unit};
 
     const KICK: SpellId = 1766;
+    const CLEANSE: SpellId = 4987;
 
     fn interrupt(t: i32, source: ActorId, target: ActorId, interrupted: SpellId) -> Event {
         Event {
@@ -142,6 +147,22 @@ mod tests {
             kind: EventKind::Interrupt { interrupted },
             source_hostile: false,
             target_hostile: true,
+            unit_hp: None,
+        }
+    }
+
+    fn dispel(t: i32, source: ActorId, target: ActorId) -> Event {
+        Event {
+            t,
+            source,
+            target,
+            spell: CLEANSE,
+            kind: EventKind::Dispel {
+                removed: 100,
+                aura_type: AuraType::Debuff,
+            },
+            source_hostile: false,
+            target_hostile: false,
             unit_hp: None,
         }
     }
@@ -209,9 +230,9 @@ mod tests {
         let set = set_of(&pulls, DimensionDto::Source);
         let rows: Vec<_> = set
             .report
-            .rows
+            .interrupt_rows
             .iter()
-            .map(|row| (row.name.as_str(), row.interrupts))
+            .map(|row| (row.name.as_str(), row.count))
             .collect();
         assert_eq!(rows, [("Faelan", 2), ("Aleth", 1)]);
         assert_eq!(set.report.kickers, 2);
@@ -219,6 +240,33 @@ mod tests {
         assert_eq!(second, [2_000, 3_000]);
         assert_eq!(set.pulls[0].fight_index, 0);
         assert_eq!(set.pulls[1].duration_ms, 20_000);
+    }
+
+    #[test]
+    fn dispels_sum_and_rank_in_their_own_rows() {
+        let raid = raid();
+        let (a, b, boss) = (raid.a, raid.b, raid.boss);
+        let pulls = [
+            pull(
+                &raid,
+                vec![dispel(1_000, a, b), interrupt(1_500, a, boss, 100)],
+            ),
+            pull(&raid, vec![dispel(2_000, b, a), dispel(3_000, b, a)]),
+        ];
+        let set = set_of(&pulls, DimensionDto::Source);
+        let counts = |rows: &[KickRowDto]| {
+            rows.iter()
+                .map(|row| (row.name.clone(), row.count))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            counts(&set.report.dispel_rows),
+            [("Aleth".to_string(), 2), ("Faelan".to_string(), 1)]
+        );
+        assert_eq!(
+            counts(&set.report.interrupt_rows),
+            [("Faelan".to_string(), 1)]
+        );
     }
 
     #[test]
@@ -236,8 +284,8 @@ mod tests {
             pull(&raid, vec![interrupt(1_000, a, boss, 101)]),
         ];
         let set = set_of(&pulls, DimensionDto::Ability);
-        assert_eq!(set.report.rows.len(), 1);
-        assert_eq!(set.report.rows[0].spell_id, 101);
+        assert_eq!(set.report.interrupt_rows.len(), 1);
+        assert_eq!(set.report.interrupt_rows[0].spell_id, 101);
         assert_eq!(
             set.report.most_interrupted.map(|m| (m.spell_id, m.count)),
             Some((101, 2))
