@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
 import { api } from '../api/client';
 import { gameDataManifest } from '../gameData';
@@ -32,6 +32,7 @@ beforeEach(() => {
   localStorage.clear();
   useApp.setState(initialState());
 });
+afterEach(() => vi.unstubAllGlobals());
 
 async function openDialog() {
   render(<App />);
@@ -73,6 +74,18 @@ describe('Settings dialog', () => {
       const dialog = await openDialog();
       expect(within(dialog).queryByRole('link', { name: 'Privacy notice' })).toBeNull();
     });
+  });
+
+  it('turns the update check off in the desktop app and remembers it', async () => {
+    build.IN_DESKTOP_APP = true;
+    const fetchMock = vi.fn().mockResolvedValue(new Response('[]'));
+    vi.stubGlobal('fetch', fetchMock);
+    const dialog = await openDialog();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(within(dialog).getByText('Version 0.1.0-beta8')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: /Check for updates/ }));
+    expect(localStorage.getItem('openlogs.updateCheck')).toBe('false');
+    expect(initialState().updateCheck).toBe(false);
   });
 
   it('offers the source code on the website', async () => {
