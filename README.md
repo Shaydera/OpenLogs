@@ -124,6 +124,16 @@ Spell, class and boss images and map art come from the Wowhead CDN; spell icon n
 
 World of Warcraft is a trademark of Blizzard Entertainment. OpenLogs is not affiliated with Blizzard or RPGLogs.
 
+## AI disclosure
+
+How much AI went into OpenLogs differs between its two parts.
+
+In the Rust engine in `crates`, which parses and analyses the logs, AI only plays a supporting role: mainly for chores such as refactoring, code reviews, bug hunting and parts of the documentation. Nothing lands there that I have not reviewed by hand.
+
+The user interface relies on AI much more heavily: most of the React code in `ui` is AI-generated.
+
+This describes my own code (Shaydera). For contributions by others, I can't say how they were written.
+
 ## Privacy
 
 Logs, settings and indexes stay on your device; there are no cookies and no tracking. The website and web app are covered by the [privacy notice on openlogs.gg](https://openlogs.gg/privacy.html), the desktop app and your own builds by [PRIVACY.md](PRIVACY.md).
