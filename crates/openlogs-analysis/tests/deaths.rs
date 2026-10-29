@@ -174,6 +174,7 @@ fn damage_before_death_counts_what_shields_absorbed() {
             via: DamageVia::Spell,
             miss_type: MissType::Absorb,
             amount_missed: 250,
+            critical: false,
         }),
     );
     b.push(

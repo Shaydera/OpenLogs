@@ -76,6 +76,7 @@ fn recap_lists_damage_heals_and_absorbs() {
             via: DamageVia::Spell,
             miss_type: MissType::Absorb,
             amount_missed: 80_000,
+            critical: false,
         }),
     );
     s.b.push(

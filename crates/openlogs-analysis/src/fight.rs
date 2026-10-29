@@ -248,6 +248,7 @@ pub struct Missed {
     pub miss_type: MissType,
     /// Prevented amount for partial misses, else 0.
     pub amount_missed: u64,
+    pub critical: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

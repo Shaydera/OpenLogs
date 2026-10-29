@@ -1,7 +1,8 @@
 mod support;
 
 use openlogs_analysis::{
-    Attribution, Damage, DamageVia, EventKind, Overkill, ReportFilter, RowKind, damage_done,
+    Attribution, Damage, DamageVia, EventKind, MissType, Missed, Overkill, ReportFilter, RowKind,
+    damage_done,
 };
 use support::{FightBuilder, HOSTILE_FLAGS, PET_FLAGS, damage};
 
@@ -128,6 +129,41 @@ fn reattributed_mode_moves_support_to_the_evoker() {
         .unwrap();
     assert_eq!((given.spell, given.amount), (395152, 100));
     assert_eq!(evoker.support_by_recipient, vec![(r.warrior, 100)]);
+}
+
+#[test]
+fn hits_a_shield_swallowed_count_as_damage_done_net_of_their_support() {
+    let mut r = raid();
+    r.b.push(1_000, r.warrior, r.boss, 1, hit(1_000));
+    r.b.push(
+        2_000,
+        r.warrior,
+        r.boss,
+        1,
+        EventKind::Missed(Missed {
+            via: DamageVia::Spell,
+            miss_type: MissType::Absorb,
+            amount_missed: 400,
+            critical: true,
+        }),
+    );
+    r.b.push(2_000, r.warrior, r.boss, 395152, supported(40, r.evoker));
+    let report = damage_done(&r.b.build(), &ReportFilter::whole(RE));
+    assert_eq!(
+        (total(&report, r.warrior), total(&report, r.evoker)),
+        (1_360, 40)
+    );
+    let warrior = report
+        .players
+        .iter()
+        .find(|p| p.player == r.warrior)
+        .unwrap();
+    let rows: Vec<_> = warrior
+        .abilities
+        .iter()
+        .map(|a| (a.spell, a.kind, a.amount, a.support, a.hits, a.crits))
+        .collect();
+    assert_eq!(rows, [(1, RowKind::Own, 1_360, 40, 2, 1)]);
 }
 
 #[test]

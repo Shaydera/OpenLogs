@@ -95,6 +95,7 @@ fn raid() -> Raid {
             via: DamageVia::Spell,
             miss_type: MissType::Absorb,
             amount_missed: 250,
+            critical: false,
         }),
     );
     Raid {
@@ -179,6 +180,7 @@ fn misses_are_rows_without_an_amount_on_both_sides() {
             via,
             miss_type,
             amount_missed: 0,
+            critical: false,
         })
     };
     b.push(
