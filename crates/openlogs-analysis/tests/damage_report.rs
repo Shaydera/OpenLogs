@@ -321,3 +321,36 @@ fn a_killing_blow_counts_up_to_the_target_hp_unless_overkill_is_included() {
         (600, 1_000)
     );
 }
+
+#[test]
+fn the_support_share_of_a_killing_blow_follows_the_overkill_option() {
+    let mut r = raid();
+    r.b.push(
+        1_000,
+        r.warrior,
+        r.boss,
+        1,
+        EventKind::Damage(damage(DamageVia::Spell, 1_000, 400)),
+    );
+    r.b.push(
+        1_000,
+        r.warrior,
+        r.boss,
+        395152,
+        EventKind::Damage(Damage {
+            supporter: r.evoker,
+            ..damage(DamageVia::Spell, 100, 60)
+        }),
+    );
+    let fight = r.b.build();
+    let totals_with = |overkill| {
+        let filter = ReportFilter {
+            overkill,
+            ..ReportFilter::whole(RE)
+        };
+        let report = damage_done(&fight, &filter);
+        (total(&report, r.warrior), total(&report, r.evoker))
+    };
+    assert_eq!(totals_with(Overkill::Excluded), (560, 40));
+    assert_eq!(totals_with(Overkill::Included), (900, 100));
+}

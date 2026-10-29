@@ -904,8 +904,7 @@ pub(crate) fn damage_share(fight: &Fight, event: &Event, overkill: Overkill) -> 
         doer: event.source,
         buff: event.spell,
         target: event.target,
-        // The Evoker's share is logged on its own; the hit's overkill is not part of it.
-        amount: damage_done_amount(&damage, Overkill::Included),
+        amount: damage_done_amount(&damage, overkill),
     }))
 }
 
