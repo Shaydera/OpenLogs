@@ -10,7 +10,8 @@ pub enum Attribution {
     Reattributed,
 }
 
-/// Whether damage counts the overkill of a killing hit, the part beyond the target's HP.
+/// Whether damage done counts the overkill of a killing hit, the part beyond the target's HP.
+/// Damage taken always does.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Overkill {
     #[default]

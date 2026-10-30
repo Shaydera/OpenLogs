@@ -632,7 +632,7 @@ export const en = {
   'options.titleOverkill': 'Options · Overkill included',
   'options.allLogs': 'All logs',
   'options.overkill': 'Include overkill',
-  'options.overkillHint': 'Killing hits count beyond the health the target had left.',
+  'options.overkillHint': 'Killing hits count beyond the health the target had left. Damage taken always counts them in full.',
   'options.liveRefresh': 'Follow the log',
   'options.liveRefreshHint': 'Add new pulls while the game writes the log',
   'options.liveRefreshUnavailable': 'This log cannot be followed here. Open it again, or use Chrome, Edge or the desktop app.',

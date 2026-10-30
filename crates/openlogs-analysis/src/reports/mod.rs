@@ -948,19 +948,36 @@ pub(crate) fn damage_share(fight: &Fight, event: &Event, overkill: Overkill) -> 
 /// same player; Pet Protector Immunity shields a turned player's pet from the raid.
 const ABSORBS_THAT_ARE_NOT_HEALING: [SpellId; 4] = [410355, 1309497, 114556, 1297827];
 
+/// Whether a player's or pet's heal on a player or pet counts, by the flags of its line: not when
+/// a healer logged hostile heals a target logged friendly, like the raid healing the turned
+/// logging player or a mind-controlled player healing the raid.
+pub(crate) fn heal_on_player_counts(healer_hostile: bool, target_hostile: bool) -> bool {
+    !healer_hostile || target_hostile
+}
+
 /// Whether what `absorb_spell` absorbed is healing.
 pub(crate) fn absorb_is_healing(absorb_spell: SpellId) -> bool {
     !ABSORBS_THAT_ARE_NOT_HEALING.contains(&absorb_spell)
 }
+
+/// Refraction and Stretch Time bring back the damage those absorbs delayed, and Spirit Link
+/// moves health between players.
+const DAMAGE_THAT_IS_NOT_TAKEN: [SpellId; 3] = [1309786, 413924, SPIRIT_LINK];
+
+/// Whether the damage of `spell` is damage taken.
+pub(crate) fn damage_is_taken(spell: SpellId) -> bool {
+    !DAMAGE_THAT_IS_NOT_TAKEN.contains(&spell)
+}
+
 /// The paladin's heal absorb on himself: what it takes of others' heals is his cost.
 const LIGHT_OF_THE_MARTYR: SpellId = 448005;
 /// The totem heals and damages under this spell: its damage takes back what its heals gave.
 const SPIRIT_LINK: SpellId = 98021;
 
 /// Healing: effective heals and absorbs on the healer's own side, less what his own effects took
-/// back. On a player or a pet, a heal counts when healer and target stand on the same side at
-/// the event and an absorb always; on any other unit both count only while neither stands
-/// against the raid. An enemy no player owns is credited itself for what it does on players and
+/// back. On a player or a pet, an absorb always counts, a player's or pet's heal unless it is
+/// logged hostile and its target friendly, and any other healer's when both stand on the same
+/// side; on any other unit heals and absorbs count only while neither stands against the raid. An enemy no player owns is credited itself for what it does on players and
 /// pets.
 pub(crate) fn healing_share(fight: &Fight, event: &Event) -> Option<Share> {
     if event.target == NOBODY {
@@ -1001,10 +1018,14 @@ pub(crate) fn healing_share(fight: &Fight, event: &Event) -> Option<Share> {
     let on_raid = fight.actors.credited_player(event.target).is_some();
     let doer_against = || fight.against_raid_at(doer, doer_hostile, event.t);
     let target_against = || fight.against_raid_at(event.target, event.target_hostile, event.t);
-    let counts = if on_raid {
-        absorb || doer_against() == target_against()
-    } else {
+    let counts = if !on_raid {
         !doer_against() && !target_against()
+    } else if absorb {
+        true
+    } else if fight.actors.credited_player(doer).is_some() {
+        heal_on_player_counts(doer_hostile, event.target_hostile)
+    } else {
+        doer_against() == target_against()
     };
     if !counts {
         return None;
