@@ -47,6 +47,9 @@ pub struct Fight {
     /// When a mechanic turned the logging player against the raid, as sorted, inclusive
     /// `(start_ms, end_ms)` spans. The log then shows enemies friendly and the raid hostile.
     pub logger_turned: Vec<(i32, i32)>,
+    /// Who put a buff that grants heals on whom, as `(holder, t, granter)` sorted by holder and
+    /// time, with granter [`NOBODY`] where one ended; see [`Fight::heal_granter`].
+    pub heal_grants: Vec<(ActorId, i32, ActorId)>,
 }
 
 impl Fight {
@@ -54,6 +57,16 @@ impl Fight {
     pub fn logger_turned_at(&self, t: i32) -> bool {
         let next = self.logger_turned.partition_point(|&(start, _)| start <= t);
         next > 0 && self.logger_turned[next - 1].1 >= t
+    }
+
+    /// Who granted the heal `holder` logged at `t` as his own: the latest to buff him with it,
+    /// unless that buff ended since.
+    pub fn heal_granter(&self, holder: ActorId, t: i32) -> Option<ActorId> {
+        let end = self
+            .heal_grants
+            .partition_point(|&(h, at, _)| (h, at) <= (holder, t));
+        let &(h, _, granter) = self.heal_grants.get(end.checked_sub(1)?)?;
+        (h == holder && granter != NOBODY).then_some(granter)
     }
 
     /// Whether `actor`, logged `hostile` on a line at `t`, stands against the raid. While the
@@ -188,6 +201,7 @@ pub enum EventKind {
     Missed(Missed),
     Heal(Heal),
     Absorbed(Absorbed),
+    HealAbsorbed(HealAbsorbed),
     Energize(Energize),
     CastStart,
     CastSuccess,
@@ -346,6 +360,15 @@ pub struct Absorbed {
     pub absorb_spell: SpellId,
     pub amount: u64,
     pub supporter: ActorId,
+}
+
+/// The event's spell, a heal absorb its source put on its target, took `amount` of `healer`'s
+/// `heal_spell`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HealAbsorbed {
+    pub healer: ActorId,
+    pub heal_spell: SpellId,
+    pub amount: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -21,6 +21,7 @@ pub(crate) fn log_name(event: &Event) -> &'static str {
         },
         EventKind::Absorbed(absorbed) if absorbed.supporter != NOBODY => "SPELL_ABSORBED_SUPPORT",
         EventKind::Absorbed(_) => "SPELL_ABSORBED",
+        EventKind::HealAbsorbed(_) => "SPELL_HEAL_ABSORBED",
         EventKind::Energize(_) => "SPELL_ENERGIZE",
         EventKind::CastStart => "SPELL_CAST_START",
         EventKind::CastSuccess => "SPELL_CAST_SUCCESS",

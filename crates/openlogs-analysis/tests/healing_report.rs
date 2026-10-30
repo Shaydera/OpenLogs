@@ -1,11 +1,12 @@
 mod support;
 
 use openlogs_analysis::{
-    Absorbed, Attribution, Dimension, EventKind, Heal, NOBODY, ReportFilter, RowKey, RowKind,
-    Scope, ScopeMetric, Side, UnitRef, breakdown, healing,
+    Absorbed, Attribution, AuraAction, AuraType, DamageVia, Dimension, EventKind, Fight, Heal,
+    HealAbsorbed, NO_SPELL, NOBODY, ReportFilter, RowKey, RowKind, Scope, ScopeMetric, Side,
+    UnitRef, breakdown, healing,
 };
 use openlogs_gamedata::Curated;
-use support::{FightBuilder, HOSTILE_FLAGS, heal};
+use support::{FightBuilder, HOSTILE_FLAGS, PET_FLAGS, damage, heal};
 
 fn whole(mode: Attribution) -> ReportFilter {
     ReportFilter::whole(mode)
@@ -252,4 +253,199 @@ fn an_enemy_heal_on_a_mind_controlled_player_is_not_enemy_healing() {
     .map(|r| r.row.amount)
     .sum();
     assert_eq!(enemy_healing, 200);
+}
+
+fn healing_table_total(fight: &Fight) -> i64 {
+    breakdown(
+        fight,
+        &Curated::bundled(),
+        &whole(Attribution::Augmented),
+        &Scope::default(),
+        ScopeMetric::Healing,
+        Dimension::Source,
+    )
+    .rows
+    .iter()
+    .map(|r| r.row.amount)
+    .sum()
+}
+
+fn absorb(absorber: u32, absorb_spell: u32, amount: u64) -> EventKind {
+    EventKind::Absorbed(Absorbed {
+        absorber,
+        absorber_hostile: false,
+        absorb_spell,
+        amount,
+        supporter: NOBODY,
+    })
+}
+
+#[test]
+fn absorbs_that_only_delay_damage_are_not_healing() {
+    let mut b = FightBuilder::new(10_000);
+    let evoker = b.player("Player-1", "Speronis-Stonevale-EU", 1473);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    b.spell(410355, "Stretch Time");
+    b.spell(374348, "Renewing Blaze");
+    b.push(1_000, boss, evoker, 9, absorb(evoker, 410355, 900));
+    b.push(2_000, boss, evoker, 9, absorb(evoker, 374348, 400));
+    let fight = b.build();
+    let report = healing(&fight, &whole(Attribution::Augmented));
+    assert_eq!(report.total, 400);
+    assert_eq!(healing_table_total(&fight), 400);
+}
+
+#[test]
+fn light_of_the_martyr_takes_what_it_absorbs_off_the_paladins_healing() {
+    let mut b = FightBuilder::new(10_000);
+    let paladin = b.player("Player-1", "Puran-Ironmoor-EU", 65);
+    let druid = b.player("Player-2", "Pyrrin-Emberfall-EU", 105);
+    let tank = b.player("Player-3", "Edrin-Emberfall-EU", 581);
+    b.spell(19750, "Flash of Light");
+    b.spell(774, "Rejuvenation");
+    b.spell(448005, "Light of the Martyr");
+    b.push(1_000, paladin, tank, 19750, EventKind::Heal(heal(1_000, 0)));
+    b.push(
+        2_000,
+        druid,
+        paladin,
+        774,
+        EventKind::Heal(Heal {
+            absorbed: 300,
+            ..heal(200, 0)
+        }),
+    );
+    b.push(
+        2_000,
+        paladin,
+        paladin,
+        448005,
+        EventKind::HealAbsorbed(HealAbsorbed {
+            healer: druid,
+            heal_spell: 774,
+            amount: 300,
+        }),
+    );
+    let fight = b.build();
+    let report = healing(&fight, &whole(Attribution::Augmented));
+    let player = |p: u32| report.players.iter().find(|x| x.player == p).unwrap();
+    assert_eq!((player(paladin).total, player(druid).total), (700, 500));
+    let martyr = player(paladin)
+        .abilities
+        .iter()
+        .find(|row| row.spell == 448005)
+        .unwrap();
+    assert_eq!((martyr.amount, martyr.hits), (-300, 0));
+    assert_eq!(healing_table_total(&fight), 1_200);
+}
+
+#[test]
+fn spirit_link_damage_takes_back_what_the_totem_healed() {
+    let mut b = FightBuilder::new(10_000);
+    let shaman = b.player("Player-1", "Elowyn-Emberfall-EU", 264);
+    let tank = b.player("Player-2", "Edrin-Emberfall-EU", 581);
+    let mage = b.player("Player-3", "Ulvara-Emberfall-EU", 63);
+    let totem = b.unit("Creature-0-1-1-1-53006-01", "Spirit Link Totem", PET_FLAGS);
+    b.fight.actors.set_owner(totem, shaman);
+    b.spell(98021, "Spirit Link");
+    b.push(1_000, totem, tank, 98021, EventKind::Heal(heal(800, 0)));
+    b.push(
+        1_000,
+        totem,
+        mage,
+        98021,
+        EventKind::Damage(damage(DamageVia::Spell, 600, 0)),
+    );
+    let fight = b.build();
+    let report = healing(&fight, &whole(Attribution::Augmented));
+    assert_eq!(report.total, 200);
+    assert_eq!(healing_table_total(&fight), 200);
+}
+
+#[test]
+fn healing_elixir_heals_belong_to_the_monk_whose_buff_granted_them() {
+    let mut b = FightBuilder::new(10_000);
+    let monk = b.player("Player-1", "Wenlai-Emberfall-EU", 270);
+    let druid = b.player("Player-2", "Pyrrin-Emberfall-EU", 104);
+    b.spell(467281, "Healing Elixir");
+    b.spell(428439, "Healing Elixir");
+    b.push(
+        1_000,
+        monk,
+        druid,
+        467281,
+        EventKind::Aura {
+            action: AuraAction::Applied,
+            aura_type: AuraType::Buff,
+            stacks: None,
+            broken_by: NO_SPELL,
+        },
+    );
+    b.push(2_000, druid, druid, 428439, EventKind::Heal(heal(400, 0)));
+    let fight = b.build();
+    let report = healing(&fight, &whole(Attribution::Augmented));
+    assert_eq!(
+        report
+            .players
+            .iter()
+            .map(|p| (p.player, p.total))
+            .collect::<Vec<_>>(),
+        [(monk, 400)]
+    );
+}
+
+#[test]
+fn a_cost_beyond_the_heals_comes_off_the_absorbs() {
+    let mut b = FightBuilder::new(10_000);
+    let paladin = b.player("Player-1", "Puran-Ironmoor-EU", 65);
+    let druid = b.player("Player-2", "Pyrrin-Emberfall-EU", 105);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    b.spell(19750, "Flash of Light");
+    b.spell(414019, "Greater Judgment");
+    b.spell(448005, "Light of the Martyr");
+    b.push(1_000, paladin, druid, 19750, EventKind::Heal(heal(100, 0)));
+    b.push(1_500, boss, druid, 9, absorb(paladin, 414019, 500));
+    b.push(
+        2_000,
+        paladin,
+        paladin,
+        448005,
+        EventKind::HealAbsorbed(HealAbsorbed {
+            healer: druid,
+            heal_spell: 774,
+            amount: 300,
+        }),
+    );
+    let fight = b.build();
+    let report = healing(&fight, &whole(Attribution::Augmented));
+    let paladin_row = report.players.iter().find(|p| p.player == paladin).unwrap();
+    assert_eq!(paladin_row.total, 300);
+    assert_eq!(healing_table_total(&fight), 300);
+}
+
+#[test]
+fn a_healing_elixir_heal_after_the_buff_ended_stays_with_its_holder() {
+    let mut b = FightBuilder::new(10_000);
+    let monk = b.player("Player-1", "Wenlai-Emberfall-EU", 270);
+    let druid = b.player("Player-2", "Pyrrin-Emberfall-EU", 104);
+    b.spell(467281, "Healing Elixir");
+    b.spell(428439, "Healing Elixir");
+    let aura = |action| EventKind::Aura {
+        action,
+        aura_type: AuraType::Buff,
+        stacks: None,
+        broken_by: NO_SPELL,
+    };
+    b.push(1_000, monk, druid, 467281, aura(AuraAction::Applied));
+    b.push(3_000, monk, druid, 467281, aura(AuraAction::Removed));
+    b.push(5_000, druid, druid, 428439, EventKind::Heal(heal(400, 0)));
+    let report = healing(&b.build(), &whole(Attribution::Augmented));
+    assert_eq!(
+        report
+            .players
+            .iter()
+            .map(|p| (p.player, p.total))
+            .collect::<Vec<_>>(),
+        [(druid, 400)]
+    );
 }

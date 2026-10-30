@@ -1,6 +1,6 @@
 use openlogs_parser::{
     Absorbed, AuraAction, AuraChange, AuraType, CombatEvent, CombatKind, Damage, DamageVia,
-    Energize, Event, Heal, HealVia, Missed, Power, Spell, Unit, parse,
+    Energize, Event, Heal, HealAbsorbed, HealVia, Missed, Power, Spell, Unit, parse,
 };
 
 const EVOKER: &str = "Player-4103-63B5FD29";
@@ -392,6 +392,32 @@ fn absorbs_with_and_without_an_attacking_spell() {
     assert_eq!(
         (absorbed.absorb_spell.name, absorbed.amount),
         ("Soul Barrier", 130_439)
+    );
+}
+
+#[test]
+fn heal_absorbs_name_the_heal_they_took() {
+    let e = combat(
+        r#"10/7/2026 19:00:04.9992  SPELL_HEAL_ABSORBED,Player-4102-7E89660A,"Puran-Ironmoor-EU",0x514,0x80000000,Player-4102-7E89660A,"Puran-Ironmoor-EU",0x514,0x80000000,448005,"Light of the Martyr",0x2,Player-4101-D4B96DC1,"Edrin-Emberfall-EU",0x514,0x80000000,143924,"Leech",0x1,10729,10729"#,
+    );
+    assert_eq!(e.spell.map(|s| s.id), Some(448005));
+    assert_eq!(e.source.guid, "Player-4102-7E89660A");
+    assert_eq!(
+        e.kind,
+        CombatKind::HealAbsorbed(HealAbsorbed {
+            healer: Unit {
+                guid: "Player-4101-D4B96DC1",
+                name: Some("Edrin-Emberfall-EU"),
+                flags: 0x514,
+                raid_flags: 0x8000_0000,
+            },
+            heal_spell: Spell {
+                id: 143924,
+                name: "Leech",
+                school: 0x1,
+            },
+            amount: 10729,
+        })
     );
 }
 

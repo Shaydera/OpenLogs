@@ -4,10 +4,10 @@ use crate::actors::ActorId;
 use crate::fight::{Fight, SpellId};
 use crate::filter::{Attribution, ReportFilter};
 use crate::reports::{
-    AbilityRow, AbilityTargets, Absorbs, BuffShare, GroupAbilities, PetNames, RowKind, Share,
-    SupportAcc, SupportLedger, SupportShare, TOP_ABILITIES_PER_GROUP, TargetKey, TargetShare,
-    UnitCounts, color_groups, credit_support, damage_share, damage_target, group_abilities,
-    keeps_own, keeps_support, per_second, sorted_by_amount, support_entry,
+    AbilityRow, AbilityTargets, Absorbs, BuffShare, GroupAbilities, PetNames, Share, SupportAcc,
+    SupportLedger, SupportShare, TOP_ABILITIES_PER_GROUP, TargetKey, TargetShare, UnitCounts,
+    color_groups, credit_support, damage_share, damage_target, group_abilities, keeps_own,
+    keeps_support, per_second, sorted_by_amount, support_entry,
 };
 use crate::scope::Scope;
 
@@ -116,12 +116,7 @@ fn damage_done_grouped(
                 periodic,
                 ..
             }) => {
-                let actor = pets.representative(fight, player, actor);
-                let kind = if actor == player {
-                    RowKind::Own
-                } else {
-                    RowKind::Pet
-                };
+                let (actor, kind) = pets.row(fight, player, actor);
                 let entry = acc.entry(player).or_default();
                 entry.own += amount;
                 entry.support.rows.add(
@@ -149,7 +144,7 @@ fn damage_done_grouped(
                     parts,
                 );
             }
-            None => {}
+            Some(Share::Cost { .. }) | None => {}
         }
     }
 

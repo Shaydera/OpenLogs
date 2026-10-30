@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use openlogs_analysis::{
     ActorId, Actors, Damage, DamageVia, Event, EventKind, Fight, FightKind, Heal, NO_SPELL, NOBODY,
-    PositionSample, PowerSample, SpellId, SpellInfo, UnitHp, pair_melee_lines,
+    PositionSample, PowerSample, SpellId, SpellInfo, UnitHp, note_heal_grants, pair_melee_lines,
 };
 use openlogs_index::Outcome;
 use openlogs_parser::Unit;
@@ -44,6 +44,7 @@ impl FightBuilder {
                 ui_map_id: None,
                 map_bounds: Vec::new(),
                 logger_turned: Vec::new(),
+                heal_grants: Vec::new(),
             },
         }
     }
@@ -209,6 +210,7 @@ impl FightBuilder {
     pub fn build(&mut self) -> Fight {
         self.fight.events.sort_by_key(|event| event.t);
         pair_melee_lines(&mut self.fight);
+        note_heal_grants(&mut self.fight);
         self.fight.power.sort_by_key(|p| p.t);
         self.fight.positions.sort_by_key(|p| p.t);
         self.fight.clone()

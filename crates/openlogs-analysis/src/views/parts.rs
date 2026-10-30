@@ -37,6 +37,8 @@ pub(crate) struct Part {
     pub overheal: i64,
     pub healed: i64,
     pub hit: bool,
+    /// Healing: what the doer's own effect took back. It counts like a hit but is none.
+    pub cost: bool,
     pub crit: bool,
     /// A periodic hit or miss, or a deduction from a periodic hit.
     pub periodic: bool,
@@ -128,12 +130,35 @@ fn own_side(
                 overheal: overheal as i64,
                 healed,
                 hit: true,
+                cost: false,
                 crit: critical,
                 periodic,
                 miss: None,
                 row: Some(index),
             });
         }
+        Some(Share::Cost {
+            actor,
+            spell,
+            amount,
+            ..
+        }) => book(Part {
+            source: actor,
+            spell,
+            kind: CellKind::Own,
+            target: event.target,
+            amount: -(amount as i64),
+            absorbed: 0,
+            heal_absorbed: 0,
+            overheal: 0,
+            healed: 0,
+            hit: false,
+            cost: true,
+            crit: false,
+            periodic: false,
+            miss: None,
+            row: Some(index),
+        }),
         Some(Share::Support(support)) if reattributed => {
             let amount = support.amount as i64;
             let hit = buffed_hit(fight, index);
@@ -153,6 +178,7 @@ fn own_side(
                 overheal: 0,
                 healed: 0,
                 hit: false,
+                cost: false,
                 crit: false,
                 periodic: false,
                 miss: None,
@@ -173,6 +199,7 @@ fn own_side(
                 overheal: 0,
                 healed: 0,
                 hit: false,
+                cost: false,
                 crit: false,
                 periodic,
                 miss: None,
@@ -228,6 +255,7 @@ fn miss_part(event: &Event, index: usize, miss: MissType) -> Part {
         overheal: 0,
         healed: 0,
         hit: false,
+        cost: false,
         crit: false,
         periodic: is_periodic(event),
         miss: Some(miss),
@@ -280,6 +308,7 @@ fn taken(
             overheal: 0,
             healed: 0,
             hit: true,
+            cost: false,
             crit: dealt_damage(event).is_some_and(|damage| damage.critical),
             periodic: is_periodic(event),
             miss: None,
@@ -315,6 +344,7 @@ fn enemy_healing(fight: &Fight, index: usize, event: &Event, book: &mut impl FnM
         overheal: heal.overheal as i64,
         healed: amount,
         hit: true,
+        cost: false,
         crit: heal.critical,
         periodic: heal.periodic,
         miss: None,

@@ -3,7 +3,7 @@
 use crate::ParseError;
 use crate::event::{
     Absorbed, AuraAction, AuraChange, CombatEvent, CombatKind, Damage, DamageVia, Energize, Heal,
-    HealVia, Missed, Spell,
+    HealAbsorbed, HealVia, Missed, Spell,
 };
 use crate::fields::Fields;
 
@@ -20,6 +20,7 @@ enum Shape {
     SpellMissed(DamageVia),
     Heal(HealVia),
     Absorbed,
+    HealAbsorbed,
     Energize {
         periodic: bool,
     },
@@ -66,6 +67,7 @@ fn shape_of(base: &str, support: bool) -> Option<Shape> {
         "SPELL_HEAL" => Shape::Heal(HealVia::Direct),
         "SPELL_PERIODIC_HEAL" => Shape::Heal(HealVia::Periodic),
         "SPELL_ABSORBED" => Shape::Absorbed,
+        "SPELL_HEAL_ABSORBED" => Shape::HealAbsorbed,
         "SPELL_ENERGIZE" => Shape::Energize { periodic: false },
         "SPELL_PERIODIC_ENERGIZE" => Shape::Energize { periodic: true },
         "SPELL_CAST_START" => Shape::CastStart,
@@ -159,6 +161,11 @@ pub(crate) fn parse_combat<'a>(f: &Fields<'_, 'a>) -> Result<Option<CombatEvent<
                 supporter,
             })
         }
+        Shape::HealAbsorbed => CombatKind::HealAbsorbed(HealAbsorbed {
+            healer: f.unit(12)?,
+            heal_spell: f.spell(16)?,
+            amount: f.amount(19)?,
+        }),
         Shape::Energize { periodic } => CombatKind::Energize(Energize {
             periodic,
             amount: f.num(31)?,
