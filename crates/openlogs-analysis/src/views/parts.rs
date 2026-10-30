@@ -89,7 +89,7 @@ impl AmountFacts {
             Self::Taken {
                 hostile_sources_only,
             } => taken(fight, index, hostile_sources_only, overkill, book),
-            Self::EnemyHealing => enemy_healing(index, event, book),
+            Self::EnemyHealing => enemy_healing(fight, index, event, book),
         }
     }
 }
@@ -262,7 +262,10 @@ fn taken(
     if fight.actors.get(event.target).kind != ActorKind::Player {
         return;
     }
-    if hostile_sources_only && (event.source == NOBODY || !event.source_hostile) {
+    if hostile_sources_only
+        && (event.source == NOBODY
+            || !fight.against_raid_at(event.source, event.source_hostile, event.t))
+    {
         return;
     }
     if let Some((amount, absorbed)) = amounts {
@@ -287,11 +290,17 @@ fn taken(
     }
 }
 
-fn enemy_healing(index: usize, event: &Event, book: &mut impl FnMut(Part)) {
+/// Heals among units against the raid; heals on players and their pets are healing of their side.
+fn enemy_healing(fight: &Fight, index: usize, event: &Event, book: &mut impl FnMut(Part)) {
     let EventKind::Heal(heal) = event.kind else {
         return;
     };
-    if !(event.source_hostile && event.target_hostile) || heal.supporter != NOBODY {
+    let against = |actor, hostile| fight.against_raid_at(actor, hostile, event.t);
+    if !against(event.source, event.source_hostile)
+        || !against(event.target, event.target_hostile)
+        || fight.actors.credited_player(event.target).is_some()
+        || heal.supporter != NOBODY
+    {
         return;
     }
     let amount = healing_amount(&heal) as i64;

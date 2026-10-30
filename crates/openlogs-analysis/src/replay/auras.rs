@@ -153,7 +153,7 @@ fn raid_frame(
     {
         return None;
     }
-    if interval.aura_type == AuraType::Debuff && interval.source_hostile {
+    if interval.aura_type == AuraType::Debuff && from_raid_enemy(fight, interval) {
         return Some(HOSTILE_DEBUFF);
     }
     if let Some(priority) = curated.raid_frame_priority(spell) {
@@ -187,7 +187,8 @@ fn category(
     );
     let player_on_enemy = enemy_held && fight.actors.credited_player(interval.source).is_some();
     let no_class_spell = spell_classes.is_loaded() && !spell_classes.is_class_spell(spell);
-    if interval.source_hostile || (no_class_spell && !player_on_enemy && !curated.is_lockout(spell))
+    if from_raid_enemy(fight, interval)
+        || (no_class_spell && !player_on_enemy && !curated.is_lockout(spell))
     {
         return AuraCategory::Encounter;
     }
@@ -203,6 +204,10 @@ fn category(
         }
         None => AuraCategory::Other,
     }
+}
+
+fn from_raid_enemy(fight: &Fight, interval: &AuraInterval) -> bool {
+    fight.against_raid_at(interval.source, interval.source_hostile, interval.start_ms)
 }
 
 fn is_major_buff(fight: &Fight, curated: &Curated, interval: &AuraInterval) -> bool {

@@ -78,7 +78,7 @@ pub(crate) fn enemy_kills(fight: &Fight, filter: &ReportFilter) -> Vec<Kill> {
     for event in &fight.events {
         if matches!(event.kind, EventKind::Died { unconscious: false })
             && event.t >= 0
-            && side_of(fight, event.target, event.target_hostile) == Some(Side::Enemy)
+            && side_of(fight, event.target, event.target_hostile, event.t) == Some(Side::Enemy)
             && seen.insert(event.target)
             && filter.contains(event.t)
         {

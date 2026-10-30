@@ -49,7 +49,14 @@ pub(crate) fn rows(
         else {
             continue;
         };
-        if kind != aura_type || !holds(fight, event.target, event.target_hostile, scope.perspective)
+        if kind != aura_type
+            || !holds(
+                fight,
+                event.target,
+                event.target_hostile,
+                event.t,
+                scope.perspective,
+            )
         {
             continue;
         }

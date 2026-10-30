@@ -84,7 +84,7 @@ pub(crate) fn kicks<'a>(
             _ => None,
         })
         .filter(move |(_, event, _)| {
-            side_of(fight, event.source, event.source_hostile) == Some(side)
+            side_of(fight, event.source, event.source_hostile, event.t) == Some(side)
         })
 }
 

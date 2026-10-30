@@ -375,6 +375,7 @@ fn healing_rows_carry_shields_and_what_heal_absorbs_took() {
         5,
         EventKind::Absorbed(Absorbed {
             absorber: priest,
+            absorber_hostile: false,
             absorb_spell: 17,
             amount: 400,
             supporter: NOBODY,

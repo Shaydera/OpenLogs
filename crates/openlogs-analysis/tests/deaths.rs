@@ -132,6 +132,7 @@ fn healing_before_death_counts_shields_and_absorbed_heals_but_no_support_shares(
         1,
         EventKind::Absorbed(Absorbed {
             absorber: priest,
+            absorber_hostile: false,
             absorb_spell: 17,
             amount: 150,
             supporter: NOBODY,

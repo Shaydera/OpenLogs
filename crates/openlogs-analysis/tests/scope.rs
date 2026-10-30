@@ -140,9 +140,9 @@ fn players_and_their_pets_are_friendly_even_when_flagged_hostile() {
         HOSTILE_FLAGS,
     );
     let fight = b.build();
-    assert_eq!(side_of(&fight, warlock, true), Some(Side::Friendly));
-    assert_eq!(side_of(&fight, imp, true), Some(Side::Friendly));
-    assert_eq!(side_of(&fight, add, true), Some(Side::Enemy));
-    assert_eq!(side_of(&fight, add, false), Some(Side::Friendly));
-    assert_eq!(side_of(&fight, 0, true), None);
+    assert_eq!(side_of(&fight, warlock, true, 0), Some(Side::Friendly));
+    assert_eq!(side_of(&fight, imp, true, 0), Some(Side::Friendly));
+    assert_eq!(side_of(&fight, add, true, 0), Some(Side::Enemy));
+    assert_eq!(side_of(&fight, add, false, 0), Some(Side::Friendly));
+    assert_eq!(side_of(&fight, 0, true, 0), None);
 }

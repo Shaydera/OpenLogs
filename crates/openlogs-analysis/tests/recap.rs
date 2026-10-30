@@ -62,6 +62,7 @@ fn recap_lists_damage_heals_and_absorbs() {
         1,
         EventKind::Absorbed(Absorbed {
             absorber: s.priest,
+            absorber_hostile: false,
             absorb_spell: 17,
             amount: 100_000,
             supporter: NOBODY,

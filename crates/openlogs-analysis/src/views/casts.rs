@@ -336,7 +336,7 @@ pub(crate) fn casts_of(fight: &Fight, side: Side, item: &CastItem) -> bool {
             } else {
                 event.target_hostile
             };
-            side_of(fight, item.caster, hostile) == Some(Side::Enemy)
+            side_of(fight, item.caster, hostile, event.t) == Some(Side::Enemy)
         }
     }
 }

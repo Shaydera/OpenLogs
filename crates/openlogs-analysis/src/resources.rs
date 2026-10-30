@@ -135,10 +135,10 @@ fn hp_hostile(fight: &Fight, event: &Event, actor: ActorId) -> bool {
 }
 
 /// Whose resources `side` shows: players for friendlies, units hostile at the sample for enemies.
-fn holds(fight: &Fight, side: Side, actor: ActorId, hostile: bool) -> bool {
+fn holds(fight: &Fight, side: Side, actor: ActorId, hostile: bool, t: i32) -> bool {
     match side {
         Side::Friendly => fight.actors.get(actor).kind == ActorKind::Player,
-        Side::Enemy => side_of(fight, actor, hostile) == Some(Side::Enemy),
+        Side::Enemy => side_of(fight, actor, hostile, t) == Some(Side::Enemy),
     }
 }
 
@@ -150,7 +150,13 @@ fn health_samples(fight: &Fight, side: Side, start: i32, end: i32) -> Vec<PowerS
         let Some(hp) = event.unit_hp else {
             continue;
         };
-        if !holds(fight, side, hp.actor, hp_hostile(fight, event, hp.actor)) {
+        if !holds(
+            fight,
+            side,
+            hp.actor,
+            hp_hostile(fight, event, hp.actor),
+            event.t,
+        ) {
             continue;
         }
         samples.push(PowerSample {

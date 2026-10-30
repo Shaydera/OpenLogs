@@ -244,3 +244,29 @@ fn unfiltered_friendly_deaths_are_the_full_recap_list() {
     );
     assert_eq!((report.recaps.len(), report.rezzed), (2, 1));
 }
+
+#[test]
+fn an_enemy_logged_friendly_while_the_logging_player_is_turned_dies_on_the_enemy_side() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Faelan-Emberfall-EU", 62);
+    let add = b.unit(
+        "Creature-0-1-1-1-261874-01",
+        "Blightscale Rawling",
+        HOSTILE_FLAGS,
+    );
+    b.spell(30451, "Arcane Blast");
+    b.push(10_000, mage, add, 30451, lethal(900));
+    b.push(10_000, NOBODY, add, 0, died());
+    let mut fight = b.build();
+    fight.logger_turned = vec![(9_000, 11_000)];
+    for event in &mut fight.events {
+        event.target_hostile = false;
+    }
+    let enemies = Scope {
+        perspective: Side::Enemy,
+        ..Scope::default()
+    };
+    let report = deaths_report(&fight, &Curated::bundled(), &whole(), &enemies);
+    let killed: Vec<_> = report.kills.iter().map(|k| k.unit).collect();
+    assert_eq!(killed, [add]);
+}

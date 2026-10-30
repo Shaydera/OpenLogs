@@ -147,12 +147,13 @@ fn units(fight: &Fight, list: &[UnitRef], unit: Option<&UnitRef>) -> bool {
     list.is_empty() || unit.is_some_and(|unit| list.iter().any(|s| unit.is_in(fight, s)))
 }
 
-/// The side of `actor` at an event that saw it `hostile`: players and what they own are always
-/// friendly; `None` for no unit (the environment).
-pub fn side_of(fight: &Fight, actor: ActorId, hostile: bool) -> Option<Side> {
+/// The side of `actor` at an event at `t` that logged it `hostile`: players and what they own are
+/// always friendly; `None` for no unit (the environment).
+pub fn side_of(fight: &Fight, actor: ActorId, hostile: bool, t: i32) -> Option<Side> {
     if actor == NOBODY {
         return None;
     }
-    let enemy = hostile && fight.actors.credited_player(actor).is_none();
+    let enemy =
+        fight.actors.credited_player(actor).is_none() && fight.against_raid_at(actor, hostile, t);
     Some(if enemy { Side::Enemy } else { Side::Friendly })
 }

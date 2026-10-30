@@ -259,6 +259,7 @@ fn heals_and_absorbs_own_their_support() {
     let absorb = |absorb_spell, amount, supporter| {
         EventKind::Absorbed(Absorbed {
             absorber: shaman,
+            absorber_hostile: false,
             absorb_spell,
             amount,
             supporter,
@@ -320,6 +321,7 @@ fn a_heal_keeps_its_overheal_and_what_it_healed_when_support_moves() {
         9,
         EventKind::Absorbed(Absorbed {
             absorber: shaman,
+            absorber_hostile: false,
             absorb_spell: 114893,
             amount: 300,
             supporter: NOBODY,

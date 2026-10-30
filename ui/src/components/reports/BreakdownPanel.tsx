@@ -4,7 +4,7 @@ import { formatScaled, formatShare } from '../../i18n/format';
 import { type MessageKey, t } from '../../i18n/i18n';
 import { spellIcon } from '../../icons';
 import { type MetricTab, useApp } from '../../store';
-import { GameIcon } from '../GameIcon';
+import { GameIcon, MonogramTile } from '../GameIcon';
 import { rowLabel, rowPet, showOnlyLabel } from '../filters/labels';
 import { NoMatch } from '../filters/NoMatch';
 import { ReportPickers } from '../filters/ReportPickers';
@@ -106,7 +106,8 @@ export function BreakdownPanel(props: Props) {
   const icon = (row: BreakdownRow, size?: number) => {
     const player = playerOf(row);
     if (player) return <PlayerIcon player={player} size={size} />;
-    return row.key.kind === 'ability' ? <GameIcon name={rowLabel(row)} icon={spellIcon(row.spellId)} size={size} /> : null;
+    if (row.key.kind === 'ability') return <GameIcon name={rowLabel(row)} icon={spellIcon(row.spellId)} size={size} />;
+    return <MonogramTile name={rowLabel(row)} size={size} />;
   };
 
   const plainFill = (row: BreakdownRow, barPct: number) => {
