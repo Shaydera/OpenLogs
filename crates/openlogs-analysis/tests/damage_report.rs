@@ -391,6 +391,7 @@ fn logged_damage(lines: &[String]) -> Vec<(String, u64)> {
 }
 
 const WARRIOR: &str = "Player-1-0000000A";
+const ROGUE: &str = "Player-1-0000000B";
 const BOSS: &str = "Vehicle-0-1-1-1-257758-01";
 
 /// The `i`th second after 19:03:03.
@@ -425,5 +426,40 @@ fn a_boss_counts_while_logged_friendly_to_a_turned_logger_but_not_while_logged_n
     assert_eq!(
         logged_damage(&lines),
         [("Wendel-Emberfall-EU".to_string(), 800)]
+    );
+}
+
+#[test]
+fn the_raids_hits_on_a_mind_controlled_player_count_but_not_theirs() {
+    let warrior = (WARRIOR, "Wendel-Emberfall-EU", "0x514");
+    let rogue = |flags| (ROGUE, "Ilvarra-Emberfall-EU", flags);
+    let pet = ("Creature-0-1-1-1-19668-01", "Shadowfiend", "0x2114");
+    let lines = [
+        "10/7/2026 19:03:02.5000  SPELL_SUMMON,Player-1-0000000B,\"Ilvarra-Emberfall-EU\",0x514,\
+         0x80000000,Creature-0-1-1-1-19668-01,\"Shadowfiend\",0x2114,0x80000000,34433,\
+         \"Shadowfiend\",0x20\n"
+            .to_string(),
+        hit_line("03.0000", warrior, rogue("0x548"), 700),
+        hit_line("04.0000", warrior, rogue("0x514"), 300),
+        hit_line("05.0000", rogue("0x548"), warrior, 200),
+        hit_line("06.0000", pet, rogue("0x548"), 100),
+    ];
+    assert_eq!(
+        logged_damage(&lines),
+        [("Wendel-Emberfall-EU".to_string(), 700)]
+    );
+}
+
+#[test]
+fn while_the_logging_player_is_turned_the_raids_hits_on_them_count_but_not_theirs() {
+    let warrior = (WARRIOR, "Wendel-Emberfall-EU", "0x548");
+    let logger = (ROGUE, "Ilvarra-Emberfall-EU", "0x511");
+    let mut lines = boss_hits_around_a_turn(0);
+    lines.push(hit_line(&at(45), warrior, logger, 700));
+    lines.push(hit_line(&at(46), logger, warrior, 300));
+    lines.sort();
+    assert_eq!(
+        logged_damage(&lines),
+        [("Wendel-Emberfall-EU".to_string(), 700)]
     );
 }

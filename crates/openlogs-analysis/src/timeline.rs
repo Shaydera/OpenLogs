@@ -72,9 +72,19 @@ fn hits_enemy_npc(fight: &Fight, event: &Event) -> bool {
         || (fight.logger_turned_at(event.t) && fight.actors.is_enemy(event.target))
 }
 
-/// Whether a player's or pet's hit counts for Damage Done: on an enemy NPC.
+/// Whether a player's or pet's hit counts for Damage Done: on an enemy NPC, or by the raid on
+/// a player turned against it (mind control, or the logging player's side while it is turned).
 pub fn hits_enemy(fight: &Fight, event: &Event) -> bool {
-    hits_enemy_npc(fight, event)
+    hits_enemy_npc(fight, event) || hits_turned_player(fight, event)
+}
+
+/// While the logging player is turned, its side is logged friendly and the raid hostile.
+fn hits_turned_player(fight: &Fight, event: &Event) -> bool {
+    let raid_logged_hostile = fight.logger_turned_at(event.t);
+    fight.actors.get(event.target).kind == ActorKind::Player
+        && event.target_hostile != raid_logged_hostile
+        && event.source_hostile == raid_logged_hostile
+        && fight.actors.credited_player(event.source) != Some(event.target)
 }
 
 /// Non-kills shorter than this are aborted pulls: no boss, no phases.
