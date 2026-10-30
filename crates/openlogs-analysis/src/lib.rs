@@ -10,6 +10,7 @@ mod cells;
 mod compare;
 mod deaths;
 mod deaths_report;
+mod delayed;
 mod fight;
 mod filter;
 mod granted;
@@ -49,6 +50,7 @@ pub use deaths::{
     nth_death_ms,
 };
 pub use deaths_report::{DeathsReport, Kill, deaths_report};
+pub use delayed::note_delayed_hits;
 pub use fight::{
     Absorbed, AuraAction, AuraType, Damage, DamageVia, Energize, Event, EventKind, FailReason,
     Fight, FightKind, Heal, HealAbsorbed, LANDED_MATCH_MS, MarkerInterval, MissType, Missed,

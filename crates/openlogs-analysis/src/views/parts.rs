@@ -286,7 +286,7 @@ fn taken(
     let amounts = if hostile_sources_only {
         taken_amount(event, overkill)
     } else {
-        damage_taken_amount(event)
+        damage_taken_amount(fight, index)
     };
     let miss = missed_attack(event);
     if amounts.is_none() && miss.is_none() {

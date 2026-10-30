@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::actors::{ActorId, NOBODY};
+use crate::delayed::REFRACTIVE_IMAGES;
 use crate::fight::{DamageVia, Event, EventKind, Fight, NO_SPELL, SpellId};
 use crate::filter::Overkill;
 use crate::granted::HEALING_ELIXIR;
@@ -946,7 +947,7 @@ pub(crate) fn damage_share(fight: &Fight, event: &Event, overkill: Overkill) -> 
 
 /// Stretch Time, Refractive Images and Purgatory only delay the damage, which comes back on the
 /// same player; Pet Protector Immunity shields a turned player's pet from the raid.
-const ABSORBS_THAT_ARE_NOT_HEALING: [SpellId; 4] = [410355, 1309497, 114556, 1297827];
+const ABSORBS_THAT_ARE_NOT_HEALING: [SpellId; 4] = [410355, REFRACTIVE_IMAGES, 114556, 1297827];
 
 /// Whether a player's or pet's heal on a player or pet counts, by the flags of its line: not when
 /// a healer logged hostile heals a target logged friendly, like the raid healing the turned
@@ -963,9 +964,9 @@ pub(crate) fn absorb_is_healing(absorb_spell: SpellId) -> bool {
     !ABSORBS_THAT_ARE_NOT_HEALING.contains(&absorb_spell)
 }
 
-/// Refraction and Stretch Time bring back the damage those absorbs delayed, and Spirit Link
-/// moves health between players.
-const DAMAGE_THAT_IS_NOT_TAKEN: [SpellId; 3] = [1309786, 413924, SPIRIT_LINK];
+/// Stretch Time brings back the damage its absorb delayed, which counts at the hit, and Spirit
+/// Link moves health between players.
+const DAMAGE_THAT_IS_NOT_TAKEN: [SpellId; 2] = [413924, SPIRIT_LINK];
 
 /// Whether the damage of `spell` is damage taken.
 pub(crate) fn damage_is_taken(spell: SpellId) -> bool {

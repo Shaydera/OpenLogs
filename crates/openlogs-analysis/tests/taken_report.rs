@@ -1,7 +1,8 @@
 mod support;
 
 use openlogs_analysis::{
-    Attribution, Damage, DamageVia, EventKind, NOBODY, Overkill, ReportFilter, damage_taken,
+    Absorbed, Attribution, Damage, DamageVia, EventKind, NOBODY, Overkill, ReportFilter,
+    damage_taken,
 };
 use support::{FightBuilder, HOSTILE_FLAGS, MELEE, damage};
 
@@ -230,20 +231,143 @@ fn damage_taken_over_for_another_player_counts_on_the_one_who_took_it() {
 }
 
 #[test]
-fn damage_that_comes_back_from_a_delaying_absorb_is_not_damage_taken() {
+fn damage_refractive_images_delays_counts_when_refraction_deals_it() {
     let mut b = FightBuilder::new(10_000);
     let mage = b.player("Player-1", "Faelan-Emberfall-EU", 62);
     let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
     b.spell(5, "Virulent Spit");
     b.spell(1309786, "Refraction");
-    b.push(1_000, boss, mage, 5, hit(500));
+    b.push(998, boss, mage, 5, refractive_images(mage, 150));
+    b.push(
+        1_000,
+        boss,
+        mage,
+        5,
+        EventKind::Damage(Damage {
+            absorbed: 150,
+            ..damage(DamageVia::Spell, 350, 0)
+        }),
+    );
     b.push(
         2_000,
         mage,
         mage,
         1309786,
-        EventKind::Damage(damage(DamageVia::Periodic, 200, 0)),
+        EventKind::Damage(damage(DamageVia::Periodic, 150, 0)),
     );
     let report = damage_taken(&b.build(), &ReportFilter::whole(Attribution::Augmented));
-    assert_eq!(report.total, 500);
+    let rows: Vec<_> = report
+        .by_ability
+        .iter()
+        .map(|r| (r.spell, r.amount, r.absorbed))
+        .collect();
+    assert_eq!(rows, [(5, 350, 0), (1309786, 150, 0)]);
+}
+
+#[test]
+fn an_absorb_line_without_an_attacker_takes_nothing_off_a_hit_that_names_one() {
+    let mut b = FightBuilder::new(10_000);
+    let mage = b.player("Player-1", "Faelan-Emberfall-EU", 62);
+    let add = b.unit(
+        "Creature-0-1-1-1-1-01",
+        "Blightscale Shrieker",
+        HOSTILE_FLAGS,
+    );
+    b.spell(6, "Acidic Expulsion");
+    b.push(1_000, NOBODY, mage, 6, refractive_images(mage, 50));
+    b.push(
+        1_000,
+        add,
+        mage,
+        6,
+        EventKind::Damage(Damage {
+            absorbed: 50,
+            ..damage(DamageVia::Periodic, 100, 0)
+        }),
+    );
+    let report = damage_taken(&b.build(), &ReportFilter::whole(Attribution::Augmented));
+    assert_eq!(report.total, 150);
+}
+
+#[test]
+fn refractive_images_on_a_swing_is_logged_before_its_landed_copy() {
+    let mut b = FightBuilder::new(10_000);
+    let mage = b.player("Player-1", "Faelan-Emberfall-EU", 62);
+    let add = b.unit(
+        "Creature-0-1-1-1-1-01",
+        "Blightscale Rawling",
+        HOSTILE_FLAGS,
+    );
+    let swing = |via| {
+        EventKind::Damage(Damage {
+            absorbed: 100,
+            ..damage(via, 300, 0)
+        })
+    };
+    b.push(1_000, add, mage, MELEE, swing(DamageVia::Swing));
+    b.push(1_004, add, mage, MELEE, refractive_images(mage, 100));
+    b.push(1_005, add, mage, MELEE, swing(DamageVia::SwingLanded));
+    let report = damage_taken(&b.build(), &ReportFilter::whole(Attribution::Augmented));
+    assert_eq!(
+        (
+            report.total,
+            report.by_player[0].absorbed,
+            report.by_ability[0].hits
+        ),
+        (300, 0, 1)
+    );
+}
+
+#[test]
+fn refractive_images_on_a_fully_absorbed_swing_comes_off_that_swing() {
+    use openlogs_analysis::{MissType, Missed};
+    let mut b = FightBuilder::new(10_000);
+    let mage = b.player("Player-1", "Faelan-Emberfall-EU", 62);
+    let add = b.unit(
+        "Creature-0-1-1-1-1-01",
+        "Blightscale Rawling",
+        HOSTILE_FLAGS,
+    );
+    b.push(998, add, mage, MELEE, refractive_images(mage, 100));
+    b.push(
+        1_000,
+        add,
+        mage,
+        MELEE,
+        EventKind::Missed(Missed {
+            via: DamageVia::Swing,
+            miss_type: MissType::Absorb,
+            amount_missed: 400,
+            critical: false,
+        }),
+    );
+    b.push(
+        1_002,
+        add,
+        mage,
+        MELEE,
+        EventKind::Damage(Damage {
+            absorbed: 400,
+            ..damage(DamageVia::SwingLanded, 0, 0)
+        }),
+    );
+    let report = damage_taken(&b.build(), &ReportFilter::whole(Attribution::Augmented));
+    assert_eq!(
+        (
+            report.total,
+            report.by_player[0].absorbed,
+            report.by_ability[0].hits
+        ),
+        (300, 300, 1)
+    );
+}
+
+fn refractive_images(mage: u32, amount: u64) -> EventKind {
+    EventKind::Absorbed(Absorbed {
+        absorber: mage,
+        absorber_logged_hostile: false,
+        absorb_spell: 1309497,
+        amount,
+        supporter: NOBODY,
+    })
 }
