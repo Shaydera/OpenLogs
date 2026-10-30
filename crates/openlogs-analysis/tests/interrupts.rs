@@ -310,3 +310,28 @@ fn a_friendly_npc_counts_on_the_friendly_side() {
         [(RowKey::Unit(UnitRef::Unit("Guard".into())), 1)]
     );
 }
+
+#[test]
+fn an_enemy_kick_logged_friendly_while_the_logging_player_is_turned_stays_on_the_enemy_side() {
+    let mut s = scene();
+    s.b.push(
+        4_000,
+        s.boss,
+        s.mage,
+        77,
+        EventKind::Interrupt { interrupted: 116 },
+    );
+    let mut fight = s.b.build();
+    fight.logger_turned = vec![(3_000, 5_000)];
+    fight.events[0].source_logged_hostile = false;
+    fight.events[0].target_logged_hostile = true;
+    let enemies = Scope {
+        perspective: Side::Enemy,
+        ..Scope::default()
+    };
+    let report = interrupts_report(&fight, &whole(), &enemies, Dimension::Source);
+    assert_eq!(
+        rows(&report.interrupt_rows),
+        [(RowKey::Unit(UnitRef::Unit("Ula'tek".into())), 1)]
+    );
+}

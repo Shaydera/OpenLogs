@@ -1362,8 +1362,8 @@ mod tests {
             target: player,
             spell: 0,
             kind: EventKind::Died { unconscious: false },
-            source_hostile: false,
-            target_hostile: false,
+            source_logged_hostile: false,
+            target_logged_hostile: false,
             unit_hp: None,
         };
         let mut long = fight(

@@ -89,8 +89,8 @@ impl FightBuilder {
             target,
             spell,
             kind,
-            source_hostile: self.fight.actors.get(source).is_hostile(),
-            target_hostile: self.fight.actors.get(target).is_hostile(),
+            source_logged_hostile: self.fight.actors.get(source).is_hostile(),
+            target_logged_hostile: self.fight.actors.get(target).is_hostile(),
             unit_hp: None,
         });
         self
@@ -112,8 +112,8 @@ impl FightBuilder {
             target,
             spell,
             kind: EventKind::Damage(damage(DamageVia::Spell, amount, 0)),
-            source_hostile: self.fight.actors.get(source).is_hostile(),
-            target_hostile: self.fight.actors.get(target).is_hostile(),
+            source_logged_hostile: self.fight.actors.get(source).is_hostile(),
+            target_logged_hostile: self.fight.actors.get(target).is_hostile(),
             unit_hp: Some(UnitHp {
                 actor: target,
                 current: hp.0,

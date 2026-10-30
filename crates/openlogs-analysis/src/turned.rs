@@ -31,8 +31,8 @@ pub(crate) fn logger_turned_spans(
         .iter()
         .flat_map(|e| {
             [
-                (e.t, e.source, e.source_hostile),
-                (e.t, e.target, e.target_hostile),
+                (e.t, e.source, e.source_logged_hostile),
+                (e.t, e.target, e.target_logged_hostile),
             ]
         })
         .filter(|&(_, unit, hostile)| hostile && enemy[unit as usize])

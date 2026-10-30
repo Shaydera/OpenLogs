@@ -76,8 +76,8 @@ pub fn damage_event(
             attacker_line: None,
             lands_after_end: false,
         }),
-        source_hostile: false,
-        target_hostile: true,
+        source_logged_hostile: false,
+        target_logged_hostile: true,
         unit_hp: None,
     }
 }
@@ -97,8 +97,8 @@ pub fn heal_event(t: i32, source: ActorId, target: ActorId, spell: SpellId, amou
             critical: false,
             supporter: NOBODY,
         }),
-        source_hostile: false,
-        target_hostile: false,
+        source_logged_hostile: false,
+        target_logged_hostile: false,
         unit_hp: None,
     }
 }

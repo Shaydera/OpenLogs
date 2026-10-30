@@ -951,8 +951,11 @@ const ABSORBS_THAT_ARE_NOT_HEALING: [SpellId; 4] = [410355, 1309497, 114556, 129
 /// Whether a player's or pet's heal on a player or pet counts, by the flags of its line: not when
 /// a healer logged hostile heals a target logged friendly, like the raid healing the turned
 /// logging player or a mind-controlled player healing the raid.
-pub(crate) fn heal_on_player_counts(healer_hostile: bool, target_hostile: bool) -> bool {
-    !healer_hostile || target_hostile
+pub(crate) fn heal_on_player_counts(
+    healer_logged_hostile: bool,
+    target_logged_hostile: bool,
+) -> bool {
+    !healer_logged_hostile || target_logged_hostile
 }
 
 /// Whether what `absorb_spell` absorbed is healing.
@@ -986,11 +989,11 @@ pub(crate) fn healing_share(fight: &Fight, event: &Event) -> Option<Share> {
     if let Some(cost) = healing_cost(fight, event) {
         return Some(cost);
     }
-    let (doer, doer_hostile, spell, amount, overheal, critical, periodic, absorb, supporter) =
+    let (doer, doer_logged_hostile, spell, amount, overheal, critical, periodic, absorb, supporter) =
         match event.kind {
             EventKind::Heal(heal) => (
                 healer_of(fight, event),
-                healer_hostile(fight, event),
+                healer_logged_hostile(fight, event),
                 event.spell,
                 healing_amount(&heal),
                 heal.overheal,
@@ -1004,7 +1007,7 @@ pub(crate) fn healing_share(fight: &Fight, event: &Event) -> Option<Share> {
             }
             EventKind::Absorbed(absorbed) => (
                 absorbed.absorber,
-                absorbed.absorber_hostile,
+                absorbed.absorber_logged_hostile,
                 absorbed.absorb_spell,
                 absorbed.amount,
                 0,
@@ -1016,14 +1019,14 @@ pub(crate) fn healing_share(fight: &Fight, event: &Event) -> Option<Share> {
             _ => return None,
         };
     let on_raid = fight.actors.credited_player(event.target).is_some();
-    let doer_against = || fight.against_raid_at(doer, doer_hostile, event.t);
-    let target_against = || fight.against_raid_at(event.target, event.target_hostile, event.t);
+    let doer_against = || fight.against_raid_at(doer, doer_logged_hostile, event.t);
+    let target_against = || fight.target_against_raid(event);
     let counts = if !on_raid {
         !doer_against() && !target_against()
     } else if absorb {
         true
     } else if fight.actors.credited_player(doer).is_some() {
-        heal_on_player_counts(doer_hostile, event.target_hostile)
+        heal_on_player_counts(doer_logged_hostile, event.target_logged_hostile)
     } else {
         doer_against() == target_against()
     };
@@ -1068,12 +1071,12 @@ fn healer_of(fight: &Fight, event: &Event) -> ActorId {
     granter_of(fight, event).unwrap_or(event.source)
 }
 
-/// The healer's logged hostile flag. A granting monk buffed from the raid's side, which the log
-/// shows hostile only while the logging player is turned.
-fn healer_hostile(fight: &Fight, event: &Event) -> bool {
+/// The healer's hostile flag as the log shows it. A granting monk is not on the line: it buffed
+/// from the raid's side, which the log shows hostile only while the logging player is turned.
+fn healer_logged_hostile(fight: &Fight, event: &Event) -> bool {
     match granter_of(fight, event) {
         Some(_) => fight.logger_turned_at(event.t),
-        None => event.source_hostile,
+        None => event.source_logged_hostile,
     }
 }
 

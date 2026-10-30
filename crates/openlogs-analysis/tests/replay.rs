@@ -1034,3 +1034,22 @@ fn a_trinket_debuff_a_player_puts_on_a_boss_is_other() {
 
     assert_eq!(auras, vec![(rune, AuraCategory::Other, Some(mage))]);
 }
+
+#[test]
+fn a_hostile_debuff_logged_friendly_while_the_logging_player_is_turned_is_encounter() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Ilvaren", 62);
+    let boss = boss(&mut b);
+    let shackle = b.spell(900_040, "Shadow Shackle");
+    apply_aura(&mut b, boss, mage, shackle, AuraType::Debuff);
+    let mut fight = b.build();
+    fight.logger_turned = vec![(0, 6_000)];
+    for event in &mut fight.events {
+        event.source_logged_hostile = false;
+        event.target_logged_hostile = true;
+    }
+
+    let auras = categorised(&fight, &spell_classes(&[shackle], &[shackle]));
+
+    assert_eq!(auras, vec![(shackle, AuraCategory::Encounter, None)]);
+}

@@ -19,8 +19,8 @@ fn death_with_killing_blow_window_and_hp_before() {
         target: player,
         spell: venom,
         kind: EventKind::Damage(damage(DamageVia::Periodic, 10, 0)),
-        source_hostile: true,
-        target_hostile: false,
+        source_logged_hostile: true,
+        target_logged_hostile: false,
         unit_hp: Some(UnitHp {
             actor: player,
             current: 830,
@@ -132,7 +132,7 @@ fn healing_before_death_counts_shields_and_absorbed_heals_but_no_support_shares(
         1,
         EventKind::Absorbed(Absorbed {
             absorber: priest,
-            absorber_hostile: false,
+            absorber_logged_hostile: false,
             absorb_spell: 17,
             amount: 150,
             supporter: NOBODY,
@@ -267,8 +267,8 @@ fn only_a_lethal_last_hit_is_a_killing_blow() {
             target: player,
             spell: spit,
             kind,
-            source_hostile: true,
-            target_hostile: false,
+            source_logged_hostile: true,
+            target_logged_hostile: false,
             unit_hp: hp_left.map(|current| UnitHp {
                 actor: player,
                 current,
@@ -492,8 +492,8 @@ fn own_hp(b: &mut FightBuilder, t: i32, player: u32, current: u64) {
         target: NOBODY,
         spell: 116,
         kind: EventKind::CastSuccess,
-        source_hostile: false,
-        target_hostile: false,
+        source_logged_hostile: false,
+        target_logged_hostile: false,
         unit_hp: Some(UnitHp {
             actor: player,
             current,

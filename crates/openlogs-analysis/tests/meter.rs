@@ -42,7 +42,7 @@ fn supported(amount: u64, evoker: ActorId) -> EventKind {
 fn absorbed(absorber: ActorId, absorb_spell: u32, amount: u64, supporter: ActorId) -> EventKind {
     EventKind::Absorbed(Absorbed {
         absorber,
-        absorber_hostile: false,
+        absorber_logged_hostile: false,
         absorb_spell,
         amount,
         supporter,

@@ -70,8 +70,8 @@ mod tests {
             target: NOBODY,
             spell: SPELL,
             kind,
-            source_hostile: false,
-            target_hostile: false,
+            source_logged_hostile: false,
+            target_logged_hostile: false,
             unit_hp: None,
         }
     }

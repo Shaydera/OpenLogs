@@ -9,7 +9,7 @@ use crate::cells::{Cell, CellKind, Facts, ScopeMetric, book, in_scope, into_cell
 use crate::fight::{Event, EventKind, Fight, SpellId};
 use crate::filter::ReportFilter;
 use crate::links::{AbilityIndex, AbilityLink, SpellKey, spell_key};
-use crate::scope::{AbilityRef, Scope, Side, UnitRef, side_of, unit_of};
+use crate::scope::{AbilityRef, Scope, Side, UnitRef, source_side, unit_of};
 
 /// A row of one player and one ability, with what the breakdown does not carry.
 #[derive(Debug, Clone, PartialEq)]
@@ -136,9 +136,7 @@ pub(crate) fn presses<'a>(
                 && matches!(event.kind, EventKind::CastSuccess)
                 && caster(event.source)
                 && !follow_ups.contains(i)
-                && (side == Side::Friendly
-                    || side_of(fight, event.source, event.source_hostile, event.t)
-                        == Some(Side::Enemy))
+                && (side == Side::Friendly || source_side(fight, event) == Some(Side::Enemy))
         })
         .map(|(_, event)| event)
         .collect()

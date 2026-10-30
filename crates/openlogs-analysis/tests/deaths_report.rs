@@ -260,7 +260,7 @@ fn an_enemy_logged_friendly_while_the_logging_player_is_turned_dies_on_the_enemy
     let mut fight = b.build();
     fight.logger_turned = vec![(9_000, 11_000)];
     for event in &mut fight.events {
-        event.target_hostile = false;
+        event.target_logged_hostile = false;
     }
     let enemies = Scope {
         perspective: Side::Enemy,

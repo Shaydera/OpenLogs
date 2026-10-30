@@ -335,3 +335,26 @@ fn hide_procs_yields_to_an_ability_selection() {
     };
     assert_eq!(total(&fragments), 1);
 }
+
+#[test]
+fn an_enemy_cast_logged_friendly_while_the_logging_player_is_turned_stays_an_enemy_cast() {
+    let mut b = FightBuilder::new(20_000);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    b.spell(5, "Virulent Spit");
+    cast(&mut b, 1_000, boss, 5);
+    cast(&mut b, 12_000, boss, 5);
+    let mut fight = b.build();
+    fight.logger_turned = vec![(11_000, 13_000)];
+    fight.events[1].source_logged_hostile = false;
+    let enemies = Scope {
+        perspective: Side::Enemy,
+        ..Scope::default()
+    };
+    let rows: Vec<(RowKey, i64)> = report(&fight, &enemies, Dimension::Source)
+        .breakdown
+        .rows
+        .iter()
+        .map(|g| (g.row.key.clone(), g.row.amount))
+        .collect();
+    assert_eq!(rows, [(RowKey::Unit(UnitRef::Unit("Ula'tek".into())), 2)]);
+}

@@ -1,13 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::actors::ActorId;
-use crate::aura_report::{holds, side_intervals};
+use crate::aura_report::side_intervals;
 use crate::auras::{AuraInterval, merged};
 use crate::breakdown::{Dimension, RowKey};
 use crate::cells::{Cell, CellKind, in_range, in_scope};
 use crate::fight::{AuraAction, AuraType, EventKind, Fight, SpellId};
 use crate::filter::ReportFilter;
-use crate::scope::{AbilityRef, Scope, unit_of};
+use crate::scope::{AbilityRef, Scope, shown_on, target_side, unit_of};
 use crate::views::names::log_name;
 use crate::views::timeline::{Lanes, log_lines, overlaps, pack};
 use crate::views::{EventRow, ItemAmount, ItemKind, RowType, Sink, Summary, TimelineItem, Window};
@@ -50,12 +50,11 @@ pub(crate) fn rows(
             continue;
         };
         if kind != aura_type
-            || !holds(
+            || !shown_on(
                 fight,
-                event.target,
-                event.target_hostile,
-                event.t,
                 scope.perspective,
+                event.target,
+                target_side(fight, event),
             )
         {
             continue;

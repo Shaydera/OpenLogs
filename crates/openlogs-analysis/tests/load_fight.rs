@@ -132,8 +132,8 @@ fn hostility_is_recorded_per_event() {
         .iter()
         .find(|e| e.target == add && matches!(e.kind, EventKind::Damage(_)))
         .unwrap();
-    assert!(hit.target_hostile, "it was hostile when it was hit");
-    assert!(!hit.source_hostile);
+    assert!(hit.target_logged_hostile, "it was hostile when it was hit");
+    assert!(!hit.source_logged_hostile);
 }
 
 const CAST_FAILED_LOG: &str = concat!(

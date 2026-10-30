@@ -8,7 +8,7 @@ use crate::cells::{Cell, CellKind, in_scope};
 use crate::fight::{Event, EventKind, FailReason, Fight, SpellId};
 use crate::filter::ReportFilter;
 use crate::links::{SpellKey, spell_key};
-use crate::scope::{Scope, Side, side_of};
+use crate::scope::{Scope, Side, shown_on, side_at};
 use crate::views::amounts::{cast_amounts, until_next_cast};
 use crate::views::names::log_name;
 use crate::views::parts::AmountFacts;
@@ -327,18 +327,8 @@ pub(crate) fn casters(fight: &Fight, side: Side) -> impl Fn(ActorId) -> bool + '
 /// Whether `side` owns the cast: players for friendlies (their pets' casts are not counted),
 /// units hostile at the cast for enemies.
 pub(crate) fn casts_of(fight: &Fight, side: Side, item: &CastItem) -> bool {
-    match side {
-        Side::Friendly => fight.actors.get(item.caster).kind == ActorKind::Player,
-        Side::Enemy => {
-            let event = &fight.events[item.anchor()];
-            let hostile = if event.source == item.caster {
-                event.source_hostile
-            } else {
-                event.target_hostile
-            };
-            side_of(fight, item.caster, hostile, event.t) == Some(Side::Enemy)
-        }
-    }
+    let event = &fight.events[item.anchor()];
+    shown_on(fight, side, item.caster, side_at(fight, event, item.caster))
 }
 
 /// Every cast of `side`'s casters, follow-ups folded into their press, and with `bosses` the

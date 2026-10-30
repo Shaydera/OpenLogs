@@ -10,7 +10,7 @@ use crate::fight::{EventKind, Fight, SpellId};
 use crate::filter::ReportFilter;
 use crate::links::{SpellKey, spell_key};
 use crate::recap::{DeathRecap, death_recaps_where};
-use crate::scope::{Scope, Side, UnitRef, side_of, unit_of};
+use crate::scope::{Scope, Side, UnitRef, target_side, unit_of};
 use crate::targets::hits_by_unit;
 use crate::timeline::boss_units;
 
@@ -78,7 +78,7 @@ pub(crate) fn enemy_kills(fight: &Fight, filter: &ReportFilter) -> Vec<Kill> {
     for event in &fight.events {
         if matches!(event.kind, EventKind::Died { unconscious: false })
             && event.t >= 0
-            && side_of(fight, event.target, event.target_hostile, event.t) == Some(Side::Enemy)
+            && target_side(fight, event) == Some(Side::Enemy)
             && seen.insert(event.target)
             && filter.contains(event.t)
         {

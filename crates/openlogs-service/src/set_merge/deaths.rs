@@ -334,8 +334,8 @@ mod tests {
             target,
             spell,
             kind,
-            source_hostile: false,
-            target_hostile: false,
+            source_logged_hostile: false,
+            target_logged_hostile: false,
             unit_hp: None,
         }
     }
@@ -343,7 +343,7 @@ mod tests {
     fn killed(t: i32, boss: ActorId, player: ActorId, spell: SpellId) -> [Event; 2] {
         [
             Event {
-                source_hostile: true,
+                source_logged_hostile: true,
                 ..event(t, boss, player, spell, EventKind::Instakill)
             },
             died(t, player),
