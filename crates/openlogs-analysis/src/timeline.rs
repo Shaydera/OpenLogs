@@ -64,11 +64,27 @@ fn is_npc(fight: &Fight, actor: ActorId) -> bool {
     )
 }
 
-/// Whether the event's target was a hostile, non-player unit when the event happened.
-pub fn hits_hostile_npc(fight: &Fight, event: &Event) -> bool {
-    event.target_hostile
-        && is_npc(fight, event.target)
-        && fight.actors.credited_player(event.target).is_none()
+/// Whether the event's target is an enemy NPC: a non-player unit no player owns that was
+/// hostile at the event, or an enemy of the pull while the logging player was turned (the log
+/// then shows enemies friendly). Hits on units logged neutral do not count.
+fn hits_enemy_npc(fight: &Fight, event: &Event) -> bool {
+    (event.target_hostile && fight.actors.is_unowned_npc(event.target))
+        || (fight.logger_turned_at(event.t) && fight.actors.is_enemy(event.target))
+}
+
+/// Whether a player's or pet's hit counts for Damage Done: on an enemy NPC, or by the raid on
+/// a player turned against it (mind control, or the logging player's side while it is turned).
+pub fn hits_enemy(fight: &Fight, event: &Event) -> bool {
+    hits_enemy_npc(fight, event) || hits_turned_player(fight, event)
+}
+
+/// While the logging player is turned, its side is logged friendly and the raid hostile.
+fn hits_turned_player(fight: &Fight, event: &Event) -> bool {
+    let raid_logged_hostile = fight.logger_turned_at(event.t);
+    fight.actors.get(event.target).kind == ActorKind::Player
+        && event.target_hostile != raid_logged_hostile
+        && event.source_hostile == raid_logged_hostile
+        && fight.actors.credited_player(event.source) != Some(event.target)
 }
 
 /// Non-kills shorter than this are aborted pulls: no boss, no phases.
@@ -93,7 +109,7 @@ pub fn boss_units(fight: &Fight) -> Vec<ActorId> {
     for event in &fight.events {
         if let EventKind::Damage(damage) = event.kind
             && is_distinct_hit(&damage)
-            && hits_hostile_npc(fight, event)
+            && hits_enemy_npc(fight, event)
         {
             *taken.entry(event.target).or_default() += damage.amount;
         }
@@ -107,7 +123,7 @@ pub fn boss_units(fight: &Fight) -> Vec<ActorId> {
     let Some(top_damage) = taken.values().copied().max().filter(|&d| d > 0) else {
         return Vec::new();
     };
-    // Only units hit while hostile compete for the largest max HP.
+    // Only enemy units that were hit compete for the largest max HP.
     let top_max = taken
         .keys()
         .filter_map(|actor| max_hp.get(actor))
@@ -170,14 +186,14 @@ pub fn boss_hp_series(fight: &Fight, bosses: &[ActorId], step_ms: u32) -> Vec<Op
     values
 }
 
-/// Damage per second credited to players (including their pets) against hostile units.
+/// Damage per second credited to players (including their pets) against enemies.
 pub fn raid_dps_series(fight: &Fight, step_ms: u32, overkill: Overkill) -> Vec<f64> {
     let mut totals = vec![0u64; step_count(fight.duration_ms, step_ms)];
     for event in &fight.events {
         let Some(damage) = dealt_damage(event) else {
             continue;
         };
-        if event.t < 0 || !credited_as_damage_done(&damage) || !hits_hostile_npc(fight, event) {
+        if event.t < 0 || !credited_as_damage_done(&damage) || !hits_enemy(fight, event) {
             continue;
         }
         if fight.actors.credited_player(event.source).is_none() {
