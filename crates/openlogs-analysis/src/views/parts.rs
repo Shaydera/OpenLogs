@@ -2,7 +2,7 @@ use crate::actors::{ActorId, ActorKind, NOBODY};
 use crate::cells::{CellKind, ScopeMetric};
 use crate::fight::{DamageVia, Event, EventKind, Fight, MissType, NO_SPELL, SpellId};
 use crate::filter::Overkill;
-use crate::reports::taken::taken_amount;
+use crate::reports::taken::{damage_taken_amount, taken_amount};
 use crate::reports::{Absorbs, Share, buffed_hit, damage_share, healing_share};
 use crate::scope::Side;
 use crate::timeline::{dealt_damage, healing_amount, hits_enemy};
@@ -282,7 +282,12 @@ fn taken(
     book: &mut impl FnMut(Part),
 ) {
     let event = &fight.events[index];
-    let amounts = taken_amount(event, overkill);
+    // Enemies' damage done follows the overkill option; the raid's damage taken counts it all.
+    let amounts = if hostile_sources_only {
+        taken_amount(event, overkill)
+    } else {
+        damage_taken_amount(event)
+    };
     let miss = missed_attack(event);
     if amounts.is_none() && miss.is_none() {
         return;

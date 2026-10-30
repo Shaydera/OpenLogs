@@ -4,7 +4,7 @@ use crate::actors::{ActorId, ActorKind, NOBODY};
 use crate::fight::{DamageVia, Event, EventKind, Fight, SpellId};
 use crate::filter::{Overkill, ReportFilter};
 use crate::links::{SpellKey, spell_key};
-use crate::reports::per_second;
+use crate::reports::{damage_is_taken, per_second};
 use crate::timeline::{damage_done_amount, dealt_damage, is_distinct_hit};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -88,7 +88,7 @@ pub fn damage_taken(fight: &Fight, filter: &ReportFilter) -> DamageTakenReport {
     let mut abilities: HashMap<AbilityKey<'_>, AbilityAcc> = HashMap::new();
     let mut players: HashMap<ActorId, PlayerAcc<'_>> = HashMap::new();
     for event in fight.events.iter().filter(|e| filter.contains(e.t)) {
-        let Some((amount, absorbed)) = taken_amount(event, filter.overkill) else {
+        let Some((amount, absorbed)) = damage_taken_amount(event) else {
             continue;
         };
         if fight.actors.get(event.target).kind != ActorKind::Player {
@@ -183,4 +183,23 @@ pub(crate) fn taken_amount(event: &Event, overkill: Overkill) -> Option<(u64, u6
     dealt_damage(event)
         .filter(is_distinct_hit)
         .map(|damage| (damage_done_amount(&damage, overkill), damage.absorbed))
+}
+
+/// Damage Taken: every hit with its overkill, also the part of a hit another player took over
+/// (`DAMAGE_SPLIT`), but not damage that only comes back or moves between players.
+pub(crate) fn damage_taken_amount(event: &Event) -> Option<(u64, u64)> {
+    if !damage_is_taken(event.spell) {
+        return None;
+    }
+    dealt_damage(event)
+        .filter(|damage| {
+            is_distinct_hit(damage)
+                || (damage.via == DamageVia::Split && damage.supporter == NOBODY)
+        })
+        .map(|damage| {
+            (
+                damage_done_amount(&damage, Overkill::Included),
+                damage.absorbed,
+            )
+        })
 }

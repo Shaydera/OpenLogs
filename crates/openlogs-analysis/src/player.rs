@@ -11,11 +11,11 @@ use crate::filter::{Attribution, Overkill, ReportFilter};
 use crate::links::{AbilityIndex, AbilityLink, SpellKey, spell_key};
 use crate::reports::damage::damage_done_in;
 use crate::reports::healing::healing_in;
-use crate::reports::taken::taken_amount;
+use crate::reports::taken::damage_taken_amount;
 use crate::reports::{
     AbilityRow, AbilityTargets, BuffShare, BuffedAbility, RowKind, Share, Support, SupportShare,
-    TargetShare, absorb_is_healing, buff_totals, buffed_spell, damage_share, healing_share,
-    keeps_own, keeps_support, merged_targets, sorted_by_amount,
+    TargetShare, absorb_is_healing, buff_totals, buffed_spell, damage_share, heal_on_player_counts,
+    healing_share, keeps_own, keeps_support, merged_targets, sorted_by_amount,
 };
 use crate::resources::power_series;
 use crate::scope::Scope;
@@ -790,7 +790,12 @@ pub(crate) fn received_healing(event: &Event, player: ActorId) -> Option<u64> {
         return None;
     }
     match event.kind {
-        EventKind::Heal(heal) if heal.supporter == NOBODY => Some(healing_amount(&heal)),
+        EventKind::Heal(heal)
+            if heal.supporter == NOBODY
+                && heal_on_player_counts(event.source_hostile, event.target_hostile) =>
+        {
+            Some(healing_amount(&heal))
+        }
         EventKind::Absorbed(absorbed)
             if absorbed.supporter == NOBODY && absorb_is_healing(absorbed.absorb_spell) =>
         {
@@ -924,7 +929,7 @@ pub fn player_detail(
             _ if event.target == player => {
                 if let Some(amount) = received_healing(event, player) {
                     healing_received += amount;
-                } else if let Some((amount, _)) = taken_amount(event, filter.overkill) {
+                } else if let Some((amount, _)) = damage_taken_amount(event) {
                     let environmental = matches!(event.kind, EventKind::Damage(d) if d.via == DamageVia::Environmental);
                     *taken.entry((event.spell, environmental)).or_default() += amount;
                 }

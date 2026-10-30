@@ -180,7 +180,7 @@ fn world_damage_stays_apart_from_melee() {
 }
 
 #[test]
-fn a_lethal_hit_counts_up_to_the_player_hp_unless_overkill_is_included() {
+fn a_lethal_hit_counts_with_its_overkill_whatever_the_overkill_option() {
     let mut b = FightBuilder::new(10_000);
     let tank = b.player("Player-1", "Edrin-Emberfall-EU", 581);
     let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
@@ -208,6 +208,42 @@ fn a_lethal_hit_counts_up_to_the_player_hp_unless_overkill_is_included() {
             total_with(Overkill::Excluded),
             total_with(Overkill::Included)
         ),
-        (800, 1_100)
+        (1_100, 1_100)
     );
+}
+
+#[test]
+fn damage_taken_over_for_another_player_counts_on_the_one_who_took_it() {
+    let mut b = FightBuilder::new(10_000);
+    let paladin = b.player("Player-1", "Puran-Ironmoor-EU", 65);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    b.spell(6940, "Blessing of Sacrifice");
+    b.push(
+        1_000,
+        boss,
+        paladin,
+        6940,
+        EventKind::Damage(damage(DamageVia::Split, 300, 0)),
+    );
+    let report = damage_taken(&b.build(), &ReportFilter::whole(Attribution::Augmented));
+    assert_eq!(report.total, 300);
+}
+
+#[test]
+fn damage_that_comes_back_from_a_delaying_absorb_is_not_damage_taken() {
+    let mut b = FightBuilder::new(10_000);
+    let mage = b.player("Player-1", "Faelan-Emberfall-EU", 62);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    b.spell(5, "Virulent Spit");
+    b.spell(1309786, "Refraction");
+    b.push(1_000, boss, mage, 5, hit(500));
+    b.push(
+        2_000,
+        mage,
+        mage,
+        1309786,
+        EventKind::Damage(damage(DamageVia::Periodic, 200, 0)),
+    );
+    let report = damage_taken(&b.build(), &ReportFilter::whole(Attribution::Augmented));
+    assert_eq!(report.total, 500);
 }

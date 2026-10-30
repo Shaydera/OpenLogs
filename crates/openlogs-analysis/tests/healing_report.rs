@@ -147,30 +147,37 @@ fn heal_and_absorb_support_move_to_the_evoker() {
 }
 
 #[test]
-fn heals_count_when_healer_and_target_stand_on_the_same_side() {
+fn heals_on_players_count_unless_a_hostile_healer_heals_a_friendly_target() {
     let mut b = FightBuilder::new(10_000);
     let druid = b.player("Player-1", "Pyrrin-Emberfall-EU", 105);
     let warrior = b.player("Player-2", "Wendel-Emberfall-EU", 71);
+    let logger = b.player("Player-3", "Faelan-Emberfall-EU", 62);
     b.spell(774, "Rejuvenation");
     b.push(2_000, druid, warrior, 774, EventKind::Heal(heal(100, 0)));
+    b.push(2_500, druid, logger, 774, EventKind::Heal(heal(1_600, 0)));
     b.push(7_000, druid, warrior, 774, EventKind::Heal(heal(200, 0)));
     b.push(7_500, warrior, warrior, 774, EventKind::Heal(heal(400, 0)));
+    b.push(8_000, warrior, druid, 774, EventKind::Heal(heal(800, 0)));
     let mut fight = b.build();
     fight.logger_turned = vec![(1_000, 3_000)];
     let raid_logged_hostile_while_turned = (true, true);
+    let raid_on_turned_logger = (true, false);
     let raid_on_mind_controlled = (false, true);
     let mind_controlled_on_self = (true, true);
+    let mind_controlled_on_raid = (true, false);
     for (event, (source, target)) in fight.events.iter_mut().zip([
         raid_logged_hostile_while_turned,
+        raid_on_turned_logger,
         raid_on_mind_controlled,
         mind_controlled_on_self,
+        mind_controlled_on_raid,
     ]) {
         event.source_hostile = source;
         event.target_hostile = target;
     }
     let report = healing(&fight, &whole(Attribution::Augmented));
     let totals: Vec<_> = report.players.iter().map(|p| (p.player, p.total)).collect();
-    assert_eq!(totals, [(warrior, 400), (druid, 100)]);
+    assert_eq!(totals, [(warrior, 400), (druid, 300)]);
 }
 
 #[test]
@@ -448,4 +455,22 @@ fn a_healing_elixir_heal_after_the_buff_ended_stays_with_its_holder() {
             .collect::<Vec<_>>(),
         [(druid, 400)]
     );
+}
+
+#[test]
+fn an_enemy_heal_on_the_raid_while_the_logger_is_turned_is_not_healing() {
+    let mut b = FightBuilder::new(10_000);
+    let warrior = b.player("Player-2", "Wendel-Emberfall-EU", 71);
+    let boss = b.unit(
+        "Creature-0-1-1-1-259854-01",
+        "Hex Lord Malacrass",
+        HOSTILE_FLAGS,
+    );
+    b.spell(8936, "Regrowth");
+    b.push(2_000, boss, warrior, 8936, EventKind::Heal(heal(500, 0)));
+    let mut fight = b.build();
+    fight.logger_turned = vec![(1_000, 3_000)];
+    fight.events[0].source_hostile = false;
+    fight.events[0].target_hostile = true;
+    assert_eq!(healing_table_total(&fight), 0);
 }
