@@ -69,6 +69,16 @@ impl Fight {
         (h == holder && granter != NOBODY).then_some(granter)
     }
 
+    /// Whether the event's source stands against the raid at the event.
+    pub fn source_against_raid(&self, event: &Event) -> bool {
+        self.against_raid_at(event.source, event.source_logged_hostile, event.t)
+    }
+
+    /// Whether the event's target stands against the raid at the event.
+    pub fn target_against_raid(&self, event: &Event) -> bool {
+        self.against_raid_at(event.target, event.target_logged_hostile, event.t)
+    }
+
     /// Whether `actor`, logged `hostile` on a line at `t`, stands against the raid. While the
     /// logging player is turned the log swaps the sides: an unowned NPC then counts by how it
     /// was logged over the pull, and players and their pets by the swapped flag.
@@ -179,11 +189,13 @@ pub struct Event {
     pub target: ActorId,
     pub spell: SpellId,
     pub kind: EventKind,
-    /// Hostile reaction flag of source and target at this event. Units can change
-    /// reaction during a fight (adds turning neutral), so this, not the actor's latest
-    /// flags, decides friend or foe.
-    pub source_hostile: bool,
-    pub target_hostile: bool,
+    /// Hostile reaction flag of source and target as this line logged them. Units can change
+    /// reaction during a fight (adds turning neutral), so this, not the actor's latest flags,
+    /// is the line's view; while the logging player is turned it shows the sides swapped, so
+    /// whether a unit stands against the raid is [`Fight::source_against_raid`] and
+    /// [`Fight::target_against_raid`].
+    pub source_logged_hostile: bool,
+    pub target_logged_hostile: bool,
     /// HP snapshot from the advanced block, of whichever unit it describes.
     pub unit_hp: Option<UnitHp>,
 }
@@ -356,7 +368,8 @@ pub struct Heal {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Absorbed {
     pub absorber: ActorId,
-    pub absorber_hostile: bool,
+    /// As logged; see [`Event::source_logged_hostile`].
+    pub absorber_logged_hostile: bool,
     pub absorb_spell: SpellId,
     pub amount: u64,
     pub supporter: ActorId,

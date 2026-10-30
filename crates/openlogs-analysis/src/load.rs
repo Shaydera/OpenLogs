@@ -574,8 +574,8 @@ impl FightBuilder {
             target,
             spell,
             kind,
-            source_hostile: event.source.is_hostile(),
-            target_hostile: event.target.is_hostile(),
+            source_logged_hostile: event.source.is_hostile(),
+            target_logged_hostile: event.target.is_hostile(),
             unit_hp,
         }
     }
@@ -660,7 +660,7 @@ impl FightBuilder {
                 let absorber = self.fight.actors.intern(&a.absorber);
                 EventKind::Absorbed(Absorbed {
                     absorber,
-                    absorber_hostile: a.absorber.is_hostile(),
+                    absorber_logged_hostile: a.absorber.is_hostile(),
                     absorb_spell: self.spell(a.absorb_spell),
                     amount: a.amount,
                     supporter: self.actor(a.supporter),

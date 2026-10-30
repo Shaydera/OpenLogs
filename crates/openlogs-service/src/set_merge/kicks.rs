@@ -145,8 +145,8 @@ mod tests {
             target,
             spell: KICK,
             kind: EventKind::Interrupt { interrupted },
-            source_hostile: false,
-            target_hostile: true,
+            source_logged_hostile: false,
+            target_logged_hostile: true,
             unit_hp: None,
         }
     }
@@ -161,8 +161,8 @@ mod tests {
                 removed: 100,
                 aura_type: AuraType::Debuff,
             },
-            source_hostile: false,
-            target_hostile: false,
+            source_logged_hostile: false,
+            target_logged_hostile: false,
             unit_hp: None,
         }
     }

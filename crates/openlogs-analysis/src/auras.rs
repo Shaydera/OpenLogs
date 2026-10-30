@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::actors::ActorId;
 use crate::fight::{AuraAction, AuraType, Event, EventKind, Fight, SpellId};
+use crate::scope::{Side, side_of};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuraInterval {
@@ -13,10 +14,10 @@ pub struct AuraInterval {
     pub aura_type: AuraType,
     pub start_ms: i32,
     pub end_ms: i32,
-    /// The holder's hostile flag at the event that opened the interval.
-    pub target_hostile: bool,
-    /// The applier's hostile flag at the event that opened the interval.
-    pub source_hostile: bool,
+    /// The holder's hostile flag as logged by the event that opened the interval.
+    pub target_logged_hostile: bool,
+    /// The applier's hostile flag as logged by the event that opened the interval.
+    pub source_logged_hostile: bool,
     /// When the event that opened it came, unclipped; `None` when it was up before the log slice.
     pub opened_ms: Option<i32>,
     /// When it was applied, refreshed or given a stack, unclipped, the opening event included.
@@ -34,6 +35,21 @@ impl AuraInterval {
         let carried = self.opened_ms.is_none_or(|t| t < start) && self.end_ms > start;
         in_range as u32 + u32::from(carried)
     }
+
+    /// The holder's side when the interval opened.
+    pub(crate) fn holder_side(&self, fight: &Fight) -> Option<Side> {
+        side_of(
+            fight,
+            self.target,
+            self.target_logged_hostile,
+            self.start_ms,
+        )
+    }
+
+    /// Whether the applier stood against the raid when the interval opened.
+    pub(crate) fn applier_against_raid(&self, fight: &Fight) -> bool {
+        fight.against_raid_at(self.source, self.source_logged_hostile, self.start_ms)
+    }
 }
 
 type Key = (ActorId, SpellId, ActorId);
@@ -49,7 +65,7 @@ struct Open {
 }
 
 fn hostile(event: &Event) -> Hostile {
-    (event.target_hostile, event.source_hostile)
+    (event.target_logged_hostile, event.source_logged_hostile)
 }
 
 fn counts_as_application(action: AuraAction) -> bool {
@@ -161,7 +177,7 @@ fn push_clipped(
     let (start_ms, end_ms) = (interval.start.max(0), stop.min(end));
     let instant = end_ms == start_ms && !interval.applied.is_empty();
     if end_ms > start_ms || instant {
-        let (target_hostile, source_hostile) = interval.hostile;
+        let (target_logged_hostile, source_logged_hostile) = interval.hostile;
         out.push(AuraInterval {
             target,
             source,
@@ -169,8 +185,8 @@ fn push_clipped(
             aura_type: interval.aura_type,
             start_ms,
             end_ms,
-            target_hostile,
-            source_hostile,
+            target_logged_hostile,
+            source_logged_hostile,
             opened_ms: interval.opened_ms,
             applied: interval.applied,
         });

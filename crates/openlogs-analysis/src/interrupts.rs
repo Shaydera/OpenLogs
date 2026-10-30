@@ -5,7 +5,7 @@ use crate::breakdown::{Dimension, RowKey, effective_group, key_of, largest_first
 use crate::cells::{Cell, CellKind, Facts, ScopeMetric, book, in_scope};
 use crate::fight::{Event, EventKind, Fight, SpellId};
 use crate::filter::ReportFilter;
-use crate::scope::{Scope, Side, side_of, unit_of};
+use crate::scope::{Scope, Side, source_side, unit_of};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InterruptEntry {
@@ -83,9 +83,7 @@ pub(crate) fn kicks<'a>(
             }
             _ => None,
         })
-        .filter(move |(_, event, _)| {
-            side_of(fight, event.source, event.source_hostile, event.t) == Some(side)
-        })
+        .filter(move |(_, event, _)| source_side(fight, event) == Some(side))
 }
 
 pub(crate) fn cell_of(fight: &Fight, event: &Event, stopped: SpellId) -> Cell {

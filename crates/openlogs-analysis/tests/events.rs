@@ -948,3 +948,35 @@ fn a_selection_is_narrowed_only_when_every_row_shows_one_identity() {
         [Dimension::Source]
     );
 }
+
+#[test]
+fn an_enemy_buff_logged_friendly_while_the_logging_player_is_turned_stays_an_enemy_row() {
+    let mut b = FightBuilder::new(20_000);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let bond = b.spell(900_011, "Blood Bond");
+    b.push(
+        3_000,
+        boss,
+        boss,
+        bond,
+        aura(AuraAction::Applied, AuraType::Buff, None),
+    );
+    let mut fight = b.build();
+    fight.logger_turned = vec![(2_000, 4_000)];
+    fight.events[0].source_logged_hostile = false;
+    fight.events[0].target_logged_hostile = false;
+    let enemies = Scope {
+        perspective: Side::Enemy,
+        ..Scope::default()
+    };
+    let theirs = page_of(
+        &fight,
+        &filter(Attribution::Augmented),
+        &enemies,
+        ScopeMetric::Buffs,
+    );
+    assert_eq!(
+        theirs.rows.iter().map(|r| r.spell).collect::<Vec<_>>(),
+        [bond]
+    );
+}

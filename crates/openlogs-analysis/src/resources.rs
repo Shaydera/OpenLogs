@@ -1,11 +1,11 @@
 use std::collections::{BTreeMap, HashMap};
 
-use crate::actors::{ActorId, ActorKind, NOBODY};
+use crate::actors::{ActorId, NOBODY};
 use crate::cells::{CellKind, Facts, book};
 use crate::deaths::deaths;
-use crate::fight::{Event, EventKind, Fight, NO_SPELL, PowerSample, SpellId};
+use crate::fight::{EventKind, Fight, NO_SPELL, PowerSample, SpellId};
 use crate::filter::ReportFilter;
-use crate::scope::{Scope, Side, UnitRef, side_of, unit_of};
+use crate::scope::{Scope, Side, UnitRef, shown_on, side_at, unit_of};
 
 pub const RESOURCE_STEP_MS: u32 = 5_000;
 /// The track of a unit's health (WoW's power type for health costs): HP from the advanced log
@@ -123,25 +123,6 @@ pub(crate) fn power_series(
     )
 }
 
-/// Whether the unit of an HP snapshot was hostile at the event.
-fn hp_hostile(fight: &Fight, event: &Event, actor: ActorId) -> bool {
-    if actor == event.source {
-        event.source_hostile
-    } else if actor == event.target {
-        event.target_hostile
-    } else {
-        fight.actors.get(actor).is_hostile()
-    }
-}
-
-/// Whose resources `side` shows: players for friendlies, units hostile at the sample for enemies.
-fn holds(fight: &Fight, side: Side, actor: ActorId, hostile: bool, t: i32) -> bool {
-    match side {
-        Side::Friendly => fight.actors.get(actor).kind == ActorKind::Player,
-        Side::Enemy => side_of(fight, actor, hostile, t) == Some(Side::Enemy),
-    }
-}
-
 /// Every HP snapshot of `side`'s units in the range as a health sample; none is dropped, so the
 /// lowest logged HP stays the minimum.
 fn health_samples(fight: &Fight, side: Side, start: i32, end: i32) -> Vec<PowerSample> {
@@ -150,13 +131,7 @@ fn health_samples(fight: &Fight, side: Side, start: i32, end: i32) -> Vec<PowerS
         let Some(hp) = event.unit_hp else {
             continue;
         };
-        if !holds(
-            fight,
-            side,
-            hp.actor,
-            hp_hostile(fight, event, hp.actor),
-            event.t,
-        ) {
+        if !shown_on(fight, side, hp.actor, side_at(fight, event, hp.actor)) {
             continue;
         }
         samples.push(PowerSample {

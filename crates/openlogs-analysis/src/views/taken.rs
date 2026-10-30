@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use crate::actors::ActorId;
-use crate::aura_report::holds;
 use crate::auras::{AuraInterval, aura_intervals};
 use crate::breakdown::Dimension;
 use crate::cells::{CellKind, ScopeMetric, in_range};
@@ -10,7 +9,7 @@ use crate::deaths_report::enemy_kills;
 use crate::fight::{AuraType, Fight, SpellId};
 use crate::filter::{Attribution, ReportFilter};
 use crate::links::{SpellKey, spell_key};
-use crate::scope::{Scope, Side};
+use crate::scope::{Scope, Side, shown_on};
 use crate::views::amounts::timeline_parts;
 use crate::views::auras::{aura_in_scope, place_bars};
 use crate::views::deaths::{death_cell, death_item};
@@ -133,7 +132,7 @@ pub(crate) fn marks(
             i.aura_type == AuraType::Debuff
                 && i.end_ms > start
                 && i.start_ms < end
-                && holds(fight, i.target, i.target_hostile, i.start_ms, side)
+                && shown_on(fight, side, i.target, i.holder_side(fight))
                 && (!scope.source.is_empty() || applied_by_other_side(fight, side, i.source))
                 && aura_in_scope(fight, scope, i.source, i.spell, i.target)
         })

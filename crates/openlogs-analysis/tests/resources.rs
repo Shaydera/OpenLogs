@@ -232,3 +232,29 @@ fn health_average_weighs_each_snapshot_by_the_time_it_holds() {
     let report = report(&b.build(), &Scope::default());
     assert_eq!(report.units[0].tracks[0].avg_pct, Some(75.0));
 }
+
+#[test]
+fn an_enemy_logged_friendly_while_the_logging_player_is_turned_keeps_its_health() {
+    let mut b = FightBuilder::new(10_000);
+    let mage = b.player("Player-1", "Faelan-Emberfall-EU", 62);
+    let add = b.unit(
+        "Creature-0-1-1-1-261874-0001",
+        "Blightscale Rawling",
+        HOSTILE_FLAGS,
+    );
+    b.hit(2_000, mage, add, 5, 400, (600, 1_000));
+    let mut fight = b.build();
+    fight.logger_turned = vec![(1_000, 3_000)];
+    fight.events[0].source_logged_hostile = true;
+    fight.events[0].target_logged_hostile = false;
+    let enemies = Scope {
+        perspective: Side::Enemy,
+        ..Scope::default()
+    };
+    let units: Vec<_> = report(&fight, &enemies)
+        .units
+        .iter()
+        .map(|u| u.unit)
+        .collect();
+    assert_eq!(units, [add]);
+}

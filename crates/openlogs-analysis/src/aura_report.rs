@@ -8,7 +8,7 @@ use crate::cells::{CellKind, Facts, ScopeMetric, book};
 use crate::fight::{AuraType, Fight, SpellId};
 use crate::filter::ReportFilter;
 use crate::player::EBON_MIGHT;
-use crate::scope::{Scope, Side, side_of, unit_of};
+use crate::scope::{Scope, Side, shown_on, unit_of};
 
 /// Who has an aura: a player, or every enemy of one name.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -133,15 +133,6 @@ fn by_count<K: Copy + Ord>(counts: &HashMap<K, u32>) -> Vec<K> {
     counted(counts).into_iter().map(|(k, _)| k).collect()
 }
 
-/// Friendly holders are players (their pets' auras are not counted); enemy holders are units
-/// hostile when the aura came.
-pub(crate) fn holds(fight: &Fight, holder: ActorId, hostile: bool, t: i32, side: Side) -> bool {
-    match side {
-        Side::Friendly => fight.actors.get(holder).kind == ActorKind::Player,
-        Side::Enemy => side_of(fight, holder, hostile, t) == Some(Side::Enemy),
-    }
-}
-
 fn holder_of(fight: &Fight, target: ActorId) -> AuraHolder {
     let player = fight.actors.get(target).kind == ActorKind::Player;
     AuraHolder {
@@ -172,7 +163,7 @@ fn on_side(
         .into_iter()
         .filter(|i| i.start_ms < end && (i.end_ms > start || i.start_ms >= start))
         .filter(|i| {
-            i.aura_type == aura_type && holds(fight, i.target, i.target_hostile, i.start_ms, side)
+            i.aura_type == aura_type && shown_on(fight, side, i.target, i.holder_side(fight))
         })
         .collect()
 }

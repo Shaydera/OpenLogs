@@ -792,7 +792,10 @@ pub(crate) fn received_healing(event: &Event, player: ActorId) -> Option<u64> {
     match event.kind {
         EventKind::Heal(heal)
             if heal.supporter == NOBODY
-                && heal_on_player_counts(event.source_hostile, event.target_hostile) =>
+                && heal_on_player_counts(
+                    event.source_logged_hostile,
+                    event.target_logged_hostile,
+                ) =>
         {
             Some(healing_amount(&heal))
         }

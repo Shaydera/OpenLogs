@@ -192,8 +192,8 @@ mod tests {
                 stacks: None,
                 broken_by: NO_SPELL,
             },
-            source_hostile: false,
-            target_hostile: false,
+            source_logged_hostile: false,
+            target_logged_hostile: false,
             unit_hp: None,
         };
         let mut fight = fight(actors, vec![applied]);

@@ -29,7 +29,7 @@ fn effective_healing_overheal_and_absorbs() {
         9,
         EventKind::Absorbed(Absorbed {
             absorber: paladin,
-            absorber_hostile: false,
+            absorber_logged_hostile: false,
             absorb_spell: 414019,
             amount: 700,
             supporter: NOBODY,
@@ -108,7 +108,7 @@ fn heal_and_absorb_support_move_to_the_evoker() {
         9,
         EventKind::Absorbed(Absorbed {
             absorber: shaman,
-            absorber_hostile: false,
+            absorber_logged_hostile: false,
             absorb_spell: 2,
             amount: 1_000,
             supporter: NOBODY,
@@ -121,7 +121,7 @@ fn heal_and_absorb_support_move_to_the_evoker() {
         9,
         EventKind::Absorbed(Absorbed {
             absorber: shaman,
-            absorber_hostile: false,
+            absorber_logged_hostile: false,
             absorb_spell: 413984,
             amount: 100,
             supporter: evoker,
@@ -172,8 +172,8 @@ fn heals_on_players_count_unless_a_hostile_healer_heals_a_friendly_target() {
         mind_controlled_on_self,
         mind_controlled_on_raid,
     ]) {
-        event.source_hostile = source;
-        event.target_hostile = target;
+        event.source_logged_hostile = source;
+        event.target_logged_hostile = target;
     }
     let report = healing(&fight, &whole(Attribution::Augmented));
     let totals: Vec<_> = report.players.iter().map(|p| (p.player, p.total)).collect();
@@ -198,14 +198,14 @@ fn an_enemy_shield_on_a_mind_controlled_player_is_healing_of_that_enemy() {
         8921,
         EventKind::Absorbed(Absorbed {
             absorber: boss,
-            absorber_hostile: true,
+            absorber_logged_hostile: true,
             absorb_spell: 1297445,
             amount: 300,
             supporter: NOBODY,
         }),
     );
     let mut fight = b.build();
-    fight.events[0].target_hostile = true;
+    fight.events[0].target_logged_hostile = true;
     let filter = whole(Attribution::Augmented);
     assert!(healing(&fight, &filter).players.is_empty());
     let rows: Vec<_> = breakdown(
@@ -242,7 +242,7 @@ fn an_enemy_heal_on_a_mind_controlled_player_is_not_enemy_healing() {
     b.push(1_000, boss, warrior, 8936, EventKind::Heal(heal(500, 0)));
     b.push(2_000, boss, boss, 8936, EventKind::Heal(heal(200, 0)));
     let mut fight = b.build();
-    fight.events[0].target_hostile = true;
+    fight.events[0].target_logged_hostile = true;
     let enemies = Scope {
         perspective: Side::Enemy,
         ..Scope::default()
@@ -280,7 +280,7 @@ fn healing_table_total(fight: &Fight) -> i64 {
 fn absorb(absorber: u32, absorb_spell: u32, amount: u64) -> EventKind {
     EventKind::Absorbed(Absorbed {
         absorber,
-        absorber_hostile: false,
+        absorber_logged_hostile: false,
         absorb_spell,
         amount,
         supporter: NOBODY,
@@ -470,7 +470,7 @@ fn an_enemy_heal_on_the_raid_while_the_logger_is_turned_is_not_healing() {
     b.push(2_000, boss, warrior, 8936, EventKind::Heal(heal(500, 0)));
     let mut fight = b.build();
     fight.logger_turned = vec![(1_000, 3_000)];
-    fight.events[0].source_hostile = false;
-    fight.events[0].target_hostile = true;
+    fight.events[0].source_logged_hostile = false;
+    fight.events[0].target_logged_hostile = true;
     assert_eq!(healing_table_total(&fight), 0);
 }

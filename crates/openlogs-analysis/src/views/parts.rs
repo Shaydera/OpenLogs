@@ -295,10 +295,7 @@ fn taken(
     if fight.actors.get(event.target).kind != ActorKind::Player {
         return;
     }
-    if hostile_sources_only
-        && (event.source == NOBODY
-            || !fight.against_raid_at(event.source, event.source_hostile, event.t))
-    {
+    if hostile_sources_only && (event.source == NOBODY || !fight.source_against_raid(event)) {
         return;
     }
     if let Some((amount, absorbed)) = amounts {
@@ -329,9 +326,8 @@ fn enemy_healing(fight: &Fight, index: usize, event: &Event, book: &mut impl FnM
     let EventKind::Heal(heal) = event.kind else {
         return;
     };
-    let against = |actor, hostile| fight.against_raid_at(actor, hostile, event.t);
-    if !against(event.source, event.source_hostile)
-        || !against(event.target, event.target_hostile)
+    if !fight.source_against_raid(event)
+        || !fight.target_against_raid(event)
         || fight.actors.credited_player(event.target).is_some()
         || heal.supporter != NOBODY
     {

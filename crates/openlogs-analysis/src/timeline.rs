@@ -73,8 +73,7 @@ fn is_npc(fight: &Fight, actor: ActorId) -> bool {
 /// Whether the event's target is an enemy NPC: a unit no player owns that stands against the
 /// raid at the event. Hits on units logged neutral do not count.
 fn hits_enemy_npc(fight: &Fight, event: &Event) -> bool {
-    fight.actors.is_unowned_npc(event.target)
-        && fight.against_raid_at(event.target, event.target_hostile, event.t)
+    fight.actors.is_unowned_npc(event.target) && fight.target_against_raid(event)
 }
 
 /// Whether a player's or pet's hit counts for Damage Done: on an enemy NPC, or by the raid on
@@ -85,8 +84,8 @@ pub fn hits_enemy(fight: &Fight, event: &Event) -> bool {
 
 fn hits_turned_player(fight: &Fight, event: &Event) -> bool {
     fight.actors.get(event.target).kind == ActorKind::Player
-        && fight.against_raid_at(event.target, event.target_hostile, event.t)
-        && !fight.against_raid_at(event.source, event.source_hostile, event.t)
+        && fight.target_against_raid(event)
+        && !fight.source_against_raid(event)
         && fight.actors.credited_player(event.source) != Some(event.target)
 }
 

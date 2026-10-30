@@ -146,7 +146,7 @@ mod tests {
         if let openlogs_analysis::EventKind::Damage(damage) = &mut event.kind {
             damage.via = openlogs_analysis::DamageVia::Environmental;
         }
-        event.target_hostile = false;
+        event.target_logged_hostile = false;
         event
     }
 

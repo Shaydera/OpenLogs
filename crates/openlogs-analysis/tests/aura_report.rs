@@ -258,7 +258,7 @@ fn an_enemy_debuff_keeps_its_applications_after_the_holder_turns_friendly() {
         (9_000, AuraAction::Removed),
     ] {
         s.b.push(t, s.mage, s.boss, 172, debuff(action));
-        s.b.fight.events.last_mut().unwrap().target_hostile = false;
+        s.b.fight.events.last_mut().unwrap().target_logged_hostile = false;
     }
     let rows = report(
         &s.b.build(),
@@ -474,4 +474,35 @@ fn enemies_have_buffs_of_their_own() {
         .map(|r| (r.spell, r.lanes[0].holder.name.as_str(), r.uptime))
         .collect();
     assert_eq!(shields, [(77, "Ula'tek", 0.2)]);
+}
+
+#[test]
+fn an_enemy_buff_logged_friendly_while_the_logging_player_is_turned_stays_an_enemy_buff() {
+    let mut s = scene();
+    s.b.push(
+        2_000,
+        s.boss,
+        s.boss,
+        77,
+        aura(AuraAction::Applied, AuraType::Buff),
+    );
+    s.b.push(
+        6_000,
+        s.boss,
+        s.boss,
+        77,
+        aura(AuraAction::Removed, AuraType::Buff),
+    );
+    let mut fight = s.b.build();
+    fight.logger_turned = vec![(1_000, 7_000)];
+    for event in &mut fight.events {
+        event.source_logged_hostile = false;
+        event.target_logged_hostile = false;
+    }
+    let rows = report(&fight, Side::Enemy, AuraType::Buff, Scope::default()).rows;
+    let holders: Vec<_> = rows
+        .iter()
+        .map(|r| (r.spell, r.lanes[0].holder.name.as_str()))
+        .collect();
+    assert_eq!(holders, [(77, "Ula'tek")]);
 }

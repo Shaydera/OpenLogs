@@ -1,5 +1,5 @@
 use crate::actors::{ActorId, ActorKind, NOBODY};
-use crate::fight::{Fight, SpellId};
+use crate::fight::{Event, Fight, SpellId};
 use crate::links::{SpellKey, spell_key};
 
 /// Which side a view is about.
@@ -150,10 +150,43 @@ fn units(fight: &Fight, list: &[UnitRef], unit: Option<&UnitRef>) -> bool {
 /// The side of `actor` at an event at `t` that logged it `hostile`: players and what they own are
 /// always friendly; `None` for no unit (the environment).
 pub fn side_of(fight: &Fight, actor: ActorId, hostile: bool, t: i32) -> Option<Side> {
+    side_by(fight, actor, || fight.against_raid_at(actor, hostile, t))
+}
+
+/// The side of the event's source at the event.
+pub(crate) fn source_side(fight: &Fight, event: &Event) -> Option<Side> {
+    side_by(fight, event.source, || fight.source_against_raid(event))
+}
+
+/// The side of the event's target at the event.
+pub(crate) fn target_side(fight: &Fight, event: &Event) -> Option<Side> {
+    side_by(fight, event.target, || fight.target_against_raid(event))
+}
+
+/// The side of `actor` at an event; `None` when the event names it neither as source nor target.
+pub(crate) fn side_at(fight: &Fight, event: &Event, actor: ActorId) -> Option<Side> {
+    if actor == event.source {
+        source_side(fight, event)
+    } else if actor == event.target {
+        target_side(fight, event)
+    } else {
+        None
+    }
+}
+
+fn side_by(fight: &Fight, actor: ActorId, against_raid: impl FnOnce() -> bool) -> Option<Side> {
     if actor == NOBODY {
         return None;
     }
-    let enemy =
-        fight.actors.credited_player(actor).is_none() && fight.against_raid_at(actor, hostile, t);
+    let enemy = fight.actors.credited_player(actor).is_none() && against_raid();
     Some(if enemy { Side::Enemy } else { Side::Friendly })
+}
+
+/// Whether a view of `side` shows `unit`, which stands on `unit_side`: players for friendlies
+/// (not their pets), units against the raid for enemies.
+pub(crate) fn shown_on(fight: &Fight, side: Side, unit: ActorId, unit_side: Option<Side>) -> bool {
+    match side {
+        Side::Friendly => fight.actors.get(unit).kind == ActorKind::Player,
+        Side::Enemy => unit_side == Some(Side::Enemy),
+    }
 }

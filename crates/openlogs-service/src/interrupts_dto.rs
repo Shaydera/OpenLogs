@@ -180,7 +180,7 @@ mod tests {
             "Ula'tek",
             HOSTILE_FLAGS,
         );
-        let dispel = |target, target_hostile| openlogs_analysis::Event {
+        let dispel = |target, target_logged_hostile| openlogs_analysis::Event {
             t: 33_973,
             source: paladin,
             target,
@@ -189,8 +189,8 @@ mod tests {
                 removed: 1287036,
                 aura_type: openlogs_analysis::AuraType::Debuff,
             },
-            source_hostile: false,
-            target_hostile,
+            source_logged_hostile: false,
+            target_logged_hostile,
             unit_hp: None,
         };
         let fight = fight(actors, vec![dispel(aleth, false), dispel(boss, true)]);
@@ -237,8 +237,8 @@ mod tests {
                 removed: 1,
                 aura_type: openlogs_analysis::AuraType::Debuff,
             },
-            source_hostile: false,
-            target_hostile: false,
+            source_logged_hostile: false,
+            target_logged_hostile: false,
             unit_hp: None,
         };
         let fight = fight(actors, vec![dispel]);

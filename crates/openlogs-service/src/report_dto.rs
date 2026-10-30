@@ -680,8 +680,8 @@ mod death_cutoff_tests {
             target,
             spell: 0,
             kind: EventKind::Died { unconscious: false },
-            source_hostile: false,
-            target_hostile: false,
+            source_logged_hostile: false,
+            target_logged_hostile: false,
             unit_hp: None,
         };
         let pull = fight(

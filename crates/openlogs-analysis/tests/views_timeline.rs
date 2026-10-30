@@ -1534,3 +1534,45 @@ fn every_mark_carries_where_its_drawing_ends() {
     assert_eq!(span(ScopeMetric::Buffs), 9_000, "a bar ends with it");
     assert_eq!(span(ScopeMetric::Interrupts), 1_950, "a point at its start");
 }
+
+#[test]
+fn an_enemy_logged_friendly_while_the_logging_player_is_turned_keeps_the_raids_debuff() {
+    let mut b = FightBuilder::new(60_000);
+    let mage = b.player("Player-1", "Faelan-Emberfall-EU", 63);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    let ignite = b.spell(12654, "Ignite");
+    b.push(
+        1_000,
+        mage,
+        boss,
+        ignite,
+        aura(AuraAction::Applied, AuraType::Debuff, None),
+    );
+    b.push(2_000, mage, boss, ignite, spell_hit(400));
+    b.push(
+        4_000,
+        mage,
+        boss,
+        ignite,
+        aura(AuraAction::Removed, AuraType::Debuff, None),
+    );
+    let mut fight = b.build();
+    fight.logger_turned = vec![(0, 5_000)];
+    for event in &mut fight.events {
+        event.source_logged_hostile = true;
+        event.target_logged_hostile = false;
+    }
+    let enemies = Scope {
+        perspective: Side::Enemy,
+        ..Scope::default()
+    };
+    let taken = plain(
+        &fight,
+        &enemies,
+        ScopeMetric::DamageTaken,
+        Dimension::Target,
+        ViewOptions::default(),
+        (0, 60_000),
+    );
+    assert_eq!(taken.legend, [ignite]);
+}

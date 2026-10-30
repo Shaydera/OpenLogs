@@ -513,8 +513,8 @@ mod tests {
             target,
             spell,
             kind,
-            source_hostile: false,
-            target_hostile: false,
+            source_logged_hostile: false,
+            target_logged_hostile: false,
             unit_hp: None,
         };
         let aura_mastery = EventKind::Aura {
@@ -655,8 +655,8 @@ mod tests {
                     stacks: None,
                     broken_by: NO_SPELL,
                 },
-                source_hostile: false,
-                target_hostile: false,
+                source_logged_hostile: false,
+                target_logged_hostile: false,
                 unit_hp: None,
             }],
         );
