@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use openlogs_index::{MapBounds, Outcome};
 pub use openlogs_parser::{AuraAction, AuraType, DamageVia};
 
-use crate::actors::{ActorId, Actors};
+use crate::actors::{ActorId, Actors, NOBODY};
 
 pub type SpellId = u32;
 /// Spell of melee swings, environmental damage and deaths.
@@ -244,11 +244,29 @@ pub struct Damage {
     pub critical: bool,
     /// Augmentation Evoker for `*_SUPPORT` events, else `NOBODY`.
     pub supporter: ActorId,
+    /// For a `SWING_DAMAGE_LANDED`: the index in [`Fight::events`] of the hit's attacker-side
+    /// line, set by [`crate::pair_melee_lines`].
+    pub attacker_line: Option<u32>,
     /// A swing whose `SWING_DAMAGE_LANDED` copy is logged after the pull's end.
     pub lands_after_end: bool,
 }
 
-/// A melee hit's landed copy follows its swing at most this long after.
+impl Damage {
+    /// A `SWING_DAMAGE_LANDED` the log has no attacker-side line for: it is the hit.
+    pub(crate) fn is_landed_only(&self) -> bool {
+        self.via == DamageVia::SwingLanded
+            && self.supporter == NOBODY
+            && self.attacker_line.is_none()
+    }
+
+    /// What a melee hit's swing and its landed copy both log: they may split the hit
+    /// differently between `amount` and `absorbed`.
+    pub(crate) fn melee_total(&self) -> u64 {
+        self.amount + self.absorbed
+    }
+}
+
+/// A melee hit's landed copy is logged at most this long before or after its swing.
 pub const LANDED_MATCH_MS: i32 = 1_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

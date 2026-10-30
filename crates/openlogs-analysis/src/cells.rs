@@ -341,10 +341,10 @@ fn book_amounts(fight: &Fight, filter: &ReportFilter, facts: AmountFacts, map: &
     }
 }
 
-/// Its landed copy is not a swing of its own.
-fn is_swing(event: &Event) -> bool {
+/// A melee swing's landed copy is a swing of its own only when the log has no swing for it.
+pub(crate) fn is_swing(event: &Event) -> bool {
     match event.kind {
-        EventKind::Damage(damage) => damage.via == DamageVia::Swing,
+        EventKind::Damage(damage) => damage.via == DamageVia::Swing || damage.is_landed_only(),
         EventKind::Missed(missed) => missed.via == DamageVia::Swing,
         _ => false,
     }

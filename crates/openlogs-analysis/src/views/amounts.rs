@@ -113,7 +113,7 @@ pub(crate) fn rows(
                 .any(|p| p.kind == CellKind::Support && passes(p));
         let row = match parts.first() {
             Some(part) => part.row,
-            None => buffed_hit(fight, index).and_then(|(hit, _)| listed_row(fight, hit)),
+            None => buffed_hit(fight, index).map(|(hit, _)| listed_row(fight, hit)),
         }
         .filter(|row| range.contains(row));
         match row {

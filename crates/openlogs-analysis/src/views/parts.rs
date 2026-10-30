@@ -1,8 +1,6 @@
 use crate::actors::{ActorId, ActorKind, NOBODY};
 use crate::cells::{CellKind, ScopeMetric};
-use crate::fight::{
-    DamageVia, Event, EventKind, Fight, LANDED_MATCH_MS, MissType, NO_SPELL, SpellId,
-};
+use crate::fight::{DamageVia, Event, EventKind, Fight, MissType, NO_SPELL, SpellId};
 use crate::filter::Overkill;
 use crate::reports::taken::taken_amount;
 use crate::reports::{Absorbs, Share, buffed_hit, damage_share, healing_share};
@@ -142,7 +140,7 @@ fn own_side(
             let deducted = hit
                 .map(|(hit, _)| Absorbs::of_part(&fight.events[hit], support.amount))
                 .unwrap_or_default();
-            let row = hit.and_then(|(hit, _)| listed_row(fight, hit));
+            let row = hit.map(|(hit, _)| listed_row(fight, hit));
             let periodic = hit.is_some_and(|(hit, _)| is_periodic(&fight.events[hit]));
             book(Part {
                 source: support.evoker,
@@ -186,27 +184,14 @@ fn own_side(
 }
 
 /// The listed row of the hit at `index`. Melee support is logged after the hit's
-/// SWING_DAMAGE_LANDED copy, which is never listed: its row is the swing it repeats.
-pub(crate) fn listed_row(fight: &Fight, index: usize) -> Option<usize> {
-    let hit = &fight.events[index];
-    let EventKind::Damage(landed) = hit.kind else {
-        return Some(index);
-    };
-    if landed.via != DamageVia::SwingLanded {
-        return Some(index);
+/// SWING_DAMAGE_LANDED copy, which is listed as the attacker-side line it was paired with.
+pub(crate) fn listed_row(fight: &Fight, index: usize) -> usize {
+    match fight.events[index].kind {
+        EventKind::Damage(damage) if damage.via == DamageVia::SwingLanded => {
+            damage.attacker_line.map_or(index, |line| line as usize)
+        }
+        _ => index,
     }
-    fight.events[..index]
-        .iter()
-        .enumerate()
-        .rev()
-        .take_while(|(_, swing)| hit.t - swing.t <= LANDED_MATCH_MS)
-        .find(|(_, swing)| {
-            swing.source == hit.source
-                && swing.target == hit.target
-                && matches!(swing.kind, EventKind::Damage(d)
-                    if d.via == DamageVia::Swing && d.supporter == NOBODY && d.amount == landed.amount)
-        })
-        .map(|(i, _)| i)
 }
 
 /// The type of a logged attack that did no damage; a hit a shield swallowed is a hit.
