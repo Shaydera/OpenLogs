@@ -10,7 +10,9 @@ const TYPE_PET: u32 = 0x1000;
 const TYPE_GUARDIAN: u32 = 0x2000;
 /// Affiliation mine | party | raid.
 const AFFILIATION_GROUP: u32 = 0x7;
+const REACTION_FRIENDLY: u32 = 0x10;
 const REACTION_HOSTILE: u32 = 0x40;
+const CONTROL_NPC: u32 = 0x200;
 /// Owner chains longer than this are treated as broken (cycles, bad data).
 const MAX_OWNER_DEPTH: usize = 8;
 
@@ -31,6 +33,9 @@ pub struct Actor {
     pub kind: ActorKind,
     /// Latest unit flags seen for this actor.
     pub flags: u32,
+    /// Lines that logged this actor hostile, and lines that did not.
+    hostile_lines: u32,
+    other_lines: u32,
     /// Direct owner (summoner) of a pet or guardian.
     pub owner: Option<ActorId>,
     /// From `COMBATANT_INFO`, players only.
@@ -46,10 +51,22 @@ impl Actor {
         self.flags & REACTION_HOSTILE != 0
     }
 
+    /// Hostile on most of the lines it appeared on. Mechanics that turn the logging player
+    /// against the raid log enemies as friendly for a few seconds.
+    pub fn mostly_hostile(&self) -> bool {
+        self.hostile_lines > self.other_lines
+    }
+
     /// Belongs to the logging player's group (mine, party or raid) and is not hostile.
     pub fn is_friendly(&self) -> bool {
         self.flags & AFFILIATION_GROUP != 0 && !self.is_hostile()
     }
+}
+
+/// An NPC-controlled unit logged friendly: how enemies look while the logging player is turned
+/// against the raid.
+pub(crate) fn npc_logged_friendly(unit: &Unit<'_>) -> bool {
+    !unit.is_player() && unit.flags & CONTROL_NPC != 0 && unit.flags & REACTION_FRIENDLY != 0
 }
 
 /// Every unit seen in a fight, interned by GUID. Index 0 is [`NOBODY`].
@@ -74,6 +91,8 @@ impl Actors {
                 name: None,
                 kind: ActorKind::Nobody,
                 flags: 0,
+                hostile_lines: 0,
+                other_lines: 0,
                 owner: None,
                 spec_id: None,
                 item_level: None,
@@ -88,6 +107,8 @@ impl Actors {
         let mut carried = self.clone();
         for actor in &mut carried.list {
             actor.flags = 0;
+            actor.hostile_lines = 0;
+            actor.other_lines = 0;
             actor.owner = None;
             actor.spec_id = None;
             actor.item_level = None;
@@ -96,7 +117,8 @@ impl Actors {
         carried
     }
 
-    /// Id for `unit`, created on first sight; refreshes the name (if unknown) and flags.
+    /// Id for `unit`, created on first sight; refreshes the name (if unknown) and flags and
+    /// counts the line's hostility.
     pub fn intern(&mut self, unit: &Unit<'_>) -> ActorId {
         if unit.is_empty() {
             return NOBODY;
@@ -107,6 +129,11 @@ impl Actors {
             actor.name = unit.name.map(str::to_string);
         }
         actor.flags = unit.flags;
+        if actor.is_hostile() {
+            actor.hostile_lines += 1;
+        } else {
+            actor.other_lines += 1;
+        }
         if actor.kind == ActorKind::Npc && unit.flags & (TYPE_PET | TYPE_GUARDIAN) != 0 {
             actor.kind = ActorKind::Pet;
         }
@@ -128,6 +155,8 @@ impl Actors {
             name: None,
             kind: kind_from_guid(guid),
             flags: 0,
+            hostile_lines: 0,
+            other_lines: 0,
             owner: None,
             spec_id: None,
             item_level: None,
@@ -215,6 +244,17 @@ impl Actors {
     pub fn credited_player(&self, id: ActorId) -> Option<ActorId> {
         let root = self.root_owner(id);
         (self.list[root as usize].kind == ActorKind::Player).then_some(root)
+    }
+
+    /// A unit that is neither a player nor owned by one.
+    pub fn is_unowned_npc(&self, id: ActorId) -> bool {
+        !matches!(self.get(id).kind, ActorKind::Player | ActorKind::Nobody)
+            && self.credited_player(id).is_none()
+    }
+
+    /// An unowned NPC hostile on most of its lines: an enemy for the whole pull.
+    pub fn is_enemy(&self, id: ActorId) -> bool {
+        self.is_unowned_npc(id) && self.get(id).mostly_hostile()
     }
 }
 

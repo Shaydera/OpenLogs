@@ -5,7 +5,7 @@ use crate::fight::{DamageVia, Event, EventKind, Fight, NO_SPELL, SpellId};
 use crate::filter::Overkill;
 use crate::scope::{Scope, UnitRef, unit_of};
 use crate::timeline::{
-    credited_as_damage_done, damage_done_amount, dealt_damage, healing_amount, hits_hostile_npc,
+    credited_as_damage_done, damage_done_amount, dealt_damage, healing_amount, hits_enemy,
 };
 
 pub mod damage;
@@ -877,11 +877,11 @@ impl Absorbs {
     }
 }
 
-/// Damage done: hits on units that were hostile at the hit, credited through pets.
+/// Damage done: hits on enemies (see [`hits_enemy`]), credited through pets.
 /// Support from an unknown Evoker is not a share.
 pub(crate) fn damage_share(fight: &Fight, event: &Event, overkill: Overkill) -> Option<Share> {
     let damage = dealt_damage(event)?;
-    if !hits_hostile_npc(fight, event) {
+    if !hits_enemy(fight, event) {
         return None;
     }
     let player = fight.actors.credited_player(event.source)?;
