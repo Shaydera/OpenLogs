@@ -42,6 +42,7 @@ pub(crate) fn dealt_damage(event: &Event) -> Option<Damage> {
             absorbed: missed.amount_missed,
             critical: missed.critical,
             supporter: NOBODY,
+            attacker_line: None,
             lands_after_end: false,
         }),
         _ => None,
