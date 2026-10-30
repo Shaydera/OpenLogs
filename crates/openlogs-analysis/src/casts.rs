@@ -137,7 +137,8 @@ pub(crate) fn presses<'a>(
                 && caster(event.source)
                 && !follow_ups.contains(i)
                 && (side == Side::Friendly
-                    || side_of(fight, event.source, event.source_hostile) == Some(Side::Enemy))
+                    || side_of(fight, event.source, event.source_hostile, event.t)
+                        == Some(Side::Enemy))
         })
         .map(|(_, event)| event)
         .collect()

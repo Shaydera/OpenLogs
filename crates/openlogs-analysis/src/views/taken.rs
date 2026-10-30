@@ -133,7 +133,7 @@ pub(crate) fn marks(
             i.aura_type == AuraType::Debuff
                 && i.end_ms > start
                 && i.start_ms < end
-                && holds(fight, i.target, i.target_hostile, side)
+                && holds(fight, i.target, i.target_hostile, i.start_ms, side)
                 && (!scope.source.is_empty() || applied_by_other_side(fight, side, i.source))
                 && aura_in_scope(fight, scope, i.source, i.spell, i.target)
         })

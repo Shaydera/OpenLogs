@@ -657,6 +657,7 @@ impl FightBuilder {
                 let absorber = self.fight.actors.intern(&a.absorber);
                 EventKind::Absorbed(Absorbed {
                     absorber,
+                    absorber_hostile: a.absorber.is_hostile(),
                     absorb_spell: self.spell(a.absorb_spell),
                     amount: a.amount,
                     supporter: self.actor(a.supporter),

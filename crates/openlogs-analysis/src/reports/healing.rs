@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::actors::ActorId;
+use crate::actors::{ActorId, ActorKind};
 use crate::fight::Fight;
 use crate::filter::{Attribution, ReportFilter};
 use crate::reports::{
@@ -165,7 +165,10 @@ pub(crate) fn healing_in(fight: &Fight, filter: &ReportFilter, scope: &Scope) ->
         .collect();
     // Overheal counts even for players whose healing was all overheal.
     let overheal = all.iter().map(|p| p.overheal).sum();
-    let mut players: Vec<PlayerHealing> = all.into_iter().filter(|p| p.total > 0).collect();
+    let mut players: Vec<PlayerHealing> = all
+        .into_iter()
+        .filter(|p| p.total > 0 && fight.actors.get(p.player).kind == ActorKind::Player)
+        .collect();
     let total: u64 = players.iter().map(|p| p.total).sum();
     for p in &mut players {
         p.share = if total > 0 {

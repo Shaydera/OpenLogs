@@ -135,10 +135,10 @@ fn by_count<K: Copy + Ord>(counts: &HashMap<K, u32>) -> Vec<K> {
 
 /// Friendly holders are players (their pets' auras are not counted); enemy holders are units
 /// hostile when the aura came.
-pub(crate) fn holds(fight: &Fight, holder: ActorId, hostile: bool, side: Side) -> bool {
+pub(crate) fn holds(fight: &Fight, holder: ActorId, hostile: bool, t: i32, side: Side) -> bool {
     match side {
         Side::Friendly => fight.actors.get(holder).kind == ActorKind::Player,
-        Side::Enemy => side_of(fight, holder, hostile) == Some(Side::Enemy),
+        Side::Enemy => side_of(fight, holder, hostile, t) == Some(Side::Enemy),
     }
 }
 
@@ -171,7 +171,9 @@ fn on_side(
     spans
         .into_iter()
         .filter(|i| i.start_ms < end && (i.end_ms > start || i.start_ms >= start))
-        .filter(|i| i.aura_type == aura_type && holds(fight, i.target, i.target_hostile, side))
+        .filter(|i| {
+            i.aura_type == aura_type && holds(fight, i.target, i.target_hostile, i.start_ms, side)
+        })
         .collect()
 }
 

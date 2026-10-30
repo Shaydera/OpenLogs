@@ -70,12 +70,11 @@ fn is_npc(fight: &Fight, actor: ActorId) -> bool {
     )
 }
 
-/// Whether the event's target is an enemy NPC: a non-player unit no player owns that was
-/// hostile at the event, or an enemy of the pull while the logging player was turned (the log
-/// then shows enemies friendly). Hits on units logged neutral do not count.
+/// Whether the event's target is an enemy NPC: a unit no player owns that stands against the
+/// raid at the event. Hits on units logged neutral do not count.
 fn hits_enemy_npc(fight: &Fight, event: &Event) -> bool {
-    (event.target_hostile && fight.actors.is_unowned_npc(event.target))
-        || (fight.logger_turned_at(event.t) && fight.actors.is_enemy(event.target))
+    fight.actors.is_unowned_npc(event.target)
+        && fight.against_raid_at(event.target, event.target_hostile, event.t)
 }
 
 /// Whether a player's or pet's hit counts for Damage Done: on an enemy NPC, or by the raid on
@@ -84,12 +83,10 @@ pub fn hits_enemy(fight: &Fight, event: &Event) -> bool {
     hits_enemy_npc(fight, event) || hits_turned_player(fight, event)
 }
 
-/// While the logging player is turned, its side is logged friendly and the raid hostile.
 fn hits_turned_player(fight: &Fight, event: &Event) -> bool {
-    let raid_logged_hostile = fight.logger_turned_at(event.t);
     fight.actors.get(event.target).kind == ActorKind::Player
-        && event.target_hostile != raid_logged_hostile
-        && event.source_hostile == raid_logged_hostile
+        && fight.against_raid_at(event.target, event.target_hostile, event.t)
+        && !fight.against_raid_at(event.source, event.source_hostile, event.t)
         && fight.actors.credited_player(event.source) != Some(event.target)
 }
 

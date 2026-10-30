@@ -56,6 +56,20 @@ impl Fight {
         next > 0 && self.logger_turned[next - 1].1 >= t
     }
 
+    /// Whether `actor`, logged `hostile` on a line at `t`, stands against the raid. While the
+    /// logging player is turned the log swaps the sides: an unowned NPC then counts by how it
+    /// was logged over the pull, and players and their pets by the swapped flag.
+    pub fn against_raid_at(&self, actor: ActorId, hostile: bool, t: i32) -> bool {
+        if actor == NOBODY || !self.logger_turned_at(t) {
+            return hostile;
+        }
+        if self.actors.is_unowned_npc(actor) {
+            self.actors.is_enemy(actor)
+        } else {
+            !hostile
+        }
+    }
+
     /// The reason text as the log wrote it.
     pub fn fail_reason(&self, reason: FailReason) -> &str {
         match reason {
@@ -328,6 +342,7 @@ pub struct Heal {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Absorbed {
     pub absorber: ActorId,
+    pub absorber_hostile: bool,
     pub absorb_spell: SpellId,
     pub amount: u64,
     pub supporter: ActorId,

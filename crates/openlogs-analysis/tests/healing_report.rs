@@ -1,8 +1,10 @@
 mod support;
 
 use openlogs_analysis::{
-    Absorbed, Attribution, EventKind, Heal, NOBODY, ReportFilter, RowKind, healing,
+    Absorbed, Attribution, Dimension, EventKind, Heal, NOBODY, ReportFilter, RowKey, RowKind,
+    Scope, ScopeMetric, Side, UnitRef, breakdown, healing,
 };
+use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS, heal};
 
 fn whole(mode: Attribution) -> ReportFilter {
@@ -26,6 +28,7 @@ fn effective_healing_overheal_and_absorbs() {
         9,
         EventKind::Absorbed(Absorbed {
             absorber: paladin,
+            absorber_hostile: false,
             absorb_spell: 414019,
             amount: 700,
             supporter: NOBODY,
@@ -104,6 +107,7 @@ fn heal_and_absorb_support_move_to_the_evoker() {
         9,
         EventKind::Absorbed(Absorbed {
             absorber: shaman,
+            absorber_hostile: false,
             absorb_spell: 2,
             amount: 1_000,
             supporter: NOBODY,
@@ -116,6 +120,7 @@ fn heal_and_absorb_support_move_to_the_evoker() {
         9,
         EventKind::Absorbed(Absorbed {
             absorber: shaman,
+            absorber_hostile: false,
             absorb_spell: 413984,
             amount: 100,
             supporter: evoker,
@@ -138,4 +143,113 @@ fn heal_and_absorb_support_move_to_the_evoker() {
     assert_eq!(aug.total, re.total);
     let evoker_row = re.players.iter().find(|x| x.player == evoker).unwrap();
     assert_eq!(evoker_row.support_by_recipient, vec![(shaman, 381)]);
+}
+
+#[test]
+fn heals_count_when_healer_and_target_stand_on_the_same_side() {
+    let mut b = FightBuilder::new(10_000);
+    let druid = b.player("Player-1", "Pyrrin-Emberfall-EU", 105);
+    let warrior = b.player("Player-2", "Wendel-Emberfall-EU", 71);
+    b.spell(774, "Rejuvenation");
+    b.push(2_000, druid, warrior, 774, EventKind::Heal(heal(100, 0)));
+    b.push(7_000, druid, warrior, 774, EventKind::Heal(heal(200, 0)));
+    b.push(7_500, warrior, warrior, 774, EventKind::Heal(heal(400, 0)));
+    let mut fight = b.build();
+    fight.logger_turned = vec![(1_000, 3_000)];
+    let raid_logged_hostile_while_turned = (true, true);
+    let raid_on_mind_controlled = (false, true);
+    let mind_controlled_on_self = (true, true);
+    for (event, (source, target)) in fight.events.iter_mut().zip([
+        raid_logged_hostile_while_turned,
+        raid_on_mind_controlled,
+        mind_controlled_on_self,
+    ]) {
+        event.source_hostile = source;
+        event.target_hostile = target;
+    }
+    let report = healing(&fight, &whole(Attribution::Augmented));
+    let totals: Vec<_> = report.players.iter().map(|p| (p.player, p.total)).collect();
+    assert_eq!(totals, [(warrior, 400), (druid, 100)]);
+}
+
+#[test]
+fn an_enemy_shield_on_a_mind_controlled_player_is_healing_of_that_enemy() {
+    let mut b = FightBuilder::new(10_000);
+    let druid = b.player("Player-1", "Pyrrin-Emberfall-EU", 105);
+    let warrior = b.player("Player-2", "Wendel-Emberfall-EU", 71);
+    let boss = b.unit(
+        "Creature-0-1-1-1-259854-01",
+        "Hex Lord Malacrass",
+        HOSTILE_FLAGS,
+    );
+    b.spell(1297445, "Dreadmarch");
+    b.push(
+        1_000,
+        druid,
+        warrior,
+        8921,
+        EventKind::Absorbed(Absorbed {
+            absorber: boss,
+            absorber_hostile: true,
+            absorb_spell: 1297445,
+            amount: 300,
+            supporter: NOBODY,
+        }),
+    );
+    let mut fight = b.build();
+    fight.events[0].target_hostile = true;
+    let filter = whole(Attribution::Augmented);
+    assert!(healing(&fight, &filter).players.is_empty());
+    let rows: Vec<_> = breakdown(
+        &fight,
+        &Curated::bundled(),
+        &filter,
+        &Scope::default(),
+        ScopeMetric::Healing,
+        Dimension::Source,
+    )
+    .rows
+    .into_iter()
+    .map(|r| (r.row.key, r.row.amount))
+    .collect();
+    assert!(
+        matches!(
+            rows.as_slice(),
+            [(RowKey::Unit(UnitRef::Unit(_) | UnitRef::Instance(_)), 300)]
+        ),
+        "{rows:?}"
+    );
+}
+
+#[test]
+fn an_enemy_heal_on_a_mind_controlled_player_is_not_enemy_healing() {
+    let mut b = FightBuilder::new(10_000);
+    let warrior = b.player("Player-2", "Wendel-Emberfall-EU", 71);
+    let boss = b.unit(
+        "Creature-0-1-1-1-259854-01",
+        "Hex Lord Malacrass",
+        HOSTILE_FLAGS,
+    );
+    b.spell(8936, "Regrowth");
+    b.push(1_000, boss, warrior, 8936, EventKind::Heal(heal(500, 0)));
+    b.push(2_000, boss, boss, 8936, EventKind::Heal(heal(200, 0)));
+    let mut fight = b.build();
+    fight.events[0].target_hostile = true;
+    let enemies = Scope {
+        perspective: Side::Enemy,
+        ..Scope::default()
+    };
+    let enemy_healing: i64 = breakdown(
+        &fight,
+        &Curated::bundled(),
+        &whole(Attribution::Augmented),
+        &enemies,
+        ScopeMetric::Healing,
+        Dimension::Source,
+    )
+    .rows
+    .iter()
+    .map(|r| r.row.amount)
+    .sum();
+    assert_eq!(enemy_healing, 200);
 }

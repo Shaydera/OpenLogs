@@ -908,35 +908,54 @@ pub(crate) fn damage_share(fight: &Fight, event: &Event, overkill: Overkill) -> 
     }))
 }
 
-/// Healing: effective heals and absorbs on targets that were not hostile at the event.
+/// Healing: effective heals and absorbs on the healer's own side. On a player or a pet, a heal
+/// counts when healer and target stand on the same side at the event and an absorb always; on
+/// any other unit both count only while neither stands against the raid. An enemy no player
+/// owns is credited itself for what it does on players and pets.
 pub(crate) fn healing_share(fight: &Fight, event: &Event) -> Option<Share> {
-    if event.target_hostile || event.target == NOBODY {
+    if event.target == NOBODY {
         return None;
     }
-    let (doer, spell, amount, overheal, critical, periodic, absorb, supporter) = match event.kind {
-        EventKind::Heal(heal) => (
-            event.source,
-            event.spell,
-            healing_amount(&heal),
-            heal.overheal,
-            heal.critical,
-            heal.periodic,
-            false,
-            heal.supporter,
-        ),
-        EventKind::Absorbed(absorbed) => (
-            absorbed.absorber,
-            absorbed.absorb_spell,
-            absorbed.amount,
-            0,
-            false,
-            false,
-            true,
-            absorbed.supporter,
-        ),
-        _ => return None,
+    let (doer, doer_hostile, spell, amount, overheal, critical, periodic, absorb, supporter) =
+        match event.kind {
+            EventKind::Heal(heal) => (
+                event.source,
+                event.source_hostile,
+                event.spell,
+                healing_amount(&heal),
+                heal.overheal,
+                heal.critical,
+                heal.periodic,
+                false,
+                heal.supporter,
+            ),
+            EventKind::Absorbed(absorbed) => (
+                absorbed.absorber,
+                absorbed.absorber_hostile,
+                absorbed.absorb_spell,
+                absorbed.amount,
+                0,
+                false,
+                false,
+                true,
+                absorbed.supporter,
+            ),
+            _ => return None,
+        };
+    let on_raid = fight.actors.credited_player(event.target).is_some();
+    let doer_against = || fight.against_raid_at(doer, doer_hostile, event.t);
+    let target_against = || fight.against_raid_at(event.target, event.target_hostile, event.t);
+    let counts = if on_raid {
+        absorb || doer_against() == target_against()
+    } else {
+        !doer_against() && !target_against()
     };
-    let player = fight.actors.credited_player(doer)?;
+    if !counts {
+        return None;
+    }
+    let player = fight.actors.credited_player(doer).or_else(|| {
+        (on_raid && fight.actors.is_unowned_npc(doer) && doer_against()).then_some(doer)
+    })?;
     if supporter == NOBODY {
         return Some(Share::Own {
             player,
