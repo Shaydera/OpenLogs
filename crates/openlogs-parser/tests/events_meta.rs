@@ -184,10 +184,6 @@ fn unmodelled_events_are_unhandled() {
             r#"10/7/2026 19:03:03.1762  SPELL_EXTRA_ATTACKS,Player-4101-2E0D6EAA,"Elowyn-Emberfall-EU",0x514,0x80000000,Player-4101-2E0D6EAA,"Elowyn-Emberfall-EU",0x514,0x80000000,465661,"Skyfury",0x1,1"#,
             "SPELL_EXTRA_ATTACKS",
         ),
-        (
-            r#"10/7/2026 19:00:04.9992  SPELL_HEAL_ABSORBED,Player-4102-7E89660A,"Puran-Ironmoor-EU",0x514,0x80000000,Player-4102-7E89660A,"Puran-Ironmoor-EU",0x514,0x80000000,448005,"Light of the Martyr",0x2,Player-4102-7E89660A,"Puran-Ironmoor-EU",0x514,0x80000000,143924,"Leech",0x1,10729,10729"#,
-            "SPELL_HEAL_ABSORBED",
-        ),
     ] {
         assert_eq!(event(line), Event::Unhandled { name });
     }

@@ -4,9 +4,9 @@ use crate::actors::{ActorId, ActorKind};
 use crate::fight::Fight;
 use crate::filter::{Attribution, ReportFilter};
 use crate::reports::{
-    AbilityRow, AbilityTargets, Absorbs, BuffShare, PetNames, RowKind, Share, SupportAcc,
-    SupportLedger, SupportShare, TargetShare, credit_support, heal_target, healing_share,
-    keeps_own, keeps_support, per_second, sorted_by_amount, support_entry,
+    AbilityRow, AbilityTargets, Absorbs, BuffShare, PetNames, Share, SupportAcc, SupportLedger,
+    SupportShare, TargetShare, credit_support, heal_target, healing_share, keeps_own,
+    keeps_support, per_second, sorted_by_amount, support_entry,
 };
 use crate::scope::Scope;
 
@@ -53,6 +53,7 @@ pub struct HealingReport {
 struct Acc {
     healing: u64,
     absorbs: u64,
+    costs: u64,
     overheal: u64,
     support: SupportAcc,
 }
@@ -74,7 +75,7 @@ pub(crate) fn healing_in(fight: &Fight, filter: &ReportFilter, scope: &Scope) ->
         .filter(|(_, e)| filter.contains(e.t))
     {
         match healing_share(fight, event) {
-            Some(Share::Own { actor, spell, .. })
+            Some(Share::Own { actor, spell, .. } | Share::Cost { actor, spell, .. })
                 if !keeps_own(fight, scope, actor, spell, event.target) => {}
             Some(Share::Own {
                 player,
@@ -86,12 +87,7 @@ pub(crate) fn healing_in(fight: &Fight, filter: &ReportFilter, scope: &Scope) ->
                 periodic,
                 absorb,
             }) => {
-                let actor = pets.representative(fight, player, actor);
-                let kind = if actor == player {
-                    RowKind::Own
-                } else {
-                    RowKind::Pet
-                };
+                let (actor, kind) = pets.row(fight, player, actor);
                 let entry = acc.entry(player).or_default();
                 if absorb {
                     entry.absorbs += amount;
@@ -109,6 +105,23 @@ pub(crate) fn healing_in(fight: &Fight, filter: &ReportFilter, scope: &Scope) ->
                     overheal,
                     critical,
                     periodic,
+                );
+            }
+            Some(Share::Cost {
+                player,
+                actor,
+                spell,
+                amount,
+            }) => {
+                let (actor, kind) = pets.row(fight, player, actor);
+                let entry = acc.entry(player).or_default();
+                entry.costs += amount;
+                entry.support.rows.take_back(
+                    spell,
+                    actor,
+                    kind,
+                    heal_target(fight, event.target),
+                    amount,
                 );
             }
             Some(Share::Support(support)) => {
@@ -133,7 +146,9 @@ pub(crate) fn healing_in(fight: &Fight, filter: &ReportFilter, scope: &Scope) ->
         .into_iter()
         .map(|(player, a)| {
             let s = a.support;
-            let own = a.healing + a.absorbs;
+            let healing = a.healing.saturating_sub(a.costs);
+            let absorbs = a.absorbs.saturating_sub(a.costs.saturating_sub(a.healing));
+            let own = healing + absorbs;
             let total = if reattributed {
                 s.reattributed_total(own)
             } else {
@@ -144,8 +159,8 @@ pub(crate) fn healing_in(fight: &Fight, filter: &ReportFilter, scope: &Scope) ->
             let parts = s.rows.into_parts(fight);
             PlayerHealing {
                 player,
-                healing: a.healing,
-                absorbs: a.absorbs,
+                healing,
+                absorbs,
                 overheal: a.overheal,
                 support_received: s.received,
                 support_given: s.given,

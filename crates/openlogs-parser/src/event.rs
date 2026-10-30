@@ -213,6 +213,7 @@ pub enum CombatKind<'a> {
     Missed(Missed<'a>),
     Heal(Heal<'a>),
     Absorbed(Absorbed<'a>),
+    HealAbsorbed(HealAbsorbed<'a>),
     Energize(Energize),
     CastStart,
     CastSuccess,
@@ -323,6 +324,15 @@ pub struct Absorbed<'a> {
     pub amount: u64,
     pub critical: bool,
     pub supporter: Option<&'a str>,
+}
+
+/// `SPELL_HEAL_ABSORBED`: the event's spell, a heal absorb its source put on its target, took
+/// `amount` of `healer`'s `heal_spell`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HealAbsorbed<'a> {
+    pub healer: Unit<'a>,
+    pub heal_spell: Spell<'a>,
+    pub amount: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

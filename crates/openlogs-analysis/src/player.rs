@@ -14,8 +14,8 @@ use crate::reports::healing::healing_in;
 use crate::reports::taken::taken_amount;
 use crate::reports::{
     AbilityRow, AbilityTargets, BuffShare, BuffedAbility, RowKind, Share, Support, SupportShare,
-    TargetShare, buff_totals, buffed_spell, damage_share, healing_share, keeps_own, keeps_support,
-    merged_targets, sorted_by_amount,
+    TargetShare, absorb_is_healing, buff_totals, buffed_spell, damage_share, healing_share,
+    keeps_own, keeps_support, merged_targets, sorted_by_amount,
 };
 use crate::resources::power_series;
 use crate::scope::Scope;
@@ -301,6 +301,14 @@ fn series(
                 ..
             }) if p == player && keeps_own(fight, scope, actor, spell, event.target) => {
                 amount as i64
+            }
+            Some(Share::Cost {
+                player: p,
+                actor,
+                spell,
+                amount,
+            }) if p == player && keeps_own(fight, scope, actor, spell, event.target) => {
+                -(amount as i64)
             }
             Some(Share::Support(s)) if reattributed => {
                 // The hit's ability decides only under a selection; finding it scans back.
@@ -783,7 +791,11 @@ pub(crate) fn received_healing(event: &Event, player: ActorId) -> Option<u64> {
     }
     match event.kind {
         EventKind::Heal(heal) if heal.supporter == NOBODY => Some(healing_amount(&heal)),
-        EventKind::Absorbed(absorbed) if absorbed.supporter == NOBODY => Some(absorbed.amount),
+        EventKind::Absorbed(absorbed)
+            if absorbed.supporter == NOBODY && absorb_is_healing(absorbed.absorb_spell) =>
+        {
+            Some(absorbed.amount)
+        }
         _ => None,
     }
 }

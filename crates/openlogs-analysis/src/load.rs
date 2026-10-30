@@ -12,9 +12,10 @@ use openlogs_parser::{
 use crate::actors::{ActorId, ActorKind, Actors, NOBODY, npc_logged_friendly};
 use crate::fight::{
     Absorbed, Damage, DamageVia, Energize, Event, EventKind, FailReason, Fight, FightKind, Heal,
-    LANDED_MATCH_MS, MarkerInterval, MissType, Missed, NO_SPELL, POWER_SAMPLE_MS, PositionSample,
-    PowerSample, RunEncounter, SpellId, SpellInfo, UnitHp, WorldMarkerInterval,
+    HealAbsorbed, LANDED_MATCH_MS, MarkerInterval, MissType, Missed, NO_SPELL, POWER_SAMPLE_MS,
+    PositionSample, PowerSample, RunEncounter, SpellId, SpellInfo, UnitHp, WorldMarkerInterval,
 };
+use crate::granted::note_heal_grants;
 use crate::turned::logger_turned_spans;
 
 /// Loads one fight, including its prelude, from the complete log bytes.
@@ -256,6 +257,7 @@ impl FightBuilder {
                 ui_map_id: None,
                 map_bounds: summary.map_bounds.clone(),
                 logger_turned: Vec::new(),
+                heal_grants: Vec::new(),
             },
             last_power: HashMap::new(),
             last_t: i32::MIN,
@@ -362,6 +364,7 @@ impl FightBuilder {
         self.fight.positions.sort_by_key(|p| p.t);
         self.friendly_npc_lines.sort_by_key(|&(t, _)| t);
         self.fight.logger_turned = logger_turned_spans(&self.fight, &self.friendly_npc_lines);
+        note_heal_grants(&mut self.fight);
         self.fight
     }
 
@@ -663,6 +666,11 @@ impl FightBuilder {
                     supporter: self.actor(a.supporter),
                 })
             }
+            CombatKind::HealAbsorbed(h) => EventKind::HealAbsorbed(HealAbsorbed {
+                healer: self.fight.actors.intern(&h.healer),
+                heal_spell: self.spell(h.heal_spell),
+                amount: h.amount,
+            }),
             CombatKind::Energize(e) => EventKind::Energize(Energize {
                 power_type: e.power_type,
                 amount: e.amount,

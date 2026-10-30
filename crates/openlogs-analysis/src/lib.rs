@@ -12,6 +12,7 @@ mod deaths;
 mod deaths_report;
 mod fight;
 mod filter;
+mod granted;
 mod interrupts;
 mod links;
 mod load;
@@ -50,11 +51,12 @@ pub use deaths::{
 pub use deaths_report::{DeathsReport, Kill, deaths_report};
 pub use fight::{
     Absorbed, AuraAction, AuraType, Damage, DamageVia, Energize, Event, EventKind, FailReason,
-    Fight, FightKind, Heal, LANDED_MATCH_MS, MarkerInterval, MissType, Missed, NO_SPELL,
-    POWER_SAMPLE_MS, PositionSample, PowerSample, RunEncounter, SpellId, SpellInfo, UnitHp,
-    WorldMarkerInterval,
+    Fight, FightKind, Heal, HealAbsorbed, LANDED_MATCH_MS, MarkerInterval, MissType, Missed,
+    NO_SPELL, POWER_SAMPLE_MS, PositionSample, PowerSample, RunEncounter, SpellId, SpellInfo,
+    UnitHp, WorldMarkerInterval,
 };
 pub use filter::{Attribution, Overkill, ReportFilter};
+pub use granted::note_heal_grants;
 pub use interrupts::{
     DispelEntry, InterruptEntry, InterruptsReport, KickRow, MissedCast, interrupts_report,
 };

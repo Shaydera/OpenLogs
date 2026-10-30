@@ -45,6 +45,7 @@ pub fn fight(actors: Actors, mut events: Vec<Event>) -> Fight {
         ui_map_id: None,
         map_bounds: Vec::new(),
         logger_turned: Vec::new(),
+        heal_grants: Vec::new(),
     }
 }
 

@@ -3,9 +3,11 @@ use std::collections::{HashMap, HashSet};
 use crate::actors::{ActorId, NOBODY};
 use crate::fight::{DamageVia, Event, EventKind, Fight, NO_SPELL, SpellId};
 use crate::filter::Overkill;
+use crate::granted::HEALING_ELIXIR;
 use crate::scope::{Scope, UnitRef, unit_of};
 use crate::timeline::{
     credited_as_damage_done, damage_done_amount, dealt_damage, healing_amount, hits_enemy,
+    is_distinct_hit,
 };
 
 pub mod damage;
@@ -273,6 +275,22 @@ impl Rows {
         split.amount -= amount as i64;
         split.absorbed -= absorbs.absorbed as i64;
         split.heal_absorbed -= absorbs.heal_absorbed as i64;
+    }
+
+    /// Takes `amount` off a row without a hit: what the row's own effect cost on `target`.
+    pub fn take_back(
+        &mut self,
+        spell: SpellId,
+        actor: ActorId,
+        kind: RowKind,
+        target: RawTarget,
+        amount: u64,
+    ) {
+        self.row(spell, actor, kind).amount -= amount as i64;
+        self.targets
+            .entry(((spell, actor, kind), target))
+            .or_default()
+            .amount -= amount as i64;
     }
 
     /// The units the rows booked an amount on.
@@ -792,6 +810,17 @@ impl<'a> PetNames<'a> {
             None => actor,
         }
     }
+
+    /// The row an ability of `actor` goes into for `player`: his own, or his pets' by name.
+    pub fn row(&mut self, fight: &'a Fight, player: ActorId, actor: ActorId) -> (ActorId, RowKind) {
+        let actor = self.representative(fight, player, actor);
+        let kind = if actor == player {
+            RowKind::Own
+        } else {
+            RowKind::Pet
+        };
+        (actor, kind)
+    }
 }
 
 /// One event's contribution to the damage or healing report.
@@ -813,6 +842,13 @@ pub(crate) enum Share {
     /// absorber for absorbs). Reattributed, it moves to `evoker` — the player himself for his
     /// own buff, from his ability to his support row.
     Support(Support),
+    /// Healing: what `actor`'s own effect took back from the raid, booked against `player`.
+    Cost {
+        player: ActorId,
+        actor: ActorId,
+        spell: SpellId,
+        amount: u64,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -908,19 +944,36 @@ pub(crate) fn damage_share(fight: &Fight, event: &Event, overkill: Overkill) -> 
     }))
 }
 
-/// Healing: effective heals and absorbs on the healer's own side. On a player or a pet, a heal
-/// counts when healer and target stand on the same side at the event and an absorb always; on
-/// any other unit both count only while neither stands against the raid. An enemy no player
-/// owns is credited itself for what it does on players and pets.
+/// Stretch Time, Refractive Images and Purgatory only delay the damage, which comes back on the
+/// same player; Pet Protector Immunity shields a turned player's pet from the raid.
+const ABSORBS_THAT_ARE_NOT_HEALING: [SpellId; 4] = [410355, 1309497, 114556, 1297827];
+
+/// Whether what `absorb_spell` absorbed is healing.
+pub(crate) fn absorb_is_healing(absorb_spell: SpellId) -> bool {
+    !ABSORBS_THAT_ARE_NOT_HEALING.contains(&absorb_spell)
+}
+/// The paladin's heal absorb on himself: what it takes of others' heals is his cost.
+const LIGHT_OF_THE_MARTYR: SpellId = 448005;
+/// The totem heals and damages under this spell: its damage takes back what its heals gave.
+const SPIRIT_LINK: SpellId = 98021;
+
+/// Healing: effective heals and absorbs on the healer's own side, less what his own effects took
+/// back. On a player or a pet, a heal counts when healer and target stand on the same side at
+/// the event and an absorb always; on any other unit both count only while neither stands
+/// against the raid. An enemy no player owns is credited itself for what it does on players and
+/// pets.
 pub(crate) fn healing_share(fight: &Fight, event: &Event) -> Option<Share> {
     if event.target == NOBODY {
         return None;
     }
+    if let Some(cost) = healing_cost(fight, event) {
+        return Some(cost);
+    }
     let (doer, doer_hostile, spell, amount, overheal, critical, periodic, absorb, supporter) =
         match event.kind {
             EventKind::Heal(heal) => (
-                event.source,
-                event.source_hostile,
+                healer_of(fight, event),
+                healer_hostile(fight, event),
                 event.spell,
                 healing_amount(&heal),
                 heal.overheal,
@@ -929,6 +982,9 @@ pub(crate) fn healing_share(fight: &Fight, event: &Event) -> Option<Share> {
                 false,
                 heal.supporter,
             ),
+            EventKind::Absorbed(absorbed) if !absorb_is_healing(absorbed.absorb_spell) => {
+                return None;
+            }
             EventKind::Absorbed(absorbed) => (
                 absorbed.absorber,
                 absorbed.absorber_hostile,
@@ -977,4 +1033,45 @@ pub(crate) fn healing_share(fight: &Fight, event: &Event) -> Option<Share> {
         target: event.target,
         amount,
     }))
+}
+
+/// The monk whose Healing Elixir buff granted a heal its holder logged as his own.
+fn granter_of(fight: &Fight, event: &Event) -> Option<ActorId> {
+    (event.spell == HEALING_ELIXIR)
+        .then(|| fight.heal_granter(event.source, event.t))?
+        .filter(|&granter| granter != event.source)
+}
+
+/// Who did a heal: its source, or the monk whose buff granted it.
+fn healer_of(fight: &Fight, event: &Event) -> ActorId {
+    granter_of(fight, event).unwrap_or(event.source)
+}
+
+/// The healer's logged hostile flag. A granting monk buffed from the raid's side, which the log
+/// shows hostile only while the logging player is turned.
+fn healer_hostile(fight: &Fight, event: &Event) -> bool {
+    match granter_of(fight, event) {
+        Some(_) => fight.logger_turned_at(event.t),
+        None => event.source_hostile,
+    }
+}
+
+fn healing_cost(fight: &Fight, event: &Event) -> Option<Share> {
+    let amount = match event.kind {
+        EventKind::HealAbsorbed(taken) if event.spell == LIGHT_OF_THE_MARTYR => taken.amount,
+        _ if event.spell == SPIRIT_LINK => {
+            fight.actors.credited_player(event.target)?;
+            damage_done_amount(
+                &dealt_damage(event).filter(is_distinct_hit)?,
+                Overkill::Excluded,
+            )
+        }
+        _ => return None,
+    };
+    Some(Share::Cost {
+        player: fight.actors.credited_player(event.source)?,
+        actor: event.source,
+        spell: event.spell,
+        amount,
+    })
 }

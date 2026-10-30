@@ -131,7 +131,7 @@ pub(crate) fn rows(
         }
         let mut own = None;
         facts.parts(fight, index, reattributed, filter.overkill, &mut |part| {
-            if (part.hit || part.miss.is_some()) && part.row == Some(index) {
+            if (part.hit || part.cost || part.miss.is_some()) && part.row == Some(index) {
                 own = Some(part);
             }
         });
@@ -215,11 +215,16 @@ fn amount_row(fight: &Fight, index: usize, own: &Part) -> EventRow {
     }
     match event.kind {
         EventKind::Heal(heal) => {
+            row.source = event.source;
             row.overheal = heal.overheal;
             row.absorbed = heal.absorbed;
             row.critical = heal.critical;
         }
         EventKind::Absorbed(_) => row.by = Some((event.source, event.spell)),
+        EventKind::HealAbsorbed(taken) => {
+            row.amount = Some(taken.amount);
+            row.by = Some((taken.healer, taken.heal_spell));
+        }
         _ => {}
     }
     row
@@ -313,6 +318,8 @@ impl Tally {
         if part.hit {
             self.amount += part.amount;
             self.hits += 1;
+        } else if part.cost {
+            self.amount += part.amount;
         } else if part.kind == CellKind::Support {
             self.amount += part.amount;
             self.support += part.amount;
@@ -383,7 +390,7 @@ pub(crate) fn timeline_parts(
             return;
         }
         let credit = part.kind == CellKind::Support;
-        if reattributed || part.hit {
+        if reattributed || part.hit || part.cost {
             each(part, true);
         } else if !credit {
             each(part, false);
