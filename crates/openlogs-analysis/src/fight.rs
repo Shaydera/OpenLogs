@@ -50,6 +50,9 @@ pub struct Fight {
     /// Who put a buff that grants heals on whom, as `(holder, t, granter)` sorted by holder and
     /// time, with granter [`NOBODY`] where one ended; see [`Fight::heal_granter`].
     pub heal_grants: Vec<(ActorId, i32, ActorId)>,
+    /// What Refractive Images took of hits, as `(event index, amount)` sorted by index, on the
+    /// line the hit counts on; see [`Fight::delayed_part`].
+    pub delayed_hits: Vec<(u32, u64)>,
 }
 
 impl Fight {
@@ -67,6 +70,18 @@ impl Fight {
             .partition_point(|&(h, at, _)| (h, at) <= (holder, t));
         let &(h, _, granter) = self.heal_grants.get(end.checked_sub(1)?)?;
         (h == holder && granter != NOBODY).then_some(granter)
+    }
+
+    /// What a delaying absorb took of the hit at `index`.
+    pub fn delayed_part(&self, index: usize) -> u64 {
+        u32::try_from(index)
+            .ok()
+            .and_then(|index| {
+                self.delayed_hits
+                    .binary_search_by_key(&index, |&(hit, _)| hit)
+                    .ok()
+            })
+            .map_or(0, |found| self.delayed_hits[found].1)
     }
 
     /// Whether the event's source stands against the raid at the event.

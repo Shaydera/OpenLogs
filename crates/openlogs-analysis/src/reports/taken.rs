@@ -87,8 +87,13 @@ struct PlayerAcc<'a> {
 pub fn damage_taken(fight: &Fight, filter: &ReportFilter) -> DamageTakenReport {
     let mut abilities: HashMap<AbilityKey<'_>, AbilityAcc> = HashMap::new();
     let mut players: HashMap<ActorId, PlayerAcc<'_>> = HashMap::new();
-    for event in fight.events.iter().filter(|e| filter.contains(e.t)) {
-        let Some((amount, absorbed)) = damage_taken_amount(event) else {
+    for (index, event) in fight
+        .events
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| filter.contains(e.t))
+    {
+        let Some((amount, absorbed)) = damage_taken_amount(fight, index) else {
             continue;
         };
         if fight.actors.get(event.target).kind != ActorKind::Player {
@@ -186,20 +191,19 @@ pub(crate) fn taken_amount(event: &Event, overkill: Overkill) -> Option<(u64, u6
 }
 
 /// Damage Taken: every hit with its overkill, also the part of a hit another player took over
-/// (`DAMAGE_SPLIT`), but not damage that only comes back or moves between players.
-pub(crate) fn damage_taken_amount(event: &Event) -> Option<(u64, u64)> {
+/// (`DAMAGE_SPLIT`), but not damage that only comes back or moves between players, nor the part
+/// Refractive Images delayed: that counts when Refraction deals it.
+pub(crate) fn damage_taken_amount(fight: &Fight, index: usize) -> Option<(u64, u64)> {
+    let event = &fight.events[index];
     if !damage_is_taken(event.spell) {
         return None;
     }
-    dealt_damage(event)
-        .filter(|damage| {
-            is_distinct_hit(damage)
-                || (damage.via == DamageVia::Split && damage.supporter == NOBODY)
-        })
-        .map(|damage| {
-            (
-                damage_done_amount(&damage, Overkill::Included),
-                damage.absorbed,
-            )
-        })
+    let damage = dealt_damage(event).filter(|damage| {
+        is_distinct_hit(damage) || (damage.via == DamageVia::Split && damage.supporter == NOBODY)
+    })?;
+    let delayed = fight.delayed_part(index);
+    Some((
+        damage_done_amount(&damage, Overkill::Included).saturating_sub(delayed),
+        damage.absorbed.saturating_sub(delayed),
+    ))
 }

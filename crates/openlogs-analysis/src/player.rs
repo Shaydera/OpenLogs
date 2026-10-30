@@ -932,7 +932,7 @@ pub fn player_detail(
             _ if event.target == player => {
                 if let Some(amount) = received_healing(event, player) {
                     healing_received += amount;
-                } else if let Some((amount, _)) = damage_taken_amount(event) {
+                } else if let Some((amount, _)) = damage_taken_amount(fight, i) {
                     let environmental = matches!(event.kind, EventKind::Damage(d) if d.via == DamageVia::Environmental);
                     *taken.entry((event.spell, environmental)).or_default() += amount;
                 }

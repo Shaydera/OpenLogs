@@ -10,6 +10,7 @@ use openlogs_parser::{
 };
 
 use crate::actors::{ActorId, ActorKind, Actors, NOBODY, npc_logged_friendly};
+use crate::delayed::note_delayed_hits;
 use crate::fight::{
     Absorbed, Damage, DamageVia, Energize, Event, EventKind, FailReason, Fight, FightKind, Heal,
     HealAbsorbed, LANDED_MATCH_MS, MarkerInterval, MissType, Missed, NO_SPELL, POWER_SAMPLE_MS,
@@ -72,6 +73,7 @@ fn load_slice(
     let mut fight = builder.finish();
     let unpaired = pair_landed_copies(&mut fight);
     mark_swings_landing_after_end(&mut fight, unpaired, &late);
+    note_delayed_hits(&mut fight);
     fight
 }
 
@@ -258,6 +260,7 @@ impl FightBuilder {
                 map_bounds: summary.map_bounds.clone(),
                 logger_turned: Vec::new(),
                 heal_grants: Vec::new(),
+                delayed_hits: Vec::new(),
             },
             last_power: HashMap::new(),
             last_t: i32::MIN,
