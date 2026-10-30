@@ -1,8 +1,9 @@
 use openlogs_analysis::{
     ActorKind, Actors, Attribution, Damage, DamageVia, EventKind, FailReason, LANDED_TAIL_BYTES,
-    NO_SPELL, ReportFilter, UnitHp, damage_done, load_fight, load_fight_slice,
-    load_fight_slice_with,
+    NO_SPELL, ReportFilter, ScopeMetric, Side, UnitHp, cells, damage_done, damage_taken,
+    load_fight, load_fight_slice, load_fight_slice_with,
 };
+use openlogs_gamedata::Curated;
 use openlogs_index::{Outcome, index_bytes};
 use openlogs_parser::Unit;
 
@@ -199,7 +200,7 @@ const KILLING_SWING_LOG: &str = concat!(
     "10/7/2026 19:03:05.0000  SWING_DAMAGE,Pet-0-4246-0-846-17252-01044B0E32,\"ShaaNash\",0x1114,0x80000000,Vehicle-0-3892-3004-1387-257758-00004679D4,\"Ula'tek\",0x10a48,0x80000000,Pet-0-4246-0-846-17252-01044B0E32,Player-4101-0A1AA093,821186,821186,7070,10791,5420,0,0,164192,3,75,200,0,1576.64,5.07,2610,6.0174,333,6234,6234,-1,1,0,0,0,nil,nil,nil\n",
     "10/7/2026 19:04:02.0500  SWING_DAMAGE,Pet-0-4246-0-846-17252-01044B0E32,\"ShaaNash\",0x1114,0x80000000,Vehicle-0-3892-3004-1387-257758-00004679D4,\"Ula'tek\",0x10a48,0x80000000,Pet-0-4246-0-846-17252-01044B0E32,Player-4101-0A1AA093,821186,821186,7070,10791,5420,0,0,164192,3,75,200,0,1576.64,5.07,2610,6.0174,333,5000,5000,1200,1,0,0,0,nil,nil,nil\n",
     "10/7/2026 19:04:02.0762  ENCOUNTER_END,3492,\"Ula'tek\",15,23,1,60000\n",
-    "10/7/2026 19:04:02.0800  SWING_DAMAGE_LANDED,Pet-0-4246-0-846-17252-01044B0E32,\"ShaaNash\",0x1114,0x80000000,Vehicle-0-3892-3004-1387-257758-00004679D4,\"Ula'tek\",0x10a48,0x80000000,Pet-0-4246-0-846-17252-01044B0E32,Player-4101-0A1AA093,821186,821186,7070,10791,5420,0,0,164192,3,75,200,0,1576.64,5.07,2610,6.0174,333,5000,5000,1200,1,0,0,0,nil,nil,nil\n",
+    "10/7/2026 19:04:02.0800  SWING_DAMAGE_LANDED,Pet-0-4246-0-846-17252-01044B0E32,\"ShaaNash\",0x1114,0x80000000,Vehicle-0-3892-3004-1387-257758-00004679D4,\"Ula'tek\",0x10a48,0x80000000,Pet-0-4246-0-846-17252-01044B0E32,Player-4101-0A1AA093,821186,821186,7070,10791,5420,0,0,164192,3,75,200,0,1576.64,5.07,2610,6.0174,333,3800,5000,1200,1,0,0,1200,nil,nil,nil\n",
 );
 
 #[test]
@@ -224,6 +225,86 @@ fn a_swing_whose_landed_copy_follows_the_end_stays_out_of_damage_done() {
         [false, true],
         "the killing swing stays an event of the pull"
     );
+}
+
+const BOSS: &str = "Vehicle-0-3892-3004-1387-257758-00004679D4,\"Ula'tek\",0x10a48,0x80000000";
+const GHOUL: &str = "Creature-0-3890-3004-1-237409-0000000001,\"Gravewalker\",0xa28,0x80000000";
+const KNIGHT: &str = "Player-1111-00000001,\"Morvane-Emberfall-EU\",0x511,0x80000000";
+
+/// A pull of Ula'tek from 19:03:02.0762 to 19:04:02.0762 with `lines` (seconds past 19:03
+/// first) in between.
+fn pull_log(lines: &[String]) -> String {
+    let mut log =
+        String::from("10/7/2026 19:03:02.0762  ENCOUNTER_START,3492,\"Ula'tek\",15,23,3004\n");
+    for line in lines {
+        log.push_str(&format!("10/7/2026 19:03:{line}\n"));
+    }
+    log.push_str("10/7/2026 19:04:02.0762  ENCOUNTER_END,3492,\"Ula'tek\",15,23,1,60000\n");
+    log
+}
+
+/// Its advanced block reports on the swinging unit for `SWING_DAMAGE` and on the target for
+/// `SWING_DAMAGE_LANDED`.
+fn melee(
+    seconds: &str,
+    event: &str,
+    source: &str,
+    target: &str,
+    amount: u64,
+    absorbed: u64,
+) -> String {
+    let reported = if event == "SWING_DAMAGE" {
+        source
+    } else {
+        target
+    };
+    let guid = reported.split(',').next().unwrap();
+    format!(
+        "{seconds}  {event},{source},{target},{guid},0000000000000000,100000,100000,0,0,1470,0,0,0,3,5,100,0,206.68,-0.05,2606,3.1241,92,{amount},{amount},-1,1,0,0,{absorbed},nil,nil,nil"
+    )
+}
+
+#[test]
+fn a_melee_hit_counts_once_whichever_of_its_lines_the_log_has() {
+    let log = pull_log(&[
+        format!("03.0000  SPELL_SUMMON,{KNIGHT},{GHOUL},1294026,\"Gravewalker\",0x20"),
+        melee("04.0000", "SWING_DAMAGE_LANDED", GHOUL, BOSS, 400, 0),
+        melee("05.0000", "SWING_DAMAGE", GHOUL, BOSS, 300, 200),
+        melee("05.0100", "SWING_DAMAGE_LANDED", GHOUL, BOSS, 500, 0),
+        melee("06.0000", "SWING_DAMAGE_LANDED", GHOUL, BOSS, 700, 0),
+        melee("06.0250", "SWING_DAMAGE", GHOUL, BOSS, 700, 0),
+    ]);
+    let index = index_bytes(log.as_bytes());
+    let fight = load_fight(log.as_bytes(), &index.fights[0]);
+    let filter = ReportFilter::whole(Attribution::Augmented);
+    let cells = cells(
+        &fight,
+        &Curated::bundled(),
+        &filter,
+        Side::Friendly,
+        ScopeMetric::DamageDone,
+    );
+    let hits: u32 = cells.iter().map(|cell| cell.hits).sum();
+    let swings: u32 = cells.iter().map(|cell| cell.casts).sum();
+    assert_eq!(
+        (damage_done(&fight, &filter).total, hits, swings),
+        (1_600, 3, 3),
+        "the landed-only hit, the pair whose lines split the hit differently and the pair \
+         whose landed copy comes first"
+    );
+}
+
+#[test]
+fn a_melee_hit_a_shield_took_whole_counts_once_in_damage_taken() {
+    let log = pull_log(&[
+        format!("04.0000  SWING_MISSED,{BOSS},{KNIGHT},ABSORB,nil,900,900,nil"),
+        melee("04.0100", "SWING_DAMAGE_LANDED", BOSS, KNIGHT, 0, 900),
+        melee("05.0000", "SWING_DAMAGE_LANDED", BOSS, KNIGHT, 1_000, 0),
+    ]);
+    let index = index_bytes(log.as_bytes());
+    let fight = load_fight(log.as_bytes(), &index.fights[0]);
+    let report = damage_taken(&fight, &ReportFilter::whole(Attribution::Augmented));
+    assert_eq!(report.total, 1_900);
 }
 
 #[test]

@@ -250,8 +250,8 @@ pub enum CombatKind<'a> {
 }
 
 /// How damage was dealt. `Swing` and `SwingLanded` describe the same melee hit from the
-/// attacker's and the victim's side, so count only one of them. Augmentation support for
-/// melee exists only as `SWING_DAMAGE_LANDED_SUPPORT`.
+/// attacker's and the victim's side, so count only one of them; some hits are logged only as
+/// `SwingLanded`. Augmentation support for melee exists only as `SWING_DAMAGE_LANDED_SUPPORT`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DamageVia {
     Swing,

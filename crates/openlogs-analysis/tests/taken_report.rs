@@ -33,7 +33,7 @@ fn groups_by_spell_and_source_name() {
         add1,
         tank,
         MELEE,
-        EventKind::Damage(damage(DamageVia::SwingLanded, 1_000, 0)),
+        EventKind::Damage(damage(DamageVia::SwingLanded, 1_100, 0)),
     );
     b.push(
         2_000,

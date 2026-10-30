@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::actors::{ActorId, NOBODY};
-use crate::fight::{DamageVia, EventKind, Fight};
+use crate::cells::is_swing;
+use crate::fight::{EventKind, Fight};
 use crate::replay::units::Roster;
 
 /// Who a unit acts on, one entry per change.
@@ -52,9 +53,7 @@ pub(super) fn targets(fight: &Fight, roster: &Roster) -> Vec<TargetTrack> {
     for event in &fight.events {
         let targeted = match event.kind {
             EventKind::CastSuccess => event.target != NOBODY,
-            EventKind::Damage(damage) => damage.via == DamageVia::Swing,
-            EventKind::Missed(missed) => missed.via == DamageVia::Swing,
-            _ => false,
+            _ => is_swing(event),
         };
         if targeted
             && event.source != event.target

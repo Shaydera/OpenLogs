@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fs::File;
 use std::io;
 use std::path::Path;
@@ -68,7 +68,8 @@ fn load_slice(
     }
     let late = builder.landed_after_end(&data[end..], &mut fields);
     let mut fight = builder.finish();
-    mark_swings_landing_after_end(&mut fight, &late);
+    let unpaired = pair_landed_copies(&mut fight);
+    mark_swings_landing_after_end(&mut fight, unpaired, &late);
     fight
 }
 
@@ -77,54 +78,100 @@ struct LateLanded {
     t: i32,
     source: ActorId,
     target: ActorId,
-    amount: u64,
+    melee_total: u64,
 }
 
-/// Flags the swings near the end whose landed copy is one of `late` rather than a line of
-/// the fight; each landed copy belongs to the earliest swing it matches.
-fn mark_swings_landing_after_end(fight: &mut Fight, late: &[LateLanded]) {
-    if late.is_empty() {
-        return;
-    }
-    let end = i32::try_from(fight.duration_ms).unwrap_or(i32::MAX);
-    // A landed copy late in the pull may belong to a swing before the last window.
-    let first = fight
-        .events
-        .partition_point(|e| e.t < end.saturating_sub(2 * LANDED_MATCH_MS));
-    let melee = |event: &Event, via: DamageVia| match event.kind {
-        EventKind::Damage(d) if d.via == via && d.supporter == NOBODY => Some(d.amount),
+enum MeleeLine {
+    /// `SWING_DAMAGE`, or `SWING_MISSED` ABSORB for a hit a shield took whole.
+    Attacker,
+    Landed,
+}
+
+fn melee_line(event: &Event) -> Option<(MeleeLine, u64)> {
+    match event.kind {
+        EventKind::Damage(d) if d.supporter == NOBODY => match d.via {
+            DamageVia::Swing => Some((MeleeLine::Attacker, d.melee_total())),
+            DamageVia::SwingLanded => Some((MeleeLine::Landed, d.melee_total())),
+            _ => None,
+        },
+        EventKind::Missed(m) if m.via == DamageVia::Swing && m.miss_type == MissType::Absorb => {
+            Some((MeleeLine::Attacker, m.amount_missed))
+        }
         _ => None,
-    };
-    let mut unlanded: Vec<usize> = Vec::new();
-    for index in first..fight.events.len() {
+    }
+}
+
+/// Pairs each melee hit's landed copy with its attacker-side line, as loading does, for a
+/// fight built without loading it. A landed copy left without one is the hit itself.
+pub fn pair_melee_lines(fight: &mut Fight) {
+    pair_landed_copies(fight);
+}
+
+/// Pairs each landed copy with its attacker-side line, which the log writes up to
+/// [`LANDED_MATCH_MS`] before or after it, and records that line in the copy. Returns the
+/// attacker-side lines of the last [`LANDED_MATCH_MS`] that are still unpaired.
+fn pair_landed_copies(fight: &mut Fight) -> VecDeque<(usize, u64)> {
+    let mut attackers: VecDeque<(usize, u64)> = VecDeque::new();
+    let mut landed: VecDeque<(usize, u64)> = VecDeque::new();
+    let mut pairs = Vec::new();
+    for index in 0..fight.events.len() {
         let event = &fight.events[index];
-        if melee(event, DamageVia::Swing).is_some() {
-            unlanded.push(index);
-        } else if let Some(amount) = melee(event, DamageVia::SwingLanded) {
-            let copy_of = |&swing: &usize| {
-                let s = &fight.events[swing];
-                s.source == event.source
-                    && s.target == event.target
-                    && melee(s, DamageVia::Swing) == Some(amount)
-            };
-            if let Some(position) = unlanded.iter().position(copy_of) {
-                unlanded.remove(position);
+        let expired = |&(line, _): &(usize, u64)| event.t - fight.events[line].t > LANDED_MATCH_MS;
+        while attackers.front().is_some_and(expired) {
+            attackers.pop_front();
+        }
+        while landed.front().is_some_and(expired) {
+            landed.pop_front();
+        }
+        let Some((side, total)) = melee_line(event) else {
+            continue;
+        };
+        let (unpaired, other_side) = match side {
+            MeleeLine::Attacker => (&mut attackers, &mut landed),
+            MeleeLine::Landed => (&mut landed, &mut attackers),
+        };
+        let pair = |&(line, other_total): &(usize, u64)| {
+            let other = &fight.events[line];
+            other_total == total && other.source == event.source && other.target == event.target
+        };
+        match other_side.iter().position(pair) {
+            Some(position) => {
+                let (other, _) = other_side.remove(position).expect("found above");
+                pairs.push(match side {
+                    MeleeLine::Attacker => (other, index),
+                    MeleeLine::Landed => (index, other),
+                });
             }
+            None => unpaired.push_back((index, total)),
         }
     }
-    for landed in late {
-        let copy_of = |&swing: &usize| {
-            let s = &fight.events[swing];
-            s.source == landed.source
-                && s.target == landed.target
-                && landed.t - s.t <= LANDED_MATCH_MS
-                && melee(s, DamageVia::Swing) == Some(landed.amount)
+    for (copy, attacker) in pairs {
+        if let EventKind::Damage(damage) = &mut fight.events[copy].kind {
+            damage.attacker_line = u32::try_from(attacker).ok();
+        }
+    }
+    attackers
+}
+
+/// Flags the swings among `unpaired` whose landed copy is one of `late`.
+fn mark_swings_landing_after_end(
+    fight: &mut Fight,
+    mut unpaired: VecDeque<(usize, u64)>,
+    late: &[LateLanded],
+) {
+    for copy in late {
+        let landed_after = |&(line, total): &(usize, u64)| {
+            let swing = &fight.events[line];
+            total == copy.melee_total
+                && swing.source == copy.source
+                && swing.target == copy.target
+                && copy.t - swing.t <= LANDED_MATCH_MS
         };
-        if let Some(position) = unlanded.iter().position(copy_of) {
-            let swing = unlanded.remove(position);
-            if let EventKind::Damage(damage) = &mut fight.events[swing].kind {
-                damage.lands_after_end = true;
-            }
+        if let Some(position) = unpaired.iter().position(landed_after)
+            && let Some((swing, _)) = unpaired.remove(position)
+            && let EventKind::Damage(damage) = &mut fight.events[swing].kind
+        {
+            damage.lands_after_end = true;
         }
     }
 }
@@ -445,7 +492,7 @@ impl FightBuilder {
                     t,
                     source,
                     target,
-                    amount: damage.amount,
+                    melee_total: damage.amount + damage.absorbed,
                 });
             }
         }
@@ -577,6 +624,7 @@ impl FightBuilder {
                 absorbed: d.absorbed,
                 critical: d.critical,
                 supporter: self.actor(d.supporter),
+                attacker_line: None,
                 lands_after_end: false,
             }),
             CombatKind::Missed(m) => EventKind::Missed(Missed {

@@ -10,10 +10,15 @@ use openlogs_index::Outcome;
 pub const MIN_INTERMISSION_MS: u32 = 15_000;
 
 /// Whether a damage event is a hit of its own: support shares repeat the buffed player's
-/// hit, the landed melee copy repeats the swing, and splits move damage around. Damage Done
-/// counts through [`credited_as_damage_done`].
+/// hit, the landed melee copy repeats the swing unless the log has none, and splits move
+/// damage around. Damage Done counts through [`credited_as_damage_done`].
 pub fn is_distinct_hit(damage: &Damage) -> bool {
-    damage.supporter == NOBODY && !matches!(damage.via, DamageVia::SwingLanded | DamageVia::Split)
+    damage.supporter == NOBODY
+        && match damage.via {
+            DamageVia::SwingLanded => damage.is_landed_only(),
+            DamageVia::Split => false,
+            _ => true,
+        }
 }
 
 /// Whether a hit is in the Damage Done numbers. They leave out a swing whose landed copy is

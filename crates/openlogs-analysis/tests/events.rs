@@ -276,6 +276,45 @@ fn support_shares_stay_inline_in_the_hit_they_belong_to() {
 }
 
 #[test]
+fn melee_support_stays_with_its_swing_when_the_landed_copy_comes_first() {
+    let mut b = FightBuilder::new(10_000);
+    let warrior = b.player("Player-1", "Washed-Frostwolf-EU", 71);
+    let evoker = b.player("Player-2", "Sparkyevo-Rexxar-EU", 1473);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    b.spell(EBON_MIGHT, "Ebon Might");
+    let melee = |via| EventKind::Damage(damage(via, 800, 0));
+    b.push(1_000, warrior, boss, MELEE, melee(DamageVia::SwingLanded));
+    b.push(
+        1_000,
+        warrior,
+        boss,
+        EBON_MIGHT,
+        supported(DamageVia::SwingLanded, 60, evoker),
+    );
+    b.push(1_020, warrior, boss, MELEE, melee(DamageVia::Swing));
+    let fight = b.build();
+    let page = page_of(
+        &fight,
+        &filter(Attribution::Reattributed),
+        &Scope::default(),
+        ScopeMetric::DamageDone,
+    );
+    let rows: Vec<(&str, u64, Vec<u64>)> = page
+        .rows
+        .iter()
+        .map(|row| {
+            (
+                row.event,
+                row.amount.unwrap(),
+                row.shares.iter().map(|s| s.amount).collect(),
+            )
+        })
+        .collect();
+    assert_eq!(rows, [("SWING_DAMAGE", 800, vec![60])]);
+    assert_eq!(page.unlisted_support, 0);
+}
+
+#[test]
 fn target_hp_shows_only_when_the_log_names_the_target() {
     let mut b = FightBuilder::new(10_000);
     let warrior = b.player("Player-2", "Washed-Frostwolf-EU", 71);

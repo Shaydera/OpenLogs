@@ -60,6 +60,7 @@ pub use interrupts::{
 pub use links::AbilityLink;
 pub use load::{
     LANDED_TAIL_BYTES, load_fight, load_fight_file, load_fight_slice, load_fight_slice_with,
+    pair_melee_lines,
 };
 pub use meter::{Meter, MeterCategory, MeterEntry, MeterKey, MeterRow, meter};
 pub use options::{FilterOption, OptionValue, SpellVariant, filter_options};
