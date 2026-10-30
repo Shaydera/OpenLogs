@@ -5,7 +5,7 @@ use crate::filter::Overkill;
 use crate::reports::taken::taken_amount;
 use crate::reports::{Absorbs, Share, buffed_hit, damage_share, healing_share};
 use crate::scope::Side;
-use crate::timeline::{healing_amount, hits_hostile_npc};
+use crate::timeline::{dealt_damage, healing_amount, hits_enemy};
 
 /// The amount rule of Damage Done, Healing and Damage Taken from one side's point of view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -235,11 +235,11 @@ fn miss_part(event: &Event, index: usize, miss: MissType) -> Part {
     }
 }
 
-/// A player's or pet's attack on a hostile NPC that did no damage.
+/// A player's or pet's attack on an enemy that did no damage.
 fn damage_done_miss(fight: &Fight, index: usize, book: &mut impl FnMut(Part)) {
     let event = &fight.events[index];
     if let Some(miss) = missed_attack(event)
-        && hits_hostile_npc(fight, event)
+        && hits_enemy(fight, event)
         && fight.actors.credited_player(event.source).is_some()
     {
         book(miss_part(event, index, miss));
@@ -277,7 +277,7 @@ fn taken(
             overheal: 0,
             healed: 0,
             hit: true,
-            crit: matches!(event.kind, EventKind::Damage(d) if d.critical),
+            crit: dealt_damage(event).is_some_and(|damage| damage.critical),
             periodic: is_periodic(event),
             miss: None,
             row: Some(index),

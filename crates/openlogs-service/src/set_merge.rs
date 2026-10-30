@@ -920,6 +920,7 @@ mod tests {
                 via: DamageVia::Spell,
                 miss_type,
                 amount_missed: 0,
+                critical: false,
             }),
             ..damage_event(t, mage, boss, 1, 0, NOBODY)
         };

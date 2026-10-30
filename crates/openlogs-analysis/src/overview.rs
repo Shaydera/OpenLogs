@@ -8,8 +8,8 @@ use crate::fight::{EventKind, Fight, SpellId};
 use crate::filter::{Attribution, Overkill, ReportFilter};
 use crate::phases::fight_phases;
 use crate::timeline::{
-    Phase, boss_hp_series, boss_units, credited_as_damage_done, damage_done_amount,
-    hits_hostile_npc, raid_dps_series,
+    Phase, boss_hp_series, boss_units, credited_as_damage_done, damage_done_amount, dealt_damage,
+    hits_enemy, raid_dps_series,
 };
 use crate::usage::{
     ConsumableUse, CooldownUse, DeathContext, consumable_uses, cooldown_uses, death_context,
@@ -177,12 +177,13 @@ fn raid_damage(fight: &Fight, in_range: impl Fn(i32) -> bool, overkill: Overkill
         .events
         .iter()
         .filter(|event| event.t >= 0 && i64::from(event.t) <= end && in_range(event.t))
-        .filter_map(|event| match event.kind {
-            EventKind::Damage(damage) if credited_as_damage_done(&damage) => Some((event, damage)),
-            _ => None,
+        .filter_map(|event| {
+            dealt_damage(event)
+                .filter(credited_as_damage_done)
+                .map(|damage| (event, damage))
         })
         .filter(|(event, _)| {
-            hits_hostile_npc(fight, event) && fight.actors.credited_player(event.source).is_some()
+            hits_enemy(fight, event) && fight.actors.credited_player(event.source).is_some()
         })
         .map(|(_, damage)| damage_done_amount(&damage, overkill))
         .sum()

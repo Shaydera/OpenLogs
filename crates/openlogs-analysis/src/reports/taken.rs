@@ -1,11 +1,11 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::actors::{ActorId, ActorKind, NOBODY};
-use crate::fight::{DamageVia, Event, EventKind, Fight, MissType, SpellId};
+use crate::fight::{DamageVia, Event, EventKind, Fight, SpellId};
 use crate::filter::{Overkill, ReportFilter};
 use crate::links::{SpellKey, spell_key};
 use crate::reports::per_second;
-use crate::timeline::{damage_done_amount, is_distinct_hit};
+use crate::timeline::{damage_done_amount, dealt_damage, is_distinct_hit};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TakenAbility {
@@ -178,19 +178,9 @@ fn ability_rows(map: HashMap<AbilityKey<'_>, AbilityAcc>) -> Vec<TakenAbility> {
     rows
 }
 
-/// Damage an event deals to its target as `(amount + absorbed, absorbed)`. Hits a shield
-/// swallowed completely are logged as ABSORB misses; they still hit.
+/// Damage an event deals to its target as `(amount + absorbed, absorbed)`.
 pub(crate) fn taken_amount(event: &Event, overkill: Overkill) -> Option<(u64, u64)> {
-    match event.kind {
-        EventKind::Damage(damage) if is_distinct_hit(&damage) => {
-            Some((damage_done_amount(&damage, overkill), damage.absorbed))
-        }
-        EventKind::Missed(missed)
-            if missed.miss_type == MissType::Absorb
-                && !matches!(missed.via, DamageVia::SwingLanded | DamageVia::Split) =>
-        {
-            Some((missed.amount_missed, missed.amount_missed))
-        }
-        _ => None,
-    }
+    dealt_damage(event)
+        .filter(is_distinct_hit)
+        .map(|damage| (damage_done_amount(&damage, overkill), damage.absorbed))
 }

@@ -114,6 +114,7 @@ fn fully_absorbed_hits_count_as_damage_taken() {
             via: DamageVia::Spell,
             miss_type: MissType::Absorb,
             amount_missed: 400,
+            critical: false,
         }),
     );
     b.push(
@@ -125,6 +126,7 @@ fn fully_absorbed_hits_count_as_damage_taken() {
             via: DamageVia::Spell,
             miss_type: MissType::Dodge,
             amount_missed: 0,
+            critical: false,
         }),
     );
     let report = damage_taken(&b.build(), &ReportFilter::whole(Attribution::Augmented));

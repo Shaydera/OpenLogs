@@ -9,12 +9,13 @@ use openlogs_parser::{
     LogLine, Spell, Timestamp, parse_line,
 };
 
-use crate::actors::{ActorId, ActorKind, Actors, NOBODY};
+use crate::actors::{ActorId, ActorKind, Actors, NOBODY, npc_logged_friendly};
 use crate::fight::{
     Absorbed, Damage, DamageVia, Energize, Event, EventKind, FailReason, Fight, FightKind, Heal,
     LANDED_MATCH_MS, MarkerInterval, MissType, Missed, NO_SPELL, POWER_SAMPLE_MS, PositionSample,
     PowerSample, RunEncounter, SpellId, SpellInfo, UnitHp, WorldMarkerInterval,
 };
+use crate::turned::logger_turned_spans;
 
 /// Loads one fight, including its prelude, from the complete log bytes.
 pub fn load_fight(data: &[u8], summary: &FightSummary) -> Fight {
@@ -212,6 +213,8 @@ struct FightBuilder {
     open_raid_markers: HashMap<ActorId, usize>,
     /// Index into `fight.world_markers` of each marker's interval still open.
     open_world_markers: HashMap<u8, usize>,
+    /// Lines that logged an NPC-controlled unit friendly, for `Fight::logger_turned`.
+    friendly_npc_lines: Vec<(i32, ActorId)>,
 }
 
 impl FightBuilder {
@@ -252,6 +255,7 @@ impl FightBuilder {
                     .collect(),
                 ui_map_id: None,
                 map_bounds: summary.map_bounds.clone(),
+                logger_turned: Vec::new(),
             },
             last_power: HashMap::new(),
             last_t: i32::MIN,
@@ -268,6 +272,7 @@ impl FightBuilder {
                 .enumerate()
                 .map(|(index, marker)| (marker.marker, index))
                 .collect(),
+            friendly_npc_lines: Vec::new(),
         }
     }
 
@@ -355,6 +360,8 @@ impl FightBuilder {
         self.fight.power.sort_by_key(|p| p.t);
         self.fight.npc_power.sort_by_key(|p| p.t);
         self.fight.positions.sort_by_key(|p| p.t);
+        self.friendly_npc_lines.sort_by_key(|&(t, _)| t);
+        self.fight.logger_turned = logger_turned_spans(&self.fight, &self.friendly_npc_lines);
         self.fight
     }
 
@@ -508,6 +515,11 @@ impl FightBuilder {
         let actors = &mut self.fight.actors;
         let source = actors.intern(&event.source);
         let target = actors.intern(&event.target);
+        for (id, unit) in [(source, &event.source), (target, &event.target)] {
+            if npc_logged_friendly(unit) {
+                self.friendly_npc_lines.push((t, id));
+            }
+        }
         self.note_raid_marker(t, source, event.source.raid_flags);
         self.note_raid_marker(t, target, event.target.raid_flags);
         let actors = &mut self.fight.actors;
@@ -631,6 +643,7 @@ impl FightBuilder {
                 via: m.via,
                 miss_type: MissType::from_log(m.miss_type),
                 amount_missed: m.amount_missed.unwrap_or(0),
+                critical: m.critical,
             }),
             CombatKind::Heal(h) => EventKind::Heal(Heal {
                 periodic: h.via == HealVia::Periodic,

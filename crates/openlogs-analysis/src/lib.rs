@@ -28,6 +28,7 @@ mod run_result;
 mod scope;
 mod targets;
 mod timeline;
+mod turned;
 mod usage;
 mod views;
 
@@ -97,7 +98,7 @@ pub use targets::{
 };
 pub use timeline::{
     ABORTED_PULL_MS, MIN_INTERMISSION_MS, Phase, PhaseKind, boss_hp_series, boss_units,
-    damage_done_amount, detect_phases, hits_hostile_npc, is_aborted, is_distinct_hit,
+    damage_done_amount, detect_phases, hits_enemy, is_aborted, is_distinct_hit,
     name_detected_phases, raid_dps_series,
 };
 pub use usage::{

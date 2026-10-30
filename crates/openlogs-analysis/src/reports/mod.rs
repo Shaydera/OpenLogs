@@ -5,7 +5,7 @@ use crate::fight::{DamageVia, Event, EventKind, Fight, NO_SPELL, SpellId};
 use crate::filter::Overkill;
 use crate::scope::{Scope, UnitRef, unit_of};
 use crate::timeline::{
-    credited_as_damage_done, damage_done_amount, healing_amount, hits_hostile_npc,
+    credited_as_damage_done, damage_done_amount, dealt_damage, healing_amount, hits_enemy,
 };
 
 pub mod damage;
@@ -481,18 +481,18 @@ fn supported_spell(support: &Event, hit: &Event) -> Option<SpellId> {
         return None;
     }
     let melee = |via| matches!(via, DamageVia::Swing | DamageVia::SwingLanded);
-    match (support.kind, hit.kind) {
-        (EventKind::Damage(s), EventKind::Damage(h))
+    match (support.kind, dealt_damage(hit), hit.kind) {
+        (EventKind::Damage(s), Some(h), _)
             if h.supporter == NOBODY && (s.via == h.via || (melee(s.via) && melee(h.via))) =>
         {
             Some(hit.spell)
         }
-        (EventKind::Heal(s), EventKind::Heal(h))
+        (EventKind::Heal(s), _, EventKind::Heal(h))
             if h.supporter == NOBODY && s.periodic == h.periodic =>
         {
             Some(hit.spell)
         }
-        (EventKind::Absorbed(s), EventKind::Absorbed(h))
+        (EventKind::Absorbed(s), _, EventKind::Absorbed(h))
             if h.supporter == NOBODY && h.absorber == s.absorber && hit.spell == support.spell =>
         {
             Some(h.absorb_spell)
@@ -835,11 +835,13 @@ pub(crate) struct Absorbs {
 impl Absorbs {
     /// A hit's shielded part, a whole absorb, or what heal absorbs took of a heal.
     pub(crate) fn of(event: &Event) -> Self {
-        match event.kind {
-            EventKind::Damage(damage) => Self {
+        if let Some(damage) = dealt_damage(event) {
+            return Self {
                 absorbed: damage.absorbed,
                 heal_absorbed: 0,
-            },
+            };
+        }
+        match event.kind {
             EventKind::Heal(heal) => Self {
                 absorbed: 0,
                 heal_absorbed: heal.absorbed,
@@ -854,10 +856,10 @@ impl Absorbs {
 
     /// The same split for `part` of the event's amount, in proportion.
     pub(crate) fn of_part(event: &Event, part: u64) -> Self {
-        let whole = match event.kind {
-            EventKind::Damage(damage) => damage_done_amount(&damage, Overkill::Included),
-            EventKind::Heal(heal) => healing_amount(&heal),
-            EventKind::Absorbed(absorbed) => absorbed.amount,
+        let whole = match (dealt_damage(event), event.kind) {
+            (Some(damage), _) => damage_done_amount(&damage, Overkill::Included),
+            (None, EventKind::Heal(heal)) => healing_amount(&heal),
+            (None, EventKind::Absorbed(absorbed)) => absorbed.amount,
             _ => 0,
         };
         let scaled = |value: u64| {
@@ -875,13 +877,11 @@ impl Absorbs {
     }
 }
 
-/// Damage done: hits on units that were hostile at the hit, credited through pets.
+/// Damage done: hits on enemies (see [`hits_enemy`]), credited through pets.
 /// Support from an unknown Evoker is not a share.
 pub(crate) fn damage_share(fight: &Fight, event: &Event, overkill: Overkill) -> Option<Share> {
-    let EventKind::Damage(damage) = event.kind else {
-        return None;
-    };
-    if !hits_hostile_npc(fight, event) {
+    let damage = dealt_damage(event)?;
+    if !hits_enemy(fight, event) {
         return None;
     }
     let player = fight.actors.credited_player(event.source)?;
@@ -904,8 +904,7 @@ pub(crate) fn damage_share(fight: &Fight, event: &Event, overkill: Overkill) -> 
         doer: event.source,
         buff: event.spell,
         target: event.target,
-        // The Evoker's share is logged on its own; the hit's overkill is not part of it.
-        amount: damage_done_amount(&damage, Overkill::Included),
+        amount: damage_done_amount(&damage, overkill),
     }))
 }
 

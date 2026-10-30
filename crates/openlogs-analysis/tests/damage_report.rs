@@ -1,8 +1,10 @@
 mod support;
 
 use openlogs_analysis::{
-    Attribution, Damage, DamageVia, EventKind, Overkill, ReportFilter, RowKind, damage_done,
+    Attribution, Damage, DamageVia, EventKind, MissType, Missed, Overkill, ReportFilter, RowKind,
+    damage_done, load_fight,
 };
+use openlogs_index::index_bytes;
 use support::{FightBuilder, HOSTILE_FLAGS, PET_FLAGS, damage};
 
 const AUG: Attribution = Attribution::Augmented;
@@ -128,6 +130,41 @@ fn reattributed_mode_moves_support_to_the_evoker() {
         .unwrap();
     assert_eq!((given.spell, given.amount), (395152, 100));
     assert_eq!(evoker.support_by_recipient, vec![(r.warrior, 100)]);
+}
+
+#[test]
+fn hits_a_shield_swallowed_count_as_damage_done_net_of_their_support() {
+    let mut r = raid();
+    r.b.push(1_000, r.warrior, r.boss, 1, hit(1_000));
+    r.b.push(
+        2_000,
+        r.warrior,
+        r.boss,
+        1,
+        EventKind::Missed(Missed {
+            via: DamageVia::Spell,
+            miss_type: MissType::Absorb,
+            amount_missed: 400,
+            critical: true,
+        }),
+    );
+    r.b.push(2_000, r.warrior, r.boss, 395152, supported(40, r.evoker));
+    let report = damage_done(&r.b.build(), &ReportFilter::whole(RE));
+    assert_eq!(
+        (total(&report, r.warrior), total(&report, r.evoker)),
+        (1_360, 40)
+    );
+    let warrior = report
+        .players
+        .iter()
+        .find(|p| p.player == r.warrior)
+        .unwrap();
+    let rows: Vec<_> = warrior
+        .abilities
+        .iter()
+        .map(|a| (a.spell, a.kind, a.amount, a.support, a.hits, a.crits))
+        .collect();
+    assert_eq!(rows, [(1, RowKind::Own, 1_360, 40, 2, 1)]);
 }
 
 #[test]
@@ -283,5 +320,146 @@ fn a_killing_blow_counts_up_to_the_target_hp_unless_overkill_is_included() {
             total_with(Overkill::Included)
         ),
         (600, 1_000)
+    );
+}
+
+#[test]
+fn the_support_share_of_a_killing_blow_follows_the_overkill_option() {
+    let mut r = raid();
+    r.b.push(
+        1_000,
+        r.warrior,
+        r.boss,
+        1,
+        EventKind::Damage(damage(DamageVia::Spell, 1_000, 400)),
+    );
+    r.b.push(
+        1_000,
+        r.warrior,
+        r.boss,
+        395152,
+        EventKind::Damage(Damage {
+            supporter: r.evoker,
+            ..damage(DamageVia::Spell, 100, 60)
+        }),
+    );
+    let fight = r.b.build();
+    let totals_with = |overkill| {
+        let filter = ReportFilter {
+            overkill,
+            ..ReportFilter::whole(RE)
+        };
+        let report = damage_done(&fight, &filter);
+        (total(&report, r.warrior), total(&report, r.evoker))
+    };
+    assert_eq!(totals_with(Overkill::Excluded), (560, 40));
+    assert_eq!(totals_with(Overkill::Included), (900, 100));
+}
+
+/// A hit by `source` on `target` with their flags as the line logs them.
+fn hit_line(
+    time: &str,
+    source: (&str, &str, &str),
+    target: (&str, &str, &str),
+    amount: u64,
+) -> String {
+    let (source_guid, source_name, source_flags) = source;
+    let (target_guid, target_name, target_flags) = target;
+    format!(
+        "10/7/2026 19:03:{time}  SPELL_DAMAGE,{source_guid},\"{source_name}\",{source_flags},0x80000000,\
+         {target_guid},\"{target_name}\",{target_flags},0x80000000,1,\"Mortal Strike\",0x1,\
+         {target_guid},0000000000000000,1000000,2000000,0,0,0,0,0,0,1,0,0,0,1590.00,-3.00,2610,1.0000,92,\
+         {amount},{amount},-1,1,0,0,0,nil,nil,nil,ST\n"
+    )
+}
+
+fn logged_damage(lines: &[String]) -> Vec<(String, u64)> {
+    let log = [
+        "10/7/2026 19:03:02.0000  ENCOUNTER_START,3492,\"Ula'tek\",15,23,3004\n".to_string(),
+        lines.concat(),
+        "10/7/2026 19:04:02.0000  ENCOUNTER_END,3492,\"Ula'tek\",15,23,1,60000\n".to_string(),
+    ]
+    .concat();
+    let index = index_bytes(log.as_bytes());
+    let fight = load_fight(log.as_bytes(), &index.fights[0]);
+    let report = damage_done(&fight, &ReportFilter::whole(AUG));
+    report
+        .players
+        .iter()
+        .map(|p| (fight.actors.get(p.player).name.clone().unwrap(), p.total))
+        .collect()
+}
+
+const WARRIOR: &str = "Player-1-0000000A";
+const ROGUE: &str = "Player-1-0000000B";
+const BOSS: &str = "Vehicle-0-1-1-1-257758-01";
+
+/// The `i`th second after 19:03:03.
+fn at(i: usize) -> String {
+    format!("{:02}.{:04}", 3 + i / 10, i % 10 * 1000)
+}
+
+/// One hit of `amount` on the boss each second for 80 s; from second 30 to 49 a mechanic turns
+/// the logging player, so the log shows the warrior hostile and the boss friendly.
+fn boss_hits_around_a_turn(amount: u64) -> Vec<String> {
+    let boss = |flags| (BOSS, "Ula'tek", flags);
+    let warrior = |flags| (WARRIOR, "Wendel-Emberfall-EU", flags);
+    (0..80)
+        .map(|i| match i {
+            30..50 => hit_line(&at(i), warrior("0x548"), boss("0x10a18"), amount),
+            _ => hit_line(&at(i), warrior("0x514"), boss("0x10a48"), amount),
+        })
+        .collect()
+}
+
+#[test]
+fn a_boss_counts_while_logged_friendly_to_a_turned_logger_but_not_while_logged_neutral() {
+    let warrior = (WARRIOR, "Wendel-Emberfall-EU", "0x514");
+    let mut lines = boss_hits_around_a_turn(10);
+    lines.push(hit_line(
+        &at(70),
+        warrior,
+        (BOSS, "Ula'tek", "0xa28"),
+        1_000,
+    ));
+    lines.sort();
+    assert_eq!(
+        logged_damage(&lines),
+        [("Wendel-Emberfall-EU".to_string(), 800)]
+    );
+}
+
+#[test]
+fn the_raids_hits_on_a_mind_controlled_player_count_but_not_theirs() {
+    let warrior = (WARRIOR, "Wendel-Emberfall-EU", "0x514");
+    let rogue = |flags| (ROGUE, "Ilvarra-Emberfall-EU", flags);
+    let pet = ("Creature-0-1-1-1-19668-01", "Shadowfiend", "0x2114");
+    let lines = [
+        "10/7/2026 19:03:02.5000  SPELL_SUMMON,Player-1-0000000B,\"Ilvarra-Emberfall-EU\",0x514,\
+         0x80000000,Creature-0-1-1-1-19668-01,\"Shadowfiend\",0x2114,0x80000000,34433,\
+         \"Shadowfiend\",0x20\n"
+            .to_string(),
+        hit_line("03.0000", warrior, rogue("0x548"), 700),
+        hit_line("04.0000", warrior, rogue("0x514"), 300),
+        hit_line("05.0000", rogue("0x548"), warrior, 200),
+        hit_line("06.0000", pet, rogue("0x548"), 100),
+    ];
+    assert_eq!(
+        logged_damage(&lines),
+        [("Wendel-Emberfall-EU".to_string(), 700)]
+    );
+}
+
+#[test]
+fn while_the_logging_player_is_turned_the_raids_hits_on_them_count_but_not_theirs() {
+    let warrior = (WARRIOR, "Wendel-Emberfall-EU", "0x548");
+    let logger = (ROGUE, "Ilvarra-Emberfall-EU", "0x511");
+    let mut lines = boss_hits_around_a_turn(0);
+    lines.push(hit_line(&at(45), warrior, logger, 700));
+    lines.push(hit_line(&at(46), logger, warrior, 300));
+    lines.sort();
+    assert_eq!(
+        logged_damage(&lines),
+        [("Wendel-Emberfall-EU".to_string(), 700)]
     );
 }

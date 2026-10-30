@@ -44,9 +44,18 @@ pub struct Fight {
     /// Bounds of every map the log wrote before the end of the fight (latest wins), sorted by
     /// map ID; for a run only those written during it.
     pub map_bounds: Vec<MapBounds>,
+    /// When a mechanic turned the logging player against the raid, as sorted, inclusive
+    /// `(start_ms, end_ms)` spans. The log then shows enemies friendly and the raid hostile.
+    pub logger_turned: Vec<(i32, i32)>,
 }
 
 impl Fight {
+    /// Whether the logging player was turned against the raid at `t`.
+    pub fn logger_turned_at(&self, t: i32) -> bool {
+        let next = self.logger_turned.partition_point(|&(start, _)| start <= t);
+        next > 0 && self.logger_turned[next - 1].1 >= t
+    }
+
     /// The reason text as the log wrote it.
     pub fn fail_reason(&self, reason: FailReason) -> &str {
         match reason {
@@ -266,6 +275,7 @@ pub struct Missed {
     pub miss_type: MissType,
     /// Prevented amount for partial misses, else 0.
     pub amount_missed: u64,
+    pub critical: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -6,10 +6,11 @@ use crate::actors::{ActorId, NOBODY};
 use crate::auras::merged;
 use crate::breakdown::Dimension;
 use crate::cells::{Cell, CellKind, in_range, in_scope};
-use crate::fight::{DamageVia, Event, EventKind, Fight, MissType};
+use crate::fight::{DamageVia, Event, EventKind, Fight};
 use crate::filter::{Attribution, Overkill, ReportFilter};
 use crate::reports::{Share, buffed_hit, damage_share, healing_share};
 use crate::scope::{Scope, Side};
+use crate::timeline::dealt_damage;
 use crate::views::casts::{CastItem, side_casts, side_items, timeline_item};
 use crate::views::names::log_name;
 use crate::views::parts::{AmountFacts, Part, listed_row};
@@ -203,19 +204,16 @@ fn amount_row(fight: &Fight, index: usize, own: &Part) -> EventRow {
         .unit_hp
         .filter(|hp| hp.actor == event.target)
         .map(|hp| (hp.current, hp.max));
+    if let Some(damage) = dealt_damage(event) {
+        row.amount = Some(damage.amount + damage.absorbed);
+        row.overkill = damage.overkill;
+        row.absorbed = damage.absorbed;
+        row.blocked = damage.blocked;
+        row.resisted = damage.resisted;
+        row.critical = damage.critical;
+        row.environmental = damage.via == DamageVia::Environmental;
+    }
     match event.kind {
-        EventKind::Damage(damage) => {
-            row.amount = Some(damage.amount + damage.absorbed);
-            row.overkill = damage.overkill;
-            row.absorbed = damage.absorbed;
-            row.blocked = damage.blocked;
-            row.resisted = damage.resisted;
-            row.critical = damage.critical;
-            row.environmental = damage.via == DamageVia::Environmental;
-        }
-        EventKind::Missed(missed) if missed.miss_type == MissType::Absorb => {
-            row.absorbed = missed.amount_missed;
-        }
         EventKind::Heal(heal) => {
             row.overheal = heal.overheal;
             row.absorbed = heal.absorbed;

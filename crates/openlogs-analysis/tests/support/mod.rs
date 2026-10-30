@@ -43,6 +43,7 @@ impl FightBuilder {
                 world_markers: Vec::new(),
                 ui_map_id: None,
                 map_bounds: Vec::new(),
+                logger_turned: Vec::new(),
             },
         }
     }
