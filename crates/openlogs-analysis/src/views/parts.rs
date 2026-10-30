@@ -7,7 +7,7 @@ use crate::filter::Overkill;
 use crate::reports::taken::taken_amount;
 use crate::reports::{Absorbs, Share, buffed_hit, damage_share, healing_share};
 use crate::scope::Side;
-use crate::timeline::{healing_amount, hits_hostile_npc};
+use crate::timeline::{dealt_damage, healing_amount, hits_hostile_npc};
 
 /// The amount rule of Damage Done, Healing and Damage Taken from one side's point of view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -292,7 +292,7 @@ fn taken(
             overheal: 0,
             healed: 0,
             hit: true,
-            crit: matches!(event.kind, EventKind::Damage(d) if d.critical),
+            crit: dealt_damage(event).is_some_and(|damage| damage.critical),
             periodic: is_periodic(event),
             miss: None,
             row: Some(index),

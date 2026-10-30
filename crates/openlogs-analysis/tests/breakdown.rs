@@ -297,6 +297,7 @@ fn damage_taken_rows_carry_hits_and_absorbed_damage_on_both_sides() {
             via: DamageVia::Spell,
             miss_type: MissType::Absorb,
             amount_missed: 400,
+            critical: true,
         }),
     );
     b.push(
@@ -335,7 +336,10 @@ fn damage_taken_rows_carry_hits_and_absorbed_damage_on_both_sides() {
     );
     assert_eq!(taken.group, Dimension::Ability);
     let row = &taken.rows[0].row;
-    assert_eq!((row.amount, row.hits, row.absorbed), (1_500, 2, 500));
+    assert_eq!(
+        (row.amount, row.hits, row.crits, row.absorbed),
+        (1_500, 2, 1, 500)
+    );
     let by_source = &taken.rows[0].splits[0].rows[0];
     assert_eq!((by_source.hits, by_source.absorbed), (2, 500));
 
@@ -502,6 +506,7 @@ fn missed(via: DamageVia, miss_type: MissType) -> EventKind {
         via,
         miss_type,
         amount_missed: 0,
+        critical: false,
     })
 }
 

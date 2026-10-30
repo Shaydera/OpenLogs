@@ -583,6 +583,7 @@ impl FightBuilder {
                 via: m.via,
                 miss_type: MissType::from_log(m.miss_type),
                 amount_missed: m.amount_missed.unwrap_or(0),
+                critical: m.critical,
             }),
             CombatKind::Heal(h) => EventKind::Heal(Heal {
                 periodic: h.via == HealVia::Periodic,

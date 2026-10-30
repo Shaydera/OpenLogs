@@ -1,8 +1,8 @@
 mod support;
 
 use openlogs_analysis::{
-    Attribution, DamageVia, EventKind, NOBODY, Overkill, ReportFilter, quick_overview,
-    quick_overview_in,
+    Attribution, DamageVia, EventKind, MissType, Missed, NOBODY, Overkill, ReportFilter,
+    damage_done, quick_overview, quick_overview_in,
 };
 use openlogs_gamedata::Curated;
 use support::{FightBuilder, HOSTILE_FLAGS, MELEE, damage};
@@ -56,6 +56,38 @@ fn kpis_summarise_the_pull() {
     assert_eq!(overview.timeline.boss_hp_step_ms, 1_000);
     assert_eq!(overview.timeline.raid_dps.len(), 2);
     assert_eq!(overview.consumables.len(), 2);
+}
+
+#[test]
+fn raid_damage_counts_hits_a_shield_swallowed_like_the_damage_report() {
+    let curated = Curated::bundled();
+    let mut b = FightBuilder::new(10_000);
+    let mage = b.player("Player-1", "Faelan-Emberfall-EU", 62);
+    let boss = b.unit("Vehicle-0-1-1-1-257758-01", "Ula'tek", HOSTILE_FLAGS);
+    b.push(
+        1_000,
+        mage,
+        boss,
+        1,
+        EventKind::Damage(damage(DamageVia::Spell, 30_000, 0)),
+    );
+    b.push(
+        2_000,
+        mage,
+        boss,
+        1,
+        EventKind::Missed(Missed {
+            via: DamageVia::Periodic,
+            miss_type: MissType::Absorb,
+            amount_missed: 10_000,
+            critical: false,
+        }),
+    );
+    let fight = b.build();
+    let overview = quick_overview(&fight, &curated);
+    let report = damage_done(&fight, &ReportFilter::whole(Attribution::Reattributed));
+    assert_eq!((overview.kpis.raid_damage, report.total), (40_000, 40_000));
+    assert_eq!(overview.timeline.raid_dps, [8_000.0, 0.0]);
 }
 
 #[test]

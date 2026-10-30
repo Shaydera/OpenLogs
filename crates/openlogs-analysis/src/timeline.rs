@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::actors::{ActorId, ActorKind, NOBODY};
-use crate::fight::{Damage, DamageVia, Event, EventKind, Fight, FightKind, Heal};
+use crate::fight::{Damage, DamageVia, Event, EventKind, Fight, FightKind, Heal, MissType};
 use crate::filter::Overkill;
 use openlogs_gamedata::Curated;
 use openlogs_index::Outcome;
@@ -20,6 +20,27 @@ pub fn is_distinct_hit(damage: &Damage) -> bool {
 /// logged after the pull's end, mostly the boss's killing blow.
 pub(crate) fn credited_as_damage_done(damage: &Damage) -> bool {
     is_distinct_hit(damage) && !damage.lands_after_end
+}
+
+/// The damage an event deals its target. A hit a shield swallowed completely is logged as an
+/// ABSORB miss; it still hits, with its whole amount absorbed.
+pub(crate) fn dealt_damage(event: &Event) -> Option<Damage> {
+    match event.kind {
+        EventKind::Damage(damage) => Some(damage),
+        EventKind::Missed(missed) if missed.miss_type == MissType::Absorb => Some(Damage {
+            via: missed.via,
+            amount: 0,
+            overkill: 0,
+            school: 0,
+            resisted: 0,
+            blocked: 0,
+            absorbed: missed.amount_missed,
+            critical: missed.critical,
+            supporter: NOBODY,
+            lands_after_end: false,
+        }),
+        _ => None,
+    }
 }
 
 /// Damage done counts absorbed damage as well.
@@ -153,7 +174,7 @@ pub fn boss_hp_series(fight: &Fight, bosses: &[ActorId], step_ms: u32) -> Vec<Op
 pub fn raid_dps_series(fight: &Fight, step_ms: u32, overkill: Overkill) -> Vec<f64> {
     let mut totals = vec![0u64; step_count(fight.duration_ms, step_ms)];
     for event in &fight.events {
-        let EventKind::Damage(damage) = event.kind else {
+        let Some(damage) = dealt_damage(event) else {
             continue;
         };
         if event.t < 0 || !credited_as_damage_done(&damage) || !hits_hostile_npc(fight, event) {

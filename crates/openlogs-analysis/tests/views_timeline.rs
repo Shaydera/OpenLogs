@@ -1290,6 +1290,7 @@ fn the_dot_a_game_data_channel_left_does_not_extend_it() {
         via: DamageVia::Spell,
         miss_type: MissType::Absorb,
         amount_missed: 200,
+        critical: false,
     });
     b.push(1_000, hunter, boss, fire, EventKind::CastSuccess);
     b.push(1_300, hunter, boss, fire, spell_hit(200));
