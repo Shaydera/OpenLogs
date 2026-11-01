@@ -12,8 +12,8 @@ export interface Engine {
   /** Which spells belong to a player class and which of those are crowd control. */
   setSpellClasses(json: string): Promise<void>;
   beginIndex(): Promise<void>;
-  /** Takes ownership of `bytes`; the caller must not use them afterwards. */
-  feed(bytes: Uint8Array): Promise<void>;
+  /** Takes ownership of `bytes`, which are empty afterwards; resolves to how many it took. */
+  feed(bytes: Uint8Array): Promise<number>;
   finishIndex(logId: string, fileName: string, sizeBytes: number): Promise<LogView>;
   indexJson(): Promise<string>;
   restoreIndex(indexJson: string, logId: string, fileName: string, sizeBytes: number): Promise<LogView>;
@@ -80,7 +80,11 @@ export function workerEngine(): Engine {
     setChannelSpells: (json) => send('set_channel_spells', [json]),
     setSpellClasses: (json) => send('set_spell_classes', [json]),
     beginIndex: () => send('begin_index'),
-    feed: (bytes) => send('index_feed', [bytes], [bytes.buffer]),
+    feed: async (bytes) => {
+      const { length } = bytes;
+      await send('index_feed', [bytes], [bytes.buffer]);
+      return length;
+    },
     finishIndex: async (logId, fileName, sizeBytes) => JSON.parse(await send<string>('finish_index', [logId, fileName, sizeBytes])),
     indexJson: () => send('index_json'),
     restoreIndex: async (indexJson, logId, fileName, sizeBytes) =>

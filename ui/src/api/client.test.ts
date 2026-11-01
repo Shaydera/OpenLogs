@@ -41,6 +41,13 @@ function view(id: string, logVersion: number | null = 22): LogView {
   };
 }
 
+/** Takes the bytes over like the worker's transfer does, which leaves the caller's view empty. */
+function takeOver(bytes: Uint8Array): number {
+  const { length } = bytes;
+  structuredClone(bytes.buffer, { transfer: [bytes.buffer] });
+  return length;
+}
+
 /** Records what reaches the engine; pulls 1–3 span bytes 100–200, 200–300 and 300–400. */
 function fakeEngine() {
   const loaded: number[] = [];
@@ -56,7 +63,11 @@ function fakeEngine() {
       state.beginIndexCalls += 1;
       fed.splice(0);
     },
-    feed: async (bytes) => void fed.push(bytes.length),
+    feed: async (bytes) => {
+      const length = takeOver(bytes);
+      fed.push(length);
+      return length;
+    },
     finishIndex: async (logId) => view(logId),
     indexJson: async () => '{"fights":[]}',
     restoreIndex: async (_, logId) => ({ ...view(logId), cacheHit: true }),
@@ -64,9 +75,15 @@ function fakeEngine() {
     snapshotJson: async () => '{"fights":[]}',
     fightRange: async (fight) => [fight * 100, fight * 100 + 100],
     touchFight: async (fight) => loaded.includes(fight),
-    loadFight: async (_, __, fight) => void loaded.push(fight),
+    loadFight: async (bytes, _, fight) => {
+      takeOver(bytes);
+      loaded.push(fight);
+    },
     setBegin: async () => void setFeeds.splice(0),
-    setFeed: async (_, __, fight) => void setFeeds.push(fight),
+    setFeed: async (bytes, _, fight) => {
+      takeOver(bytes);
+      setFeeds.push(fight);
+    },
     setFinish: async () => JSON.stringify([{ pulls: setFeeds.length }]),
     call: async <T>(command: string, args: object) => ({ command, args }) as T,
     restarts: () => state.restarts,
@@ -347,6 +364,33 @@ describe('following a log that grows', () => {
     expect(result).not.toBeNull();
   });
 
+  it('feeds each appended byte once, also when later refreshes find no growth', async () => {
+    const { api, fed } = client();
+    const log = growable('raid.txt', 10 * MiB);
+    await api.openLog(log);
+    fed.splice(0);
+
+    log.grow(19 * MiB);
+    await api.followLog('raid.txt', false);
+    await api.followLog('raid.txt', false);
+    await api.followLog('raid.txt', true);
+
+    expect(fed).toEqual([8 * MiB, 1 * MiB]);
+  });
+
+  it('goes on from where a short read stopped', async () => {
+    const { api, fed } = client();
+    const log = growable('raid.txt', 10 * MiB);
+    await api.openLog(log);
+    fed.splice(0);
+    vi.mocked(log.read).mockImplementation(async (_: number, length: number) => new Uint8Array(Math.min(length, 5 * MiB)));
+
+    log.grow(19 * MiB);
+    await api.followLog('raid.txt', false);
+
+    expect(fed).toEqual([5 * MiB, 4 * MiB]);
+  });
+
   it('feeds a restored log from its start on its first growth, without beginning a new index', async () => {
     const { api, fed, state } = client();
     await api.openLog(growable('raid.txt', 10 * MiB));
@@ -415,7 +459,8 @@ describe('following a log that grows', () => {
     let feeds = 0;
     engine.feed = async (bytes) => {
       if (++feeds === 2) throw new Error('read failed');
-      fed.push(bytes.length);
+      fed.push(takeOver(bytes));
+      return fed[fed.length - 1];
     };
 
     log.grow(22 * MiB);
