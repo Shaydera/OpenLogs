@@ -74,6 +74,13 @@ async function quietly<T>(task: () => Promise<T>): Promise<T | undefined> {
   }
 }
 
+/** The next chunk from `offset`, which may come back shorter than asked; an empty one would never reach the end. */
+async function readSome(source: LogSource, offset: number): Promise<Uint8Array> {
+  const bytes = await source.read(offset, Math.min(CHUNK_BYTES, source.size - offset));
+  if (bytes.length === 0) throw 'The log ended before its listed size. Open it again.';
+  return bytes;
+}
+
 export class SetCancelled extends Error {}
 
 export function createClient({ engine: getEngine, dungeons, channelSpells, spellClasses, db, now }: ClientDeps) {
@@ -173,12 +180,13 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
       }
     }
     await engine.beginIndex();
-    let feeding: Promise<void> = Promise.resolve();
-    for (let offset = 0; offset < source.size; offset += CHUNK_BYTES) {
+    let feeding: Promise<unknown> = Promise.resolve();
+    for (let offset = 0; offset < source.size; ) {
       if (superseded()) throw 'Another log is being opened.';
-      const bytes = await source.read(offset, Math.min(CHUNK_BYTES, source.size - offset));
+      const bytes = await readSome(source, offset);
       await feeding;
-      onProgress(offset + bytes.length, source.size);
+      offset += bytes.length;
+      onProgress(offset, source.size);
       feeding = engine.feed(bytes);
     }
     await feeding;
@@ -253,11 +261,9 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
         // A feed that failed left bytes behind, and `refresh` has already taken the new size.
         const behind = log.followedBytes < source.size;
         if (!grew && !(log.followed && (settleAll || behind))) return null;
-        for (let offset = log.followedBytes; offset < source.size; offset += CHUNK_BYTES) {
+        while (log.followedBytes < source.size) {
           if (log.open !== latestOpen) return null;
-          const bytes = await source.read(offset, Math.min(CHUNK_BYTES, source.size - offset));
-          await engine.feed(bytes);
-          log.followedBytes = offset + bytes.length;
+          log.followedBytes += await engine.feed(await readSome(source, log.followedBytes));
         }
         const view = await engine.refreshIndex(source.id, source.name, source.size, settleAll);
         await storeFollowed(engine, log, view, settleAll);
