@@ -1,6 +1,8 @@
+use std::collections::BTreeMap;
+
 use openlogs_analysis::{BossProgress, run_result};
 use openlogs_gamedata::{DungeonTable, KeyTimer};
-use openlogs_index::{FightSummary, LogIndex, Outcome, difficulty_label};
+use openlogs_index::{FightSummary, GameFlavor, LogIndex, Outcome, difficulty_label};
 use openlogs_parser::Timestamp;
 use serde::Serialize;
 
@@ -57,6 +59,30 @@ impl From<KeyTimer> for TimerDto {
     }
 }
 
+/// The game a log comes from: `{ "kind": "retail" }`, `{ "kind": "classicEra" }` or
+/// `{ "kind": "other", "projectId": 7 }`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum GameDto {
+    Retail,
+    ClassicEra,
+    Other { project_id: u32 },
+}
+
+impl From<GameFlavor> for GameDto {
+    fn from(flavor: GameFlavor) -> Self {
+        match flavor {
+            GameFlavor::Retail => Self::Retail,
+            GameFlavor::ClassicEra => Self::ClassicEra,
+            GameFlavor::Other(project_id) => Self::Other { project_id },
+        }
+    }
+}
+
 /// Key details of a Mythic+ run row.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -104,8 +130,10 @@ pub struct LogView {
     pub cache_hit: bool,
     pub log_version: Option<u32>,
     pub build: Option<String>,
+    pub game: Option<GameDto>,
     pub advanced_logging: bool,
     pub broken_lines: u64,
+    pub broken_by_event: BTreeMap<String, u64>,
     pub warnings: Vec<String>,
     pub zone: Option<String>,
     pub start_unix_ms: Option<i64>,
@@ -171,8 +199,10 @@ pub fn log_view(
         cache_hit,
         log_version: index.log_version,
         build: index.build.clone(),
+        game: index.flavor.map(Into::into),
         advanced_logging: index.advanced_logging,
         broken_lines: index.broken_lines,
+        broken_by_event: index.broken_by_event.clone(),
         warnings,
         zone: first.and_then(|fight| fight.zone.clone()),
         start_unix_ms: first.map(|fight| unix_ms(fight.start)),

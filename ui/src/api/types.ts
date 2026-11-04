@@ -8,6 +8,9 @@ export interface BossProgress {
   total: number;
 }
 
+/** The game a log comes from (mirrors `GameDto`). */
+export type Game = { kind: 'retail' } | { kind: 'classicEra' } | { kind: 'other'; projectId: number };
+
 /** A completed key against its time limits (mirrors `TimerDto`). */
 export type KeyTimer = { kind: 'inTime'; upgrades: number } | { kind: 'overTime' };
 
@@ -53,8 +56,12 @@ export interface LogView {
   cacheHit: boolean;
   logVersion: number | null;
   build: string | null;
+  /** `null` for logs whose header names no project. */
+  game: Game | null;
   advancedLogging: boolean;
   brokenLines: number;
+  /** Unreadable lines by event name; lines without a readable name count only in `brokenLines`. */
+  brokenByEvent: Record<string, number>;
   warnings: string[];
   zone: string | null;
   startUnixMs: number | null;

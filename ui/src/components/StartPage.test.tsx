@@ -57,8 +57,10 @@ const LOG: LogView = {
   cacheHit: false,
   logVersion: 22,
   build: '12.1.0',
+  game: { kind: 'retail' },
   advancedLogging: true,
   brokenLines: 0,
+  brokenByEvent: {},
   warnings: [],
   zone: 'The Venomous Abyss',
   startUnixMs: Date.UTC(2026, 9, 7, 19, 3, 2),
@@ -110,6 +112,22 @@ describe('start page', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: 'Remove from list' }));
     expect(api.removeRecent).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('names the game of the log and the events most of its unreadable lines belong to', async () => {
+    vi.mocked(api.openLog).mockResolvedValue({
+      ...LOG,
+      game: { kind: 'other', projectId: 7 },
+      brokenLines: 1_210,
+      brokenByEvent: { SPELL_HEAL: 300, SWING_DAMAGE: 2, SPELL_DAMAGE: 900, SPELL_ENERGIZE: 8 },
+    });
+    vi.mocked(chooseLog).mockResolvedValue({ name: SOURCE.name, open: async () => SOURCE });
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Open log…' }));
+    expect(await screen.findByText(/^Project 7 · /)).toBeInTheDocument();
+    const skipped = screen.getByText(/unreadable lines/);
+    expect(skipped).toHaveTextContent('SPELL_DAMAGE (900), SPELL_HEAL (300) and SPELL_ENERGIZE (8)');
+    expect(skipped).not.toHaveTextContent('SWING_DAMAGE');
   });
 
   it('opens a log chosen in the file dialog', async () => {

@@ -5,10 +5,11 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use clap::{Parser, Subcommand};
-use openlogs_index::{index_file, load_or_build};
+use openlogs_index::{index_file, load_or_build, map_log};
 
 mod format;
 mod game_data;
+mod inspect;
 
 #[derive(Parser)]
 #[command(
@@ -33,6 +34,12 @@ enum Command {
         #[arg(long)]
         cache_dir: Option<PathBuf>,
     },
+    /// Count every event of a combat log with its fields and a sample line, to see where
+    /// its layout differs from the one the parser expects.
+    Inspect {
+        /// Path to a WoWCombatLog-*.txt file.
+        file: PathBuf,
+    },
     /// Download spell icons, Mythic+ dungeons and boss portraits from wago.tools for the app.
     ExportGameData {
         /// Directory the app serves as `game-data/`, e.g. `ui/public/game-data`.
@@ -50,6 +57,17 @@ fn main() -> ExitCode {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
                 eprintln!("error: cannot index {}: {err}", file.display());
+                ExitCode::FAILURE
+            }
+        },
+        Command::Inspect { file } => match map_log(&file) {
+            Ok(map) => {
+                let data = map.as_deref().unwrap_or_default();
+                print!("{}", inspect::report(&inspect::census(data)));
+                ExitCode::SUCCESS
+            }
+            Err(err) => {
+                eprintln!("error: cannot read {}: {err}", file.display());
                 ExitCode::FAILURE
             }
         },

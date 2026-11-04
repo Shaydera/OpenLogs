@@ -91,10 +91,13 @@ impl Indexer {
         if self.partial_len > MAX_LINE_BYTES {
             let offset = self.offset;
             self.offset += self.partial_len;
-            self.builder.push_broken(LineSpan {
-                offset,
-                next_offset: self.offset,
-            });
+            self.builder.push_broken(
+                LineSpan {
+                    offset,
+                    next_offset: self.offset,
+                },
+                None,
+            );
         } else {
             let line = std::mem::take(&mut self.partial_line);
             self.push_lines(&line);
@@ -121,7 +124,7 @@ impl Indexer {
             next_offset: self.offset + raw.next_offset,
         };
         let Ok(text) = raw.text() else {
-            self.builder.push_broken(span);
+            self.builder.push_broken(span, None);
             return;
         };
         if !self.builder.in_fight() {
@@ -132,14 +135,17 @@ impl Indexer {
                 }
                 Ok(_) => {}
                 Err(_) => {
-                    self.builder.push_broken(span);
+                    self.builder.push_broken(span, None);
                     return;
                 }
             }
         }
         match parse_line(text, fields) {
             Ok(line) => self.builder.push(span, &line),
-            Err(_) => self.builder.push_broken(span),
+            Err(_) => {
+                let event = parse_header(text).ok().map(|(_, name)| name);
+                self.builder.push_broken(span, event);
+            }
         }
     }
 }
@@ -153,13 +159,17 @@ pub fn index_bytes(data: &[u8]) -> LogIndex {
 
 /// Memory-maps and indexes a log file.
 pub fn index_file(path: &Path) -> std::io::Result<LogIndex> {
+    Ok(map_log(path)?.map_or_else(LogIndex::empty, |map| index_bytes(&map)))
+}
+
+/// Memory-maps a log file; `None` for an empty file, which cannot be mapped.
+pub fn map_log(path: &Path) -> std::io::Result<Option<memmap2::Mmap>> {
     let file = File::open(path)?;
     if file.metadata()?.len() == 0 {
-        return Ok(LogIndex::empty());
+        return Ok(None);
     }
     // SAFETY: the map is read-only. WoW only appends to the log, which leaves the mapped
     // prefix intact. Truncating the file while it is mapped is undefined behaviour, which
     // we accept for a local single-user tool.
-    let map = unsafe { memmap2::Mmap::map(&file)? };
-    Ok(index_bytes(&map))
+    Ok(Some(unsafe { memmap2::Mmap::map(&file)? }))
 }

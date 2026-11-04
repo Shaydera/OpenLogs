@@ -16,6 +16,25 @@ fn parses_log_encounter_and_key_events() {
                 version: 22,
                 advanced: true,
                 build: "12.1.0",
+                project_id: Some(1),
+            },
+        ),
+        (
+            "10/7/2026 18:58:23.0202  COMBAT_LOG_VERSION,9,ADVANCED_LOG_ENABLED,0,BUILD_VERSION,8.3.0",
+            Event::CombatLogVersion {
+                version: 9,
+                advanced: false,
+                build: "8.3.0",
+                project_id: None,
+            },
+        ),
+        (
+            "10/7/2026 18:58:23.0202  COMBAT_LOG_VERSION,22,ADVANCED_LOG_ENABLED,1,BUILD_VERSION,1.60.1,PROJECT_ID,",
+            Event::CombatLogVersion {
+                version: 22,
+                advanced: true,
+                build: "1.60.1",
+                project_id: None,
             },
         ),
         (

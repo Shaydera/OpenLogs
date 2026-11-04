@@ -80,6 +80,7 @@ fn assert_camel_case_keys(value: &Value, at: &str) {
 fn opening_a_log_lists_its_pulls_and_a_stored_index_reopens_it() {
     let (engine, view) = open(FIXTURE);
     assert_eq!(view["cacheHit"], false);
+    assert_eq!(view["game"], json!({ "kind": "retail" }));
     let first = &view["fights"][0];
     assert_eq!(
         (
