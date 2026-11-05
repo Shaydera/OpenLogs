@@ -3,7 +3,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use openlogs_index::{
-    CacheStatus, ChallengeMode, FightSummary, LogIndex, Outcome, difficulty_label,
+    CacheStatus, ChallengeMode, FightSummary, GameFlavor, LogIndex, Outcome, difficulty_label,
 };
 
 /// Human-readable fight table for `openlogs-cli dump-fights`.
@@ -39,10 +39,19 @@ pub fn report(
     );
     let _ = writeln!(
         out,
-        "Log version {version}, build {}, advanced logging {}",
+        "{}, log version {version}, build {}, advanced logging {}",
+        GameFlavor::describe(index.flavor),
         index.build.as_deref().unwrap_or("unknown"),
         if index.advanced_logging { "on" } else { "off" }
     );
+    if !index.broken_by_event.is_empty() {
+        let events: Vec<String> = index
+            .broken_by_event
+            .iter()
+            .map(|(event, count)| format!("{event} {}", thousands(*count)))
+            .collect();
+        let _ = writeln!(out, "Broken lines by event: {}", events.join(", "));
+    }
     for warning in &index.warnings {
         let _ = writeln!(out, "warning: {warning}");
     }
@@ -163,7 +172,7 @@ fn megabytes(bytes: u64) -> String {
 }
 
 /// `705319` → `705,319`.
-fn thousands(n: u64) -> String {
+pub(crate) fn thousands(n: u64) -> String {
     let digits = n.to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3);
     for (i, digit) in digits.chars().enumerate() {

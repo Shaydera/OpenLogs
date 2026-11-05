@@ -4,7 +4,7 @@ use openlogs_parser::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// Bumped whenever the index layout or its rules change; invalidates cached indexes.
-pub const INDEX_FORMAT_VERSION: u32 = 12;
+pub const INDEX_FORMAT_VERSION: u32 = 13;
 /// The combat log format this tool is built and tested against.
 pub const SUPPORTED_LOG_VERSION: u32 = 22;
 /// Lookback before `ENCOUNTER_START` that belongs to a fight (pre-pots, pre-casts).
@@ -19,6 +19,41 @@ pub const END_GRACE_LINES: u32 = 200;
 /// its key still continues it (reconnect, /reload); a later one is a new key.
 pub const RESUME_MAX_GAP_MICROS: i64 = 600_000_000;
 
+/// The game a log comes from, by the `PROJECT_ID` of its header. Only retail is fully
+/// supported; the others are read with retail's rules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GameFlavor {
+    Retail,
+    ClassicEra,
+    Forever,
+    Other(u32),
+}
+
+impl GameFlavor {
+    pub fn from_project_id(id: u32) -> Self {
+        match id {
+            1 => Self::Retail,
+            2 => Self::ClassicEra,
+            18 => Self::Forever,
+            other => Self::Other(other),
+        }
+    }
+
+    pub fn name(self) -> String {
+        match self {
+            Self::Retail => "Retail".to_string(),
+            Self::ClassicEra => "Classic Era".to_string(),
+            Self::Forever => "Forever".to_string(),
+            Self::Other(id) => format!("Project {id}"),
+        }
+    }
+
+    /// [`Self::name`], or "Unknown game" for a header without a `PROJECT_ID`.
+    pub fn describe(flavor: Option<Self>) -> String {
+        flavor.map_or_else(|| "Unknown game".to_string(), Self::name)
+    }
+}
+
 /// Difficulty ID of Mythic+ (Mythic Keystone) dungeons; run entries carry it too.
 pub const MYTHIC_KEYSTONE_DIFFICULTY: u32 = 8;
 
@@ -27,9 +62,15 @@ pub struct LogIndex {
     pub format_version: u32,
     pub log_version: Option<u32>,
     pub build: Option<String>,
+    /// `None` for headers without a `PROJECT_ID`.
+    pub flavor: Option<GameFlavor>,
     pub advanced_logging: bool,
     pub line_count: u64,
+    /// Only lines the index parses: inside boss pulls, and meta events everywhere. Other lines
+    /// outside pulls are skipped unread, so a layout break there goes unnoticed.
     pub broken_lines: u64,
+    /// Broken lines by event name; lines without a readable name are only in `broken_lines`.
+    pub broken_by_event: BTreeMap<String, u64>,
     /// Lines inside fights whose event the parser does not model, by event name.
     pub unhandled_in_fights: BTreeMap<String, u64>,
     pub warnings: Vec<String>,
@@ -43,9 +84,11 @@ impl LogIndex {
             format_version: INDEX_FORMAT_VERSION,
             log_version: None,
             build: None,
+            flavor: None,
             advanced_logging: false,
             line_count: 0,
             broken_lines: 0,
+            broken_by_event: BTreeMap::new(),
             unhandled_in_fights: BTreeMap::new(),
             warnings: Vec::new(),
             fights: Vec::new(),

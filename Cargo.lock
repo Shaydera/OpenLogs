@@ -2525,6 +2525,7 @@ dependencies = [
  "clap",
  "openlogs-gamedata",
  "openlogs-index",
+ "openlogs-parser",
  "serde_json",
 ]
 

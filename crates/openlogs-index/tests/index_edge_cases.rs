@@ -1,4 +1,4 @@
-use openlogs_index::{Outcome, index_bytes};
+use openlogs_index::{GameFlavor, Outcome, index_bytes};
 use openlogs_parser::Timestamp;
 
 fn start(ts: &str, id: u32, name: &str) -> String {
@@ -16,8 +16,12 @@ fn died(ts: &str) -> String {
 }
 
 fn version(ts: &str, version: u32, advanced: u8) -> String {
+    header(ts, version, advanced, "12.1.0", 1)
+}
+
+fn header(ts: &str, version: u32, advanced: u8, build: &str, project: u32) -> String {
     format!(
-        "{ts}  COMBAT_LOG_VERSION,{version},ADVANCED_LOG_ENABLED,{advanced},BUILD_VERSION,12.1.0,PROJECT_ID,1\n"
+        "{ts}  COMBAT_LOG_VERSION,{version},ADVANCED_LOG_ENABLED,{advanced},BUILD_VERSION,{build},PROJECT_ID,{project}\n"
     )
 }
 
@@ -178,6 +182,71 @@ fn version_headers_warn_about_unsupported_logs_once() {
             }
         }
     }
+}
+
+#[test]
+fn the_header_project_id_names_the_game_and_other_games_warn_once() {
+    for (project, flavor, warns) in [
+        (1, GameFlavor::Retail, false),
+        (2, GameFlavor::ClassicEra, true),
+        (18, GameFlavor::Forever, true),
+        (7, GameFlavor::Other(7), true),
+    ] {
+        let data = [
+            header("10/7/2026 18:58:23.0202", 22, 1, "1.60.1.70450", project),
+            header("10/7/2026 18:58:23.0242", 22, 1, "1.60.1.70450", project),
+        ]
+        .concat();
+        let index = index_bytes(data.as_bytes());
+        assert_eq!(index.flavor, Some(flavor));
+        assert_eq!(
+            index.warnings.len(),
+            usize::from(warns),
+            "{:?}",
+            index.warnings
+        );
+    }
+
+    let without_project =
+        "10/7/2026 18:58:23.0202  COMBAT_LOG_VERSION,22,ADVANCED_LOG_ENABLED,1,BUILD_VERSION,12.1.0
+";
+    let index = index_bytes(without_project.as_bytes());
+    assert_eq!(index.flavor, None);
+    assert!(index.warnings.is_empty(), "{:?}", index.warnings);
+}
+
+#[test]
+fn unreadable_lines_are_counted_by_event() {
+    let data = [
+        version("10/7/2026 18:58:23.0202", 22, 1),
+        start("10/7/2026 19:03:00.0000", 3492, "Ula'tek"),
+        "10/7/2026 19:03:01.0000  SPELL_DAMAGE,Player-4101-8E8C0182
+"
+        .to_string(),
+        "10/7/2026 19:03:02.0000  SPELL_DAMAGE,Player-4101-8E8C0182
+"
+        .to_string(),
+        "10/7/2026 19:03:03.0000  SPELL_HEAL,Player-4101-8E8C0182
+"
+        .to_string(),
+        "not a log line
+"
+        .to_string(),
+        "10/7/2026 19:03:04.0000  ENCOUNTER_END,3492
+"
+        .to_string(),
+    ]
+    .concat();
+    let index = index_bytes(data.as_bytes());
+    assert_eq!(index.broken_lines, 5);
+    assert_eq!(
+        index.broken_by_event.into_iter().collect::<Vec<_>>(),
+        [
+            ("ENCOUNTER_END".to_string(), 1),
+            ("SPELL_DAMAGE".to_string(), 2),
+            ("SPELL_HEAL".to_string(), 1),
+        ]
+    );
 }
 
 #[test]

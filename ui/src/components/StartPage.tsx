@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusRequest } from '../hooks/useFocusRequest';
 import { type ChosenLog, chooseLog as pickLog } from '../api/logSource';
-import type { LogView } from '../api/types';
-import { formatBytes, formatDateTime } from '../i18n/format';
+import type { Game, LogView } from '../api/types';
+import { formatBytes, formatDateTime, formatList } from '../i18n/format';
 import { t } from '../i18n/i18n';
 import { groupPulls, groupRuns } from '../pulls/groupPulls';
 import { logStartMs } from '../pulls/logStart';
@@ -12,6 +12,21 @@ import { ThemeSwitch } from './chrome/ThemeSwitch';
 import { DropZone } from './DropZone';
 import { PullList, RunCards } from './PullList';
 import { RecentLogs } from './RecentLogs';
+
+function gameName(game: Game | null): string {
+  if (game === null) return t('game.unknown');
+  return game.kind === 'other' ? t('game.other', { id: game.projectId }) : t(`game.${game.kind}`);
+}
+
+const SKIPPED_EVENTS_SHOWN = 3;
+
+function skippedEvents(byEvent: Record<string, number>): string | null {
+  const top = Object.entries(byEvent)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, SKIPPED_EVENTS_SHOWN)
+    .map(([event, count]) => t('log.skippedEvent', { event, count }));
+  return top.length > 0 ? t('log.skippedMostly', { events: formatList(top) }) : null;
+}
 
 export function StartPage({ dragOver }: { dragOver: boolean }) {
   const recent = useApp((s) => s.recent);
@@ -94,6 +109,7 @@ function LogPulls({ log }: { log: LogView }) {
           <h1 ref={titleRef} tabIndex={-1} className="num log-title">{log.fileName}</h1>
           <div className="log-meta">
             {t('log.meta', {
+              game: gameName(log.game),
               version: log.logVersion ?? t('log.unknown'),
               advanced: log.advancedLogging ? t('log.on') : t('log.off'),
               build: log.build ?? t('log.unknown'),
@@ -105,7 +121,9 @@ function LogPulls({ log }: { log: LogView }) {
               {warning}
             </p>
           ))}
-          {log.brokenLines > 0 && <p className="warning">{t('log.skippedLines', { count: log.brokenLines })}</p>}
+          {log.brokenLines > 0 && (
+            <p className="warning">{[t('log.skippedLines', { count: log.brokenLines }), skippedEvents(log.brokenByEvent)].filter(Boolean).join(' ')}</p>
+          )}
         </div>
         <label className="toggle">
           <input type="checkbox" checked={hideAborted} onChange={(event) => setHideAborted(event.target.checked)} />

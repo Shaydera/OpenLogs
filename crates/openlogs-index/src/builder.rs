@@ -7,7 +7,7 @@ use openlogs_parser::{
 
 use crate::markers::MarkerState;
 use crate::model::{
-    ChallengeMode, END_GRACE_LINES, END_GRACE_MICROS, FightSummary, LogIndex,
+    ChallengeMode, END_GRACE_LINES, END_GRACE_MICROS, FightSummary, GameFlavor, LogIndex,
     MYTHIC_KEYSTONE_DIFFICULTY, MapBounds, Outcome, PRELUDE_MICROS, RESUME_MAX_GAP_MICROS,
     RosterEntry, SUPPORTED_LOG_VERSION, WorldMarker,
 };
@@ -80,11 +80,19 @@ impl IndexBuilder {
         }
     }
 
-    /// Records a line that failed to parse.
-    pub fn push_broken(&mut self, span: LineSpan) {
+    /// Records a line that failed to parse; `event` is its name if that was readable.
+    pub fn push_broken(&mut self, span: LineSpan, event: Option<&str>) {
         self.release_end(None);
         self.index.line_count += 1;
         self.index.broken_lines += 1;
+        if let Some(event) = event {
+            match self.index.broken_by_event.get_mut(event) {
+                Some(count) => *count += 1,
+                None => {
+                    self.index.broken_by_event.insert(event.to_string(), 1);
+                }
+            }
+        }
         if let Some(fight) = &mut self.open {
             fight.summary.broken_lines += 1;
             fight.summary.end_offset = span.next_offset;
@@ -122,7 +130,8 @@ impl IndexBuilder {
                 version,
                 advanced,
                 build,
-            } => self.on_version(*version, *advanced, build),
+                project_id,
+            } => self.on_version(*version, *advanced, build, *project_id),
             Event::EncounterStart(start) => self.open_fight(span, line.timestamp, start),
             Event::EncounterEnd(end) => self.end_fight(end, line.timestamp),
             Event::ChallengeModeStart(start) if !resumes_run => {
@@ -233,9 +242,11 @@ impl IndexBuilder {
             format_version: self.index.format_version,
             log_version: self.index.log_version,
             build: self.index.build.clone(),
+            flavor: self.index.flavor,
             advanced_logging: self.index.advanced_logging,
             line_count: self.index.line_count,
             broken_lines: self.index.broken_lines,
+            broken_by_event: self.index.broken_by_event.clone(),
             unhandled_in_fights: self.index.unhandled_in_fights.clone(),
             warnings: self.index.warnings.clone(),
             fights,
@@ -344,12 +355,20 @@ impl IndexBuilder {
         }
     }
 
-    fn on_version(&mut self, version: u32, advanced: bool, build: &str) {
+    fn on_version(&mut self, version: u32, advanced: bool, build: &str, project_id: Option<u32>) {
         match self.index.log_version {
             None => {
+                let flavor = project_id.map(GameFlavor::from_project_id);
                 self.index.log_version = Some(version);
                 self.index.build = Some(build.to_string());
+                self.index.flavor = flavor;
                 self.index.advanced_logging = advanced;
+                if let Some(flavor) = flavor.filter(|&flavor| flavor != GameFlavor::Retail) {
+                    self.warn(format!(
+                        "{} logs are not fully supported yet; some reports may be incomplete.",
+                        flavor.name()
+                    ));
+                }
                 if version != SUPPORTED_LOG_VERSION {
                     self.warn(format!(
                         "Combat log version {version} is not supported (expected {SUPPORTED_LOG_VERSION}); some events may be missing."

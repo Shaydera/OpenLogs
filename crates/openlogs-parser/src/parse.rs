@@ -35,6 +35,8 @@ fn parse_event<'a>(f: &Fields<'_, 'a>) -> Result<Event<'a>, ParseError> {
             version: f.num(1)?,
             advanced: f.flag(3)?,
             build: f.str(5)?,
+            // Lenient: an odd project must not make the whole log unreadable.
+            project_id: f.get(7).and_then(|id| id.parse().ok()),
         },
         "ZONE_CHANGE" => Event::ZoneChange {
             zone_id: f.num(1)?,

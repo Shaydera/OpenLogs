@@ -20,6 +20,7 @@ pub enum Event<'a> {
         version: u32,
         advanced: bool,
         build: &'a str,
+        project_id: Option<u32>,
     },
     ZoneChange {
         zone_id: u32,

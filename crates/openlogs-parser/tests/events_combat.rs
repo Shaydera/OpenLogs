@@ -556,3 +556,25 @@ fn casts_auras_and_unit_events() {
         assert_eq!(combat(line).kind, expected, "{line}");
     }
 }
+
+#[test]
+fn forever_lines_have_the_retail_layout() {
+    let hit = combat(
+        r#"11/5/2026 02:45:24.9121  SPELL_DAMAGE,Player-6949-0066C9DA,"Kaelin-Dera-Normal-EU",0x511,0x80000000,Creature-0-6846-0-240-1544-00016BDF9A,"Vile Fin Minor Oracle",0x10a48,0x80000000,1776,"Gouge",0x1,Creature-0-6846-0-240-1544-00016BDF9A,0000000000000000,146,156,23,0,260,0,0,0,0,165,165,0,2911.08,213.45,1420,1.1924,8,10,12,-1,1,0,0,0,nil,nil,nil,ST"#,
+    );
+    assert_eq!((damage(&hit).amount, damage(&hit).base_amount), (10, 12));
+    assert_eq!(hit.advanced.unwrap().current_hp, 146);
+
+    let swing = combat(
+        r#"11/5/2026 02:45:21.5991  SWING_DAMAGE,Player-6939-002654D1,"Maren-Kapustnik-Normal-EU",0x518,0x80000000,Creature-0-6846-0-240-1675-00016BDE2C,"Rot Hide Mongrel",0xa28,0x80000000,Player-6939-002654D1,0000000000000000,128,167,84,0,202,0,0,0,3,66,100,0,2859.98,411.15,1420,1.0861,1,8,9,-1,1,0,0,0,nil,nil,nil"#,
+    );
+    assert_eq!(damage(&swing).amount, 8);
+
+    let heal = combat(
+        r#"11/5/2026 02:45:28.2101  SPELL_HEAL,Player-6941-0045A21C,"Torvin-Destoryer-Normal-EU",0x518,0x80000000,Player-6941-0045A21C,"Torvin-Destoryer-Normal-EU",0x518,0x80000000,1260198,"Touch of the Grave",0x20,Player-6941-0045A21C,0000000000000000,203,203,125,0,308,0,0,0,1,136,1000,0,2975.52,186.38,1420,2.7356,0,10,10,10,0,nil"#,
+    );
+    let CombatKind::Heal(heal) = heal.kind else {
+        panic!("expected a heal, got {:?}", heal.kind);
+    };
+    assert_eq!((heal.amount, heal.overheal, heal.critical), (10, 10, false));
+}
