@@ -32,6 +32,7 @@ export const en = {
   'log.meta': '{game} · COMBAT_LOG_VERSION {version} · Advanced logging {advanced} · Build {build} · {size}',
   'game.retail': 'Retail',
   'game.classicEra': 'Classic Era',
+  'game.forever': 'Forever',
   'game.other': 'Project {id}',
   'game.unknown': 'Unknown game',
   'log.on': 'on',

@@ -59,7 +59,7 @@ impl From<KeyTimer> for TimerDto {
     }
 }
 
-/// The game a log comes from: `{ "kind": "retail" }`, `{ "kind": "classicEra" }` or
+/// The game a log comes from: `{ "kind": "retail" }`, `{ "kind": "forever" }` or
 /// `{ "kind": "other", "projectId": 7 }`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(
@@ -70,6 +70,7 @@ impl From<KeyTimer> for TimerDto {
 pub enum GameDto {
     Retail,
     ClassicEra,
+    Forever,
     Other { project_id: u32 },
 }
 
@@ -78,6 +79,7 @@ impl From<GameFlavor> for GameDto {
         match flavor {
             GameFlavor::Retail => Self::Retail,
             GameFlavor::ClassicEra => Self::ClassicEra,
+            GameFlavor::Forever => Self::Forever,
             GameFlavor::Other(project_id) => Self::Other { project_id },
         }
     }

@@ -9,7 +9,7 @@ export interface BossProgress {
 }
 
 /** The game a log comes from (mirrors `GameDto`). */
-export type Game = { kind: 'retail' } | { kind: 'classicEra' } | { kind: 'other'; projectId: number };
+export type Game = { kind: 'retail' } | { kind: 'classicEra' } | { kind: 'forever' } | { kind: 'other'; projectId: number };
 
 /** A completed key against its time limits (mirrors `TimerDto`). */
 export type KeyTimer = { kind: 'inTime'; upgrades: number } | { kind: 'overTime' };

@@ -189,6 +189,7 @@ fn the_header_project_id_names_the_game_and_other_games_warn_once() {
     for (project, flavor, warns) in [
         (1, GameFlavor::Retail, false),
         (2, GameFlavor::ClassicEra, true),
+        (18, GameFlavor::Forever, true),
         (7, GameFlavor::Other(7), true),
     ] {
         let data = [

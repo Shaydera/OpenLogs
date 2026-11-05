@@ -25,6 +25,7 @@ pub const RESUME_MAX_GAP_MICROS: i64 = 600_000_000;
 pub enum GameFlavor {
     Retail,
     ClassicEra,
+    Forever,
     Other(u32),
 }
 
@@ -33,6 +34,7 @@ impl GameFlavor {
         match id {
             1 => Self::Retail,
             2 => Self::ClassicEra,
+            18 => Self::Forever,
             other => Self::Other(other),
         }
     }
@@ -41,6 +43,7 @@ impl GameFlavor {
         match self {
             Self::Retail => "Retail".to_string(),
             Self::ClassicEra => "Classic Era".to_string(),
+            Self::Forever => "Forever".to_string(),
             Self::Other(id) => format!("Project {id}"),
         }
     }
