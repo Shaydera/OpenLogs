@@ -71,7 +71,7 @@ fn is_npc(fight: &Fight, actor: ActorId) -> bool {
 }
 
 /// Whether the event's target is an enemy NPC: a unit no player owns that stands against the
-/// raid at the event. Hits on units logged neutral do not count.
+/// raid at the event. A unit logged neutral counts if it fought the group.
 fn hits_enemy_npc(fight: &Fight, event: &Event) -> bool {
     fight.actors.is_unowned_npc(event.target) && fight.target_against_raid(event)
 }

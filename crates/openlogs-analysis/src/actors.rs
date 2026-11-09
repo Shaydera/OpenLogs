@@ -32,6 +32,9 @@ pub struct Actor {
     /// Lines that logged this actor hostile, and lines that did not.
     hostile_lines: u32,
     other_lines: u32,
+    /// Logged as an NPC-controlled friendly unit on a line outside the logging player's turns.
+    logged_friendly: bool,
+    fought_group: bool,
     /// Direct owner (summoner) of a pet or guardian.
     pub owner: Option<ActorId>,
     /// From `COMBATANT_INFO`, players only.
@@ -89,6 +92,8 @@ impl Actors {
                 flags: 0,
                 hostile_lines: 0,
                 other_lines: 0,
+                logged_friendly: false,
+                fought_group: false,
                 owner: None,
                 spec_id: None,
                 item_level: None,
@@ -105,6 +110,8 @@ impl Actors {
             actor.flags = 0;
             actor.hostile_lines = 0;
             actor.other_lines = 0;
+            actor.logged_friendly = false;
+            actor.fought_group = false;
             actor.owner = None;
             actor.spec_id = None;
             actor.item_level = None;
@@ -153,6 +160,8 @@ impl Actors {
             flags: 0,
             hostile_lines: 0,
             other_lines: 0,
+            logged_friendly: false,
+            fought_group: false,
             owner: None,
             spec_id: None,
             item_level: None,
@@ -251,6 +260,32 @@ impl Actors {
     /// An unowned NPC hostile on most of its lines: an enemy for the whole pull.
     pub fn is_enemy(&self, id: ActorId) -> bool {
         self.is_unowned_npc(id) && self.get(id).mostly_hostile()
+    }
+
+    /// An unowned NPC that traded damage or misses with a player or a player's pet.
+    pub fn fought_group(&self, id: ActorId) -> bool {
+        self.get(id).fought_group
+    }
+
+    /// An unowned NPC that fought the group and was never logged friendly outside the logging
+    /// player's turns: it stands against the raid even on lines that log it neutral.
+    pub(crate) fn fights_group_unfriendly(&self, id: ActorId) -> bool {
+        let actor = self.get(id);
+        actor.fought_group && !actor.logged_friendly
+    }
+
+    pub(crate) fn note_logged_friendly(&mut self, id: ActorId) {
+        self.list[id as usize].logged_friendly = true;
+    }
+
+    /// Marks the unowned NPCs on one side of a damage or miss with a player or a player's pet
+    /// on the other. Needs the pull's final owners.
+    pub(crate) fn note_fought_group(&mut self, source: ActorId, target: ActorId) {
+        for (npc, other) in [(source, target), (target, source)] {
+            if self.is_unowned_npc(npc) && self.credited_player(other).is_some() {
+                self.list[npc as usize].fought_group = true;
+            }
+        }
     }
 }
 

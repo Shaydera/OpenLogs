@@ -380,11 +380,23 @@ impl FightBuilder {
             .max_by_key(|&(&map, &count)| (count, std::cmp::Reverse(map)))
             .map(|(&map, _)| map);
         self.fight.events.sort_by_key(|event| event.t);
+        for event in &self.fight.events {
+            if matches!(event.kind, EventKind::Damage(_) | EventKind::Missed(_)) {
+                self.fight
+                    .actors
+                    .note_fought_group(event.source, event.target);
+            }
+        }
         self.fight.power.sort_by_key(|p| p.t);
         self.fight.npc_power.sort_by_key(|p| p.t);
         self.fight.positions.sort_by_key(|p| p.t);
         self.friendly_npc_lines.sort_by_key(|&(t, _)| t);
         self.fight.logger_turned = logger_turned_spans(&self.fight, &self.friendly_npc_lines);
+        for &(t, id) in &self.friendly_npc_lines {
+            if !self.fight.logger_turned_at(t) {
+                self.fight.actors.note_logged_friendly(id);
+            }
+        }
         note_heal_grants(&mut self.fight);
         self.fight
     }

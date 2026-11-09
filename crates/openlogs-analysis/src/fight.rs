@@ -97,15 +97,19 @@ impl Fight {
         self.against_raid_at(event.target, event.target_logged_hostile, event.t)
     }
 
-    /// Whether `actor`, logged `hostile` on a line at `t`, stands against the raid. While the
-    /// logging player is turned the log swaps the sides: an unowned NPC then counts by how it
-    /// was logged over the pull, and players and their pets by the swapped flag.
+    /// Whether `actor`, logged `hostile` on a line at `t`, stands against the raid. A neutral
+    /// NPC that fought the group does too. While the logging player is turned the log swaps the
+    /// sides: an unowned NPC then counts by how it was logged over the pull, and players and
+    /// their pets by the swapped flag.
     pub fn against_raid_at(&self, actor: ActorId, hostile: bool, t: i32) -> bool {
-        if actor == NOBODY || !self.logger_turned_at(t) {
+        if actor == NOBODY {
             return hostile;
         }
+        if !self.logger_turned_at(t) {
+            return hostile || self.actors.fights_group_unfriendly(actor);
+        }
         if self.actors.is_unowned_npc(actor) {
-            self.actors.is_enemy(actor)
+            self.actors.is_enemy(actor) || self.actors.fights_group_unfriendly(actor)
         } else {
             !hostile
         }
