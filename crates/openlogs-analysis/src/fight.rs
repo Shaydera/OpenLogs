@@ -1,9 +1,9 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use openlogs_index::{MapBounds, Outcome};
 pub use openlogs_parser::{AuraAction, AuraType, DamageVia};
 
-use crate::actors::{ActorId, Actors, NOBODY};
+use crate::actors::{ActorId, ActorKind, Actors, NOBODY};
 
 pub type SpellId = u32;
 /// Spell of melee swings, environmental damage and deaths.
@@ -53,6 +53,9 @@ pub struct Fight {
     /// What Refractive Images took of hits, as `(event index, amount)` sorted by index, on the
     /// line the hit counts on; see [`Fight::delayed_part`].
     pub delayed_hits: Vec<(u32, u64)>,
+    /// The index's roster: players with `COMBATANT_INFO` in a boss pull or run, the players
+    /// who fought in a combat pull.
+    pub roster: BTreeSet<ActorId>,
 }
 
 impl Fight {
@@ -127,6 +130,17 @@ pub enum FightKind {
     Pull,
     /// A Mythic+ run, `CHALLENGE_MODE_START` to `CHALLENGE_MODE_END`.
     Run,
+    /// A fight against NPCs outside a boss encounter; it has no bosses.
+    Combat,
+}
+
+/// Whether the player belongs on the fight's player lists: a player with a spec, or one who
+/// fought in a combat pull, where most players have no `COMBATANT_INFO`.
+pub fn listed_player(fight: &Fight, id: ActorId) -> bool {
+    let actor = fight.actors.get(id);
+    actor.kind == ActorKind::Player
+        && (actor.spec_id.is_some()
+            || (fight.kind == FightKind::Combat && fight.roster.contains(&id)))
 }
 
 /// A boss encounter inside a Mythic+ run, in ms since the run started.

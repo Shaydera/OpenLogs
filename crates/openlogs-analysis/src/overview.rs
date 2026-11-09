@@ -4,7 +4,7 @@ use openlogs_gamedata::{ConsumableKind, CooldownCategory, Curated};
 
 use crate::actors::ActorId;
 use crate::deaths::{Death, deaths};
-use crate::fight::{EventKind, Fight, SpellId};
+use crate::fight::{EventKind, Fight, SpellId, listed_player};
 use crate::filter::{Attribution, Overkill, ReportFilter};
 use crate::phases::fight_phases;
 use crate::timeline::{
@@ -21,7 +21,8 @@ pub const DPS_STEP_MS: u32 = 5_000;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Kpis {
-    /// Players with a spec from `COMBATANT_INFO`.
+    /// Listed players (see [`listed_player`]), plus anyone who used a consumable or cooldown
+    /// or died.
     pub players: u32,
     pub duration_ms: u64,
     pub raid_damage: u64,
@@ -87,7 +88,7 @@ pub fn quick_overview_in(fight: &Fight, curated: &Curated, filter: &ReportFilter
     let roster: HashSet<ActorId> = fight
         .actors
         .players()
-        .filter(|p| p.spec_id.is_some())
+        .filter(|p| listed_player(fight, p.id))
         .map(|p| p.id)
         .chain(all_consumables.iter().map(|u| u.player))
         .chain(all_cooldowns.iter().map(|u| u.player))

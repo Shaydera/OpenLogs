@@ -1,9 +1,9 @@
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use openlogs_index::{FightSummary, MapBounds, Outcome};
+use openlogs_index::{FightSummary, MapBounds, Outcome, RosterEntry};
 use openlogs_parser::{
     CombatEvent, CombatKind, EncounterEnd, EncounterStart, Event as LogEvent, HealVia, Lines,
     LogLine, Spell, Timestamp, parse_line,
@@ -71,10 +71,25 @@ fn load_slice(
     }
     let late = builder.landed_after_end(&data[end..], &mut fields);
     let mut fight = builder.finish();
+    // A combat pull's specs come from `COMBATANT_INFO` before its range, which only the index
+    // read; a spec logged inside the range wins.
+    apply_roster(&mut fight, &summary.roster);
     let unpaired = pair_landed_copies(&mut fight);
     mark_swings_landing_after_end(&mut fight, unpaired, &late);
     note_delayed_hits(&mut fight);
     fight
+}
+
+fn apply_roster(fight: &mut Fight, roster: &[RosterEntry]) {
+    for entry in roster {
+        let Some(id) = fight.actors.id(&entry.guid) else {
+            continue;
+        };
+        fight.roster.insert(id);
+        if entry.spec_id != 0 && fight.actors.get(id).spec_id.is_none() {
+            fight.actors.set_spec(id, entry.spec_id);
+        }
+    }
 }
 
 /// A `SWING_DAMAGE_LANDED` logged after the fight's end, of units the fight knows.
@@ -227,6 +242,8 @@ impl FightBuilder {
             fight: Fight {
                 kind: if summary.is_run() {
                     FightKind::Run
+                } else if summary.is_combat() {
+                    FightKind::Combat
                 } else {
                     FightKind::Pull
                 },
@@ -261,6 +278,7 @@ impl FightBuilder {
                 logger_turned: Vec::new(),
                 heal_grants: Vec::new(),
                 delayed_hits: Vec::new(),
+                roster: BTreeSet::new(),
             },
             last_power: HashMap::new(),
             last_t: i32::MIN,

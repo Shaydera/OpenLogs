@@ -101,9 +101,9 @@ pub fn is_aborted(fight: &Fight) -> bool {
 /// Boss candidates: hostile units that took at least a fifth of the damage of the
 /// most-damaged unit and have at least a quarter of the largest max HP. Councils yield
 /// several bosses; untouched encounter NPCs and small adds are excluded. A Mythic+ run has
-/// none: its boss pulls do.
+/// none (its boss pulls do), nor has a combat pull.
 pub fn boss_units(fight: &Fight) -> Vec<ActorId> {
-    if is_aborted(fight) || fight.kind == FightKind::Run {
+    if is_aborted(fight) || matches!(fight.kind, FightKind::Run | FightKind::Combat) {
         return Vec::new();
     }
     let mut taken: HashMap<ActorId, u64> = HashMap::new();

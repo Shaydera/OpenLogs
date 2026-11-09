@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use openlogs_analysis::{
     AbilityLink, ActorId, ActorKind, BuffKind, CastKind, EBON_MIGHT, Fight, Metric, NOBODY,
-    PlayerDetail, SpellId,
+    PlayerDetail, SpellId, listed_player,
 };
 use openlogs_gamedata::{ConsumableKind, Curated};
 use serde::{Deserialize, Serialize};
@@ -406,12 +406,12 @@ pub fn player_detail_dto(
         spells.entry(id).or_insert(spell);
     }
 
-    // Players with a spec for the switcher, plus every player the page names (an Evoker or
-    // buff source without COMBATANT_INFO would otherwise show as "?").
+    // Listed players for the switcher, plus every player the page names (an Evoker or buff
+    // source without COMBATANT_INFO would otherwise show as "?").
     let mut roster: Vec<PlayerRef> = fight
         .actors
         .players()
-        .filter(|actor| actor.spec_id.is_some())
+        .filter(|actor| listed_player(fight, actor.id))
         .map(|actor| player_ref(fight, actor.id))
         .collect();
     for player in referenced {

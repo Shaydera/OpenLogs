@@ -7,7 +7,7 @@ use openlogs_gamedata::Curated;
 use crate::ability::unit_name;
 use crate::actors::ActorId;
 use crate::deaths::nth_death_ms;
-use crate::fight::Fight;
+use crate::fight::{Fight, listed_player};
 use crate::filter::{Attribution, Overkill, ReportFilter};
 use crate::overview::{QuickOverview, quick_overview_in};
 use crate::reports::damage::damage_done;
@@ -117,7 +117,7 @@ fn sort_key(row: &ComparedPlayer) -> (u8, f64) {
     }
 }
 
-/// The players of one pull by GUID: everyone with a spec, plus anyone who did damage or
+/// The players of one pull by GUID: every listed player, plus anyone who did damage or
 /// healing or died there (an Evoker outside the raid, a player without `COMBATANT_INFO`).
 fn player_sides(
     fight: &Fight,
@@ -125,7 +125,11 @@ fn player_sides(
     filter: &ReportFilter,
 ) -> HashMap<String, PlayerSide> {
     let mut sides: HashMap<ActorId, PlayerSide> = HashMap::new();
-    for player in fight.actors.players().filter(|p| p.spec_id.is_some()) {
+    for player in fight
+        .actors
+        .players()
+        .filter(|p| listed_player(fight, p.id))
+    {
         side(&mut sides, player.id);
     }
     for player in damage_done(fight, filter).players {
