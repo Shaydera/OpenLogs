@@ -164,12 +164,10 @@ pub fn death_context(
     };
     let mut context = Vec::new();
 
-    let has_warlock = fight.actors.players().any(|actor| {
-        actor
-            .spec_id
-            .and_then(openlogs_gamedata::spec)
-            .is_some_and(|s| s.class_id == WARLOCK_CLASS_ID)
-    });
+    let has_warlock = fight
+        .actors
+        .players()
+        .any(|actor| actor.spec_class() == Some(WARLOCK_CLASS_ID));
     // Stones outlast the warlock who made them: anyone using one shows the raid had them.
     let stones_in_raid = consumables
         .iter()

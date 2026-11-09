@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::mem::take;
 
 use openlogs_analysis::{
-    ActorId, COLOR_GROUPS, SpellId, TOP_ABILITIES_PER_GROUP, largest_first, per_second,
+    ActorId, COLOR_GROUPS, SpellId, TOP_ABILITIES_PER_GROUP, largest_first, per_second, spec_class,
 };
 use serde::Serialize;
 
@@ -396,14 +396,21 @@ fn merge_rows<T>(
     }
 }
 
-/// Keeps the later pull's entry unless only an earlier one knows the spec.
+/// Keeps the later pull's entry unless only an earlier one knows the spec, or without a known
+/// spec the class.
 fn merge_roster(roster: &mut Vec<PlayerRef>, next: Vec<PlayerRef>) {
+    let knowledge = |player: &PlayerRef| {
+        (
+            spec_class(player.spec_id).is_some(),
+            player.class_id.is_some(),
+        )
+    };
     for player in next {
         match roster
             .iter_mut()
             .find(|known| known.actor_id == player.actor_id)
         {
-            Some(known) if known.spec_id.is_some() && player.spec_id.is_none() => {}
+            Some(known) if knowledge(known) > knowledge(&player) => {}
             Some(known) => *known = player,
             None => roster.push(player),
         }
@@ -1401,5 +1408,21 @@ mod tests {
         );
         assert_eq!(set.overview.kpis.duration_ms, 100_001);
         assert_eq!(set.overview.timeline.cutoff_ms, None);
+    }
+
+    #[test]
+    fn a_class_from_casts_in_an_earlier_pull_outlives_a_later_pull_without_one() {
+        let ravel = |class_id: Option<u32>| PlayerRef {
+            actor_id: 1,
+            name: "Ravel-Ashwood-EU".into(),
+            spec_id: None,
+            spec_name: None,
+            class_id,
+            class_token: class_id.map(|_| "ROGUE".into()),
+            role: None,
+        };
+        let mut roster = vec![ravel(Some(4))];
+        merge_roster(&mut roster, vec![ravel(None)]);
+        assert_eq!(roster, [ravel(Some(4))]);
     }
 }

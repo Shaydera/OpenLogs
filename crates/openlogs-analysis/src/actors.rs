@@ -39,6 +39,8 @@ pub struct Actor {
     pub owner: Option<ActorId>,
     /// From `COMBATANT_INFO`, players only.
     pub spec_id: Option<u32>,
+    /// From the player's own casts, for players without a known spec; see [`Actor::class`].
+    pub class_id: Option<u32>,
     /// Largest item level the advanced block reported; players only.
     pub item_level: Option<u32>,
     /// Largest max HP the advanced block reported; players only.
@@ -56,10 +58,27 @@ impl Actor {
         self.hostile_lines > self.other_lines
     }
 
+    /// The spec's class, else the class the player's casts belong to.
+    pub fn class(&self) -> Option<u32> {
+        self.spec_class().or(self.class_id)
+    }
+
+    pub fn spec_class(&self) -> Option<u32> {
+        spec_class(self.spec_id)
+    }
+
     /// Belongs to the logging player's group (mine, party or raid) and is not hostile.
     pub fn is_friendly(&self) -> bool {
         self.flags & AFFILIATION_GROUP != 0 && !self.is_hostile()
     }
+}
+
+/// The class of a spec the game data knows; a spec of 0 (none chosen) or an unknown one has
+/// none, so the class then comes from casts.
+pub fn spec_class(spec_id: Option<u32>) -> Option<u32> {
+    spec_id
+        .and_then(openlogs_gamedata::spec)
+        .map(|spec| spec.class_id)
 }
 
 /// An NPC-controlled unit logged friendly: how enemies look while the logging player is turned
@@ -96,6 +115,7 @@ impl Actors {
                 fought_group: false,
                 owner: None,
                 spec_id: None,
+                class_id: None,
                 item_level: None,
                 max_hp: None,
             }],
@@ -114,6 +134,7 @@ impl Actors {
             actor.fought_group = false;
             actor.owner = None;
             actor.spec_id = None;
+            actor.class_id = None;
             actor.item_level = None;
             actor.max_hp = None;
         }
@@ -164,6 +185,7 @@ impl Actors {
             fought_group: false,
             owner: None,
             spec_id: None,
+            class_id: None,
             item_level: None,
             max_hp: None,
         });
@@ -218,6 +240,10 @@ impl Actors {
         }
     }
 
+    pub(crate) fn set_class(&mut self, unit: ActorId, class_id: Option<u32>) {
+        self.list[unit as usize].class_id = class_id;
+    }
+
     /// Records a player's item level and max HP from an advanced block, keeping the largest.
     pub fn note_advanced(&mut self, unit: ActorId, level: u32, max_hp: u64) {
         let actor = &mut self.list[unit as usize];
@@ -260,11 +286,6 @@ impl Actors {
     /// An unowned NPC hostile on most of its lines: an enemy for the whole pull.
     pub fn is_enemy(&self, id: ActorId) -> bool {
         self.is_unowned_npc(id) && self.get(id).mostly_hostile()
-    }
-
-    /// An unowned NPC that traded damage or misses with a player or a player's pet.
-    pub fn fought_group(&self, id: ActorId) -> bool {
-        self.get(id).fought_group
     }
 
     /// An unowned NPC that fought the group and was never logged friendly outside the logging

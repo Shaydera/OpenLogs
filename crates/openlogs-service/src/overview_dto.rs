@@ -569,7 +569,7 @@ pub fn quick_overview_dto(
 pub fn player_ref(fight: &Fight, id: ActorId) -> PlayerRef {
     let actor = fight.actors.get(id);
     let spec = actor.spec_id.and_then(openlogs_gamedata::spec);
-    let class = spec.and_then(|spec| openlogs_gamedata::class(spec.class_id));
+    let class = actor.class().and_then(openlogs_gamedata::class);
     PlayerRef {
         actor_id: id,
         name: actor.name.clone().unwrap_or_else(|| actor.guid.clone()),

@@ -853,3 +853,46 @@ fn a_run_opens_like_a_pull_with_boss_phases_and_no_boss_hp() {
         "a boss pull of the run keeps its boss HP"
     );
 }
+
+#[test]
+fn players_without_a_spec_take_the_class_of_their_casts() {
+    const OPEN_WORLD: &str =
+        include_str!("../../openlogs-index/tests/fixtures/forever_open_world.txt");
+    let mut engine = Engine::default();
+    let charge_and_sinister_strike =
+        r#"{"classSpells":[100,1657],"crowdControl":[],"families":[4,8]}"#;
+    engine
+        .set_spell_classes(charge_and_sinister_strike)
+        .unwrap();
+    let (mut engine, view) = open_with(engine, OPEN_WORLD);
+    let pull = view["fights"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["encounterId"] == 0 && f["run"].is_null())
+        .unwrap()["index"]
+        .as_u64()
+        .unwrap() as u32;
+    let class_of = |report: &Value, name: &str| {
+        report["roster"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["name"] == name)
+            .unwrap()["classId"]
+            .clone()
+    };
+
+    load(&mut engine, OPEN_WORLD, pull);
+    let single = call(
+        &engine,
+        "damage_done_report",
+        json!({ "fightIndex": pull, "filter": whole_pull() }),
+    );
+    let set = feed_set(&mut engine, OPEN_WORLD, &[pull], set_damage()).remove(0);
+
+    for report in [single, set] {
+        assert_eq!(class_of(&report, "Ravel-Ashwood-Normal-EU"), 4);
+        assert_eq!(class_of(&report, "Brakk-Thornfield-Normal-EU"), 1);
+    }
+}
