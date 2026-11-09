@@ -1,18 +1,14 @@
 use std::collections::HashMap;
 
+use openlogs_parser::unit_flags::{
+    AFFILIATION_GROUP, CONTROL_NPC, REACTION_FRIENDLY, REACTION_HOSTILE, TYPE_GUARDIAN, TYPE_PET,
+};
 use openlogs_parser::{NULL_GUID, Unit};
 
 /// Index into [`Actors`]. [`NOBODY`] stands for an empty unit slot.
 pub type ActorId = u32;
 pub const NOBODY: ActorId = 0;
 
-const TYPE_PET: u32 = 0x1000;
-const TYPE_GUARDIAN: u32 = 0x2000;
-/// Affiliation mine | party | raid.
-const AFFILIATION_GROUP: u32 = 0x7;
-const REACTION_FRIENDLY: u32 = 0x10;
-const REACTION_HOSTILE: u32 = 0x40;
-const CONTROL_NPC: u32 = 0x200;
 /// Owner chains longer than this are treated as broken (cycles, bad data).
 const MAX_OWNER_DEPTH: usize = 8;
 

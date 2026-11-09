@@ -118,6 +118,18 @@ pub struct CombatantInfo<'a> {
     pub spec_id: u32,
 }
 
+/// `COMBATLOG_OBJECT_*` bits of a unit's flags.
+pub mod unit_flags {
+    pub const TYPE_PET: u32 = 0x1000;
+    pub const TYPE_GUARDIAN: u32 = 0x2000;
+    /// Affiliation mine | party | raid.
+    pub const AFFILIATION_GROUP: u32 = 0x7;
+    pub const REACTION_FRIENDLY: u32 = 0x10;
+    pub const REACTION_NEUTRAL: u32 = 0x20;
+    pub const REACTION_HOSTILE: u32 = 0x40;
+    pub const CONTROL_NPC: u32 = 0x200;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Unit<'a> {
     pub guid: &'a str,
@@ -138,7 +150,27 @@ impl Unit<'_> {
 
     /// `COMBATLOG_OBJECT_REACTION_HOSTILE`.
     pub fn is_hostile(&self) -> bool {
-        self.flags & 0x40 != 0
+        self.flags & unit_flags::REACTION_HOSTILE != 0
+    }
+
+    /// Affiliation mine, party or raid.
+    pub fn in_group(&self) -> bool {
+        self.flags & unit_flags::AFFILIATION_GROUP != 0
+    }
+
+    /// A player, or a pet or guardian, of the logging player's group.
+    pub fn is_group_combatant(&self) -> bool {
+        self.in_group()
+            && (self.is_player()
+                || self.flags & (unit_flags::TYPE_PET | unit_flags::TYPE_GUARDIAN) != 0)
+    }
+
+    /// An NPC-controlled, hostile or neutral unit outside our group.
+    pub fn is_enemy_npc(&self) -> bool {
+        !self.is_player()
+            && !self.in_group()
+            && self.flags & unit_flags::CONTROL_NPC != 0
+            && self.flags & (unit_flags::REACTION_HOSTILE | unit_flags::REACTION_NEUTRAL) != 0
     }
 }
 
