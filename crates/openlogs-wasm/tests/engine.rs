@@ -24,7 +24,7 @@ fn runs_and_boss_pulls(view: &Value) -> Vec<&Value> {
         .as_array()
         .unwrap()
         .iter()
-        .filter(|f| f["encounterId"] != 0 || !f["run"].is_null())
+        .filter(|f| f["combat"].is_null())
         .collect()
 }
 
@@ -869,7 +869,7 @@ fn players_without_a_spec_take_the_class_of_their_casts() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|f| f["encounterId"] == 0 && f["run"].is_null())
+        .find(|f| !f["combat"].is_null())
         .unwrap()["index"]
         .as_u64()
         .unwrap() as u32;
@@ -895,4 +895,31 @@ fn players_without_a_spec_take_the_class_of_their_casts() {
         assert_eq!(class_of(&report, "Ravel-Ashwood-Normal-EU"), 4);
         assert_eq!(class_of(&report, "Brakk-Thornfield-Normal-EU"), 1);
     }
+}
+
+#[test]
+fn opening_a_forever_open_world_log_lists_its_combat_pull() {
+    const OPEN_WORLD: &str =
+        include_str!("../../openlogs-index/tests/fixtures/forever_open_world.txt");
+    let (mut engine, view) = open(OPEN_WORLD);
+    let rows: Vec<_> = view["fights"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| !f["combat"].is_null())
+        .collect();
+    assert_eq!(rows.len(), 1);
+    let row = rows[0];
+    assert_eq!(row["combat"], json!({ "enemyCount": 1 }));
+    assert_eq!(row["outcome"], "kill");
+    assert!(row["playerCount"].as_u64().unwrap() >= 1);
+
+    let pull = row["index"].as_u64().unwrap() as u32;
+    load(&mut engine, OPEN_WORLD, pull);
+    let report = call(
+        &engine,
+        "damage_done_report",
+        json!({ "fightIndex": pull, "filter": whole_pull() }),
+    );
+    assert!(report["total"].as_u64().unwrap() > 0);
 }
