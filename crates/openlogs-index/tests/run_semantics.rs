@@ -2,7 +2,7 @@
 //! means, whether a reconnect or /reload writes `CHALLENGE_MODE_START` again, and whether
 //! the run's end can come before the last `ENCOUNTER_END` of the same moment.
 
-use openlogs_index::{END_GRACE_LINES, LogIndex, Outcome, index_bytes};
+use openlogs_index::{END_GRACE_LINES, FightSummary, LogIndex, Outcome, index_bytes};
 use openlogs_parser::Timestamp;
 
 /// A +12 Priory of the Sacred Flame: Captain Dailcry (kill), Baron Braunpyke (wipe, then
@@ -18,12 +18,13 @@ const OFFLINE_WIPE: &str = include_str!("fixtures/mythic_plus_offline_wipe.txt")
 /// The fixture with the run's end at 20:07:00, logged before the boss's death and the
 /// Baron kill of the same moment; the group leaves at 20:12.
 const END_FIRST: &str = include_str!("fixtures/mythic_plus_end_first.txt");
-/// (index, is run, outcome, run index) of the fixture's entries.
+/// (index, is run, outcome, run index) of the fixture's run and boss pulls; trash pulls take
+/// indices 2 and 4.
 const FIXTURE_ROWS: [(u32, bool, Outcome, Option<u32>); 4] = [
     (1, true, Outcome::Kill, None),
-    (2, false, Outcome::Kill, Some(1)),
-    (3, false, Outcome::Wipe, Some(1)),
-    (4, false, Outcome::Kill, Some(1)),
+    (3, false, Outcome::Kill, Some(1)),
+    (5, false, Outcome::Wipe, Some(1)),
+    (6, false, Outcome::Kill, Some(1)),
 ];
 const END: &str = "10/8/2026 20:10:00.0000  CHALLENGE_MODE_END";
 const LAST_KILL: &str = "10/8/2026 20:07:00.0000  ENCOUNTER_END";
@@ -32,12 +33,20 @@ fn ts(text: &str) -> Timestamp {
     Timestamp::parse(text).unwrap()
 }
 
-/// (index, is run, outcome, run index) per entry.
+/// (index, is run, outcome, run index) per run and boss pull.
 fn rows(index: &LogIndex) -> Vec<(u32, bool, Outcome, Option<u32>)> {
+    entries(index)
+        .iter()
+        .map(|f| (f.index, f.is_run(), f.outcome, f.run_index))
+        .collect()
+}
+
+/// Boss pulls and runs, without the combat pulls among them.
+fn entries(index: &LogIndex) -> Vec<&FightSummary> {
     index
         .fights
         .iter()
-        .map(|f| (f.index, f.is_run(), f.outcome, f.run_index))
+        .filter(|fight| !fight.is_combat())
         .collect()
 }
 
@@ -216,7 +225,7 @@ fn a_repeated_start_of_the_same_key_continues_the_run_and_its_open_pull() {
         )
     );
 
-    let wipe = &index.fights[2];
+    let wipe = entries(&index)[2];
     assert_eq!(
         (wipe.name.as_str(), wipe.outcome, wipe.duration_ms, wipe.end),
         (
@@ -294,7 +303,7 @@ fn the_same_key_after_its_end_starts_a_new_run() {
 fn the_last_pull_keeps_its_kill_when_its_end_follows_the_run_end_in_the_same_moment() {
     let index = index_bytes(END_FIRST.as_bytes());
     assert_eq!(rows(&index), FIXTURE_ROWS);
-    let (run, kill) = (&index.fights[0], &index.fights[3]);
+    let (run, kill) = (&index.fights[0], entries(&index)[3]);
     assert_eq!(
         (kill.duration_ms, kill.boss_hp_percent, kill.end),
         (60_000, Some(0.0), ts("10/8/2026 20:07:00.0000"))
@@ -471,12 +480,12 @@ fn a_pull_whose_end_was_missed_offline_ends_where_the_key_was_started_again() {
         rows(&index),
         [
             (1, true, Outcome::Kill, None),
-            (2, false, Outcome::Kill, Some(1)),
-            (3, false, Outcome::Incomplete, Some(1)),
-            (4, false, Outcome::Kill, Some(1)),
+            (3, false, Outcome::Kill, Some(1)),
+            (5, false, Outcome::Incomplete, Some(1)),
+            (6, false, Outcome::Kill, Some(1)),
         ]
     );
-    let wipe = &index.fights[2];
+    let wipe = entries(&index)[2];
     assert_eq!(
         (wipe.end, wipe.duration_ms, wipe.end_offset),
         (

@@ -1,15 +1,16 @@
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use openlogs_parser::{
-    ChallengeModeEnd, ChallengeModeStart, CombatEvent, CombatKind, CombatantInfo, DamageVia,
-    EncounterEnd, EncounterStart, Event, LogLine, Timestamp,
+    ChallengeModeEnd, ChallengeModeStart, CombatEvent, CombatKind, CombatantInfo, EncounterEnd,
+    EncounterStart, Event, LogLine, Timestamp,
 };
 
+use crate::combat::{DeadEnemies, Exchange, OpenCombat, counted_damage, exchange};
 use crate::markers::MarkerState;
 use crate::model::{
-    ChallengeMode, END_GRACE_LINES, END_GRACE_MICROS, FightSummary, GameFlavor, LogIndex,
-    MYTHIC_KEYSTONE_DIFFICULTY, MapBounds, Outcome, PRELUDE_MICROS, RESUME_MAX_GAP_MICROS,
-    RosterEntry, SUPPORTED_LOG_VERSION, WorldMarker,
+    BOSS_TAIL_MICROS, ChallengeMode, END_GRACE_LINES, END_GRACE_MICROS, FightSummary, GameFlavor,
+    LogIndex, MYTHIC_KEYSTONE_DIFFICULTY, MapBounds, Outcome, PRELUDE_MICROS,
+    RESUME_MAX_GAP_MICROS, RosterEntry, SUPPORTED_LOG_VERSION, WorldMarker,
 };
 
 /// Byte range of one line in the log file.
@@ -24,16 +25,29 @@ pub struct LineSpan {
 pub struct IndexBuilder {
     index: LogIndex,
     open: Option<OpenFight>,
+    /// The combat pull in progress; never open together with a boss pull.
+    combat: Option<OpenCombat>,
     /// The Mythic+ run in progress; boss pulls opened meanwhile belong to it.
     run: Option<OpenRun>,
     /// The run's `CHALLENGE_MODE_END`, held while its open boss pull may still end.
     held_end: Option<HeldEnd>,
     /// Lines of the last [`PRELUDE_MICROS`], oldest first, as (timestamp, offset).
     recent: VecDeque<(Timestamp, u64)>,
-    /// `end_offset` of the last closed fight or run; preludes never reach back past it.
+    /// `end_offset` of the last closed boss pull or run; preludes never reach back past it.
+    /// Combat pulls leave it alone, so a boss pull keeps the trash before it in its prelude.
     last_fight_end: u64,
-    /// Zone of the latest `ZONE_CHANGE`.
+    /// `end_offset` of the last closed combat pull; combat pull preludes never reach back
+    /// past it either.
+    last_combat_end: u64,
+    /// The last closed boss pull, whose trailing lines start no combat pull.
+    boss_tail: Option<BossTail>,
+    dead_enemies: DeadEnemies,
+    /// Zone, instance ID and difficulty of the latest `ZONE_CHANGE`.
     zone: Option<String>,
+    zone_instance_id: u32,
+    zone_difficulty: u32,
+    /// Spec of each player's latest `COMBATANT_INFO`, by GUID.
+    last_specs: HashMap<String, u32>,
     markers: MarkerState,
     /// Latest bounds per `MAP_CHANGE` map ID; facts about the map, so never reset.
     map_bounds: BTreeMap<u32, MapBounds>,
@@ -53,28 +67,40 @@ impl IndexBuilder {
         Self {
             index: LogIndex::empty(),
             open: None,
+            combat: None,
             run: None,
             held_end: None,
             recent: VecDeque::new(),
             last_fight_end: 0,
+            last_combat_end: 0,
+            boss_tail: None,
+            dead_enemies: DeadEnemies::default(),
             zone: None,
+            zone_instance_id: 0,
+            zone_difficulty: 0,
+            last_specs: HashMap::new(),
             markers: MarkerState::default(),
             map_bounds: BTreeMap::new(),
             last_index: 0,
         }
     }
 
-    /// Whether a fight is open. Outside fights, callers may feed lines via
-    /// [`Self::push_skipped`] instead of parsing them, also while a run is open.
+    /// Whether a boss pull is open. Outside boss pulls, callers may feed lines via
+    /// [`Self::push_skipped`] instead of parsing them, also while a run or combat pull is
+    /// open, except damage, miss and death events, which start and end combat pulls.
     pub fn in_fight(&self) -> bool {
         self.open.is_some()
     }
 
-    /// Records a line outside fights that was only parsed up to its event name.
+    /// Records a line outside boss pulls that was only parsed up to its event name.
     pub fn push_skipped(&mut self, span: LineSpan, timestamp: Timestamp) {
         self.release_end(None);
+        self.end_quiet_combat(timestamp);
         self.index.line_count += 1;
         self.remember(span, timestamp);
+        if let Some(combat) = &mut self.combat {
+            extend(&mut combat.summary, span, timestamp);
+        }
         if let Some(run) = &mut self.run {
             extend(&mut run.summary, span, timestamp);
         }
@@ -93,13 +119,12 @@ impl IndexBuilder {
                 }
             }
         }
-        if let Some(fight) = &mut self.open {
-            fight.summary.broken_lines += 1;
-            fight.summary.end_offset = span.next_offset;
-        }
-        if let Some(run) = &mut self.run {
-            run.summary.broken_lines += 1;
-            run.summary.end_offset = span.next_offset;
+        let open = self.open.as_mut().map(|fight| &mut fight.summary);
+        let combat = self.combat.as_mut().map(|combat| &mut combat.summary);
+        let run = self.run.as_mut().map(|run| &mut run.summary);
+        for summary in [open, combat, run].into_iter().flatten() {
+            summary.broken_lines += 1;
+            summary.end_offset = span.next_offset;
         }
     }
 
@@ -107,6 +132,7 @@ impl IndexBuilder {
         self.index.line_count += 1;
         self.remember(span, line.timestamp);
         self.release_end(Some(line));
+        self.end_quiet_combat(line.timestamp);
         // A repeated START of the open key (reconnect, /reload) continues its run.
         let resumes_run = matches!(&line.event, Event::ChallengeModeStart(start) if self.is_same_key(start, line.timestamp));
         // A boss pull open across a reconnect may have ended while the player was offline.
@@ -121,6 +147,9 @@ impl IndexBuilder {
         let starts_run = matches!(line.event, Event::ChallengeModeStart(_)) && !resumes_run;
         if !starts_fight && let Some(fight) = &mut self.open {
             extend(&mut fight.summary, span, line.timestamp);
+        }
+        if let Some(combat) = &mut self.combat {
+            extend(&mut combat.summary, span, line.timestamp);
         }
         if !starts_run && let Some(run) = &mut self.run {
             extend(&mut run.summary, span, line.timestamp);
@@ -140,6 +169,7 @@ impl IndexBuilder {
             Event::ChallengeModeStart(_) => {}
             Event::ChallengeModeEnd(end) => self.end_run(end),
             Event::CombatantInfo(info) => {
+                self.last_specs.insert(info.guid.to_string(), info.spec_id);
                 if let Some(fight) = &mut self.open {
                     add_combatant(&mut fight.summary.roster, info);
                 }
@@ -148,8 +178,14 @@ impl IndexBuilder {
                 }
             }
             Event::Combat(event) => {
-                if let Some(fight) = &mut self.open {
-                    fight.observe(event);
+                if let CombatKind::UnitDied { unconscious: false } = event.kind
+                    && event.target.is_enemy_npc()
+                {
+                    self.dead_enemies.record(event.target.guid, line.timestamp);
+                }
+                match &mut self.open {
+                    Some(fight) => fight.observe(event),
+                    None => self.observe_combat(span, line.timestamp, event),
                 }
             }
             Event::Unhandled { name } => {
@@ -198,16 +234,27 @@ impl IndexBuilder {
                     },
                 );
             }
-            Event::ZoneChange { zone_id, name, .. } => {
+            Event::ZoneChange {
+                zone_id,
+                name,
+                difficulty,
+            } => {
                 self.markers.change_zone(line.timestamp, *zone_id);
                 self.zone = Some((*name).to_string());
+                self.zone_instance_id = *zone_id;
+                self.zone_difficulty = *difficulty;
             }
         }
     }
 
-    /// Closes a still-open fight and run as incomplete and returns the index.
+    /// Closes a still-open boss pull and run as incomplete, and a combat pull as incomplete or,
+    /// once quiet past [`crate::COMBAT_QUIET_MICROS`], as ended, and returns the index.
     pub fn finish(mut self) -> LogIndex {
         self.release_end(None);
+        if let Some(&(latest, _)) = self.recent.back() {
+            self.end_quiet_combat(latest);
+        }
+        self.close_combat(Outcome::Incomplete);
         self.close_open(Outcome::Incomplete);
         self.close_run(Outcome::Incomplete);
         // A run closes after its boss pulls but is numbered before them.
@@ -217,8 +264,8 @@ impl IndexBuilder {
 
     /// The closed entries that no later line can change, as an index. With `settle_ms`, only
     /// those with a line more than `settle_ms` past their end, which the analysis may still read;
-    /// measured as it does, in whole ms from their start against `duration_ms`. Boss pulls of the
-    /// open run wait for it.
+    /// measured as it does, in whole ms from their start against `duration_ms`. Boss and combat
+    /// pulls of the open run wait for it.
     pub fn settled(&self, settle_ms: Option<i64>) -> LogIndex {
         let open_run = self.run.as_ref().map(|run| run.summary.index);
         let latest = self.recent.back().map(|&(timestamp, _)| timestamp);
@@ -254,8 +301,22 @@ impl IndexBuilder {
     }
 
     /// Ends, at the previous line, what this line leaves behind: leaving the instance or
-    /// another key ends the open pull and run; a run's END is held while a pull is open.
+    /// another key ends the open pull and run; a run's END is held while a pull is open. A
+    /// boss pull, a key's start or end, or leaving the instance ends a combat pull.
     fn close_before(&mut self, span: LineSpan, line: &LogLine<'_>) {
+        let ends_combat = match &line.event {
+            Event::EncounterStart(_)
+            | Event::ChallengeModeStart(_)
+            | Event::ChallengeModeEnd(_) => true,
+            Event::ZoneChange { zone_id, .. } => self
+                .combat
+                .as_ref()
+                .is_some_and(|combat| combat.summary.instance_id != *zone_id),
+            _ => false,
+        };
+        if ends_combat {
+            self.close_combat(Outcome::Ended);
+        }
         match &line.event {
             Event::ZoneChange { zone_id, .. } => {
                 if self
@@ -399,13 +460,12 @@ impl IndexBuilder {
         self.last_index
     }
 
-    /// First line within [`PRELUDE_MICROS`] before `span`, never before the end of the last
-    /// closed fight or run.
-    fn prelude_offset(&self, span: LineSpan) -> u64 {
+    /// First line within [`PRELUDE_MICROS`] before `span`, never before `not_before`.
+    fn prelude_offset(&self, span: LineSpan, not_before: u64) -> u64 {
         self.recent
             .front()
             .map_or(span.offset, |&(_, offset)| offset)
-            .max(self.last_fight_end)
+            .max(not_before)
     }
 
     fn is_open_run(&self, instance_id: u32) -> bool {
@@ -430,7 +490,7 @@ impl IndexBuilder {
     fn open_fight(&mut self, span: LineSpan, timestamp: Timestamp, start: &EncounterStart<'_>) {
         self.close_open(Outcome::Incomplete);
         let index = self.next_index();
-        let prelude_offset = self.prelude_offset(span);
+        let prelude_offset = self.prelude_offset(span, self.last_fight_end);
         self.open = Some(OpenFight {
             summary: FightSummary {
                 index,
@@ -454,6 +514,7 @@ impl IndexBuilder {
                 run_index: self.run.as_ref().map(|run| run.summary.index),
                 world_markers: self.markers.active(),
                 map_bounds: self.map_bounds.values().copied().collect(),
+                combat: None,
             },
             hostile: HashMap::new(),
             player_names: HashMap::new(),
@@ -486,7 +547,7 @@ impl IndexBuilder {
     /// Opens a run; [`Self::close_before`] has already ended what was open.
     fn open_run(&mut self, span: LineSpan, timestamp: Timestamp, start: &ChallengeModeStart<'_>) {
         let index = self.next_index();
-        let prelude_offset = self.prelude_offset(span);
+        let prelude_offset = self.prelude_offset(span, self.last_fight_end);
         self.run = Some(OpenRun {
             summary: FightSummary {
                 index,
@@ -515,6 +576,7 @@ impl IndexBuilder {
                 run_index: None,
                 world_markers: Vec::new(),
                 map_bounds: Vec::new(),
+                combat: None,
             },
             player_names: HashMap::new(),
             last_pull: None,
@@ -549,6 +611,10 @@ impl IndexBuilder {
         }
         if let Some(fight) = self.open.take() {
             self.last_fight_end = fight.summary.end_offset;
+            self.boss_tail = Some(BossTail {
+                hostile: fight.hostile.keys().cloned().collect(),
+                end: fight.summary.end,
+            });
             // The index reads only boss pulls in full, so a run's names come from them.
             if let Some(run) = &mut self.run {
                 for (guid, name) in &fight.player_names {
@@ -570,6 +636,88 @@ impl IndexBuilder {
             self.index.fights.push(run.finish(outcome));
         }
     }
+
+    /// Feeds a combat event outside boss pulls; an exchange between one of the group's players
+    /// and an enemy NPC that is not spent starts a combat pull.
+    fn observe_combat(&mut self, span: LineSpan, timestamp: Timestamp, event: &CombatEvent<'_>) {
+        let exchange = exchange(event);
+        let spent = exchange
+            .as_ref()
+            .is_some_and(|exchange| self.is_spent_enemy(exchange.enemy.guid, timestamp));
+        if self.combat.is_none() {
+            if spent || !exchange.is_some_and(|Exchange { ours, .. }| ours.is_player()) {
+                return;
+            }
+            self.open_combat(span, timestamp);
+        }
+        let Some(combat) = &mut self.combat else {
+            return;
+        };
+        combat.observe(event, span, timestamp, spent);
+        if let CombatKind::UnitDied { unconscious: false } = event.kind
+            && let Some(outcome) = combat.on_death(event.target.guid)
+        {
+            self.close_combat(outcome);
+        }
+    }
+
+    fn open_combat(&mut self, span: LineSpan, timestamp: Timestamp) {
+        let index = self.next_index();
+        let prelude_offset =
+            self.prelude_offset(span, self.last_fight_end.max(self.last_combat_end));
+        self.combat = Some(OpenCombat::new(FightSummary {
+            index,
+            encounter_id: 0,
+            name: String::new(),
+            difficulty: self.zone_difficulty,
+            group_size: 0,
+            instance_id: self.zone_instance_id,
+            zone: self.zone.clone(),
+            outcome: Outcome::Incomplete,
+            start: timestamp,
+            end: timestamp,
+            duration_ms: 0,
+            prelude_offset,
+            start_offset: span.offset,
+            end_offset: span.next_offset,
+            boss_hp_percent: None,
+            roster: Vec::new(),
+            broken_lines: 0,
+            challenge: None,
+            run_index: self.run.as_ref().map(|run| run.summary.index),
+            world_markers: self.markers.active(),
+            map_bounds: self.map_bounds.values().copied().collect(),
+            combat: None,
+        }));
+    }
+
+    /// Whether `guid` is an enemy that died, or a hostile unit of the last boss pull, which
+    /// ended at most [`BOSS_TAIL_MICROS`] before `timestamp`.
+    fn is_spent_enemy(&mut self, guid: &str, timestamp: Timestamp) -> bool {
+        self.dead_enemies.named(guid, timestamp)
+            || self.boss_tail.as_ref().is_some_and(|tail| {
+                timestamp.0 - tail.end.0 <= BOSS_TAIL_MICROS && tail.hostile.contains(guid)
+            })
+    }
+
+    /// Ends a combat pull quiet past [`crate::COMBAT_QUIET_MICROS`] before `timestamp`.
+    fn end_quiet_combat(&mut self, timestamp: Timestamp) {
+        if self
+            .combat
+            .as_ref()
+            .is_some_and(|combat| combat.quiet_since(timestamp))
+        {
+            self.close_combat(Outcome::Ended);
+        }
+    }
+
+    fn close_combat(&mut self, outcome: Outcome) {
+        if let Some(combat) = self.combat.take() {
+            let summary = combat.finish(outcome, &self.last_specs);
+            self.last_combat_end = summary.end_offset;
+            self.index.fights.push(summary);
+        }
+    }
 }
 
 /// Moves an open entry's end to this line; out-of-order timestamps never shrink it.
@@ -586,6 +734,12 @@ fn add_combatant(roster: &mut Vec<RosterEntry>, info: &CombatantInfo<'_>) {
             spec_id: info.spec_id,
         });
     }
+}
+
+#[derive(Clone)]
+struct BossTail {
+    hostile: HashSet<String>,
+    end: Timestamp,
 }
 
 #[derive(Clone)]
@@ -640,14 +794,11 @@ impl OpenFight {
                 unit.max_hp = info.max_hp;
             }
         }
-        // Support events and the victim-side melee copy repeat hits already counted.
-        if let CombatKind::Damage(damage) = event.kind
-            && damage.supporter.is_none()
-            && damage.via != DamageVia::SwingLanded
+        if let Some(damage) = counted_damage(event)
             && event.target.is_hostile()
             && !event.target.is_player()
         {
-            self.hostile_unit(event.target.guid).damage_taken += damage.amount;
+            self.hostile_unit(event.target.guid).damage_taken += damage;
         }
         if let CombatKind::UnitDied { .. } = event.kind
             && let Some(unit) = self.hostile.get_mut(event.target.guid)
@@ -673,7 +824,7 @@ impl OpenFight {
         }
         summary.boss_hp_percent = match outcome {
             Outcome::Kill => Some(0.0),
-            Outcome::Wipe | Outcome::Incomplete => boss_hp_percent(&self.hostile),
+            Outcome::Wipe | Outcome::Incomplete | Outcome::Ended => boss_hp_percent(&self.hostile),
         };
         for entry in &mut summary.roster {
             entry.name = self.player_names.get(&entry.guid).cloned();
@@ -723,7 +874,7 @@ fn run_outcome(end: &ChallengeModeEnd, last_pull: Option<Outcome>) -> Outcome {
         _ if end.total_time_ms == 0 => false,
         Some(Outcome::Kill) => true,
         Some(Outcome::Wipe) => false,
-        Some(Outcome::Incomplete) | None => end.success,
+        Some(Outcome::Incomplete | Outcome::Ended) | None => end.success,
     };
     if completed {
         Outcome::Kill

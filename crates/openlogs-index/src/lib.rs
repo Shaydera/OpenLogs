@@ -2,6 +2,7 @@
 
 mod builder;
 mod cache;
+mod combat;
 mod markers;
 mod model;
 mod scan;

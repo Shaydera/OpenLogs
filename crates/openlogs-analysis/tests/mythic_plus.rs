@@ -110,7 +110,7 @@ fn a_boss_phase_of_the_run_matches_the_boss_pull() {
     let pulls: Vec<_> = index
         .fights
         .iter()
-        .filter(|f| f.run_index == Some(1))
+        .filter(|f| f.run_index == Some(1) && !f.is_combat())
         .collect();
     assert_eq!(bosses.len(), pulls.len());
     for (phase, summary) in bosses.into_iter().zip(pulls) {

@@ -18,6 +18,16 @@ fn open(log: &str) -> (Engine, Value) {
     open_with(Engine::default(), log)
 }
 
+/// The view's runs and boss pulls, without combat pulls.
+fn runs_and_boss_pulls(view: &Value) -> Vec<&Value> {
+    view["fights"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["encounterId"] != 0 || !f["run"].is_null())
+        .collect()
+}
+
 fn open_with(mut engine: Engine, log: &str) -> (Engine, Value) {
     engine.begin_index();
     for chunk in log.as_bytes().chunks(4096) {
@@ -665,9 +675,7 @@ fn comparing_pulls_lists_every_player_of_either_pull_while_both_stay_loaded() {
 #[test]
 fn opening_a_mythic_plus_log_lists_the_run_and_its_boss_pulls() {
     let (_, view) = open(MYTHIC_PLUS);
-    let rows: Vec<_> = view["fights"]
-        .as_array()
-        .unwrap()
+    let rows: Vec<_> = runs_and_boss_pulls(&view)
         .iter()
         .map(|f| {
             (
@@ -687,9 +695,9 @@ fn opening_a_mythic_plus_log_lists_the_run_and_its_boss_pulls() {
                 json!("kill"),
                 Value::Null
             ),
-            (json!(2), json!("Captain Dailcry"), json!("kill"), json!(1)),
-            (json!(3), json!("Baron Braunpyke"), json!("wipe"), json!(1)),
-            (json!(4), json!("Baron Braunpyke"), json!("kill"), json!(1)),
+            (json!(3), json!("Captain Dailcry"), json!("kill"), json!(1)),
+            (json!(5), json!("Baron Braunpyke"), json!("wipe"), json!(1)),
+            (json!(6), json!("Baron Braunpyke"), json!("kill"), json!(1)),
         ]
     );
     let run = &view["fights"][0];
@@ -757,7 +765,7 @@ fn dungeon_data_decides_the_result_of_a_run() {
     assert_eq!(run["outcome"], "wipe", "Prioress Murrpray lives");
     assert_eq!(run["run"]["bosses"], json!({ "killed": 2, "total": 3 }));
     assert_eq!(run["run"]["timer"], Value::Null);
-    let outcomes: Vec<_> = view["fights"].as_array().unwrap()[1..]
+    let outcomes: Vec<_> = runs_and_boss_pulls(&view)[1..]
         .iter()
         .map(|f| f["outcome"].clone())
         .collect();
@@ -830,11 +838,11 @@ fn a_run_opens_like_a_pull_with_boss_phases_and_no_boss_hp() {
     let second_baron = json!({ "startMs": 360000, "endMs": 420000, "attribution": "augmented", "includeOverkill": false });
     assert_eq!(damage(second_baron), 400_000_000);
 
-    load(&mut engine, MYTHIC_PLUS, 2);
+    load(&mut engine, MYTHIC_PLUS, 3);
     let pull = call(
         &engine,
         "quick_overview",
-        json!({ "fightIndex": 2, "filter": null }),
+        json!({ "fightIndex": 3, "filter": null }),
     );
     assert!(
         pull["timeline"]["bossHp"]

@@ -90,7 +90,7 @@ fn fight_row(fight: &FightSummary) -> String {
                 .map_or_else(|| fight.difficulty.to_string(), str::to_string),
             match fight.outcome {
                 Outcome::Kill => "Kill",
-                Outcome::Wipe => "Wipe",
+                Outcome::Wipe | Outcome::Ended => "Wipe",
                 Outcome::Incomplete => "Incomplete",
             },
         ),
@@ -120,7 +120,7 @@ fn fight_row(fight: &FightSummary) -> String {
 fn run_result(outcome: Outcome) -> &'static str {
     match outcome {
         Outcome::Kill => "Completed",
-        Outcome::Wipe => "Not completed",
+        Outcome::Wipe | Outcome::Ended => "Not completed",
         Outcome::Incomplete => "Incomplete",
     }
 }
@@ -195,9 +195,10 @@ mod tests {
 
     #[test]
     fn report_lists_runs_with_their_boss_pulls() {
-        let index = index_bytes(
+        let mut index = index_bytes(
             include_str!("../../openlogs-index/tests/fixtures/mythic_plus.txt").as_bytes(),
         );
+        index.fights.retain(|fight| !fight.is_combat());
         let text = report(
             Path::new("Logs/mplus.txt"),
             8192,
@@ -214,19 +215,19 @@ mod tests {
             rows.iter().map(|row| words(row)).collect::<Vec<_>>(),
             [
                 "1 Priory of the Sacred Flame +12 Completed 10:00.0 - 2 20:00:00",
-                "2 Captain Dailcry Mythic+ Kill 1:00.0 0.0% 2 20:01:00",
-                "3 Baron Braunpyke Mythic+ Wipe 0:30.0 87.5% 2 20:04:00",
-                "4 Baron Braunpyke Mythic+ Kill 1:00.0 0.0% 2 20:06:00",
+                "3 Captain Dailcry Mythic+ Kill 1:00.0 0.0% 2 20:01:00",
+                "5 Baron Braunpyke Mythic+ Wipe 0:30.0 87.5% 2 20:04:00",
+                "6 Baron Braunpyke Mythic+ Kill 1:00.0 0.0% 2 20:06:00",
             ]
         );
         assert!(
-            rows[2].starts_with("  3    Baron Braunpyke"),
+            rows[2].starts_with("  5    Baron Braunpyke"),
             "boss pulls are indented under their run: {}",
             rows[2]
         );
         assert!(
             text.contains(
-                "Completed in 10:00.0 (logged 10:00.0), affixes 10, 147, 9, boss pulls 2, 3, 4"
+                "Completed in 10:00.0 (logged 10:00.0), affixes 10, 147, 9, boss pulls 3, 5, 6"
             ),
             "{text}"
         );

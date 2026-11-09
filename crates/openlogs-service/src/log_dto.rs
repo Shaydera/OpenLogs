@@ -19,7 +19,7 @@ impl From<Outcome> for OutcomeDto {
     fn from(outcome: Outcome) -> Self {
         match outcome {
             Outcome::Kill => Self::Kill,
-            Outcome::Wipe => Self::Wipe,
+            Outcome::Wipe | Outcome::Ended => Self::Wipe,
             Outcome::Incomplete => Self::Incomplete,
         }
     }

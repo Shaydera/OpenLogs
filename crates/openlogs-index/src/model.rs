@@ -4,7 +4,7 @@ use openlogs_parser::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// Bumped whenever the index layout or its rules change; invalidates cached indexes.
-pub const INDEX_FORMAT_VERSION: u32 = 13;
+pub const INDEX_FORMAT_VERSION: u32 = 14;
 /// The combat log format this tool is built and tested against.
 pub const SUPPORTED_LOG_VERSION: u32 = 22;
 /// Lookback before `ENCOUNTER_START` that belongs to a fight (pre-pots, pre-casts).
@@ -18,6 +18,14 @@ pub const END_GRACE_LINES: u32 = 200;
 /// Longest time since a run's last line after which a repeated `CHALLENGE_MODE_START` of
 /// its key still continues it (reconnect, /reload); a later one is a new key.
 pub const RESUME_MAX_GAP_MICROS: i64 = 600_000_000;
+/// Time after its last exchange of damage after which a combat pull has ended.
+pub const COMBAT_QUIET_MICROS: i64 = 10_000_000;
+/// Time after a boss pull's end in which exchanges with its hostile units that did not die are
+/// trailing lines of it (a last hit, a DoT tick) and start no combat pull.
+pub const BOSS_TAIL_MICROS: i64 = 1_000_000;
+/// Time without a line naming a dead enemy after which it is forgotten, which bounds the dead
+/// enemies kept. NPC GUIDs are per spawn, so a forgotten one rarely comes back.
+pub const DEAD_ENEMY_MEMORY_MICROS: i64 = 60_000_000;
 
 /// The game a log comes from, by the `PROJECT_ID` of its header. Only retail is fully
 /// supported; the others are read with retail's rules.
@@ -66,15 +74,16 @@ pub struct LogIndex {
     pub flavor: Option<GameFlavor>,
     pub advanced_logging: bool,
     pub line_count: u64,
-    /// Only lines the index parses: inside boss pulls, and meta events everywhere. Other lines
-    /// outside pulls are skipped unread, so a layout break there goes unnoticed.
+    /// Only lines the index parses: inside boss pulls, and meta, damage, miss and death events
+    /// everywhere. Other lines outside boss pulls are skipped unread, so a layout break there
+    /// goes unnoticed.
     pub broken_lines: u64,
     /// Broken lines by event name; lines without a readable name are only in `broken_lines`.
     pub broken_by_event: BTreeMap<String, u64>,
     /// Lines inside fights whose event the parser does not model, by event name.
     pub unhandled_in_fights: BTreeMap<String, u64>,
     pub warnings: Vec<String>,
-    /// Boss pulls and Mythic+ runs, in the order of their start lines.
+    /// Boss pulls, combat pulls and Mythic+ runs, in the order of their start lines.
     pub fights: Vec<FightSummary>,
 }
 
@@ -96,10 +105,17 @@ impl LogIndex {
     }
 }
 
-/// One boss pull, or a whole Mythic+ run when `challenge` is set. A run spans
-/// `CHALLENGE_MODE_START` to `CHALLENGE_MODE_END`; it has encounter ID 0, the dungeon as
-/// `name` and `zone`, difficulty [`MYTHIC_KEYSTONE_DIFFICULTY`], its roster size as
-/// `group_size` and no boss HP. Its boss pulls are entries of their own with `run_index`.
+/// One boss pull, a combat pull when `combat` is set, or a whole Mythic+ run when `challenge`
+/// is set. A run spans `CHALLENGE_MODE_START` to `CHALLENGE_MODE_END`; it has encounter ID 0,
+/// the dungeon as `name` and `zone`, difficulty [`MYTHIC_KEYSTONE_DIFFICULTY`], its roster size
+/// as `group_size` and no boss HP. Its boss and combat pulls are entries of their own with
+/// `run_index`.
+///
+/// A combat pull is a fight outside boss encounters, from the first exchange of damage between
+/// the group and an enemy NPC. It has encounter ID 0, the enemy that took the most damage from
+/// the group as `name`, difficulty and instance of the latest `ZONE_CHANGE`, the number of the
+/// group's players as `group_size`, no boss HP, and every player who fought an enemy NPC
+/// meanwhile, outsiders included, in its roster.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FightSummary {
     /// 1-based position of the start line in the file; a run comes before its boss pulls.
@@ -109,7 +125,7 @@ pub struct FightSummary {
     pub difficulty: u32,
     pub group_size: u32,
     pub instance_id: u32,
-    /// Zone of the last `ZONE_CHANGE` before `ENCOUNTER_START`, if any; a run's dungeon.
+    /// Zone of the last `ZONE_CHANGE` before the start line, if any; a run's dungeon.
     pub zone: Option<String>,
     /// For a run: `Kill` = completed (`CHALLENGE_MODE_END` after a killed last boss pull),
     /// `Wipe` = not completed (any other end, or a logged time of 0), `Incomplete` = no
@@ -130,7 +146,7 @@ pub struct FightSummary {
     pub broken_lines: u64,
     /// Key details when this entry is a whole Mythic+ run.
     pub challenge: Option<ChallengeMode>,
-    /// `index` of the Mythic+ run this boss pull belongs to.
+    /// `index` of the Mythic+ run this boss or combat pull belongs to.
     pub run_index: Option<u32>,
     /// World markers active at the start line, sorted by marker; empty for runs.
     #[serde(default)]
@@ -139,6 +155,14 @@ pub struct FightSummary {
     /// map ID; empty for runs.
     #[serde(default)]
     pub map_bounds: Vec<MapBounds>,
+    /// Set when this entry is a combat pull.
+    pub combat: Option<CombatPull>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CombatPull {
+    /// Enemy NPCs that traded damage or misses with the group.
+    pub enemy_count: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -163,6 +187,11 @@ impl FightSummary {
     pub fn is_run(&self) -> bool {
         self.challenge.is_some()
     }
+
+    /// Whether this entry is a combat pull outside boss encounters.
+    pub fn is_combat(&self) -> bool {
+        self.combat.is_some()
+    }
 }
 
 /// Key details of a Mythic+ run from `CHALLENGE_MODE_START` and `CHALLENGE_MODE_END`.
@@ -179,9 +208,11 @@ pub struct ChallengeMode {
 pub enum Outcome {
     Kill,
     Wipe,
-    /// No matching `ENCOUNTER_END` or `CHALLENGE_MODE_END` (crash, disconnect, log still
-    /// being written).
+    /// No matching `ENCOUNTER_END` or `CHALLENGE_MODE_END`, or a combat pull still going on
+    /// (crash, disconnect, log still being written).
     Incomplete,
+    /// A combat pull that ended after quiet time.
+    Ended,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
