@@ -1,6 +1,6 @@
 import type { FightRow, PullSet } from '../api/types';
 import type { View } from '../store';
-import { pullStatus, pullView, runStatus, type PullStatus, type RunStatus } from './groupPulls';
+import { isAborted, isCombatPull, isGroupedBossPull, moreEnemies, pullNumber, pullStatus, runStatus, type PullStatus, type RunStatus } from './groupPulls';
 
 export interface FollowUpdate {
   /** Pull or run the view moves to; `null` = stay. */
@@ -13,24 +13,30 @@ export interface FollowUpdate {
 
 export type LiveNotice =
   | { kind: 'pull'; n: number; status: PullStatus; bossHpPercent: number | null }
+  | { kind: 'combat'; name: string; moreEnemies: number; status: PullStatus }
   | { kind: 'run'; dungeon: string; keystoneLevel: number; status: RunStatus };
 
+/** Follows only to rows of the kind shown, or to any while the shown row is unknown: reading a boss pull, new trash never pulls the view away. */
 export function followUpdate(before: FightRow[], after: FightRow[], view: View, hideAborted: boolean, comparing: boolean): FollowUpdate {
   const known = new Map(before.map((fight) => [fight.index, fight]));
   const isNew = (fight: FightRow) => {
     const old = known.get(fight.index);
     return old === undefined || old.outcome !== fight.outcome || old.durationMs !== fight.durationMs;
   };
-  const isVisible = (fight: FightRow) => fight.run !== null || !(hideAborted && pullStatus(fight) === 'aborted');
+  const isVisible = (fight: FightRow) => fight.run !== null || !(hideAborted && isAborted(fight));
   const arrived = after.filter((fight) => isNew(fight) && isVisible(fight));
 
   let jumpTo: number | null = null;
   if (view.kind === 'fight' && !comparing) {
-    const newestShown = newest(before.filter(isVisible));
+    const shownRow = known.get(view.fightIndex);
+    const combatShown = shownRow !== undefined && isCombatPull(shownRow);
+    const ofShownKind = (fight: FightRow) => isCombatPull(fight) === combatShown;
+    const newestShown = newest(before.filter((fight) => isVisible(fight) && ofShownKind(fight)));
     // A run is numbered before its boss pulls, so the newest row may be the last boss pull of the shown run.
     const onNewest = newestShown !== null && (view.fightIndex === newestShown.index || view.fightIndex === newestShown.runIndex);
-    if (onNewest || !known.has(view.fightIndex)) {
-      const target = arrived.find((fight) => fight.run !== null) ?? newest(arrived);
+    if (onNewest || shownRow === undefined) {
+      const candidates = shownRow === undefined ? arrived : arrived.filter(ofShownKind);
+      const target = candidates.find((fight) => fight.run !== null) ?? newest(candidates);
       jumpTo = target?.index ?? null;
     }
   }
@@ -52,8 +58,7 @@ function grownSet(set: PullSet, unchanged: Set<number>, arrived: FightRow[]): Pu
   const added = arrived
     .filter(
       (fight) =>
-        fight.run === null &&
-        fight.runIndex === null &&
+        isGroupedBossPull(fight) &&
         fight.encounterId === set.encounterId &&
         fight.difficulty === set.difficulty &&
         (set.kind === 'kills' ? pullStatus(fight) === 'kill' : set.kind === 'wipes' ? pullStatus(fight) !== 'kill' : true),
@@ -69,7 +74,6 @@ export function liveNoticeOf(fights: FightRow[], index: number): LiveNotice {
   if (fight.run !== null) {
     return { kind: 'run', dungeon: fight.name, keystoneLevel: fight.run.keystoneLevel, status: runStatus(fight) };
   }
-  const n =
-    pullView(fights, index)?.n ?? fights.filter((other) => other.runIndex === fight.runIndex).findIndex((other) => other.index === index) + 1;
-  return { kind: 'pull', n, status: pullStatus(fight), bossHpPercent: fight.bossHpPercent };
+  if (isCombatPull(fight)) return { kind: 'combat', name: fight.name, moreEnemies: moreEnemies(fight.combat), status: pullStatus(fight) };
+  return { kind: 'pull', n: pullNumber(fights, fight)!, status: pullStatus(fight), bossHpPercent: fight.bossHpPercent };
 }

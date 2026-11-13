@@ -1,8 +1,24 @@
+import { useId, useState } from 'react';
 import type { PullSet } from '../api/types';
-import { formatClock, formatDuration, formatInteger, formatKeystoneLevel, formatPercent, formatSeconds } from '../i18n/format';
+import { formatClock, formatDuration, formatInteger, formatKeystoneLevel, formatPercent } from '../i18n/format';
 import { t } from '../i18n/i18n';
-import { type BossGroup, type PullStatus, type PullView, RUN_CHIP, type RunView, runChipLabel, runSubtitle, runTimeMs } from '../pulls/groupPulls';
+import {
+  type BossGroup,
+  type CombatPullView,
+  PULL_CHIP,
+  type PullStatus,
+  type PullView,
+  RUN_CHIP,
+  type RunView,
+  pullTime,
+  pullViewTime,
+  runChipLabel,
+  runSubtitle,
+  runTimeMs,
+  spokenCombatName,
+} from '../pulls/groupPulls';
 import { BossTile } from './BossTile';
+import { CombatName } from './CombatName';
 
 interface Props {
   groups: BossGroup[];
@@ -10,8 +26,7 @@ interface Props {
   onOpenSet: (set: PullSet) => void;
 }
 
-const CHIP: Record<PullStatus, string> = { kill: 'kill', wipe: 'wipe', incomplete: 'wipe', aborted: 'abort' };
-const FILL: Record<PullStatus, string> = { kill: 'fill-kill', wipe: 'fill-wipe', incomplete: 'fill-wipe', aborted: 'fill-abort' };
+const FILL: Record<PullStatus, string> = { kill: 'fill-kill', wipe: 'fill-wipe', incomplete: 'fill-wipe', ended: 'fill-abort', aborted: 'fill-abort' };
 
 function bestLabel(group: BossGroup): string {
   if (group.killDurationMs !== null) return t('pulls.bestKill', { duration: formatDuration(group.killDurationMs) });
@@ -22,10 +37,6 @@ function bestLabel(group: BossGroup): string {
 function hpLabel(pull: PullView): string {
   if (pull.status === 'kill') return formatPercent(0);
   return pull.bossHpPercent !== null ? formatPercent(pull.bossHpPercent) : '—';
-}
-
-function pullDuration(pull: PullView): string {
-  return pull.status === 'aborted' ? formatSeconds(pull.durationMs) : formatDuration(pull.durationMs);
 }
 
 /** Boss HP at the end of a pull as a bar and a value; inside a run the boss name comes first. */
@@ -41,9 +52,9 @@ function PullHp({ pull, name }: { pull: PullView; name?: string }) {
   );
 }
 
-function Chevron() {
+function Chevron({ open }: { open?: boolean }) {
   return (
-    <svg className="chevron" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+    <svg className={open ? 'chevron chevron-open' : 'chevron'} width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
       <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
@@ -58,9 +69,9 @@ function SetIcon() {
 }
 
 /** Column captions of a pull grid; each row names itself, so the captions are hidden from assistive tech. */
-function PullHead() {
+function PullColumns() {
   return (
-    <div className="pull pull-head" aria-hidden="true">
+    <div className="pull pull-columns" aria-hidden="true">
       <span className="cap">{t('pulls.column.pull')}</span>
       <span className="cap">{t('pulls.column.result')}</span>
       <span className="cap">{t('pulls.column.duration')}</span>
@@ -114,7 +125,7 @@ export function PullList({ groups, onOpen, onOpenSet }: Props) {
               )}
               <span className={group.killPull !== null ? 'chip kill' : 'chip wipe'}>{bestLabel(group)}</span>
             </div>
-            <PullHead />
+            <PullColumns />
             {group.pulls.map((pull) => (
               <button
                 key={pull.index}
@@ -124,8 +135,8 @@ export function PullList({ groups, onOpen, onOpenSet }: Props) {
                 onClick={() => onOpen(pull.index)}
               >
                 <span className="num text-muted">#{pull.n}</span>
-                <span className={`chip ${CHIP[pull.status]}`}>{t(`status.${pull.status}`)}</span>
-                <span className="num">{pullDuration(pull)}</span>
+                <span className={`chip ${PULL_CHIP[pull.status]}`}>{t(`status.${pull.status}`)}</span>
+                <span className="num">{pullViewTime(pull)}</span>
                 <PullHp pull={pull} />
                 <span className="num text-soft">{formatInteger(pull.playerCount)}</span>
                 <span className="num text-muted pull-start">{formatClock(pull.startUnixMs)}</span>
@@ -136,6 +147,45 @@ export function PullList({ groups, onOpen, onOpenSet }: Props) {
         );
       })}
     </>
+  );
+}
+
+function combatPullLabel(pull: CombatPullView): string {
+  return t('combat.open', {
+    pull: spokenCombatName(pull.name, pull.moreEnemies),
+    result: t(`status.${pull.status}`),
+    duration: pullTime(pull.durationMs, pull.aborted),
+    start: formatClock(pull.startUnixMs),
+  });
+}
+
+/** The fights outside boss encounters and runs, in log order, in one panel. */
+export function CombatPullList({ pulls, onOpen }: { pulls: CombatPullView[]; onOpen: (fightIndex: number) => void }) {
+  return (
+    <section className="panel boss combat-pulls" aria-label={t('combat.title')}>
+      <div className="pull pull-columns" aria-hidden="true">
+        <span className="cap">{t('combat.column.enemies')}</span>
+        <span className="cap">{t('combat.column.zone')}</span>
+        <span className="cap">{t('pulls.column.result')}</span>
+        <span className="cap">{t('pulls.column.duration')}</span>
+        <span className="cap">{t('pulls.column.players')}</span>
+        <span className="cap">{t('pulls.column.start')}</span>
+        <span />
+      </div>
+      {pulls.map((pull) => (
+        <button key={pull.index} type="button" className="pull" aria-label={combatPullLabel(pull)} onClick={() => onOpen(pull.index)}>
+          <span className="combat-enemies">
+            <CombatName name={pull.name} more={pull.moreEnemies} />
+          </span>
+          <span className="combat-zone">{pull.zone ?? '—'}</span>
+          <span className={`chip ${PULL_CHIP[pull.status]}`}>{t(`status.${pull.status}`)}</span>
+          <span className="num">{pullTime(pull.durationMs, pull.aborted)}</span>
+          <span className="num text-soft">{formatInteger(pull.playerCount)}</span>
+          <span className="num text-muted pull-start">{formatClock(pull.startUnixMs)}</span>
+          <Chevron />
+        </button>
+      ))}
+    </section>
   );
 }
 
@@ -156,12 +206,64 @@ function RunProgress({ run }: { run: RunView }) {
   );
 }
 
+function TrashRow({ pull, onOpen }: { pull: CombatPullView; onOpen: (fightIndex: number) => void }) {
+  return (
+    <button type="button" className="pull pull-trash" aria-label={combatPullLabel(pull)} onClick={() => onOpen(pull.index)}>
+      <span />
+      <span className={`chip ${PULL_CHIP[pull.status]}`}>{t(`status.${pull.status}`)}</span>
+      <span className="num text-muted">{pullTime(pull.durationMs, pull.aborted)}</span>
+      <span className="combat-enemies">
+        <CombatName name={pull.name} more={pull.moreEnemies} />
+      </span>
+      <span className="num text-muted">{formatInteger(pull.playerCount)}</span>
+      <span className="num text-muted pull-start">{formatClock(pull.startUnixMs)}</span>
+      <Chevron />
+    </button>
+  );
+}
+
+/** Two or more combat pulls between two boss pulls of a run, folded into one row that opens to list them. */
+function TrashFold({ pulls, onOpen }: { pulls: CombatPullView[]; onOpen: (fightIndex: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const listId = useId();
+  const label = t('runs.combatPulls', { count: pulls.length });
+  return (
+    <>
+      <button
+        type="button"
+        className="pull pull-trash pull-fold"
+        aria-label={label}
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        onClick={() => setOpen(!open)}
+      >
+        <span />
+        <span />
+        <span />
+        <span className="combat-enemies">
+          <span className="combat-name">{label}</span>
+        </span>
+        <span />
+        <span className="num text-muted pull-start">{formatClock(pulls[0].startUnixMs)}</span>
+        <Chevron open={open} />
+      </button>
+      {open && (
+        <div id={listId}>
+          {pulls.map((pull) => (
+            <TrashRow key={pull.index} pull={pull} onOpen={onOpen} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 interface RunProps {
   runs: RunView[];
   onOpen: (fightIndex: number) => void;
 }
 
-/** One card per Mythic+ run, built like a boss card: the first row opens the whole run, the boss pulls follow. */
+/** One card per Mythic+ run, built like a boss card: the first row opens the whole run, the boss pulls and the folded combat pulls follow. */
 export function RunCards({ runs, onOpen }: RunProps) {
   return (
     <>
@@ -180,7 +282,7 @@ export function RunCards({ runs, onOpen }: RunProps) {
               </div>
               <span className={`chip ${RUN_CHIP[run.status]}`}>{runChipLabel(run)}</span>
             </div>
-            <PullHead />
+            <PullColumns />
             <button
               type="button"
               className="pull"
@@ -195,23 +297,31 @@ export function RunCards({ runs, onOpen }: RunProps) {
               <span className="num text-muted pull-start">{formatClock(run.startUnixMs)}</span>
               <Chevron />
             </button>
-            {run.pulls.map((pull) => (
-              <button
-                key={pull.index}
-                type="button"
-                className="pull"
-                aria-label={t('runs.openPull', { boss: pull.name, n: pull.n })}
-                onClick={() => onOpen(pull.index)}
-              >
-                <span className="num text-muted">#{pull.n}</span>
-                <span className={`chip ${CHIP[pull.status]}`}>{t(`status.${pull.status}`)}</span>
-                <span className="num">{pullDuration(pull)}</span>
-                <PullHp pull={pull} name={pull.name} />
-                <span className="num text-soft">{formatInteger(pull.playerCount)}</span>
-                <span className="num text-muted pull-start">{formatClock(pull.startUnixMs)}</span>
-                <Chevron />
-              </button>
-            ))}
+            {run.entries.map((entry) =>
+              entry.kind === 'trash' ? (
+                entry.pulls.length === 1 ? (
+                  <TrashRow key={entry.pulls[0].index} pull={entry.pulls[0]} onOpen={onOpen} />
+                ) : (
+                  <TrashFold key={`trash-after-${entry.after}`} pulls={entry.pulls} onOpen={onOpen} />
+                )
+              ) : (
+                <button
+                  key={entry.pull.index}
+                  type="button"
+                  className="pull"
+                  aria-label={t('runs.openPull', { boss: entry.pull.name, n: entry.pull.n })}
+                  onClick={() => onOpen(entry.pull.index)}
+                >
+                  <span className="num text-muted">#{entry.pull.n}</span>
+                  <span className={`chip ${PULL_CHIP[entry.pull.status]}`}>{t(`status.${entry.pull.status}`)}</span>
+                  <span className="num">{pullViewTime(entry.pull)}</span>
+                  <PullHp pull={entry.pull} name={entry.pull.name} />
+                  <span className="num text-soft">{formatInteger(entry.pull.playerCount)}</span>
+                  <span className="num text-muted pull-start">{formatClock(entry.pull.startUnixMs)}</span>
+                  <Chevron />
+                </button>
+              ),
+            )}
           </section>
         );
       })}

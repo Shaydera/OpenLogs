@@ -4,13 +4,13 @@ import { type ChosenLog, chooseLog as pickLog } from '../api/logSource';
 import type { Game, LogView } from '../api/types';
 import { formatBytes, formatDateTime, formatList } from '../i18n/format';
 import { t } from '../i18n/i18n';
-import { groupPulls, groupRuns } from '../pulls/groupPulls';
+import { combatPulls, groupPulls, groupRuns } from '../pulls/groupPulls';
 import { logStartMs } from '../pulls/logStart';
 import { useApp } from '../store';
 import { AppWordmark } from './AppLogo';
 import { ThemeSwitch } from './chrome/ThemeSwitch';
 import { DropZone } from './DropZone';
-import { PullList, RunCards } from './PullList';
+import { CombatPullList, PullList, RunCards } from './PullList';
 import { RecentLogs } from './RecentLogs';
 
 function gameName(game: Game | null): string {
@@ -97,9 +97,11 @@ function LogPulls({ log }: { log: LogView }) {
   const openSet = useApp((s) => s.openSet);
   const groups = useMemo(() => groupPulls(log.fights, hideAborted), [log.fights, hideAborted]);
   const runs = useMemo(() => groupRuns(log.fights, hideAborted), [log.fights, hideAborted]);
+  const combat = useMemo(() => combatPulls(log.fights, hideAborted), [log.fights, hideAborted]);
   const start = logStartMs(log.fileName, log.startUnixMs);
   const heading = [log.zone, start !== null ? formatDateTime(start) : null].filter(Boolean).join(' · ');
-  const bothKinds = runs.length > 0 && groups.length > 0;
+  const labelled = [runs, groups, combat].filter((section) => section.length > 0).length > 1;
+  const open = (index: number) => void openFight(index);
 
   return (
     <>
@@ -130,14 +132,17 @@ function LogPulls({ log }: { log: LogView }) {
           {t('pulls.hideAborted')}
         </label>
       </div>
-      {bothKinds && <h2 className="cap section-label">{t('runs.title')}</h2>}
-      {runs.length > 0 && <RunCards runs={runs} onOpen={(index) => void openFight(index)} />}
-      {bothKinds && <h2 className="cap section-label">{t('pulls.raidBosses')}</h2>}
-      {groups.length > 0 ? (
-        <PullList groups={groups} onOpen={(index) => void openFight(index)} onOpenSet={(set) => void openSet(set)} />
-      ) : (
-        runs.length === 0 && <EmptyState title={t('pulls.noneTitle')} text={t('pulls.none')} />
+      {labelled && runs.length > 0 && <h2 className="cap section-label">{t('runs.title')}</h2>}
+      {runs.length > 0 && <RunCards runs={runs} onOpen={open} />}
+      {labelled && groups.length > 0 && <h2 className="cap section-label">{t('pulls.raidBosses')}</h2>}
+      {groups.length > 0 && <PullList groups={groups} onOpen={open} onOpenSet={(set) => void openSet(set)} />}
+      {combat.length > 0 && (
+        <>
+          <h2 className="cap section-label">{t('combat.title')}</h2>
+          <CombatPullList pulls={combat} onOpen={open} />
+        </>
       )}
+      {runs.length === 0 && groups.length === 0 && combat.length === 0 && <EmptyState title={t('pulls.noneTitle')} text={t('pulls.none')} />}
     </>
   );
 }

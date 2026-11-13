@@ -151,6 +151,15 @@
   font: 700 34px var(--font-label);
   letter-spacing: 0.01em;
 }
+.fight-name .more-tag,
+.fight-heading-name .more-tag {
+  margin-left: 12px;
+  vertical-align: middle;
+}
+.fight-name .more-tag {
+  font-size: 16px;
+  padding: 2px 8px;
+}
 .fight-meta {
   display: flex;
   flex-wrap: wrap;

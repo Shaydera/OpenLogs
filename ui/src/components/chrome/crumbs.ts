@@ -1,7 +1,7 @@
 import type { Detail, FightRow, LogView, PlayerRef, PullSet, QuickOverview } from '../../api/types';
 import { formatDuration, formatKeystoneLevel } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import { pullStatus, pullView, runStatus } from '../../pulls/groupPulls';
+import { combatName, isCombatPull, moreEnemies, pullNumber, pullStatus, runStatus } from '../../pulls/groupPulls';
 import type { FightTab, ReportData } from '../../store';
 import { playerIndex, shortName, spellName } from '../overview/players';
 import { setIdentity } from './fightMeta';
@@ -36,16 +36,10 @@ export interface CrumbInput {
 
 type Level = Omit<Crumb, 'current'>;
 
-/** A boss pull's number among the boss's pulls, or among the boss pulls of its Mythic+ run (hidden pulls count). */
-function pullNumber(fights: FightRow[], row: FightRow): number | null {
-  if (row.runIndex === null) return pullView(fights, row.index)?.n ?? null;
-  const at = fights.filter((fight) => fight.runIndex === row.runIndex).findIndex((fight) => fight.index === row.index);
-  return at === -1 ? null : at + 1;
-}
-
-/** `Ula'tek · Pull #1`, or a run's `Priory of the Sacred Flame +12`. */
+/** `Ula'tek · Pull #1`, a run's `Priory of the Sacred Flame +12`, a combat pull's `Venomfang Juggernaut +10`. */
 function pullLabel(fights: FightRow[], row: FightRow): string {
   if (row.run) return t('runs.heading', { dungeon: row.name, level: formatKeystoneLevel(row.run.keystoneLevel) });
+  if (isCombatPull(row)) return combatName(row.name, moreEnemies(row.combat));
   const n = pullNumber(fights, row);
   return n === null ? row.name : t('crumb.pull', { boss: row.name, n });
 }

@@ -1,9 +1,9 @@
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use openlogs_index::{FightSummary, MapBounds, Outcome};
+use openlogs_index::{FightSummary, MapBounds, Outcome, RosterEntry};
 use openlogs_parser::{
     CombatEvent, CombatKind, EncounterEnd, EncounterStart, Event as LogEvent, HealVia, Lines,
     LogLine, Spell, Timestamp, parse_line,
@@ -71,10 +71,25 @@ fn load_slice(
     }
     let late = builder.landed_after_end(&data[end..], &mut fields);
     let mut fight = builder.finish();
+    // A combat pull's specs come from `COMBATANT_INFO` before its range, which only the index
+    // read; a spec logged inside the range wins.
+    apply_roster(&mut fight, &summary.roster);
     let unpaired = pair_landed_copies(&mut fight);
     mark_swings_landing_after_end(&mut fight, unpaired, &late);
     note_delayed_hits(&mut fight);
     fight
+}
+
+fn apply_roster(fight: &mut Fight, roster: &[RosterEntry]) {
+    for entry in roster {
+        let Some(id) = fight.actors.id(&entry.guid) else {
+            continue;
+        };
+        fight.roster.insert(id);
+        if entry.spec_id != 0 && fight.actors.get(id).spec_id.is_none() {
+            fight.actors.set_spec(id, entry.spec_id);
+        }
+    }
 }
 
 /// A `SWING_DAMAGE_LANDED` logged after the fight's end, of units the fight knows.
@@ -227,6 +242,8 @@ impl FightBuilder {
             fight: Fight {
                 kind: if summary.is_run() {
                     FightKind::Run
+                } else if summary.is_combat() {
+                    FightKind::Combat
                 } else {
                     FightKind::Pull
                 },
@@ -261,6 +278,7 @@ impl FightBuilder {
                 logger_turned: Vec::new(),
                 heal_grants: Vec::new(),
                 delayed_hits: Vec::new(),
+                roster: BTreeSet::new(),
             },
             last_power: HashMap::new(),
             last_t: i32::MIN,
@@ -362,11 +380,23 @@ impl FightBuilder {
             .max_by_key(|&(&map, &count)| (count, std::cmp::Reverse(map)))
             .map(|(&map, _)| map);
         self.fight.events.sort_by_key(|event| event.t);
+        for event in &self.fight.events {
+            if matches!(event.kind, EventKind::Damage(_) | EventKind::Missed(_)) {
+                self.fight
+                    .actors
+                    .note_fought_group(event.source, event.target);
+            }
+        }
         self.fight.power.sort_by_key(|p| p.t);
         self.fight.npc_power.sort_by_key(|p| p.t);
         self.fight.positions.sort_by_key(|p| p.t);
         self.friendly_npc_lines.sort_by_key(|&(t, _)| t);
         self.fight.logger_turned = logger_turned_spans(&self.fight, &self.friendly_npc_lines);
+        for &(t, id) in &self.friendly_npc_lines {
+            if !self.fight.logger_turned_at(t) {
+                self.fight.actors.note_logged_friendly(id);
+            }
+        }
         note_heal_grants(&mut self.fight);
         self.fight
     }

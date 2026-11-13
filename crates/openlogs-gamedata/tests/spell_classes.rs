@@ -11,6 +11,9 @@ const KIDNEY_SHOT: u32 = 408;
 const HEALING_POTION: u32 = 441;
 const WAR_STOMP: u32 = 20549;
 
+const ROGUE: u32 = 4;
+const MAGE: u32 = 8;
+
 fn table() -> SpellClasses {
     SpellClasses::from_csv(SPELL_CLASS_OPTIONS, SPELL_EFFECT).unwrap()
 }
@@ -57,16 +60,38 @@ fn a_header_only_export_fails_as_empty() {
 }
 
 #[test]
-fn round_trips_through_json() {
+fn class_of_maps_families_to_classes() {
+    let table = table();
+    assert_eq!(table.class_of(FIREBALL), Some(MAGE));
+    assert_eq!(table.class_of(KIDNEY_SHOT), Some(ROGUE));
+    assert_eq!(table.class_of(HEALING_POTION), None);
+    assert_eq!(table.class_of(WAR_STOMP), None);
+}
+
+#[test]
+fn web_table_round_trips_families() {
     let json = table().to_json();
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(&json).unwrap(),
-        serde_json::json!({ "classSpells": [118, 15, 275], "crowdControl": [118, 290] })
+        serde_json::json!({
+            "classSpells": [118, 15, 275],
+            "crowdControl": [118, 290],
+            "families": [3, 3, 8],
+        })
     );
     let read = SpellClasses::from_json(&json).unwrap();
     assert_eq!(read, table());
     assert!(read.is_loaded());
+    assert_eq!(read.class_of(KIDNEY_SHOT), Some(ROGUE));
     assert!(!SpellClasses::default().is_loaded());
+}
+
+#[test]
+fn game_data_exported_without_families_still_loads() {
+    let read = SpellClasses::from_json(r#"{"classSpells":[118,15,275],"crowdControl":[118,290]}"#)
+        .unwrap();
+    assert!(read.is_crowd_control(KIDNEY_SHOT));
+    assert_eq!(read.class_of(KIDNEY_SHOT), None);
 }
 
 #[test]

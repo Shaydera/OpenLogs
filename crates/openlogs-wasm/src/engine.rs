@@ -1,7 +1,8 @@
 use std::collections::BTreeSet;
 
 use openlogs_analysis::{
-    Actors, Fight, LANDED_MATCH_MS, LANDED_TAIL_BYTES, load_fight_slice, load_fight_slice_with,
+    Actors, Fight, LANDED_MATCH_MS, LANDED_TAIL_BYTES, infer_classes, load_fight_slice,
+    load_fight_slice_with,
 };
 use openlogs_gamedata::{ChannelSpells, Curated, DungeonTable, SpellClasses};
 use openlogs_index::{FightSummary, Indexer, LogIndex};
@@ -161,7 +162,8 @@ impl Engine {
         fight_index: u32,
     ) -> Result<(), String> {
         let summary = self.summary(fight_index)?.clone();
-        let fight = load_fight_slice(part, base_offset, &summary);
+        let mut fight = load_fight_slice(part, base_offset, &summary);
+        infer_classes(&mut fight, &self.spell_classes);
         let cut_tail = base_offset + (part.len() as u64) < summary.end_offset + LANDED_TAIL_BYTES;
         self.fights.retain(|pulled| pulled.index != fight_index);
         self.fights.insert(
@@ -212,7 +214,9 @@ impl Engine {
             ));
         }
         let summary = summary_of(&self.index, fight_index)?;
-        let fight = load_fight_slice_with(part, base_offset, summary, pass.actors.carried_over());
+        let mut fight =
+            load_fight_slice_with(part, base_offset, summary, pass.actors.carried_over());
+        infer_classes(&mut fight, &self.spell_classes);
         let mut cuts = PullCuts::new(&fight);
         for command in &mut pass.commands {
             command.add(fight_index, &fight, &self.curated, &mut cuts);

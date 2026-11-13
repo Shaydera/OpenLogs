@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { FightRow, RunInfo } from '../api/types';
-import { comparablePulls, groupPulls, groupRuns, pullStatus, pullView, rangeKey, runChipLabel, runProgress, runStatus, runSubtitle } from './groupPulls';
+import {
+  comparablePulls,
+  groupPulls,
+  groupRuns,
+  pullStatus,
+  pullView,
+  rangeKey,
+  runChipLabel,
+  runProgress,
+  runStatus,
+  runSubtitle,
+  type RunView,
+} from './groupPulls';
 import { runLogFixture } from '../test/runFixture';
 
 let next = 1;
@@ -27,8 +39,14 @@ function fight(
     zone: 'The Venomous Abyss',
     run: null,
     runIndex: null,
+    combat: null,
     ...extra,
   };
+}
+
+/** A combat pull named after `name`, with `more` further enemies. */
+function trash(name: string, more: number, outcome: FightRow['outcome'], durationMs: number, extra: Partial<FightRow> = {}): FightRow {
+  return fight(name, 0, outcome, durationMs, null, { combat: { enemyCount: more + 1 }, ...extra });
 }
 
 // Real values from WoWCombatLog-100626_115111.txt.
@@ -131,6 +149,53 @@ describe('pullStatus', () => {
     expect(pullStatus(fight('A', 1, 'incomplete', 60_000, 40))).toBe('incomplete');
     expect(pullStatus(fight('A', 1, 'incomplete', 2_000, null))).toBe('aborted');
   });
+
+  it('keeps the logged result of a combat pull, also of a short one', () => {
+    expect(pullStatus(trash('Arathi Knight', 0, 'ended', 60_000))).toBe('ended');
+    expect(pullStatus(trash('Arathi Knight', 0, 'ended', 400))).toBe('ended');
+  });
+});
+
+describe('combat pulls', () => {
+  it('combat rows never join boss groups or sets', () => {
+    const log = [
+      trash('Venomfang Juggernaut', 1, 'kill', 36_200),
+      fight('Sszorak', 3420, 'wipe', 77_693, 82.2),
+      trash('Venomfang Juggernaut', 26, 'ended', 74_100),
+      fight('Sszorak', 3420, 'kill', 309_124, 0),
+      trash('Venomfang Juggernaut', 2, 'kill', 47_100),
+    ];
+    const bossPulls = [log[1].index, log[3].index];
+    const groups = groupPulls(log, false);
+    expect(groups.map((group) => [group.name, group.pulls.map((pull) => pull.index)])).toEqual([['Sszorak', bossPulls]]);
+    expect(groups[0].sets.map((set) => set.set.fights)).toEqual([bossPulls]);
+    expect(comparablePulls(log, log[3]).map((pull) => pull.index)).toEqual([log[1].index]);
+    expect(comparablePulls(log, log[2])).toEqual([]);
+    expect(pullView(log, log[2].index)).toBeNull();
+    expect(rangeKey(log[2])).toBeNull();
+  });
+
+  it('run card lists trash between boss pulls and still counts only boss pulls', () => {
+    const MPLUS = { difficulty: 8, difficultyLabel: 'Mythic+', playerCount: 5 };
+    const info: RunInfo = { challengeModeId: 499, keystoneLevel: 12, affixIds: [], totalTimeMs: 600_000, bosses: null, timer: null };
+    const run = fight('Priory of the Sacred Flame', 0, 'kill', 600_000, null, { ...MPLUS, run: info });
+    const inRun = { ...MPLUS, runIndex: run.index };
+    const log = [
+      run,
+      trash('Arathi Knight', 0, 'ended', 400, inRun),
+      fight('Captain Dailcry', 2847, 'kill', 60_000, 0, inRun),
+      trash('Arathi Footman', 2, 'kill', 30_000, inRun),
+      fight('Baron Braunpyke', 2835, 'wipe', 4_000, null, inRun),
+      trash('Arathi Knight', 1, 'ended', 25_000, inRun),
+      fight('Baron Braunpyke', 2835, 'kill', 60_000, 0, inRun),
+      trash('Lightspawn', 0, 'kill', 12_000),
+    ];
+    const rows = (hideAborted: boolean) =>
+      groupRuns(log, hideAborted)[0].entries.map((entry) => (entry.kind === 'boss' ? `#${entry.pull.n} ${entry.pull.name}` : entry.pulls.map((pull) => pull.name)));
+    expect(rows(false)).toEqual([['Arathi Knight'], '#1 Captain Dailcry', ['Arathi Footman'], '#2 Baron Braunpyke', ['Arathi Knight'], '#3 Baron Braunpyke']);
+    expect(rows(true)).toEqual(['#1 Captain Dailcry', ['Arathi Footman', 'Arathi Knight'], '#3 Baron Braunpyke']);
+    expect(runSubtitle(groupRuns(log, true)[0])).toBe('3 boss pulls');
+  });
 });
 
 describe('comparable pulls', () => {
@@ -177,12 +242,13 @@ describe('Mythic+ runs', () => {
       [107, 'Priory of the Sacred Flame', 13, 'incomplete', 1, null, null],
     ]);
     expect(runs[0].affixIds).toEqual([10, 147, 9]);
-    expect(runs[0].pulls.map((pull) => [pull.index, pull.n, pull.name, pull.status])).toEqual([
+    const bossPulls = (run: RunView) => run.entries.flatMap((entry) => (entry.kind === 'boss' ? [entry.pull] : []));
+    expect(bossPulls(runs[0]).map((pull) => [pull.index, pull.n, pull.name, pull.status])).toEqual([
       [103, 1, 'Captain Dailcry', 'kill'],
       [105, 3, 'Baron Braunpyke', 'wipe'],
       [106, 4, 'Baron Braunpyke', 'kill'],
     ]);
-    expect(groupRuns(RUN_LOG, false)[0].pulls.map((pull) => pull.n)).toEqual([1, 2, 3, 4]);
+    expect(bossPulls(groupRuns(RUN_LOG, false)[0]).map((pull) => pull.n)).toEqual([1, 2, 3, 4]);
     expect(groupRuns(LOG, false)).toEqual([]);
 
     const known: RunInfo = { ...RUN, bosses: { killed: 3, total: 3 }, timer: { kind: 'inTime', upgrades: 2 } };

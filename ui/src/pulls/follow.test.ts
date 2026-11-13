@@ -18,6 +18,7 @@ function fight(index: number, outcome: FightRow['outcome'], durationMs: number, 
     zone: 'The Venomous Abyss',
     run: null,
     runIndex: null,
+    combat: null,
     ...extra,
   };
 }
@@ -27,6 +28,7 @@ const RUN: RunInfo = { challengeModeId: 505, keystoneLevel: 12, affixIds: [10, 9
 const wipe = (index: number) => fight(index, 'wipe', 120_000);
 const kill = (index: number) => fight(index, 'kill', 300_000);
 const aborted = (index: number) => fight(index, 'wipe', 4_000);
+const trash = (index: number) => fight(index, 'kill', 30_000, { encounterId: 0, name: 'Venomfang Juggernaut', bossHpPercent: null, combat: { enemyCount: 3 } });
 const shown = (fightIndex: number): View => ({ kind: 'fight', fightIndex });
 
 describe('followUpdate jump', () => {
@@ -40,6 +42,7 @@ describe('followUpdate jump', () => {
     ['newest shown while comparing', shown(30), [...before, wipe(40)], true, true, null],
     ['no pull shown', { kind: 'start' } as View, [...before, wipe(40)], true, false, null],
     ['newest shown, its outcome changes', shown(30), [wipe(10), wipe(20), kill(30)], true, false, 30],
+    ['unknown pull shown, new trash', shown(99), [...before, trash(40)], true, false, 40],
   ] as [string, View, FightRow[], boolean, boolean, number | null][])('%s', (_name, view, after, hideAborted, comparing, jumpTo) => {
     expect(followUpdate(before, after, view, hideAborted, comparing).jumpTo).toBe(jumpTo);
   });
@@ -64,6 +67,14 @@ describe('followUpdate jump', () => {
       fight(44, 'kill', 80_000, { runIndex: 43, encounterId: 2570 }),
     ];
     expect(followUpdate(runs, [...runs, ...next], shown(40), true, false).jumpTo).toBe(43);
+  });
+
+  it('follow does not leave a boss pull for new trash but follows new trash from a combat pull', () => {
+    const before = [wipe(10), trash(20)];
+    expect(followUpdate(before, [...before, trash(30)], shown(10), true, false).jumpTo).toBeNull();
+    expect(followUpdate(before, [...before, trash(30)], shown(20), true, false).jumpTo).toBe(30);
+    expect(followUpdate(before, [...before, wipe(30)], shown(10), true, false).jumpTo).toBe(30);
+    expect(followUpdate(before, [...before, wipe(30)], shown(20), true, false).jumpTo).toBeNull();
   });
 });
 
@@ -112,5 +123,9 @@ describe('liveNoticeOf', () => {
   it('describes a run', () => {
     const fights = [fight(5, 'incomplete', 600_000, { run: RUN, name: 'Halls of Atonement' })];
     expect(liveNoticeOf(fights, 5)).toEqual({ kind: 'run', dungeon: 'Halls of Atonement', keystoneLevel: 12, status: 'incomplete' });
+  });
+
+  it('names a combat pull after its enemies', () => {
+    expect(liveNoticeOf([wipe(1), trash(2)], 2)).toEqual({ kind: 'combat', name: 'Venomfang Juggernaut', moreEnemies: 2, status: 'kill' });
   });
 });

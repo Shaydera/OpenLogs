@@ -1,8 +1,8 @@
 import { useId, useMemo, useState } from 'react';
 import type { Kpis, PullSet, SetPull } from '../../api/types';
-import { formatAmount, formatDuration, formatEventTimeTenths, formatInteger, formatOrdinal, formatPercent, formatSeconds } from '../../i18n/format';
+import { formatAmount, formatDuration, formatEventTimeTenths, formatInteger, formatOrdinal, formatPercent } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import { PULL_CHIP } from '../../pulls/groupPulls';
+import { PULL_CHIP, pullViewTime } from '../../pulls/groupPulls';
 import { useApp } from '../../store';
 import { CutoffShade } from '../reports/CutoffShade';
 import { type SetOrder, type SetRow, averageFirstDeath, bestPull, pullFirstDeaths, rowHpAtEnd, sortRows } from './setOverviewModel';
@@ -15,11 +15,9 @@ function hpAtEndText(row: SetRow): string {
   return hp !== null ? formatPercent(hp) : '—';
 }
 
-const lengthText = (row: SetRow, ms: number) => (row.view.status === 'aborted' ? formatSeconds(ms) : formatDuration(ms));
-
 function durationText(row: SetRow): string {
-  const whole = lengthText(row, row.view.durationMs);
-  return row.pull.cutoffMs === null ? whole : t('setOverview.cutDuration', { analysed: lengthText(row, row.pull.kpis.durationMs), whole });
+  const whole = pullViewTime(row.view);
+  return row.pull.cutoffMs === null ? whole : t('setOverview.cutDuration', { analysed: pullViewTime(row.view, row.pull.kpis.durationMs), whole });
 }
 
 const potions = (kpis: Kpis) => t('setOverview.potions', { used: formatInteger(kpis.combatPotions), without: formatInteger(kpis.playersWithoutCombatPotion) });

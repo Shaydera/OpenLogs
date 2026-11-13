@@ -1,5 +1,6 @@
 use openlogs_index::{
-    ChallengeMode, MYTHIC_KEYSTONE_DIFFICULTY, Outcome, RosterEntry, difficulty_label, index_bytes,
+    ChallengeMode, FightSummary, LogIndex, MYTHIC_KEYSTONE_DIFFICULTY, Outcome, RosterEntry,
+    difficulty_label, index_bytes,
 };
 use openlogs_parser::Timestamp;
 
@@ -13,6 +14,15 @@ fn offset_of(line_prefix: &str) -> u64 {
 
 fn ts(text: &str) -> Timestamp {
     Timestamp::parse(text).unwrap()
+}
+
+/// Boss pulls and runs, without the combat pulls among them.
+fn entries(index: &LogIndex) -> Vec<&FightSummary> {
+    index
+        .fights
+        .iter()
+        .filter(|fight| !fight.is_combat())
+        .collect()
 }
 
 fn key_start(ts: &str) -> String {
@@ -47,7 +57,7 @@ fn a_run_is_indexed_with_its_key_its_roster_and_its_prelude() {
     assert!(index.warnings.is_empty(), "{:?}", index.warnings);
     assert_eq!(index.broken_lines, 0);
     assert!(index.unhandled_in_fights.is_empty());
-    assert_eq!(index.fights.len(), 4);
+    assert_eq!(entries(&index).len(), 4);
 
     let run = &index.fights[0];
     assert!(run.is_run());
@@ -124,7 +134,7 @@ fn a_run_is_indexed_with_its_key_its_roster_and_its_prelude() {
 #[test]
 fn boss_pulls_of_a_run_come_after_it_and_know_it() {
     let index = index_bytes(FIXTURE.as_bytes());
-    let pulls: Vec<_> = index.fights[1..]
+    let pulls: Vec<_> = entries(&index)[1..]
         .iter()
         .map(|f| {
             (
@@ -140,12 +150,12 @@ fn boss_pulls_of_a_run_come_after_it_and_know_it() {
     assert_eq!(
         pulls,
         [
-            (2, "Captain Dailcry", Outcome::Kill, 60_000, Some(1), false),
-            (3, "Baron Braunpyke", Outcome::Wipe, 30_000, Some(1), false),
-            (4, "Baron Braunpyke", Outcome::Kill, 60_000, Some(1), false),
+            (3, "Captain Dailcry", Outcome::Kill, 60_000, Some(1), false),
+            (5, "Baron Braunpyke", Outcome::Wipe, 30_000, Some(1), false),
+            (6, "Baron Braunpyke", Outcome::Kill, 60_000, Some(1), false),
         ]
     );
-    let wipe = &index.fights[2];
+    let wipe = entries(&index)[2];
     assert!((wipe.boss_hp_percent.unwrap() - 87.5).abs() < 0.01);
     assert_eq!(difficulty_label(wipe.difficulty), Some("Mythic+"));
     assert_eq!(wipe.roster.len(), 2);

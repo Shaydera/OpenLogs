@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use openlogs_analysis::{
     ActorId, ContextItem, ContextState, Death, DeathContext, Fight, Hit, NO_SPELL, NOBODY,
-    PhaseKind, QuickOverview, SpellId,
+    PhaseKind, QuickOverview, SpellId, listed_player,
 };
 use openlogs_gamedata::{ConsumableKind, CooldownCategory, Curated, Role};
 use serde::Serialize;
@@ -454,7 +454,7 @@ pub fn quick_overview_dto(
     let mut player_ids: Vec<ActorId> = fight
         .actors
         .players()
-        .filter(|p| p.spec_id.is_some())
+        .filter(|p| listed_player(fight, p.id))
         .map(|p| p.id)
         .collect();
     for id in overview
@@ -569,7 +569,7 @@ pub fn quick_overview_dto(
 pub fn player_ref(fight: &Fight, id: ActorId) -> PlayerRef {
     let actor = fight.actors.get(id);
     let spec = actor.spec_id.and_then(openlogs_gamedata::spec);
-    let class = spec.and_then(|spec| openlogs_gamedata::class(spec.class_id));
+    let class = actor.class().and_then(openlogs_gamedata::class);
     PlayerRef {
         actor_id: id,
         name: actor.name.clone().unwrap_or_else(|| actor.guid.clone()),

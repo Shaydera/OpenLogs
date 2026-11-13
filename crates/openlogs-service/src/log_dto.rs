@@ -13,6 +13,7 @@ pub enum OutcomeDto {
     Kill,
     Wipe,
     Incomplete,
+    Ended,
 }
 
 impl From<Outcome> for OutcomeDto {
@@ -20,6 +21,7 @@ impl From<Outcome> for OutcomeDto {
         match outcome {
             Outcome::Kill => Self::Kill,
             Outcome::Wipe => Self::Wipe,
+            Outcome::Ended => Self::Ended,
             Outcome::Incomplete => Self::Incomplete,
         }
     }
@@ -101,7 +103,14 @@ pub struct RunDto {
     pub timer: Option<TimerDto>,
 }
 
-/// A boss pull or a whole Mythic+ run; both open the same way by `index`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CombatDto {
+    /// Enemies fought, the one the row is named after included.
+    pub enemy_count: u32,
+}
+
+/// A boss pull, a combat pull or a whole Mythic+ run; all open the same way by `index`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FightRow {
@@ -118,8 +127,10 @@ pub struct FightRow {
     pub zone: Option<String>,
     /// Set when the row is a whole Mythic+ run; its boss pulls are rows of their own.
     pub run: Option<RunDto>,
-    /// `index` of the run this boss pull belongs to.
+    /// `index` of the run this boss or combat pull belongs to.
     pub run_index: Option<u32>,
+    /// Set when the row is a combat pull; `None` for boss pulls and runs.
+    pub combat: Option<CombatDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -176,6 +187,9 @@ pub fn fight_row(
             timer: result.timer.map(Into::into),
         }),
         run_index: fight.run_index,
+        combat: fight.combat.as_ref().map(|combat| CombatDto {
+            enemy_count: combat.enemy_count,
+        }),
     }
 }
 

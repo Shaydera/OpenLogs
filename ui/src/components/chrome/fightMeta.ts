@@ -1,7 +1,7 @@
 import type { FightRow, LogView, PullSet, RunInfo } from '../../api/types';
 import { formatClock, formatDateTime, formatDuration, formatPercent } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import { difficultyName, runProgress } from '../../pulls/groupPulls';
+import { difficultyName, isCombatPull, runProgress } from '../../pulls/groupPulls';
 
 export interface MetaItem {
   text: string;
@@ -12,16 +12,21 @@ export interface MetaItem {
 
 const fact = (text: string | null): MetaItem | null => (text ? { text, mono: false } : null);
 
+/** A boss pull's difficulty; a combat pull says what it is instead. */
+export function pullKind(row: FightRow): string {
+  return isCombatPull(row) ? t('fight.combatPull') : difficultyName(row);
+}
+
 /**
  * The facts after the result chip, one item each (`Heroic · 7:58 · 23 players · Oct 7, 2026 · 19:03 ·
- * The Venomous Abyss`); a wipe adds the boss HP at its end.
+ * The Venomous Abyss`, a combat pull's `Combat pull · 0:28 · …`); a wipe adds the boss HP at its end.
  */
 export function fightMeta(row: FightRow): MetaItem[] {
   const duration: MetaItem = { text: formatDuration(row.durationMs), mono: true };
   const items = row.run
     ? [duration, ...runFacts(row, row.run)]
     : [
-        fact(difficultyName(row)),
+        fact(pullKind(row)),
         duration,
         fact(t('fight.players', { count: row.playerCount })),
         fact(formatDateTime(row.startUnixMs)),

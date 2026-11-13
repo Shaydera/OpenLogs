@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::mem::take;
 
 use openlogs_analysis::{
-    ActorId, Fight, Hit, ReportFilter, Scope, Side, SpellId, deaths, deaths_report, unit_of,
+    ActorId, Fight, Hit, ReportFilter, Scope, Side, SpellId, deaths, deaths_report, listed_player,
+    unit_of,
 };
 use openlogs_gamedata::Curated;
 use serde::Serialize;
@@ -135,7 +136,7 @@ pub fn deaths_set_part(
     }
 }
 
-/// Present players are those with COMBATANT_INFO in this pull, plus anyone who died in it.
+/// Present players are the listed players of this pull, plus anyone who died in it.
 fn lifetime(fight: &Fight, filter: &ReportFilter, scope: &Scope) -> Vec<LifeDto> {
     let mut first_deaths: BTreeMap<ActorId, i32> = BTreeMap::new();
     for death in deaths(fight).into_iter().filter(|d| filter.contains(d.t)) {
@@ -145,7 +146,7 @@ fn lifetime(fight: &Fight, filter: &ReportFilter, scope: &Scope) -> Vec<LifeDto>
     fight
         .actors
         .players()
-        .filter(|p| p.spec_id.is_some() || first_deaths.contains_key(&p.id))
+        .filter(|p| listed_player(fight, p.id) || first_deaths.contains_key(&p.id))
         .filter(|p| dead_side.accepts(fight, None, None, Some(&unit_of(fight, p.id))))
         .map(|p| LifeDto {
             player: p.id,

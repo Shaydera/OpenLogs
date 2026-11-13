@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { formatInteger, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import type { LiveNotice as Notice } from '../../pulls/follow';
+import { spokenCombatName } from '../../pulls/groupPulls';
 import { useApp } from '../../store';
 
 const NOTICE_MS = 4000;
@@ -15,6 +16,7 @@ function message(notice: Notice): string {
     });
   }
   const label = t(`status.${notice.status}`);
+  if (notice.kind === 'combat') return t('live.combatLoaded', { pull: spokenCombatName(notice.name, notice.moreEnemies), result: label });
   const result = notice.status === 'wipe' && notice.bossHpPercent !== null ? `${label} ${formatShare(notice.bossHpPercent)}` : label;
   return t('live.pullLoaded', { n: notice.n, result });
 }

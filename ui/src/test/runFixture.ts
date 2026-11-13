@@ -33,6 +33,7 @@ function row(
     zone: 'Priory of the Sacred Flame',
     run: null,
     runIndex: 1,
+    combat: null,
     ...extra,
   };
 }

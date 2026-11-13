@@ -1,5 +1,6 @@
 /** Mirrors the DTOs of `crates/openlogs-service` (serde camelCase). Times are zone-less log wall-clock values sent as Unix ms. */
-export type Outcome = 'kill' | 'wipe' | 'incomplete';
+/** `ended`: a combat pull that went quiet without a kill or a wipe. */
+export type Outcome = 'kill' | 'wipe' | 'incomplete' | 'ended';
 export type Role = 'tank' | 'healer' | 'damage';
 
 /** Bosses of the dungeon killed in a run (mirrors `BossProgressDto`). */
@@ -28,7 +29,13 @@ export interface RunInfo {
   timer: KeyTimer | null;
 }
 
-/** A boss pull, or a whole Mythic+ run when `run` is set; both open by `index`. */
+/** A fight outside boss encounters, found from the combat itself (mirrors `CombatDto`). */
+export interface CombatInfo {
+  /** Enemies fought, the one the row is named after included. */
+  enemyCount: number;
+}
+
+/** A boss pull, a combat pull when `combat` is set, or a whole Mythic+ run when `run` is set; all open by `index`. */
 export interface FightRow {
   index: number;
   encounterId: number;
@@ -44,8 +51,9 @@ export interface FightRow {
   zone: string | null;
   /** Set when this row is a whole Mythic+ run; its boss pulls are rows of their own. */
   run: RunInfo | null;
-  /** Log index of the run this boss pull belongs to. */
+  /** Log index of the run this boss or combat pull belongs to. */
   runIndex: number | null;
+  combat: CombatInfo | null;
 }
 
 export interface LogView {

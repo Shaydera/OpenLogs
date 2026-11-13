@@ -413,7 +413,7 @@ fn boss_hits_around_a_turn(amount: u64) -> Vec<String> {
 }
 
 #[test]
-fn a_boss_counts_while_logged_friendly_to_a_turned_logger_but_not_while_logged_neutral() {
+fn a_boss_counts_while_logged_friendly_to_a_turned_logger_and_while_logged_neutral() {
     let warrior = (WARRIOR, "Wendel-Emberfall-EU", "0x514");
     let mut lines = boss_hits_around_a_turn(10);
     lines.push(hit_line(
@@ -425,7 +425,7 @@ fn a_boss_counts_while_logged_friendly_to_a_turned_logger_but_not_while_logged_n
     lines.sort();
     assert_eq!(
         logged_damage(&lines),
-        [("Wendel-Emberfall-EU".to_string(), 800)]
+        [("Wendel-Emberfall-EU".to_string(), 1_800)]
     );
 }
 
@@ -461,5 +461,18 @@ fn while_the_logging_player_is_turned_the_raids_hits_on_them_count_but_not_their
     assert_eq!(
         logged_damage(&lines),
         [("Wendel-Emberfall-EU".to_string(), 700)]
+    );
+}
+
+#[test]
+fn a_neutral_add_that_fights_the_raid_counts_while_the_logging_player_is_turned() {
+    let warrior = (WARRIOR, "Wendel-Emberfall-EU", "0x548");
+    let add = ("Creature-0-1-1-1-261874-01", "Blightscale Rawling", "0xa28");
+    let mut lines = boss_hits_around_a_turn(0);
+    lines.push(hit_line(&at(40), warrior, add, 500));
+    lines.sort();
+    assert_eq!(
+        logged_damage(&lines),
+        [("Wendel-Emberfall-EU".to_string(), 500)]
     );
 }

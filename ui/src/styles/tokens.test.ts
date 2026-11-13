@@ -26,6 +26,7 @@ const FIXED_PAIRS: [foreground: string, background: string, minimum: number][] =
     ['panel', 'panel-raised'].map((panel): [string, string, number] => [text, panel, TEXT]),
   ),
   ['neutral-text', 'neutral-tint', TEXT],
+  ['text-soft', 'neutral-tint', TEXT],
   ['on-accent', 'accent', TEXT],
   ['accent', 'accent-tint', TEXT],
   ['kill-chip', 'kill-tint', TEXT],

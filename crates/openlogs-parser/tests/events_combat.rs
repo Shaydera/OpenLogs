@@ -578,3 +578,28 @@ fn forever_lines_have_the_retail_layout() {
     };
     assert_eq!((heal.amount, heal.overheal, heal.critical), (10, 10, false));
 }
+
+#[test]
+fn unit_flags_tell_our_group_from_enemy_npcs() {
+    let player = "Player-4103-63B5FD29";
+    let npc = "Creature-0-3892-3004-1387-257758-00004679D4";
+    let pet = "Pet-0-3892-3004-1387-257758-00004679D4";
+    let unit = |guid, flags| Unit {
+        guid,
+        name: None,
+        flags,
+        raid_flags: 0,
+    };
+
+    for flags in [0x511, 0x512] {
+        assert!(unit(player, flags).is_group_combatant());
+    }
+    assert!(!unit(player, 0x518).is_group_combatant());
+    assert!(unit(pet, 0x1111).is_group_combatant());
+
+    for flags in [0xa48, 0xa28, 0x10a48] {
+        assert!(unit(npc, flags).is_enemy_npc());
+    }
+    assert!(!unit(npc, 0xa18).is_enemy_npc());
+    assert!(!unit(player, 0x511).is_enemy_npc());
+}

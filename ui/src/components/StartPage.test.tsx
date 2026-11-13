@@ -46,6 +46,7 @@ function row(index: number, name: string, encounterId: number, outcome: FightRow
     zone: 'The Venomous Abyss',
     run: null,
     runIndex: null,
+    combat: null,
     ...extra,
   };
 }
@@ -199,5 +200,47 @@ describe('Mythic+ runs', () => {
     useApp.setState({ view: { kind: 'start' } });
     await userEvent.click(await screen.findByRole('button', { name: 'Open run Priory of the Sacred Flame +12' }));
     expect(api.quickOverview).toHaveBeenLastCalledWith(runLogFixture.id, 1, { startMs: null, endMs: null, attribution: 'reattributed', includeOverkill: false, deathCutoff: null });
+  });
+});
+
+describe('combat pulls', () => {
+  const trash = (index: number, name: string, more: number, outcome: FightRow['outcome'], durationMs: number) =>
+    row(index, name, 0, outcome, durationMs, { bossHpPercent: null, playerCount: 19, combat: { enemyCount: more + 1 } });
+
+  it('combat section lists pulls in order and hides short non-kills when toggled', async () => {
+    vi.mocked(api.openLog).mockResolvedValue({
+      ...LOG,
+      fights: [
+        LOG.fights[0],
+        trash(4, 'Venomfang Juggernaut', 1, 'kill', 36_200),
+        trash(5, "Nek'zali the Soulcoiler", 0, 'ended', 400),
+        trash(6, 'Venomfang Juggernaut', 26, 'ended', 74_100),
+        trash(7, 'Vigilant Protector', 0, 'kill', 4_000),
+      ],
+    });
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /^WoWCombatLog/ }));
+    const section = await screen.findByRole('region', { name: 'Combat pulls' });
+    expect(screen.getByRole('heading', { name: 'Raid bosses' })).toBeInTheDocument();
+    const labels = () => within(section).getAllByRole('button').map((button) => button.getAttribute('aria-label'));
+    expect(labels()).toEqual([
+      'Open combat pull Venomfang Juggernaut and 1 more enemy, Kill after 0:36, started 19:40',
+      'Open combat pull Venomfang Juggernaut and 26 more enemies, Ended after 1:14, started 20:00',
+      'Open combat pull Vigilant Protector, Kill after 0:04, started 20:10',
+    ]);
+    await userEvent.click(screen.getByLabelText('Hide aborted pulls (< 10 s)'));
+    expect(labels()[1]).toBe("Open combat pull Nek'zali the Soulcoiler, Ended after 0.4 s, started 19:50");
+
+    await userEvent.click(within(section).getByRole('button', { name: /^Open combat pull Vigilant Protector/ }));
+    expect(api.quickOverview).toHaveBeenLastCalledWith(LOG_ID, 7, { startMs: null, endMs: null, attribution: 'reattributed', includeOverkill: false, deathCutoff: null });
+  });
+
+  it('a log with only combat pulls shows them instead of the empty state', async () => {
+    vi.mocked(api.openLog).mockResolvedValue({ ...LOG, fights: [trash(1, 'Vile Fin Minor Oracle', 0, 'kill', 11_800)] });
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /^WoWCombatLog/ }));
+    const section = await screen.findByRole('region', { name: 'Combat pulls' });
+    expect(within(section).getByRole('button', { name: /^Open combat pull Vile Fin Minor Oracle/ })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'No pulls' })).not.toBeInTheDocument();
   });
 });

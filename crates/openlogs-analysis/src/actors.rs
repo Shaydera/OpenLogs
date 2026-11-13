@@ -1,18 +1,14 @@
 use std::collections::HashMap;
 
+use openlogs_parser::unit_flags::{
+    AFFILIATION_GROUP, CONTROL_NPC, REACTION_FRIENDLY, REACTION_HOSTILE, TYPE_GUARDIAN, TYPE_PET,
+};
 use openlogs_parser::{NULL_GUID, Unit};
 
 /// Index into [`Actors`]. [`NOBODY`] stands for an empty unit slot.
 pub type ActorId = u32;
 pub const NOBODY: ActorId = 0;
 
-const TYPE_PET: u32 = 0x1000;
-const TYPE_GUARDIAN: u32 = 0x2000;
-/// Affiliation mine | party | raid.
-const AFFILIATION_GROUP: u32 = 0x7;
-const REACTION_FRIENDLY: u32 = 0x10;
-const REACTION_HOSTILE: u32 = 0x40;
-const CONTROL_NPC: u32 = 0x200;
 /// Owner chains longer than this are treated as broken (cycles, bad data).
 const MAX_OWNER_DEPTH: usize = 8;
 
@@ -36,10 +32,15 @@ pub struct Actor {
     /// Lines that logged this actor hostile, and lines that did not.
     hostile_lines: u32,
     other_lines: u32,
+    /// Logged as an NPC-controlled friendly unit on a line outside the logging player's turns.
+    logged_friendly: bool,
+    fought_group: bool,
     /// Direct owner (summoner) of a pet or guardian.
     pub owner: Option<ActorId>,
     /// From `COMBATANT_INFO`, players only.
     pub spec_id: Option<u32>,
+    /// From the player's own casts, for players without a known spec; see [`Actor::class`].
+    pub class_id: Option<u32>,
     /// Largest item level the advanced block reported; players only.
     pub item_level: Option<u32>,
     /// Largest max HP the advanced block reported; players only.
@@ -57,10 +58,27 @@ impl Actor {
         self.hostile_lines > self.other_lines
     }
 
+    /// The spec's class, else the class the player's casts belong to.
+    pub fn class(&self) -> Option<u32> {
+        self.spec_class().or(self.class_id)
+    }
+
+    pub fn spec_class(&self) -> Option<u32> {
+        spec_class(self.spec_id)
+    }
+
     /// Belongs to the logging player's group (mine, party or raid) and is not hostile.
     pub fn is_friendly(&self) -> bool {
         self.flags & AFFILIATION_GROUP != 0 && !self.is_hostile()
     }
+}
+
+/// The class of a spec the game data knows; a spec of 0 (none chosen) or an unknown one has
+/// none, so the class then comes from casts.
+pub fn spec_class(spec_id: Option<u32>) -> Option<u32> {
+    spec_id
+        .and_then(openlogs_gamedata::spec)
+        .map(|spec| spec.class_id)
 }
 
 /// An NPC-controlled unit logged friendly: how enemies look while the logging player is turned
@@ -93,8 +111,11 @@ impl Actors {
                 flags: 0,
                 hostile_lines: 0,
                 other_lines: 0,
+                logged_friendly: false,
+                fought_group: false,
                 owner: None,
                 spec_id: None,
+                class_id: None,
                 item_level: None,
                 max_hp: None,
             }],
@@ -109,8 +130,11 @@ impl Actors {
             actor.flags = 0;
             actor.hostile_lines = 0;
             actor.other_lines = 0;
+            actor.logged_friendly = false;
+            actor.fought_group = false;
             actor.owner = None;
             actor.spec_id = None;
+            actor.class_id = None;
             actor.item_level = None;
             actor.max_hp = None;
         }
@@ -157,8 +181,11 @@ impl Actors {
             flags: 0,
             hostile_lines: 0,
             other_lines: 0,
+            logged_friendly: false,
+            fought_group: false,
             owner: None,
             spec_id: None,
+            class_id: None,
             item_level: None,
             max_hp: None,
         });
@@ -213,6 +240,10 @@ impl Actors {
         }
     }
 
+    pub(crate) fn set_class(&mut self, unit: ActorId, class_id: Option<u32>) {
+        self.list[unit as usize].class_id = class_id;
+    }
+
     /// Records a player's item level and max HP from an advanced block, keeping the largest.
     pub fn note_advanced(&mut self, unit: ActorId, level: u32, max_hp: u64) {
         let actor = &mut self.list[unit as usize];
@@ -255,6 +286,27 @@ impl Actors {
     /// An unowned NPC hostile on most of its lines: an enemy for the whole pull.
     pub fn is_enemy(&self, id: ActorId) -> bool {
         self.is_unowned_npc(id) && self.get(id).mostly_hostile()
+    }
+
+    /// An unowned NPC that fought the group and was never logged friendly outside the logging
+    /// player's turns: it stands against the raid even on lines that log it neutral.
+    pub(crate) fn fights_group_unfriendly(&self, id: ActorId) -> bool {
+        let actor = self.get(id);
+        actor.fought_group && !actor.logged_friendly
+    }
+
+    pub(crate) fn note_logged_friendly(&mut self, id: ActorId) {
+        self.list[id as usize].logged_friendly = true;
+    }
+
+    /// Marks the unowned NPCs on one side of a damage or miss with a player or a player's pet
+    /// on the other. Needs the pull's final owners.
+    pub(crate) fn note_fought_group(&mut self, source: ActorId, target: ActorId) {
+        for (npc, other) in [(source, target), (target, source)] {
+            if self.is_unowned_npc(npc) && self.credited_player(other).is_some() {
+                self.list[npc as usize].fought_group = true;
+            }
+        }
     }
 }
 

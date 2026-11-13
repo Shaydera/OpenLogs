@@ -3,7 +3,7 @@ import type { FightRow, PullComparison } from '../../api/types';
 import { useFocusRequest } from '../../hooks/useFocusRequest';
 import { formatDuration, formatEventTime } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import { type PullStatus, type PullView, pullView } from '../../pulls/groupPulls';
+import { PULL_CHIP, type PullView, pullView } from '../../pulls/groupPulls';
 import { analysedEndMs, useApp } from '../../store';
 import { ComparisonCutoffChip } from '../chrome/DeathCutoffChip';
 import { afterCutTitle } from '../reports/CutoffShade';
@@ -12,8 +12,6 @@ import { CompareChart } from './CompareChart';
 import { CompareDeaths } from './CompareDeaths';
 import { ComparePlayers } from './ComparePlayers';
 import { durationDelta, endHpLabel, kpiRows, phaseRows } from './compareData';
-
-const CHIP: Record<PullStatus, string> = { kill: 'kill', wipe: 'wipe', incomplete: 'wipe', aborted: 'abort' };
 
 const startLabel = (ms: number | null) => (ms === null ? '—' : formatEventTime(ms));
 
@@ -84,7 +82,7 @@ function PullCard({ pull, side }: { pull: PullView; side: 'a' | 'b' }) {
     <div role="group" aria-label={label} className="panel panel-pad cmp-pull">
       <span className={`cmp-swatch cmp-swatch-${side}`} aria-hidden="true" />
       <h2 className="h2">{label}</h2>
-      <span className={`chip ${CHIP[pull.status]}`}>{t(`status.${pull.status}`)}</span>
+      <span className={`chip ${PULL_CHIP[pull.status]}`}>{t(`status.${pull.status}`)}</span>
       <span className="num">{formatDuration(pull.durationMs)}</span>
       <span className="muted">{t('fight.bossHp', { percent: endHpLabel(pull) })}</span>
     </div>

@@ -1,3 +1,4 @@
+import { isCombatPull } from '../pulls/groupPulls';
 import type { Database } from './db';
 import type { LogSource } from './logSource';
 import type { LogView } from './types';
@@ -29,8 +30,8 @@ export async function rememberLog(db: Database, source: LogSource, view: LogView
     sizeBytes: source.size,
     zone: view.zone,
     startUnixMs: view.startUnixMs,
-    // A run is no pull; its boss pulls are.
-    pullCount: view.fights.filter((fight) => fight.run === null).length,
+    // Boss pulls only: a run is no pull, and combat pulls stay out of the count.
+    pullCount: view.fights.filter((fight) => fight.run === null && !isCombatPull(fight)).length,
     openedAtUnixMs,
     handle: source.handle,
   } satisfies RecentRecord);

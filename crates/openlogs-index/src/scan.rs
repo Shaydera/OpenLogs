@@ -20,13 +20,33 @@ const META_EVENTS: [&str; 9] = [
     "MAP_CHANGE",
 ];
 
+/// Events that start and end combat pulls outside boss pulls. `_SUPPORT` copies repeat hits
+/// already logged, and environmental damage has no enemy.
+const COMBAT_PULL_EVENTS: [&str; 15] = [
+    "SWING_DAMAGE",
+    "SWING_DAMAGE_LANDED",
+    "SWING_MISSED",
+    "RANGE_DAMAGE",
+    "RANGE_MISSED",
+    "SPELL_DAMAGE",
+    "SPELL_MISSED",
+    "SPELL_PERIODIC_DAMAGE",
+    "SPELL_PERIODIC_MISSED",
+    "SPELL_BUILDING_DAMAGE",
+    "SPELL_BUILDING_MISSED",
+    "DAMAGE_SHIELD",
+    "DAMAGE_SHIELD_MISSED",
+    "DAMAGE_SPLIT",
+    "UNIT_DIED",
+];
+
 /// A longer line is no combat log line. It counts as broken instead of being kept, which bounds
 /// the memory a wrong file (a video, an archive) can take.
 const MAX_LINE_BYTES: u64 = 1 << 20;
 
 /// Indexes a log that arrives in chunks of any size, e.g. while streaming a file. Lines
-/// outside fights are only read up to their event name, which keeps indexing fast on
-/// trash-heavy logs.
+/// outside boss pulls other than meta and combat pull events are only read up to their event
+/// name, which keeps indexing fast on trash-heavy logs.
 #[derive(Clone, Default)]
 pub struct Indexer {
     builder: IndexBuilder,
@@ -129,7 +149,9 @@ impl Indexer {
         };
         if !self.builder.in_fight() {
             match parse_header(text) {
-                Ok((timestamp, name)) if !META_EVENTS.contains(&name) => {
+                Ok((timestamp, name))
+                    if !META_EVENTS.contains(&name) && !COMBAT_PULL_EVENTS.contains(&name) =>
+                {
                     self.builder.push_skipped(span, timestamp);
                     return;
                 }

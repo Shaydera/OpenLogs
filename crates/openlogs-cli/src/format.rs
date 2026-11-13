@@ -85,20 +85,21 @@ fn fight_row(fight: &FightSummary) -> String {
             format!("+{}", challenge.keystone_level),
             run_result(fight.outcome),
         ),
+        None if fight.is_combat() => ("Combat".to_string(), pull_result(fight.outcome)),
         None => (
             difficulty_label(fight.difficulty)
                 .map_or_else(|| fight.difficulty.to_string(), str::to_string),
-            match fight.outcome {
-                Outcome::Kill => "Kill",
-                Outcome::Wipe => "Wipe",
-                Outcome::Incomplete => "Incomplete",
-            },
+            pull_result(fight.outcome),
         ),
     };
-    // Boss pulls of a Mythic+ run sit indented under their run.
+    let enemies = match &fight.combat {
+        Some(combat) if combat.enemy_count > 1 => format!(" +{}", combat.enemy_count - 1),
+        _ => String::new(),
+    };
+    // Pulls of a Mythic+ run sit indented under their run.
     let name = match fight.run_index {
-        Some(_) => format!("  {}", fight.name),
-        None => fight.name.clone(),
+        Some(_) => format!("  {}{enemies}", fight.name),
+        None => format!("{}{enemies}", fight.name),
     };
     let boss_hp = fight
         .boss_hp_percent
@@ -116,11 +117,20 @@ fn fight_row(fight: &FightSummary) -> String {
     )
 }
 
+fn pull_result(outcome: Outcome) -> &'static str {
+    match outcome {
+        Outcome::Kill => "Kill",
+        Outcome::Wipe => "Wipe",
+        Outcome::Ended => "Ended",
+        Outcome::Incomplete => "Incomplete",
+    }
+}
+
 /// A run's result as the index reads it from the log (see `FightSummary::outcome`).
 fn run_result(outcome: Outcome) -> &'static str {
     match outcome {
         Outcome::Kill => "Completed",
-        Outcome::Wipe => "Not completed",
+        Outcome::Wipe | Outcome::Ended => "Not completed",
         Outcome::Incomplete => "Incomplete",
     }
 }
@@ -142,7 +152,7 @@ fn run_line(run: &FightSummary, challenge: &ChallengeMode, fights: &[FightSummar
     let pulls = list(
         fights
             .iter()
-            .filter(|fight| fight.run_index == Some(run.index))
+            .filter(|fight| fight.run_index == Some(run.index) && !fight.is_combat())
             .map(|fight| fight.index.to_string())
             .collect(),
     );
@@ -195,9 +205,23 @@ mod tests {
 
     #[test]
     fn report_lists_runs_with_their_boss_pulls() {
-        let index = index_bytes(
-            include_str!("../../openlogs-index/tests/fixtures/mythic_plus.txt").as_bytes(),
+        let log = include_str!("../../openlogs-index/tests/fixtures/mythic_plus.txt");
+        let last_trash = log
+            .lines()
+            .find(|line| line.starts_with("10/8/2026 20:08:00.0000"))
+            .unwrap();
+        let second_knight = last_trash
+            .replace("20:08:00.0000", "20:08:01.0000")
+            .replace("0000468006", "0000468007");
+        let log = log.replacen(
+            last_trash,
+            &format!(
+                "{last_trash}
+{second_knight}"
+            ),
+            1,
         );
+        let index = index_bytes(log.as_bytes());
         let text = report(
             Path::new("Logs/mplus.txt"),
             8192,
@@ -214,21 +238,47 @@ mod tests {
             rows.iter().map(|row| words(row)).collect::<Vec<_>>(),
             [
                 "1 Priory of the Sacred Flame +12 Completed 10:00.0 - 2 20:00:00",
-                "2 Captain Dailcry Mythic+ Kill 1:00.0 0.0% 2 20:01:00",
-                "3 Baron Braunpyke Mythic+ Wipe 0:30.0 87.5% 2 20:04:00",
-                "4 Baron Braunpyke Mythic+ Kill 1:00.0 0.0% 2 20:06:00",
+                "2 Arathi Knight Combat Ended 0:00.0 - 1 20:00:10",
+                "3 Captain Dailcry Mythic+ Kill 1:00.0 0.0% 2 20:01:00",
+                "4 Arathi Knight Combat Ended 0:00.0 - 1 20:03:00",
+                "5 Baron Braunpyke Mythic+ Wipe 0:30.0 87.5% 2 20:04:00",
+                "6 Baron Braunpyke Mythic+ Kill 1:00.0 0.0% 2 20:06:00",
+                "7 Arathi Knight +1 Combat Ended 0:01.0 - 1 20:08:00",
             ]
         );
         assert!(
-            rows[2].starts_with("  3    Baron Braunpyke"),
+            rows[4].starts_with("  5    Baron Braunpyke"),
             "boss pulls are indented under their run: {}",
-            rows[2]
+            rows[4]
         );
         assert!(
             text.contains(
-                "Completed in 10:00.0 (logged 10:00.0), affixes 10, 147, 9, boss pulls 2, 3, 4"
+                "Completed in 10:00.0 (logged 10:00.0), affixes 10, 147, 9, boss pulls 3, 5, 6"
             ),
             "{text}"
+        );
+    }
+
+    #[test]
+    fn report_marks_combat_pulls() {
+        let index = index_bytes(
+            include_str!("../../openlogs-index/tests/fixtures/forever_open_world.txt").as_bytes(),
+        );
+        let text = report(
+            Path::new("Logs/open_world.txt"),
+            8192,
+            &index,
+            Duration::from_millis(3),
+            None,
+        );
+        let row = text
+            .lines()
+            .find(|line| line.contains("Vile Fin Minor Oracle"))
+            .expect("combat row");
+        let words: Vec<&str> = row.split_whitespace().collect();
+        assert!(
+            words.contains(&"Combat") && words.contains(&"Kill"),
+            "{row}"
         );
     }
 }

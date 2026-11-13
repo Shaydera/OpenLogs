@@ -1,7 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use openlogs_gamedata::spec;
-
 use crate::actors::{ActorId, ActorKind};
 use crate::fight::{EventKind, Fight};
 
@@ -63,7 +61,7 @@ impl Roster {
                     name: actor.name.clone().unwrap_or_default(),
                     kind,
                     spec_id: actor.spec_id,
-                    class_id: actor.spec_id.and_then(spec).map(|spec| spec.class_id),
+                    class_id: actor.class(),
                     owner: actor.owner,
                     add_number: None,
                 }

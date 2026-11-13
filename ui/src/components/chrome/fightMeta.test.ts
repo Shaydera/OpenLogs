@@ -13,6 +13,11 @@ describe('fight meta line', () => {
     expect(read(compareLogFixture.fights[0])).toEqual(['Heroic', '[2:22]', '4 players', 'Oct 7, 2026 · 19:10', 'The Venomous Abyss', 'Boss HP at end 60.4%']);
   });
 
+  it('calls a combat pull a combat pull where a boss pull names its difficulty', () => {
+    const trash: FightRow = { ...compareLogFixture.fights[0], encounterId: 0, outcome: 'ended', bossHpPercent: null, combat: { enemyCount: 3 } };
+    expect(read(trash)).toEqual(['Combat pull', '[2:22]', '4 players', 'Oct 7, 2026 · 19:10', 'The Venomous Abyss']);
+  });
+
   it('claims nothing a run did not log or the dungeon data does not know', () => {
     const run = runLogFixture.fights[0];
     const bare: FightRow = { ...run, outcome: 'incomplete', run: { ...run.run!, totalTimeMs: null, affixIds: [], bosses: null, timer: null } };

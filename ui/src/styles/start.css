@@ -300,14 +300,14 @@
   font-size: 13px;
   color: var(--muted);
 }
-.pull-head {
+.pull-columns {
   min-height: 29px;
   cursor: default;
 }
-.pull-head:hover {
+.pull-columns:hover {
   background: transparent;
 }
-.pull-head .cap {
+.pull-columns .cap {
   font-size: 11px;
 }
 .hp {
@@ -320,6 +320,41 @@
   text-align: right;
   font-size: 13px;
   color: var(--text-soft);
+}
+.combat-pulls .pull {
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 260px) 92px 64px 70px 64px 20px;
+}
+.combat-pulls .pull-columns {
+  border-top: 0;
+}
+.combat-enemies {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.combat-enemies .combat-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.combat-zone {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.more-tag {
+  flex: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--tag-bg);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 .empty-state {
   display: flex;

@@ -7,6 +7,7 @@ mod auras;
 mod breakdown;
 mod casts;
 mod cells;
+mod classes;
 mod compare;
 mod deaths;
 mod deaths_report;
@@ -35,7 +36,7 @@ mod usage;
 mod views;
 
 pub use ability::{AbilityDetail, AbilityHit, TargetHits, ability_detail};
-pub use actors::{Actor, ActorId, ActorKind, Actors, NOBODY};
+pub use actors::{Actor, ActorId, ActorKind, Actors, NOBODY, spec_class};
 pub use aura_report::{AuraHolder, AuraLane, AuraRow, AurasReport, SourceSpec, auras_report};
 pub use auras::{AuraInterval, aura_intervals, coverage, union_ms};
 pub use breakdown::{
@@ -44,6 +45,7 @@ pub use breakdown::{
 };
 pub use casts::{CastExtra, CastsReport, casts_report};
 pub use cells::{Cell, CellKind, Misses, ScopeMetric, cells};
+pub use classes::infer_classes;
 pub use compare::{ComparedPlayer, PlayerSide, PullComparison, compare_pulls};
 pub use deaths::{
     AbilityAmount, BURST_GAP_MS, DEATH_WINDOW_MS, Death, Hit, LethalBurst, Resurrection, deaths,
@@ -55,7 +57,7 @@ pub use fight::{
     Absorbed, AuraAction, AuraType, Damage, DamageVia, Energize, Event, EventKind, FailReason,
     Fight, FightKind, Heal, HealAbsorbed, LANDED_MATCH_MS, MarkerInterval, MissType, Missed,
     NO_SPELL, POWER_SAMPLE_MS, PositionSample, PowerSample, RunEncounter, SpellId, SpellInfo,
-    UnitHp, WorldMarkerInterval,
+    UnitHp, WorldMarkerInterval, listed_player,
 };
 pub use filter::{Attribution, Overkill, ReportFilter};
 pub use granted::note_heal_grants;
