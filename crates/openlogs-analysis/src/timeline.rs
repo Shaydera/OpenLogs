@@ -21,10 +21,10 @@ pub fn is_distinct_hit(damage: &Damage) -> bool {
         }
 }
 
-/// Whether a hit is in the Damage Done numbers. They leave out a swing whose landed copy is
-/// logged after the pull's end, mostly the boss's killing blow.
+/// Whether a hit is in the Damage Done numbers. They leave out a swing the log never shows
+/// landing in the pull, like the boss's killing blow or a hit on a unit logged neutral.
 pub(crate) fn credited_as_damage_done(damage: &Damage) -> bool {
-    is_distinct_hit(damage) && !damage.lands_after_end
+    is_distinct_hit(damage) && !damage.unlanded
 }
 
 /// The damage an event deals its target. A hit a shield swallowed completely is logged as an
@@ -43,7 +43,7 @@ pub(crate) fn dealt_damage(event: &Event) -> Option<Damage> {
             critical: missed.critical,
             supporter: NOBODY,
             attacker_line: None,
-            lands_after_end: false,
+            unlanded: missed.unlanded,
         }),
         _ => None,
     }

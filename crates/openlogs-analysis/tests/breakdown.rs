@@ -298,6 +298,7 @@ fn damage_taken_rows_carry_hits_and_absorbed_damage_on_both_sides() {
             miss_type: MissType::Absorb,
             amount_missed: 400,
             critical: true,
+            unlanded: false,
         }),
     );
     b.push(
@@ -508,6 +509,7 @@ fn missed(via: DamageVia, miss_type: MissType) -> EventKind {
         miss_type,
         amount_missed: 0,
         critical: false,
+        unlanded: false,
     })
 }
 

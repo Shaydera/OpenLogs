@@ -146,6 +146,7 @@ fn hits_a_shield_swallowed_count_as_damage_done_net_of_their_support() {
             miss_type: MissType::Absorb,
             amount_missed: 400,
             critical: true,
+            unlanded: false,
         }),
     );
     r.b.push(2_000, r.warrior, r.boss, 395152, supported(40, r.evoker));
@@ -182,6 +183,30 @@ fn self_support_cancels_out() {
         );
         assert_eq!(report.players[0].support_self, 50);
     }
+}
+
+#[test]
+fn the_share_of_a_hit_a_player_dealt_themselves_counts_for_the_evoker_alone() {
+    let mut r = raid();
+    r.b.spell(1292299, "Seriously Sharp Seashell");
+    r.b.spell(413984, "Shifting Sands");
+    r.b.push(1_000, r.warrior, r.boss, 1, hit(1_000));
+    r.b.push(2_000, r.warrior, r.warrior, 1292299, hit(200));
+    r.b.push(2_000, r.warrior, r.warrior, 413984, supported(20, r.evoker));
+    let fight = r.b.build();
+    let augmented = damage_done(&fight, &ReportFilter::whole(AUG));
+    assert_eq!(
+        (total(&augmented, r.warrior), total(&augmented, r.evoker)),
+        (1_000, 0)
+    );
+    let reattributed = damage_done(&fight, &ReportFilter::whole(RE));
+    assert_eq!(
+        (
+            total(&reattributed, r.warrior),
+            total(&reattributed, r.evoker)
+        ),
+        (1_000, 20)
+    );
 }
 
 #[test]

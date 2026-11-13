@@ -140,7 +140,7 @@ fn opening_a_log_lists_its_pulls_and_a_stored_index_reopens_it() {
 }
 
 #[test]
-fn a_grown_log_lists_settled_pulls_and_reloads_pulls_read_before_their_tail() {
+fn a_grown_log_lists_settled_pulls_and_keeps_the_complete_ones_loaded() {
     let pull_2_start = FIXTURE.find("19:10:00.0000").unwrap();
     let cut = pull_2_start + FIXTURE[pull_2_start..].find('\n').unwrap() + 1;
     let (head, rest) = FIXTURE.split_at(cut);
@@ -163,7 +163,7 @@ fn a_grown_log_lists_settled_pulls_and_reloads_pulls_read_before_their_tail() {
     for (grown, complete) in listed.iter().zip(whole["fights"].as_array().unwrap()) {
         assert_eq!(grown, complete);
     }
-    assert!(!engine.touch_fight(1));
+    assert!(engine.touch_fight(1));
     assert_eq!(
         serde_json::from_str::<Value>(&engine.snapshot_json()).unwrap(),
         serde_json::from_str::<Value>(&reference.index_json()).unwrap()

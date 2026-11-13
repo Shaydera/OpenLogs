@@ -81,6 +81,7 @@ fn raid_damage_counts_hits_a_shield_swallowed_like_the_damage_report() {
             miss_type: MissType::Absorb,
             amount_missed: 10_000,
             critical: false,
+            unlanded: false,
         }),
     );
     let fight = b.build();

@@ -78,6 +78,7 @@ fn recap_lists_damage_heals_and_absorbs() {
             miss_type: MissType::Absorb,
             amount_missed: 80_000,
             critical: false,
+            unlanded: false,
         }),
     );
     s.b.push(
