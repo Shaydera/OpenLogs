@@ -1,8 +1,7 @@
 use std::collections::BTreeSet;
 
 use openlogs_analysis::{
-    Actors, Fight, LANDED_MATCH_MS, LANDED_TAIL_BYTES, infer_classes, load_fight_slice,
-    load_fight_slice_with,
+    Actors, Fight, LANDED_MATCH_MS, infer_classes, load_fight_slice, load_fight_slice_with,
 };
 use openlogs_gamedata::{ChannelSpells, Curated, DungeonTable, SpellClasses};
 use openlogs_index::{FightSummary, Indexer, LogIndex};
@@ -101,8 +100,7 @@ impl Engine {
         self.index = self.indexer.settled_index(settle_ms);
         let index = &self.index;
         self.fights.retain(|pulled| {
-            !pulled.cut_tail
-                && summary_of(index, pulled.index).is_ok_and(|summary| *summary == pulled.summary)
+            summary_of(index, pulled.index).is_ok_and(|summary| *summary == pulled.summary)
         });
         self.view_json(log_id, file_name, size_bytes, false)
     }
@@ -131,13 +129,10 @@ impl Engine {
         Ok(self.view_json(log_id, file_name, size_bytes, true))
     }
 
-    /// The byte range `[prelude, end)` the pull needs from the log; `end` may lie past the file.
+    /// The byte range `[prelude, end)` the pull needs from the log.
     pub fn fight_range(&self, fight_index: u32) -> Result<(u64, u64), String> {
         let summary = self.summary(fight_index)?;
-        Ok((
-            summary.prelude_offset,
-            summary.end_offset + LANDED_TAIL_BYTES,
-        ))
+        Ok((summary.prelude_offset, summary.end_offset))
     }
 
     /// Marks a loaded pull as the most recently used one; `false` when it is not loaded.
@@ -164,7 +159,6 @@ impl Engine {
         let summary = self.summary(fight_index)?.clone();
         let mut fight = load_fight_slice(part, base_offset, &summary);
         infer_classes(&mut fight, &self.spell_classes);
-        let cut_tail = base_offset + (part.len() as u64) < summary.end_offset + LANDED_TAIL_BYTES;
         self.fights.retain(|pulled| pulled.index != fight_index);
         self.fights.insert(
             0,
@@ -172,7 +166,6 @@ impl Engine {
                 index: fight_index,
                 fight,
                 summary,
-                cut_tail,
             },
         );
         self.fights.truncate(LOADED_PULLS);
@@ -478,8 +471,6 @@ struct LoadedPull {
     index: u32,
     fight: Fight,
     summary: FightSummary,
-    /// The file ended before the pull's landed tail did, so later lines may change it.
-    cut_tail: bool,
 }
 
 fn summary_of(index: &LogIndex, fight_index: u32) -> Result<&FightSummary, String> {

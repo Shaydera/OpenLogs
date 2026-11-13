@@ -928,6 +928,7 @@ mod tests {
                 miss_type,
                 amount_missed: 0,
                 critical: false,
+                unlanded: false,
             }),
             ..damage_event(t, mage, boss, 1, 0, NOBODY)
         };

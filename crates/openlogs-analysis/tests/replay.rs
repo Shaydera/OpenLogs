@@ -736,6 +736,7 @@ fn a_bosses_target_follows_its_melee_swings() {
                 miss_type: openlogs_analysis::MissType::Dodge,
                 amount_missed: 0,
                 critical: false,
+                unlanded: false,
             }),
         );
 

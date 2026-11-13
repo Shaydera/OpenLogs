@@ -96,6 +96,7 @@ fn raid() -> Raid {
             miss_type: MissType::Absorb,
             amount_missed: 250,
             critical: false,
+            unlanded: false,
         }),
     );
     Raid {
@@ -181,6 +182,7 @@ fn misses_are_rows_without_an_amount_on_both_sides() {
             miss_type,
             amount_missed: 0,
             critical: false,
+            unlanded: false,
         })
     };
     b.push(

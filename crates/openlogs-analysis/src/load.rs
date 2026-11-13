@@ -24,12 +24,8 @@ pub fn load_fight(data: &[u8], summary: &FightSummary) -> Fight {
     load_fight_slice(data, 0, summary)
 }
 
-/// How far past a fight's end a part of the log should reach, so that the landed copies of
-/// its last swings are in it.
-pub const LANDED_TAIL_BYTES: u64 = 2 * 1024 * 1024;
-
 /// Loads one fight from a part of the log that starts at byte `base_offset` and covers the
-/// fight from its prelude to its end, plus up to [`LANDED_TAIL_BYTES`] after it.
+/// fight from its prelude to its end.
 pub fn load_fight_slice(data: &[u8], base_offset: u64, summary: &FightSummary) -> Fight {
     load_slice(data, base_offset, summary, Actors::new(), true)
 }
@@ -69,13 +65,11 @@ fn load_slice(
             Err(_) => builder.fight.broken_lines += 1,
         }
     }
-    let late = builder.landed_after_end(&data[end..], &mut fields);
     let mut fight = builder.finish();
     // A combat pull's specs come from `COMBATANT_INFO` before its range, which only the index
     // read; a spec logged inside the range wins.
     apply_roster(&mut fight, &summary.roster);
-    let unpaired = pair_landed_copies(&mut fight);
-    mark_swings_landing_after_end(&mut fight, unpaired, &late);
+    pair_melee_lines(&mut fight);
     note_delayed_hits(&mut fight);
     fight
 }
@@ -90,14 +84,6 @@ fn apply_roster(fight: &mut Fight, roster: &[RosterEntry]) {
             fight.actors.set_spec(id, entry.spec_id);
         }
     }
-}
-
-/// A `SWING_DAMAGE_LANDED` logged after the fight's end, of units the fight knows.
-struct LateLanded {
-    t: i32,
-    source: ActorId,
-    target: ActorId,
-    melee_total: u64,
 }
 
 enum MeleeLine {
@@ -120,24 +106,35 @@ fn melee_line(event: &Event) -> Option<(MeleeLine, u64)> {
     }
 }
 
-/// Pairs each melee hit's landed copy with its attacker-side line, as loading does, for a
-/// fight built without loading it. A landed copy left without one is the hit itself.
+/// Pairs each melee hit's landed copy with its attacker-side line and marks the swings left
+/// without one, as loading does, for a fight built without loading it. A landed copy left
+/// without an attacker-side line is the hit itself.
 pub fn pair_melee_lines(fight: &mut Fight) {
-    pair_landed_copies(fight);
+    let unlanded = pair_landed_copies(fight);
+    for line in unlanded {
+        match &mut fight.events[line].kind {
+            EventKind::Damage(damage) => damage.unlanded = true,
+            EventKind::Missed(missed) => missed.unlanded = true,
+            _ => {}
+        }
+    }
 }
 
 /// Pairs each landed copy with its attacker-side line, which the log writes up to
 /// [`LANDED_MATCH_MS`] before or after it, and records that line in the copy. Returns the
-/// attacker-side lines of the last [`LANDED_MATCH_MS`] that are still unpaired.
-fn pair_landed_copies(fight: &mut Fight) -> VecDeque<(usize, u64)> {
+/// attacker-side lines left without a copy; none when the pull has no landed copy at all, as
+/// in logs that do not write them.
+fn pair_landed_copies(fight: &mut Fight) -> Vec<usize> {
     let mut attackers: VecDeque<(usize, u64)> = VecDeque::new();
     let mut landed: VecDeque<(usize, u64)> = VecDeque::new();
+    let mut unlanded = Vec::new();
     let mut pairs = Vec::new();
+    let mut any_landed = false;
     for index in 0..fight.events.len() {
         let event = &fight.events[index];
         let expired = |&(line, _): &(usize, u64)| event.t - fight.events[line].t > LANDED_MATCH_MS;
-        while attackers.front().is_some_and(expired) {
-            attackers.pop_front();
+        while let Some(attacker) = attackers.pop_front_if(|a| expired(a)) {
+            unlanded.push(attacker.0);
         }
         while landed.front().is_some_and(expired) {
             landed.pop_front();
@@ -147,7 +144,10 @@ fn pair_landed_copies(fight: &mut Fight) -> VecDeque<(usize, u64)> {
         };
         let (unpaired, other_side) = match side {
             MeleeLine::Attacker => (&mut attackers, &mut landed),
-            MeleeLine::Landed => (&mut landed, &mut attackers),
+            MeleeLine::Landed => {
+                any_landed = true;
+                (&mut landed, &mut attackers)
+            }
         };
         let pair = |&(line, other_total): &(usize, u64)| {
             let other = &fight.events[line];
@@ -169,30 +169,11 @@ fn pair_landed_copies(fight: &mut Fight) -> VecDeque<(usize, u64)> {
             damage.attacker_line = u32::try_from(attacker).ok();
         }
     }
-    attackers
-}
-
-/// Flags the swings among `unpaired` whose landed copy is one of `late`.
-fn mark_swings_landing_after_end(
-    fight: &mut Fight,
-    mut unpaired: VecDeque<(usize, u64)>,
-    late: &[LateLanded],
-) {
-    for copy in late {
-        let landed_after = |&(line, total): &(usize, u64)| {
-            let swing = &fight.events[line];
-            total == copy.melee_total
-                && swing.source == copy.source
-                && swing.target == copy.target
-                && copy.t - swing.t <= LANDED_MATCH_MS
-        };
-        if let Some(position) = unpaired.iter().position(landed_after)
-            && let Some((swing, _)) = unpaired.remove(position)
-            && let EventKind::Damage(damage) = &mut fight.events[swing].kind
-        {
-            damage.lands_after_end = true;
-        }
+    if !any_landed {
+        return Vec::new();
     }
+    unlanded.extend(attackers.into_iter().map(|(line, _)| line));
+    unlanded
 }
 
 /// Memory-maps `path` and loads one fight from it.
@@ -505,43 +486,6 @@ impl FightBuilder {
         FailReason::Other(u16::try_from(index).unwrap_or(u16::MAX))
     }
 
-    /// The landed copies in `tail`, the lines after the fight, until they could no longer
-    /// belong to one of its swings.
-    fn landed_after_end<'a>(&self, tail: &'a [u8], fields: &mut Vec<&'a str>) -> Vec<LateLanded> {
-        let end = i32::try_from(self.fight.duration_ms).unwrap_or(i32::MAX);
-        let actors = &self.fight.actors;
-        let mut late = Vec::new();
-        for raw in Lines::new(tail) {
-            let Ok(line) = raw.text().and_then(|text| parse_line(text, fields)) else {
-                continue;
-            };
-            let t = self.relative_ms(line.timestamp);
-            if t > end.saturating_add(LANDED_MATCH_MS) {
-                break;
-            }
-            let LogEvent::Combat(event) = &line.event else {
-                continue;
-            };
-            let CombatKind::Damage(damage) = event.kind else {
-                continue;
-            };
-            if damage.via != DamageVia::SwingLanded || damage.supporter.is_some() {
-                continue;
-            }
-            if let (Some(source), Some(target)) =
-                (actors.id(event.source.guid), actors.id(event.target.guid))
-            {
-                late.push(LateLanded {
-                    t,
-                    source,
-                    target,
-                    melee_total: damage.amount + damage.absorbed,
-                });
-            }
-        }
-        late
-    }
-
     fn relative_ms(&self, timestamp: Timestamp) -> i32 {
         ((timestamp.0 - self.start.0) / 1_000).clamp(i64::from(i32::MIN), i64::from(i32::MAX))
             as i32
@@ -673,13 +617,14 @@ impl FightBuilder {
                 critical: d.critical,
                 supporter: self.actor(d.supporter),
                 attacker_line: None,
-                lands_after_end: false,
+                unlanded: false,
             }),
             CombatKind::Missed(m) => EventKind::Missed(Missed {
                 via: m.via,
                 miss_type: MissType::from_log(m.miss_type),
                 amount_missed: m.amount_missed.unwrap_or(0),
                 critical: m.critical,
+                unlanded: false,
             }),
             CombatKind::Heal(h) => EventKind::Heal(Heal {
                 periodic: h.via == HealVia::Periodic,

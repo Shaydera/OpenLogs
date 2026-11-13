@@ -146,6 +146,7 @@ fn hits_a_shield_swallowed_count_as_damage_done_net_of_their_support() {
             miss_type: MissType::Absorb,
             amount_missed: 400,
             critical: true,
+            unlanded: false,
         }),
     );
     r.b.push(2_000, r.warrior, r.boss, 395152, supported(40, r.evoker));

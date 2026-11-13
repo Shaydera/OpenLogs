@@ -116,6 +116,7 @@ fn fully_absorbed_hits_count_as_damage_taken() {
             miss_type: MissType::Absorb,
             amount_missed: 400,
             critical: false,
+            unlanded: false,
         }),
     );
     b.push(
@@ -128,6 +129,7 @@ fn fully_absorbed_hits_count_as_damage_taken() {
             miss_type: MissType::Dodge,
             amount_missed: 0,
             critical: false,
+            unlanded: false,
         }),
     );
     let report = damage_taken(&b.build(), &ReportFilter::whole(Attribution::Augmented));
@@ -339,6 +341,7 @@ fn refractive_images_on_a_fully_absorbed_swing_comes_off_that_swing() {
             miss_type: MissType::Absorb,
             amount_missed: 400,
             critical: false,
+            unlanded: false,
         }),
     );
     b.push(

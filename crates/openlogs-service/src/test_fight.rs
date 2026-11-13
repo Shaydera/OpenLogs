@@ -76,7 +76,7 @@ pub fn damage_event(
             critical: false,
             supporter,
             attacker_line: None,
-            lands_after_end: false,
+            unlanded: false,
         }),
         source_logged_hostile: false,
         target_logged_hostile: true,

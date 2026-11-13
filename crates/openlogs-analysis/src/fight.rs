@@ -320,8 +320,9 @@ pub struct Damage {
     /// For a `SWING_DAMAGE_LANDED`: the index in [`Fight::events`] of the hit's attacker-side
     /// line, set by [`crate::pair_melee_lines`].
     pub attacker_line: Option<u32>,
-    /// A swing whose `SWING_DAMAGE_LANDED` copy is logged after the pull's end.
-    pub lands_after_end: bool,
+    /// A swing the pull shows no `SWING_DAMAGE_LANDED` copy of, in a pull whose log writes
+    /// them; set by [`crate::pair_melee_lines`].
+    pub unlanded: bool,
 }
 
 impl Damage {
@@ -349,6 +350,8 @@ pub struct Missed {
     /// Prevented amount for partial misses, else 0.
     pub amount_missed: u64,
     pub critical: bool,
+    /// Like [`Damage::unlanded`], for a swing a shield took whole.
+    pub unlanded: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

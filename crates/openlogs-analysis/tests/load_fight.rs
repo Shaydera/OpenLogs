@@ -1,7 +1,7 @@
 use openlogs_analysis::{
-    ActorKind, Actors, Attribution, Damage, DamageVia, EventKind, FailReason, LANDED_TAIL_BYTES,
-    NO_SPELL, ReportFilter, ScopeMetric, Side, UnitHp, cells, damage_done, damage_taken,
-    load_fight, load_fight_slice, load_fight_slice_with,
+    ActorKind, Actors, Attribution, Damage, DamageVia, EventKind, FailReason, NO_SPELL,
+    ReportFilter, ScopeMetric, Side, UnitHp, cells, damage_done, damage_taken, load_fight,
+    load_fight_slice, load_fight_slice_with,
 };
 use openlogs_gamedata::Curated;
 use openlogs_index::{Outcome, index_bytes};
@@ -186,7 +186,7 @@ fn a_fight_loads_the_same_from_its_part_of_the_log() {
         let index = index_bytes(log);
         for summary in &index.fights {
             let start = summary.prelude_offset as usize;
-            let end = ((summary.end_offset + LANDED_TAIL_BYTES) as usize).min(log.len());
+            let end = summary.end_offset as usize;
             assert_eq!(
                 load_fight_slice(&log[start..end], summary.prelude_offset, summary),
                 load_fight(log, summary)
@@ -198,6 +198,7 @@ fn a_fight_loads_the_same_from_its_part_of_the_log() {
 const KILLING_SWING_LOG: &str = concat!(
     "10/7/2026 19:03:02.0762  ENCOUNTER_START,3492,\"Ula'tek\",15,23,3004\n",
     "10/7/2026 19:03:05.0000  SWING_DAMAGE,Pet-0-4246-0-846-17252-01044B0E32,\"ShaaNash\",0x1114,0x80000000,Vehicle-0-3892-3004-1387-257758-00004679D4,\"Ula'tek\",0x10a48,0x80000000,Pet-0-4246-0-846-17252-01044B0E32,Player-4101-0A1AA093,821186,821186,7070,10791,5420,0,0,164192,3,75,200,0,1576.64,5.07,2610,6.0174,333,6234,6234,-1,1,0,0,0,nil,nil,nil\n",
+    "10/7/2026 19:03:05.0100  SWING_DAMAGE_LANDED,Pet-0-4246-0-846-17252-01044B0E32,\"ShaaNash\",0x1114,0x80000000,Vehicle-0-3892-3004-1387-257758-00004679D4,\"Ula'tek\",0x10a48,0x80000000,Pet-0-4246-0-846-17252-01044B0E32,Player-4101-0A1AA093,821186,821186,7070,10791,5420,0,0,164192,3,75,200,0,1576.64,5.07,2610,6.0174,333,6234,6234,-1,1,0,0,0,nil,nil,nil\n",
     "10/7/2026 19:04:02.0500  SWING_DAMAGE,Pet-0-4246-0-846-17252-01044B0E32,\"ShaaNash\",0x1114,0x80000000,Vehicle-0-3892-3004-1387-257758-00004679D4,\"Ula'tek\",0x10a48,0x80000000,Pet-0-4246-0-846-17252-01044B0E32,Player-4101-0A1AA093,821186,821186,7070,10791,5420,0,0,164192,3,75,200,0,1576.64,5.07,2610,6.0174,333,5000,5000,1200,1,0,0,0,nil,nil,nil\n",
     "10/7/2026 19:04:02.0762  ENCOUNTER_END,3492,\"Ula'tek\",15,23,1,60000\n",
     "10/7/2026 19:04:02.0800  SWING_DAMAGE_LANDED,Pet-0-4246-0-846-17252-01044B0E32,\"ShaaNash\",0x1114,0x80000000,Vehicle-0-3892-3004-1387-257758-00004679D4,\"Ula'tek\",0x10a48,0x80000000,Pet-0-4246-0-846-17252-01044B0E32,Player-4101-0A1AA093,821186,821186,7070,10791,5420,0,0,164192,3,75,200,0,1576.64,5.07,2610,6.0174,333,3800,5000,1200,1,0,0,1200,nil,nil,nil\n",
@@ -208,15 +209,12 @@ fn a_swing_whose_landed_copy_follows_the_end_stays_out_of_damage_done() {
     let index = index_bytes(KILLING_SWING_LOG.as_bytes());
     let fight = load_fight(KILLING_SWING_LOG.as_bytes(), &index.fights[0]);
     let report = damage_done(&fight, &ReportFilter::whole(Attribution::Augmented));
-    assert_eq!(
-        report.total, 6_234,
-        "a swing without any landed copy still counts"
-    );
+    assert_eq!(report.total, 6_234);
     let swings: Vec<bool> = fight
         .events
         .iter()
         .filter_map(|e| match e.kind {
-            EventKind::Damage(d) if d.via == DamageVia::Swing => Some(d.lands_after_end),
+            EventKind::Damage(d) if d.via == DamageVia::Swing => Some(d.unlanded),
             _ => None,
         })
         .collect();
@@ -292,6 +290,32 @@ fn a_melee_hit_counts_once_whichever_of_its_lines_the_log_has() {
         "the landed-only hit, the pair whose lines split the hit differently and the pair \
          whose landed copy comes first"
     );
+}
+
+#[test]
+fn a_swing_the_pull_never_shows_landing_stays_out_of_damage_done() {
+    let log = pull_log(&[
+        melee("04.0000", "SWING_DAMAGE", KNIGHT, BOSS, 300, 0),
+        melee("04.0100", "SWING_DAMAGE_LANDED", KNIGHT, BOSS, 300, 0),
+        melee("05.0000", "SWING_DAMAGE", KNIGHT, GHOUL, 500, 0),
+        format!("06.0000  SWING_MISSED,{KNIGHT},{BOSS},ABSORB,nil,900,900,nil"),
+    ]);
+    let index = index_bytes(log.as_bytes());
+    let fight = load_fight(log.as_bytes(), &index.fights[0]);
+    let report = damage_done(&fight, &ReportFilter::whole(Attribution::Augmented));
+    assert_eq!(report.total, 300);
+}
+
+#[test]
+fn every_swing_counts_in_a_log_without_landed_copies() {
+    let log = pull_log(&[
+        melee("04.0000", "SWING_DAMAGE", KNIGHT, BOSS, 300, 0),
+        melee("05.0000", "SWING_DAMAGE", KNIGHT, GHOUL, 500, 0),
+    ]);
+    let index = index_bytes(log.as_bytes());
+    let fight = load_fight(log.as_bytes(), &index.fights[0]);
+    let report = damage_done(&fight, &ReportFilter::whole(Attribution::Augmented));
+    assert_eq!(report.total, 800);
 }
 
 #[test]
