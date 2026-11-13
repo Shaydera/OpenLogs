@@ -184,27 +184,29 @@ fn own_side(
                 miss: None,
                 row,
             });
-            let (spell, kind) = match hit {
-                Some((_, spell)) => (spell, CellKind::Own),
-                None => (NO_SPELL, CellKind::Unmatched),
-            };
-            book(Part {
-                source: support.doer,
-                spell,
-                kind,
-                target: support.target,
-                amount: -amount,
-                absorbed: -(deducted.absorbed as i64),
-                heal_absorbed: -(deducted.heal_absorbed as i64),
-                overheal: 0,
-                healed: 0,
-                hit: false,
-                cost: false,
-                crit: false,
-                periodic,
-                miss: None,
-                row,
-            });
+            if support.hit_counts {
+                let (spell, kind) = match hit {
+                    Some((_, spell)) => (spell, CellKind::Own),
+                    None => (NO_SPELL, CellKind::Unmatched),
+                };
+                book(Part {
+                    source: support.doer,
+                    spell,
+                    kind,
+                    target: support.target,
+                    amount: -amount,
+                    absorbed: -(deducted.absorbed as i64),
+                    heal_absorbed: -(deducted.heal_absorbed as i64),
+                    overheal: 0,
+                    healed: 0,
+                    hit: false,
+                    cost: false,
+                    crit: false,
+                    periodic,
+                    miss: None,
+                    row,
+                });
+            }
         }
         _ => {}
     }

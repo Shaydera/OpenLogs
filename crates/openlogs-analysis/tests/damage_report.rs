@@ -186,6 +186,30 @@ fn self_support_cancels_out() {
 }
 
 #[test]
+fn the_share_of_a_hit_a_player_dealt_themselves_counts_for_the_evoker_alone() {
+    let mut r = raid();
+    r.b.spell(1292299, "Seriously Sharp Seashell");
+    r.b.spell(413984, "Shifting Sands");
+    r.b.push(1_000, r.warrior, r.boss, 1, hit(1_000));
+    r.b.push(2_000, r.warrior, r.warrior, 1292299, hit(200));
+    r.b.push(2_000, r.warrior, r.warrior, 413984, supported(20, r.evoker));
+    let fight = r.b.build();
+    let augmented = damage_done(&fight, &ReportFilter::whole(AUG));
+    assert_eq!(
+        (total(&augmented, r.warrior), total(&augmented, r.evoker)),
+        (1_000, 0)
+    );
+    let reattributed = damage_done(&fight, &ReportFilter::whole(RE));
+    assert_eq!(
+        (
+            total(&reattributed, r.warrior),
+            total(&reattributed, r.evoker)
+        ),
+        (1_000, 20)
+    );
+}
+
+#[test]
 fn support_from_unknown_supporter_stays_with_the_player() {
     let mut r = raid();
     let stranger = r.b.unit("Creature-0-1-1-1-9-01", "Mysterious Ally", 0x1111);

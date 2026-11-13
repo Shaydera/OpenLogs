@@ -663,18 +663,19 @@ pub(crate) fn keeps_support(
 ) -> SupportParts {
     if scope.selects_all() {
         return SupportParts {
-            buffed: true,
+            buffed: support.hit_counts,
             credit: true,
         };
     }
     let target = unit_of(fight, support.target);
     SupportParts {
-        buffed: scope.accepts(
-            fight,
-            Some(&unit_of(fight, support.doer)),
-            ability,
-            Some(&target),
-        ),
+        buffed: support.hit_counts
+            && scope.accepts(
+                fight,
+                Some(&unit_of(fight, support.doer)),
+                ability,
+                Some(&target),
+            ),
         credit: scope.accepts(
             fight,
             Some(&UnitRef::Player(support.evoker)),
@@ -860,6 +861,8 @@ pub(crate) struct Support {
     pub buff: SpellId,
     pub target: ActorId,
     pub amount: u64,
+    /// Whether the buffed hit is in the numbers itself; the Evoker's share counts either way.
+    pub hit_counts: bool,
 }
 
 /// The parts of an amount that went into or came from shields, and that heal absorbs took.
@@ -914,16 +917,15 @@ impl Absorbs {
     }
 }
 
-/// Damage done: hits on enemies (see [`hits_enemy`]), credited through pets.
-/// Support from an unknown Evoker is not a share.
+/// Damage done: hits on enemies (see [`hits_enemy`]), credited through pets. The Evoker's share
+/// of a hit a player dealt themselves counts for the Evoker alone. Support from an unknown Evoker
+/// is not a share.
 pub(crate) fn damage_share(fight: &Fight, event: &Event, overkill: Overkill) -> Option<Share> {
     let damage = dealt_damage(event)?;
-    if !hits_enemy(fight, event) {
-        return None;
-    }
     let player = fight.actors.credited_player(event.source)?;
+    let on_enemy = hits_enemy(fight, event);
     if damage.supporter == NOBODY {
-        return credited_as_damage_done(&damage).then_some(Share::Own {
+        return (on_enemy && credited_as_damage_done(&damage)).then_some(Share::Own {
             player,
             actor: event.source,
             spell: event.spell,
@@ -935,6 +937,11 @@ pub(crate) fn damage_share(fight: &Fight, event: &Event, overkill: Overkill) -> 
         });
     }
     let evoker = fight.actors.credited_player(damage.supporter)?;
+    let self_hit_buffed_by_another =
+        evoker != player && fight.actors.credited_player(event.target) == Some(player);
+    if !(on_enemy || self_hit_buffed_by_another) {
+        return None;
+    }
     Some(Share::Support(Support {
         player,
         evoker,
@@ -942,6 +949,7 @@ pub(crate) fn damage_share(fight: &Fight, event: &Event, overkill: Overkill) -> 
         buff: event.spell,
         target: event.target,
         amount: damage_done_amount(&damage, overkill),
+        hit_counts: on_enemy,
     }))
 }
 
@@ -1057,6 +1065,7 @@ pub(crate) fn healing_share(fight: &Fight, event: &Event) -> Option<Share> {
         buff: spell,
         target: event.target,
         amount,
+        hit_counts: true,
     }))
 }
 
