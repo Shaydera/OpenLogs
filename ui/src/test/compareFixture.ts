@@ -69,6 +69,7 @@ function pull(index: number, outcome: Outcome, durationMs: number, bossHpPercent
     zone: 'The Venomous Abyss',
     run: null,
     runIndex: null,
+    combat: null,
   };
 }
 

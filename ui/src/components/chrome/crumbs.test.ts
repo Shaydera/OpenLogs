@@ -75,6 +75,19 @@ describe('fight breadcrumb', () => {
     expect(crumbs[1].action).toEqual({ kind: 'fight', index: 1 });
   });
 
+  it("names a combat pull after its enemies and keeps it out of the run's boss pull numbers", () => {
+    const [run, dailcry, ...rest] = runLogFixture.fights;
+    const trash = { ...dailcry, index: 20, encounterId: 0, name: 'Arathi Knight', outcome: 'ended' as const, durationMs: 45_000, bossHpPercent: null, combat: { enemyCount: 3 } };
+    const log = { ...runLogFixture, fights: [run, trash, dailcry, ...rest] };
+    const runBase = { ...base, log };
+    expect(read(fightCrumbs({ ...runBase, row: trash, tab: 'damage' }))).toEqual([
+      [RUN_FILE, 'pulls'],
+      ['Priory of the Sacred Flame +12', 'fight'],
+      ['Arathi Knight +2 · Ended 0:45', 'current'],
+    ]);
+    expect(read(fightCrumbs({ ...runBase, row: rest[1] }))[2]).toEqual(['Baron Braunpyke · Pull #3', 'current']);
+  });
+
   it('a_set_crumb_names_boss_set_and_count', () => {
     const set = { kind: 'all' as const, encounterId: 3492, difficulty: 15, fights: [1, 2, 3] };
     expect(read(setCrumbs({ log: compareLogFixture, set, tab: 'overview' }))).toEqual([

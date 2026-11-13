@@ -1,11 +1,11 @@
-import type { BossProgress, FightRow, KeyTimer, PullSet, PullSetKind, RunInfo } from '../api/types';
-import { formatDuration, formatInteger } from '../i18n/format';
+import type { BossProgress, CombatInfo, FightRow, KeyTimer, PullSet, PullSetKind, RunInfo } from '../api/types';
+import { formatDuration, formatInteger, formatSeconds } from '../i18n/format';
 import { t } from '../i18n/i18n';
 
 /** Non-kills shorter than this are "aborted" and can be hidden. */
 const ABORT_THRESHOLD_MS = 10_000;
 
-export type PullStatus = 'kill' | 'wipe' | 'aborted' | 'incomplete';
+export type PullStatus = 'kill' | 'wipe' | 'ended' | 'aborted' | 'incomplete';
 
 /** A run's result: completed, ended without completion, or no end in the log. */
 export type RunStatus = 'completed' | 'notCompleted' | 'incomplete';
@@ -13,7 +13,7 @@ export type RunStatus = 'completed' | 'notCompleted' | 'incomplete';
 /** Chip style of a run result: completed like a kill, not completed like a wipe, no end neutral. */
 export const RUN_CHIP: Record<RunStatus, string> = { completed: 'kill', notCompleted: 'wipe', incomplete: 'abort' };
 
-export const PULL_CHIP: Record<PullStatus, string> = { kill: 'kill', wipe: 'wipe', incomplete: 'wipe', aborted: 'abort' };
+export const PULL_CHIP: Record<PullStatus, string> = { kill: 'kill', wipe: 'wipe', incomplete: 'wipe', ended: 'ended', aborted: 'abort' };
 
 export interface PullView {
   index: number;
@@ -53,7 +53,25 @@ export interface RunPullView extends PullView {
   name: string;
 }
 
-/** A Mythic+ run with its boss pulls. */
+/** A fight outside boss encounters, named after the enemy that took the most damage. */
+export interface CombatPullView {
+  index: number;
+  name: string;
+  /** Enemies fought besides the one the pull is named after. */
+  moreEnemies: number;
+  zone: string | null;
+  status: PullStatus;
+  /** A non-kill under 10 s: its time in seconds, hidden with the aborted pulls. */
+  aborted: boolean;
+  durationMs: number;
+  playerCount: number;
+  startUnixMs: number;
+}
+
+/** A boss pull of a run card, or the combat pulls between two of them; `after` is the index of the boss pull before them, or of the run. */
+export type RunEntry = { kind: 'boss'; pull: RunPullView } | { kind: 'trash'; after: number; pulls: CombatPullView[] };
+
+/** A Mythic+ run with its boss and combat pulls. */
 export interface RunView {
   index: number;
   dungeon: string;
@@ -68,16 +86,51 @@ export interface RunView {
   durationMs: number;
   playerCount: number;
   startUnixMs: number;
-  /** Every boss pull of the run, hidden ones included. */
+  /** Every boss pull of the run, hidden ones included; combat pulls do not count. */
   pullCount: number;
-  /** Boss pulls in log order; aborted ones are left out when hidden. */
-  pulls: RunPullView[];
+  /** In log order, the combat pulls between two boss pulls as one entry; aborted pulls are left out when hidden. */
+  entries: RunEntry[];
+}
+
+export function isCombatPull<T extends Pick<FightRow, 'combat'>>(fight: T): fight is T & { combat: CombatInfo } {
+  return fight.combat !== null;
+}
+
+/** A non-kill under 10 s: "Hide aborted pulls" hides it, a boss pull's or a combat pull's alike. */
+export function isAborted(fight: Pick<FightRow, 'outcome' | 'durationMs'>): boolean {
+  return fight.outcome !== 'kill' && fight.durationMs < ABORT_THRESHOLD_MS;
 }
 
 export function pullStatus(fight: FightRow): PullStatus {
   if (fight.outcome === 'kill') return 'kill';
-  if (fight.durationMs < ABORT_THRESHOLD_MS) return 'aborted';
+  // A short combat pull keeps its logged result; only boss pulls are labelled aborted.
+  if (!isCombatPull(fight) && isAborted(fight)) return 'aborted';
+  if (fight.outcome === 'ended') return 'ended';
   return fight.outcome === 'incomplete' ? 'incomplete' : 'wipe';
+}
+
+export function moreEnemies(combat: CombatInfo): number {
+  return Math.max(0, combat.enemyCount - 1);
+}
+
+/** `Venomfang Juggernaut +10`; the name alone when no other enemy was fought. */
+export function combatName(name: string, more: number): string {
+  return more > 0 ? t('combat.named', { name, more: t('combat.more', { count: more }) }) : name;
+}
+
+/** `Venomfang Juggernaut and 10 more enemies`: what assistive tech reads for `combatName`. */
+export function spokenCombatName(name: string, more: number): string {
+  return more > 0 ? t('combat.named', { name, more: t('combat.moreEnemies', { count: more }) }) : name;
+}
+
+/** An aborted pull lasts seconds: `0.4 s` instead of `0:00`. */
+export function pullTime(durationMs: number, aborted: boolean): string {
+  return aborted ? formatSeconds(durationMs) : formatDuration(durationMs);
+}
+
+/** A boss pull's time as shown, by default its whole length. */
+export function pullViewTime(pull: PullView, durationMs = pull.durationMs): string {
+  return pullTime(durationMs, pull.status === 'aborted');
 }
 
 export function runStatus(fight: FightRow): RunStatus {
@@ -88,9 +141,9 @@ export function runStatus(fight: FightRow): RunStatus {
 /** Difficulty ID of Mythic+ keystone dungeons. */
 const MYTHIC_PLUS_DIFFICULTY = 8;
 
-/** Whether a row belongs to Mythic+: a whole run or a boss pull inside one. */
-function inMythicPlus(fight: FightRow): boolean {
-  return fight.run !== null || fight.runIndex !== null;
+/** What boss groups, sets and comparisons are made of: boss pulls outside Mythic+ runs. */
+export function isGroupedBossPull(fight: FightRow): boolean {
+  return fight.run === null && fight.runIndex === null && !isCombatPull(fight);
 }
 
 export function difficultyName(fight: Pick<FightRow, 'difficulty' | 'difficultyLabel'>): string {
@@ -101,7 +154,7 @@ export function difficultyName(fight: Pick<FightRow, 'difficulty' | 'difficultyL
 export function groupPulls(fights: FightRow[], hideAborted: boolean): BossGroup[] {
   const groups = new Map<string, FightRow[]>();
   for (const fight of fights) {
-    if (inMythicPlus(fight)) continue;
+    if (!isGroupedBossPull(fight)) continue;
     const key = `${fight.encounterId}:${fight.difficulty}`;
     const list = groups.get(key);
     if (list) list.push(fight);
@@ -147,14 +200,25 @@ function pullSets(boss: Pick<FightRow, 'encounterId' | 'difficulty'>, pulls: Pul
     }));
 }
 
-/** Mythic+ runs in log order, each with its boss pulls numbered within the run. */
+/** Combat pulls outside Mythic+ runs in log order; `groupRuns` lists those inside a run. */
+export function combatPulls(fights: FightRow[], hideAborted: boolean): CombatPullView[] {
+  return fights.filter(isCombatPull).filter((fight) => fight.runIndex === null && !(hideAborted && isAborted(fight))).map(toCombatView);
+}
+
+/** Mythic+ runs in log order, each with its boss pulls numbered within the run and the combat pulls between them. */
 export function groupRuns(fights: FightRow[], hideAborted: boolean): RunView[] {
   return fights.flatMap((fight) => {
     const run = fight.run;
     if (run === null) return [];
-    const views = fights
-      .filter((pull) => pull.runIndex === fight.index)
-      .map((pull, i): RunPullView => ({ ...toView(pull, i + 1), name: pull.name }));
+    const numbered = runBossPulls(fights, fight.index);
+    const entries: RunEntry[] = [];
+    for (const pull of fights) {
+      if (pull.runIndex !== fight.index || (hideAborted && isAborted(pull))) continue;
+      const last = entries.at(-1);
+      if (!isCombatPull(pull)) entries.push({ kind: 'boss', pull: { ...toView(pull, numbered.indexOf(pull) + 1), name: pull.name } });
+      else if (last?.kind === 'trash') last.pulls.push(toCombatView(pull));
+      else entries.push({ kind: 'trash', after: last?.pull.index ?? fight.index, pulls: [toCombatView(pull)] });
+    }
     return [
       {
         index: fight.index,
@@ -168,8 +232,8 @@ export function groupRuns(fights: FightRow[], hideAborted: boolean): RunView[] {
         durationMs: fight.durationMs,
         playerCount: fight.playerCount,
         startUnixMs: fight.startUnixMs,
-        pullCount: views.length,
-        pulls: hideAborted ? views.filter((view) => view.status !== 'aborted') : views,
+        pullCount: numbered.length,
+        entries,
       },
     ];
   });
@@ -235,15 +299,42 @@ function toView(fight: FightRow, n: number): PullView {
   };
 }
 
-/** Key of saved ranges: per boss and difficulty, per dungeon for a Mythic+ run. */
-export function rangeKey(fight: FightRow): string {
+function toCombatView(fight: FightRow & { combat: CombatInfo }): CombatPullView {
+  return {
+    index: fight.index,
+    name: fight.name,
+    moreEnemies: moreEnemies(fight.combat),
+    zone: fight.zone,
+    status: pullStatus(fight),
+    aborted: isAborted(fight),
+    durationMs: fight.durationMs,
+    playerCount: fight.playerCount,
+    startUnixMs: fight.startUnixMs,
+  };
+}
+
+/** Key of saved ranges: per boss and difficulty, per dungeon for a Mythic+ run; `null` for a combat pull, which keeps none. */
+export function rangeKey(fight: FightRow): string | null {
+  if (isCombatPull(fight)) return null;
   return fight.run ? `run:${fight.run.challengeModeId}` : `${fight.encounterId}:${fight.difficulty}`;
 }
 /** Pulls of one boss and difficulty outside Mythic+, numbered as in the pull list (hidden pulls count). */
 function bossPulls(fights: FightRow[], boss: Pick<FightRow, 'encounterId' | 'difficulty'>): PullView[] {
   return fights
-    .filter((fight) => !inMythicPlus(fight) && fight.encounterId === boss.encounterId && fight.difficulty === boss.difficulty)
+    .filter((fight) => isGroupedBossPull(fight) && fight.encounterId === boss.encounterId && fight.difficulty === boss.difficulty)
     .map((fight, i) => toView(fight, i + 1));
+}
+
+function runBossPulls(fights: FightRow[], runIndex: number): FightRow[] {
+  return fights.filter((fight) => fight.runIndex === runIndex && !isCombatPull(fight));
+}
+
+/** A boss pull's number among its boss's pulls, or among the boss pulls of its run (hidden pulls count); `null` for runs and combat pulls. */
+export function pullNumber(fights: FightRow[], row: FightRow): number | null {
+  if (row.run !== null || isCombatPull(row)) return null;
+  if (row.runIndex === null) return pullView(fights, row.index)?.n ?? null;
+  const at = runBossPulls(fights, row.runIndex).findIndex((fight) => fight.index === row.index);
+  return at === -1 ? null : at + 1;
 }
 
 /** The pull with log index `index`, numbered as in the pull list; `null` if the log has none. */
@@ -255,10 +346,10 @@ export function pullView(fights: FightRow[], index: number): PullView | null {
 
 /**
  * Pulls `current` can be compared with: same boss and difficulty, not aborted, not itself.
- * Comparison stays with pulls outside Mythic+, so runs and their boss pulls get none.
+ * Comparison stays with boss pulls outside Mythic+, so runs, their boss pulls and combat pulls get none.
  */
 export function comparablePulls(fights: FightRow[], current: FightRow): PullView[] {
   // Mythic+ boss pulls stay out, also when their run is missing (logging started mid-key).
-  if (inMythicPlus(current) || current.difficulty === MYTHIC_PLUS_DIFFICULTY) return [];
+  if (!isGroupedBossPull(current) || current.difficulty === MYTHIC_PLUS_DIFFICULTY) return [];
   return bossPulls(fights, current).filter((view) => view.index !== current.index && view.status !== 'aborted');
 }

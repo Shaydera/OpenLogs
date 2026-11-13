@@ -3,7 +3,8 @@ import type { Engine } from '../engine/engine';
 import { createClient, SetCancelled } from './client';
 import type { Database, StoreName } from './db';
 import type { LogSource } from './logSource';
-import type { LogView } from './types';
+import { runLogFixture } from '../test/runFixture';
+import type { FightRow, LogView } from './types';
 
 const MiB = 1 << 20;
 
@@ -198,6 +199,16 @@ describe('opening logs', () => {
       now: () => 1,
     });
     expect((await api.openLog(source('a.txt', 10))).cacheHit).toBe(false);
+  });
+
+  it('counts only the boss pulls of a log in the recent list', async () => {
+    const fake = fakeEngine();
+    const bossPull = runLogFixture.fights[1];
+    const trash: FightRow = { ...bossPull, index: 20, encounterId: 0, name: 'Arathi Knight', combat: { enemyCount: 2 } };
+    fake.engine.finishIndex = async (logId) => ({ ...view(logId), fights: [...runLogFixture.fights, trash, { ...trash, index: 21, runIndex: null }] });
+    const api = createClient({ engine: () => fake.engine, dungeons: async () => null, channelSpells: async () => null, spellClasses: async () => null, db: memoryDatabase(), now: () => 1 });
+    await api.openLog(source('a.txt', 10));
+    expect((await api.recentLogs())[0].pullCount).toBe(6);
   });
 
   it('remembers combat logs newest first; without a file handle they must be chosen again', async () => {

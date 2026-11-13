@@ -1625,6 +1625,7 @@ describe('live refresh', () => {
       zone: 'The Venomous Abyss',
       run: null,
       runIndex: null,
+      combat: null,
     };
   }
   const LIVE: LogView = { ...LOG, fights: [wipe(1), wipe(2)] };

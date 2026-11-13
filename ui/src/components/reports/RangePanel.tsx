@@ -13,6 +13,8 @@ import { type SavedRange, deleteRange, loadSavedRanges, saveRange } from './save
 import { useBrush } from './useBrush';
 import { useRangeKeys } from './useRangeKeys';
 
+const savedUnder = (key: string | null): SavedRange[] => (key === null ? [] : loadSavedRanges(key));
+
 /**
  * The report tabs' "Time range" panel: pills for the full pull, its phases and the saved ranges,
  * the selection with its duration and the pull's bounds, "+ Save range", and a plot with the selection
@@ -26,7 +28,8 @@ export function RangePanel({
   collapsible,
 }: {
   overview: QuickOverview;
-  rangeKey: string;
+  /** `null`: nothing to save ranges under (a combat pull), so no saved ranges and no "Save range". */
+  rangeKey: string | null;
   run?: boolean;
   collapsible?: { open: boolean; onToggle(open: boolean): void };
 }) {
@@ -45,14 +48,14 @@ export function RangePanel({
   const saveRef = useRef<HTMLButtonElement>(null);
   const hintId = useId();
   const popoverId = useId();
-  const [saved, setSaved] = useState<SavedRange[]>(() => loadSavedRanges(rangeKey));
+  const [saved, setSaved] = useState<SavedRange[]>(() => savedUnder(rangeKey));
   const [saving, setSaving] = useState(false);
   const expandRef = useRef<HTMLButtonElement>(null);
   const collapseRef = useRef<HTMLButtonElement>(null);
   const toggled = useRef(false);
   const collapsed = collapsible !== undefined && !collapsible.open;
 
-  useEffect(() => setSaved(loadSavedRanges(rangeKey)), [rangeKey]);
+  useEffect(() => setSaved(savedUnder(rangeKey)), [rangeKey]);
   useEffect(() => {
     if (!toggled.current) return;
     toggled.current = false;
@@ -197,7 +200,7 @@ export function RangePanel({
                 type="button"
                 className="pill-saved-x"
                 aria-label={t('range.delete', { name: entry.name })}
-                onClick={() => setSaved(deleteRange(rangeKey, entry.name))}
+                onClick={() => rangeKey !== null && setSaved(deleteRange(rangeKey, entry.name))}
               >
                 ×
               </button>
@@ -212,30 +215,32 @@ export function RangePanel({
             </span>
             <span className="num">{t('range.bounds', { start: formatEventTime(0), end: formatEventTime(duration) })}</span>
           </div>
-          <div className="range-save" onKeyDown={onSaveKey} onBlur={onSaveBlur}>
-            <button
-              ref={saveRef}
-              type="button"
-              className="pill"
-              disabled={range === null}
-              title={range === null ? t('range.saveNeedsRange') : undefined}
-              aria-expanded={saving}
-              aria-controls={saving ? popoverId : undefined}
-              onClick={() => setSaving(!saving)}
-            >
-              {t('range.saveOpen')}
-            </button>
-            {saving && range !== null && (
-              <SaveRangePopover
-                id={popoverId}
-                onSave={(name) => {
-                  setSaved(saveRange(rangeKey, { name, startMs: range.startMs, endMs: range.endMs }));
-                  closeSave(true);
-                }}
-                onCancel={() => closeSave(true)}
-              />
-            )}
-          </div>
+          {rangeKey !== null && (
+            <div className="range-save" onKeyDown={onSaveKey} onBlur={onSaveBlur}>
+              <button
+                ref={saveRef}
+                type="button"
+                className="pill"
+                disabled={range === null}
+                title={range === null ? t('range.saveNeedsRange') : undefined}
+                aria-expanded={saving}
+                aria-controls={saving ? popoverId : undefined}
+                onClick={() => setSaving(!saving)}
+              >
+                {t('range.saveOpen')}
+              </button>
+              {saving && range !== null && (
+                <SaveRangePopover
+                  id={popoverId}
+                  onSave={(name) => {
+                    setSaved(saveRange(rangeKey, { name, startMs: range.startMs, endMs: range.endMs }));
+                    closeSave(true);
+                  }}
+                  onCancel={() => closeSave(true)}
+                />
+              )}
+            </div>
+          )}
         </div>
       </div>
       <div

@@ -25,3 +25,24 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.pull.pull-trash {
+  background: color-mix(in srgb, var(--panel) 50%, var(--bg));
+}
+.pull.pull-trash:hover {
+  background: var(--hover);
+}
+.pull-trash .combat-enemies .combat-name {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-soft);
+}
+.pull-trash .chip {
+  font-size: 11px;
+  padding: 2px 7px;
+}
+.pull-fold .chevron {
+  transition: transform 0.12s ease;
+}
+.pull-fold .chevron.chevron-open {
+  transform: rotate(90deg);
+}
