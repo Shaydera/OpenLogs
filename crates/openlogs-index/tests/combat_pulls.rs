@@ -501,3 +501,119 @@ fn boss_pulls_are_unchanged() {
         ]
     );
 }
+
+const DAILCRY_START: &str =
+    "10/8/2026 20:00:03.0000  ENCOUNTER_START,2847,\"Captain Dailcry\",8,5,2649\n";
+const DAILCRY_KILL: &str =
+    "10/8/2026 20:01:03.0000  ENCOUNTER_END,2847,\"Captain Dailcry\",8,5,1,60000\n";
+
+fn first_hit_before_dailcry() -> String {
+    [
+        hit("10/8/2026 20:00:02.9900", &FAELAN, &DAILCRY, 100),
+        DAILCRY_START.to_string(),
+        hit("10/8/2026 20:00:10.0000", &FAELAN, &DAILCRY, 100),
+        DAILCRY_KILL.to_string(),
+    ]
+    .concat()
+}
+
+#[test]
+fn a_first_hit_just_before_encounter_start_joins_the_boss_pull() {
+    let index = index_bytes(first_hit_before_dailcry().as_bytes());
+    assert_eq!(index.fights.len(), 1, "{:?}", index.fights);
+    let boss = &index.fights[0];
+    assert_eq!(
+        (
+            boss.is_combat(),
+            boss.index,
+            boss.outcome,
+            boss.start,
+            boss.start_offset,
+            boss.duration_ms
+        ),
+        (
+            false,
+            1,
+            Outcome::Kill,
+            ts("10/8/2026 20:00:02.9900"),
+            0,
+            60_010
+        )
+    );
+}
+
+#[test]
+fn a_pack_still_fighting_when_the_boss_is_pulled_stays_its_own_pull() {
+    let data = [
+        hit("10/8/2026 20:00:02.9000", &FAELAN, &DAILCRY, 100),
+        hit("10/8/2026 20:00:02.9500", &FAELAN, &KNIGHT, 100),
+        DAILCRY_START.to_string(),
+        hit("10/8/2026 20:00:10.0000", &FAELAN, &DAILCRY, 100),
+        DAILCRY_KILL.to_string(),
+    ]
+    .concat();
+    let index = index_bytes(data.as_bytes());
+    let fights: Vec<_> = index
+        .fights
+        .iter()
+        .map(|fight| (fight.index, fight.is_combat(), fight.outcome, fight.start))
+        .collect();
+    assert_eq!(
+        fights,
+        [
+            (1, true, Outcome::Ended, ts("10/8/2026 20:00:02.9000")),
+            (2, false, Outcome::Kill, ts("10/8/2026 20:00:03.0000")),
+        ]
+    );
+    assert_eq!(index.fights[1].duration_ms, 60_000);
+}
+
+#[test]
+fn an_unfinished_boss_pull_keeps_its_joined_first_hit() {
+    let data = [
+        hit("10/8/2026 20:00:02.9900", &FAELAN, &DAILCRY, 100),
+        DAILCRY_START.to_string(),
+        hit("10/8/2026 20:00:30.0000", &FAELAN, &DAILCRY, 100),
+    ]
+    .concat();
+    let index = index_bytes(data.as_bytes());
+    assert_eq!(index.fights.len(), 1, "{:?}", index.fights);
+    let boss = &index.fights[0];
+    assert_eq!(
+        (boss.outcome, boss.start, boss.duration_ms),
+        (Outcome::Incomplete, ts("10/8/2026 20:00:02.9900"), 27_010)
+    );
+}
+
+#[test]
+fn a_first_hit_waits_for_its_boss_pull_while_live() {
+    let data = first_hit_before_dailcry();
+    let before_end = data.find("10/8/2026 20:01:03.0000").unwrap();
+    let mut indexer = Indexer::new();
+    indexer.feed(&data.as_bytes()[..before_end]);
+    assert!(indexer.settled_index(None).fights.is_empty());
+
+    indexer.feed(&data.as_bytes()[before_end..]);
+    assert_eq!(
+        indexer.settled_index(None).fights,
+        index_bytes(data.as_bytes()).fights
+    );
+}
+
+#[test]
+fn a_first_hit_logged_later_than_encounter_start_never_delays_the_boss_pull() {
+    let data = [
+        hit("10/8/2026 20:00:03.0100", &FAELAN, &DAILCRY, 100),
+        DAILCRY_START.to_string(),
+        hit("10/8/2026 20:00:10.0000", &FAELAN, &DAILCRY, 100),
+        DAILCRY_KILL.to_string(),
+    ]
+    .concat();
+    let index = index_bytes(data.as_bytes());
+    assert_eq!(index.fights.len(), 1, "{:?}", index.fights);
+    let boss = &index.fights[0];
+    assert_eq!(
+        (boss.start, boss.start_offset, boss.duration_ms),
+        (ts("10/8/2026 20:00:03.0000"), 0, 60_000)
+    );
+}

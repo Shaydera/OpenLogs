@@ -9,7 +9,7 @@ use crate::combat::{DeadEnemies, Exchange, OpenCombat, counted_damage, exchange}
 use crate::markers::MarkerState;
 use crate::model::{
     BOSS_TAIL_MICROS, ChallengeMode, END_GRACE_LINES, END_GRACE_MICROS, FightSummary, GameFlavor,
-    LogIndex, MYTHIC_KEYSTONE_DIFFICULTY, MapBounds, Outcome, PRELUDE_MICROS,
+    LEAD_MAX_MICROS, LogIndex, MYTHIC_KEYSTONE_DIFFICULTY, MapBounds, Outcome, PRELUDE_MICROS,
     RESUME_MAX_GAP_MICROS, RosterEntry, SUPPORTED_LOG_VERSION, WorldMarker,
 };
 
@@ -142,7 +142,7 @@ impl IndexBuilder {
         {
             fight.resume = Some(fight.snapshot(&self.index.unhandled_in_fights));
         }
-        self.close_before(span, line);
+        let lead = self.close_before(span, line);
         let starts_fight = matches!(line.event, Event::EncounterStart(_));
         let starts_run = matches!(line.event, Event::ChallengeModeStart(_)) && !resumes_run;
         if !starts_fight && let Some(fight) = &mut self.open {
@@ -161,7 +161,7 @@ impl IndexBuilder {
                 build,
                 project_id,
             } => self.on_version(*version, *advanced, build, *project_id),
-            Event::EncounterStart(start) => self.open_fight(span, line.timestamp, start),
+            Event::EncounterStart(start) => self.open_fight(span, line.timestamp, start, lead),
             Event::EncounterEnd(end) => self.end_fight(end, line.timestamp),
             Event::ChallengeModeStart(start) if !resumes_run => {
                 self.open_run(span, line.timestamp, start)
@@ -302,12 +302,16 @@ impl IndexBuilder {
 
     /// Ends, at the previous line, what this line leaves behind: leaving the instance or
     /// another key ends the open pull and run; a run's END is held while a pull is open. A
-    /// boss pull, a key's start or end, or leaving the instance ends a combat pull.
-    fn close_before(&mut self, span: LineSpan, line: &LogLine<'_>) {
+    /// boss pull, a key's start or end, or leaving the instance ends a combat pull; one that
+    /// began right before a boss pull is returned as its lead.
+    fn close_before(&mut self, span: LineSpan, line: &LogLine<'_>) -> Option<Lead> {
+        let mut lead = None;
         let ends_combat = match &line.event {
-            Event::EncounterStart(_)
-            | Event::ChallengeModeStart(_)
-            | Event::ChallengeModeEnd(_) => true,
+            Event::EncounterStart(_) => {
+                lead = self.take_lead(line.timestamp);
+                false
+            }
+            Event::ChallengeModeStart(_) | Event::ChallengeModeEnd(_) => true,
             Event::ZoneChange { zone_id, .. } => self
                 .combat
                 .as_ref()
@@ -343,6 +347,7 @@ impl IndexBuilder {
             }
             _ => {}
         }
+        lead
     }
 
     /// The open pull's `ENCOUNTER_END` may follow its run's END in the same moment.
@@ -487,9 +492,18 @@ impl IndexBuilder {
         })
     }
 
-    fn open_fight(&mut self, span: LineSpan, timestamp: Timestamp, start: &EncounterStart<'_>) {
+    fn open_fight(
+        &mut self,
+        span: LineSpan,
+        timestamp: Timestamp,
+        start: &EncounterStart<'_>,
+        lead: Option<Lead>,
+    ) {
         self.close_open(Outcome::Incomplete);
-        let index = self.next_index();
+        let index = match &lead {
+            Some(lead) => lead.pull.index,
+            None => self.next_index(),
+        };
         let prelude_offset = self.prelude_offset(span, self.last_fight_end);
         self.open = Some(OpenFight {
             summary: FightSummary {
@@ -519,6 +533,8 @@ impl IndexBuilder {
             hostile: HashMap::new(),
             player_names: HashMap::new(),
             resume: None,
+            lead,
+            encounter_end: None,
         });
     }
 
@@ -527,8 +543,7 @@ impl IndexBuilder {
         if fight.summary.encounter_id != end.encounter_id {
             return;
         }
-        fight.summary.duration_ms =
-            u64::try_from(timestamp.millis_since(fight.summary.start)).unwrap_or(0);
+        fight.encounter_end = Some(timestamp);
         self.close_open(if end.success {
             Outcome::Kill
         } else {
@@ -609,7 +624,16 @@ impl IndexBuilder {
         {
             self.restore(resume);
         }
-        if let Some(fight) = self.open.take() {
+        if let Some(mut fight) = self.open.take() {
+            if let Some(lead) = fight.lead.take() {
+                if lead.fought_only(&fight.hostile) {
+                    fight.summary.start = fight.summary.start.min(lead.pull.start);
+                    fight.summary.start_offset = lead.pull.start_offset;
+                } else {
+                    fight.summary.index = self.next_index();
+                    self.list_combat(lead.pull);
+                }
+            }
             self.last_fight_end = fight.summary.end_offset;
             self.boss_tail = Some(BossTail {
                 hostile: fight.hostile.keys().cloned().collect(),
@@ -714,9 +738,28 @@ impl IndexBuilder {
     fn close_combat(&mut self, outcome: Outcome) {
         if let Some(combat) = self.combat.take() {
             let summary = combat.finish(outcome, &self.last_specs);
-            self.last_combat_end = summary.end_offset;
-            self.index.fights.push(summary);
+            self.list_combat(summary);
         }
+    }
+
+    fn list_combat(&mut self, summary: FightSummary) {
+        self.last_combat_end = summary.end_offset;
+        self.index.fights.push(summary);
+    }
+
+    /// Ends the open combat pull at an `ENCOUNTER_START`; one that began at most
+    /// [`LEAD_MAX_MICROS`] before is returned instead of listed.
+    fn take_lead(&mut self, timestamp: Timestamp) -> Option<Lead> {
+        let Some(combat) = self
+            .combat
+            .take_if(|combat| timestamp.0 - combat.summary.start.0 <= LEAD_MAX_MICROS)
+        else {
+            self.close_combat(Outcome::Ended);
+            return None;
+        };
+        let enemies = combat.enemy_guids().map(str::to_string).collect();
+        let pull = combat.finish(Outcome::Ended, &self.last_specs);
+        Some(Lead { pull, enemies })
     }
 }
 
@@ -751,6 +794,22 @@ struct OpenFight {
     /// The pull before its key was started again (reconnect, /reload): its `ENCOUNTER_END`
     /// may have been missed offline, so an incomplete pull ends here.
     resume: Option<PullSnapshot>,
+    /// The combat pull that began right before `ENCOUNTER_START` and shares this pull's index.
+    lead: Option<Lead>,
+    encounter_end: Option<Timestamp>,
+}
+
+/// A combat pull as listed when `ENCOUNTER_START` ended it, and the enemies it engaged.
+#[derive(Clone)]
+struct Lead {
+    pull: FightSummary,
+    enemies: Vec<String>,
+}
+
+impl Lead {
+    fn fought_only(&self, hostile: &HashMap<String, HostileUnit>) -> bool {
+        self.enemies.iter().all(|guid| hostile.contains_key(guid))
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -818,10 +877,8 @@ impl OpenFight {
     fn finish(mut self, outcome: Outcome) -> FightSummary {
         let summary = &mut self.summary;
         summary.outcome = outcome;
-        if outcome == Outcome::Incomplete {
-            summary.duration_ms =
-                u64::try_from(summary.end.millis_since(summary.start)).unwrap_or(0);
-        }
+        let end = self.encounter_end.unwrap_or(summary.end);
+        summary.duration_ms = u64::try_from(end.millis_since(summary.start)).unwrap_or(0);
         summary.boss_hp_percent = match outcome {
             Outcome::Kill => Some(0.0),
             Outcome::Wipe | Outcome::Incomplete | Outcome::Ended => boss_hp_percent(&self.hostile),

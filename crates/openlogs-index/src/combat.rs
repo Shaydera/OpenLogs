@@ -137,6 +137,10 @@ impl OpenCombat {
             .then_some(Outcome::Wipe)
     }
 
+    pub(crate) fn enemy_guids(&self) -> impl Iterator<Item = &str> {
+        self.enemies.keys().map(String::as_str)
+    }
+
     /// Whether more than [`COMBAT_QUIET_MICROS`] passed since the last exchange.
     pub(crate) fn quiet_since(&self, timestamp: Timestamp) -> bool {
         timestamp.0 - self.last_exchange.0 > COMBAT_QUIET_MICROS

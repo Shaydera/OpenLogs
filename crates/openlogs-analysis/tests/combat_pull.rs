@@ -116,3 +116,24 @@ fn neutral_mob_that_fights_us_counts_as_damage_done() {
     let report = damage_done(&fight, &ReportFilter::whole(Attribution::Augmented));
     assert_eq!(report.total, 30 + 35);
 }
+
+#[test]
+fn a_boss_pull_counts_its_first_hit_before_encounter_start() {
+    let hit = |ts: &str| {
+        format!(
+            "{ts}  SPELL_DAMAGE,Player-4101-8E8C0182,\"Faelan-Emberfall-EU\",0x512,0x80000000,Creature-0-3892-2649-1387-207946-0000468002,\"Captain Dailcry\",0x10a48,0x80000000,44425,\"Arcane Barrage\",0x40,Creature-0-3892-2649-1387-207946-0000468002,0000000000000000,1000,50000000,0,0,0,0,0,0,1,0,0,0,1590.00,-3.00,2308,1.0000,80,100,100,-1,64,0,0,0,nil,nil,nil,ST"
+        )
+    };
+    let log = [
+        hit("10/8/2026 20:00:02.9900"),
+        "10/8/2026 20:00:03.0000  ENCOUNTER_START,2847,\"Captain Dailcry\",8,5,2649".to_string(),
+        hit("10/8/2026 20:00:10.0000"),
+        "10/8/2026 20:01:03.0000  ENCOUNTER_END,2847,\"Captain Dailcry\",8,5,1,60000".to_string(),
+    ]
+    .join("\n");
+    let index = index_bytes(log.as_bytes());
+    let fight = load_fight(log.as_bytes(), &index.fights[0]);
+
+    let report = damage_done(&fight, &ReportFilter::whole(Attribution::Augmented));
+    assert_eq!(report.total, 200);
+}
