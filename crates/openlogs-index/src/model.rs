@@ -4,7 +4,7 @@ use openlogs_parser::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// Bumped whenever the index layout or its rules change; invalidates cached indexes.
-pub const INDEX_FORMAT_VERSION: u32 = 14;
+pub const INDEX_FORMAT_VERSION: u32 = 15;
 /// The combat log format this tool is built and tested against.
 pub const SUPPORTED_LOG_VERSION: u32 = 22;
 /// Lookback before `ENCOUNTER_START` that belongs to a fight (pre-pots, pre-casts).
@@ -23,6 +23,9 @@ pub const COMBAT_QUIET_MICROS: i64 = 10_000_000;
 /// Time after a boss pull's end in which exchanges with its hostile units that did not die are
 /// trailing lines of it (a last hit, a DoT tick) and start no combat pull.
 pub const BOSS_TAIL_MICROS: i64 = 1_000_000;
+/// Time before `ENCOUNTER_START` in which a combat pull that fought only the boss pull's enemies
+/// began with the boss pull's first hit, which the log often writes a few ms before the START.
+pub const LEAD_MAX_MICROS: i64 = 1_000_000;
 /// Time without a line naming a dead enemy after which it is forgotten, which bounds the dead
 /// enemies kept. NPC GUIDs are per spawn, so a forgotten one rarely comes back.
 pub const DEAD_ENEMY_MEMORY_MICROS: i64 = 60_000_000;
