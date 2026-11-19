@@ -70,7 +70,7 @@ fn a_run_is_indexed_with_its_key_its_roster_and_its_prelude() {
         )
     );
     assert_eq!(
-        run.challenge,
+        run.keystone().cloned(),
         Some(ChallengeMode {
             challenge_mode_id: 499,
             keystone_level: 12,
@@ -182,7 +182,7 @@ fn a_run_without_end_lasts_to_the_end_of_the_file() {
         (run.outcome, run.duration_ms, run.end_offset),
         (Outcome::Incomplete, 300_000, data.len() as u64)
     );
-    assert_eq!(run.challenge.as_ref().unwrap().total_time_ms, None);
+    assert_eq!(run.keystone().unwrap().total_time_ms, None);
     assert_eq!(index.fights[1].run_index, Some(1));
 }
 
@@ -230,7 +230,7 @@ fn an_end_for_another_dungeon_does_not_close_the_run() {
         (run.outcome, run.end),
         (Outcome::Incomplete, ts("10/8/2026 20:12:00.0000"))
     );
-    assert_eq!(run.challenge.as_ref().unwrap().total_time_ms, None);
+    assert_eq!(run.keystone().unwrap().total_time_ms, None);
 }
 
 #[test]

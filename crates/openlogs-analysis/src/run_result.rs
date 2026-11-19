@@ -1,7 +1,5 @@
-//! The result of a Mythic+ run decided with the game's dungeon data. Without that data the
-//! index's result stands.
-
-use std::collections::HashSet;
+//! The result of a run. A Mythic+ run's is decided with the game's dungeon data; without
+//! that data, and for a dungeon visit, the index's result stands.
 
 use openlogs_gamedata::{DungeonTable, KeyTimer};
 use openlogs_index::{FightSummary, Outcome};
@@ -21,9 +19,11 @@ pub struct RunResult {
     pub bosses: Option<BossProgress>,
     /// Only for a run completed by the boss list with a logged time.
     pub timer: Option<KeyTimer>,
+    /// Bosses with a killed boss pull in the run, each counted once.
+    pub killed_bosses: u32,
 }
 
-/// The result of `run` (an entry with `challenge`) among the index's `fights`.
+/// The result of `run` (a run entry) among the index's `fights`.
 ///
 /// With a boss list for the key: completed exactly when every boss of the dungeon has a
 /// killed boss pull in the run and the logged time is not 0; otherwise not completed with
@@ -35,12 +35,14 @@ pub fn run_result(
     fights: &[FightSummary],
     dungeons: Option<&DungeonTable>,
 ) -> RunResult {
+    let kills = run.killed_encounters(fights);
     let index_result = RunResult {
         outcome: run.outcome,
         bosses: None,
         timer: None,
+        killed_bosses: kills.len() as u32,
     };
-    let Some(challenge) = &run.challenge else {
+    let Some(challenge) = run.keystone() else {
         return index_result;
     };
     let Some(dungeon) = dungeons.and_then(|table| table.dungeon(challenge.challenge_mode_id))
@@ -50,11 +52,6 @@ pub fn run_result(
     let Some(bosses) = &dungeon.bosses else {
         return index_result;
     };
-    let kills: HashSet<u32> = fights
-        .iter()
-        .filter(|fight| fight.run_index == Some(run.index) && fight.outcome == Outcome::Kill)
-        .map(|fight| fight.encounter_id)
-        .collect();
     let killed = bosses
         .iter()
         .filter(|boss| kills.contains(&boss.encounter_id))
@@ -75,5 +72,6 @@ pub fn run_result(
         outcome,
         bosses: Some(BossProgress { killed, total }),
         timer,
+        ..index_result
     }
 }

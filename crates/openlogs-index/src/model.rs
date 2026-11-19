@@ -1,10 +1,10 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use openlogs_parser::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// Bumped whenever the index layout or its rules change; invalidates cached indexes.
-pub const INDEX_FORMAT_VERSION: u32 = 15;
+pub const INDEX_FORMAT_VERSION: u32 = 16;
 /// The combat log format this tool is built and tested against.
 pub const SUPPORTED_LOG_VERSION: u32 = 22;
 /// Lookback before `ENCOUNTER_START` that belongs to a fight (pre-pots, pre-casts).
@@ -67,6 +67,8 @@ impl GameFlavor {
 
 /// Difficulty ID of Mythic+ (Mythic Keystone) dungeons; run entries carry it too.
 pub const MYTHIC_KEYSTONE_DIFFICULTY: u32 = 8;
+/// Difficulties whose visit is a dungeon run: Normal, Heroic, Mythic, Timewalking, Follower.
+pub const DUNGEON_DIFFICULTIES: [u32; 5] = [1, 2, 23, 24, 205];
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LogIndex {
@@ -86,8 +88,12 @@ pub struct LogIndex {
     /// Lines inside fights whose event the parser does not model, by event name.
     pub unhandled_in_fights: BTreeMap<String, u64>,
     pub warnings: Vec<String>,
-    /// Boss pulls, combat pulls and Mythic+ runs, in the order of their start lines.
+    /// Boss pulls, combat pulls and runs, in the order of their start lines.
     pub fights: Vec<FightSummary>,
+    /// `index` of the entries a later line may still change; only in a settled index of a log
+    /// still being written: the open run, a left run and the entries after it that may join it.
+    #[serde(default)]
+    pub provisional: Vec<u32>,
 }
 
 impl LogIndex {
@@ -104,15 +110,21 @@ impl LogIndex {
             unhandled_in_fights: BTreeMap::new(),
             warnings: Vec::new(),
             fights: Vec::new(),
+            provisional: Vec::new(),
         }
     }
 }
 
-/// One boss pull, a combat pull when `combat` is set, or a whole Mythic+ run when `challenge`
-/// is set. A run spans `CHALLENGE_MODE_START` to `CHALLENGE_MODE_END`; it has encounter ID 0,
+/// One boss pull, a combat pull when `combat` is set, or a whole run when `run` is set.
+/// A Mythic+ run spans `CHALLENGE_MODE_START` to `CHALLENGE_MODE_END`; it has encounter ID 0,
 /// the dungeon as `name` and `zone`, difficulty [`MYTHIC_KEYSTONE_DIFFICULTY`], its roster size
 /// as `group_size` and no boss HP. Its boss and combat pulls are entries of their own with
 /// `run_index`.
+///
+/// A dungeon run is a visit of a dungeon difficulty ([`DUNGEON_DIFFICULTIES`]) with at least one
+/// pull, from its `ZONE_CHANGE` to the last line before leaving. A later visit of the same
+/// instance copy continues it, together with the pulls outside in between. It has the zone's
+/// difficulty and is numbered by its first pull's start.
 ///
 /// A combat pull is a fight outside boss encounters, from the first exchange of damage between
 /// the group and an enemy NPC. It has encounter ID 0, the enemy that took the most damage from
@@ -130,9 +142,10 @@ pub struct FightSummary {
     pub instance_id: u32,
     /// Zone of the last `ZONE_CHANGE` before the start line, if any; a run's dungeon.
     pub zone: Option<String>,
-    /// For a run: `Kill` = completed (`CHALLENGE_MODE_END` after a killed last boss pull),
-    /// `Wipe` = not completed (any other end, or a logged time of 0), `Incomplete` = no
-    /// end. The `success` flag decides only when no boss pull tells.
+    /// For a Mythic+ run: `Kill` = completed (`CHALLENGE_MODE_END` after a killed last boss
+    /// pull), `Wipe` = not completed (any other end, or a logged time of 0), `Incomplete` = no
+    /// end. The `success` flag decides only when no boss pull tells. For a dungeon run: `Ended`
+    /// once left or ended by a key's start, `Incomplete` when the log ends inside.
     pub outcome: Outcome,
     pub start: Timestamp,
     pub end: Timestamp,
@@ -147,9 +160,9 @@ pub struct FightSummary {
     pub boss_hp_percent: Option<f32>,
     pub roster: Vec<RosterEntry>,
     pub broken_lines: u64,
-    /// Key details when this entry is a whole Mythic+ run.
-    pub challenge: Option<ChallengeMode>,
-    /// `index` of the Mythic+ run this boss or combat pull belongs to.
+    /// Set when this entry is a whole run: a Mythic+ key or a dungeon visit.
+    pub run: Option<RunKind>,
+    /// `index` of the run this boss or combat pull belongs to.
     pub run_index: Option<u32>,
     /// World markers active at the start line, sorted by marker; empty for runs.
     #[serde(default)]
@@ -186,15 +199,42 @@ pub struct MapBounds {
 }
 
 impl FightSummary {
-    /// Whether this entry is a whole Mythic+ run rather than a boss pull.
+    /// Whether this entry is a whole run rather than a pull.
     pub fn is_run(&self) -> bool {
-        self.challenge.is_some()
+        self.run.is_some()
+    }
+
+    /// Encounter IDs of the boss pulls killed in this run, among the index's `fights`.
+    pub fn killed_encounters(&self, fights: &[FightSummary]) -> BTreeSet<u32> {
+        fights
+            .iter()
+            .filter(|fight| {
+                fight.run_index == Some(self.index)
+                    && !fight.is_combat()
+                    && fight.outcome == Outcome::Kill
+            })
+            .map(|fight| fight.encounter_id)
+            .collect()
+    }
+
+    /// Key details when this entry is a Mythic+ run.
+    pub fn keystone(&self) -> Option<&ChallengeMode> {
+        match &self.run {
+            Some(RunKind::Keystone(key)) => Some(key),
+            _ => None,
+        }
     }
 
     /// Whether this entry is a combat pull outside boss encounters.
     pub fn is_combat(&self) -> bool {
         self.combat.is_some()
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RunKind {
+    Keystone(ChallengeMode),
+    Dungeon,
 }
 
 /// Key details of a Mythic+ run from `CHALLENGE_MODE_START` and `CHALLENGE_MODE_END`.
@@ -230,10 +270,12 @@ pub struct RosterEntry {
 pub fn difficulty_label(id: u32) -> Option<&'static str> {
     match id {
         MYTHIC_KEYSTONE_DIFFICULTY => Some("Mythic+"),
-        14 => Some("Normal"),
-        15 => Some("Heroic"),
+        1 | 14 => Some("Normal"),
+        2 | 15 => Some("Heroic"),
         // 233: Mythic with a flexible raid size, logged by Nymrissa Wavecaller.
-        16 | 233 => Some("Mythic"),
+        16 | 23 | 233 => Some("Mythic"),
+        24 => Some("Timewalking"),
+        205 => Some("Follower"),
         17 => Some("LFR"),
         _ => None,
     }

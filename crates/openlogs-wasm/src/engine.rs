@@ -88,7 +88,8 @@ impl Engine {
     }
 
     /// Re-lists the pulls of a log that grew, keeping only pulls whose end has settled; with
-    /// `settle_all` every closed pull counts. Loaded pulls that no longer match the log are dropped.
+    /// `settle_all` every closed pull counts. The open and the left run are listed as they are
+    /// now. Loaded pulls and runs that no longer match the log are dropped.
     pub fn refresh_index(
         &mut self,
         log_id: &str,

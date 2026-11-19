@@ -92,8 +92,8 @@ impl Indexer {
         self.clone().finish()
     }
 
-    /// The closed pulls and runs of everything fed so far that no later line can change; see
-    /// [`IndexBuilder::settled`]. A trailing partial line is ignored.
+    /// The closed pulls of everything fed so far, with the open and the left run as provisional
+    /// entries; see [`IndexBuilder::settled`]. A trailing partial line is ignored.
     pub fn settled_index(&self, settle_ms: Option<i64>) -> LogIndex {
         self.builder.settled(settle_ms)
     }

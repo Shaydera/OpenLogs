@@ -191,7 +191,7 @@ fn a_run_result_follows_its_logged_time_then_its_last_boss_pull_then_its_success
         assert_eq!(
             (
                 run.outcome,
-                run.challenge.as_ref().unwrap().total_time_ms,
+                run.keystone().unwrap().total_time_ms,
                 run.duration_ms
             ),
             (outcome, Some(total_ms), 600_000),
@@ -212,8 +212,8 @@ fn a_repeated_start_of_the_same_key_continues_the_run_and_its_open_pull() {
         (before.start, before.end, before.duration_ms)
     );
     assert_eq!(
-        (&run.challenge, &run.roster),
-        (&before.challenge, &before.roster)
+        (run.keystone(), &run.roster),
+        (before.keystone(), &before.roster)
     );
     let offset = |prefix: &str| RECONNECT.find(prefix).unwrap() as u64;
     assert_eq!(
@@ -312,7 +312,7 @@ fn the_last_pull_keeps_its_kill_when_its_end_follows_the_run_end_in_the_same_mom
         (
             run.end,
             run.duration_ms,
-            run.challenge.as_ref().unwrap().total_time_ms
+            run.keystone().unwrap().total_time_ms
         ),
         (ts("10/8/2026 20:07:00.0000"), 420_000, Some(420_000))
     );

@@ -1,3 +1,6 @@
+mod common;
+
+use common::{BASILISK, GUARDSMAN, dungeon_log, enter_brd, leave, pack, zone};
 use openlogs_index::{Indexer, LogIndex, Outcome, index_bytes};
 use openlogs_parser::Timestamp;
 
@@ -70,12 +73,17 @@ fn a_snapshot_after_every_chunk_equals_indexing_the_bytes_so_far() {
 
 #[test]
 fn settled_entries_never_change_as_the_log_grows() {
-    for log in FIXTURES {
+    let dungeon = dungeon_log();
+    for log in FIXTURES.into_iter().chain([dungeon.as_str()]) {
         let whole = index_bytes(log.as_bytes());
         let mut indexer = Indexer::new();
         for chunk in log.as_bytes().chunks(97) {
             indexer.feed(chunk);
-            for fight in indexer.settled_index(Some(SETTLE_MS)).fights {
+            let settled = indexer.settled_index(Some(SETTLE_MS));
+            for fight in settled.fights {
+                if settled.provisional.contains(&fight.index) {
+                    continue;
+                }
                 assert_eq!(
                     Some(&fight),
                     whole.fights.iter().find(|f| f.index == fight.index)
@@ -115,18 +123,53 @@ fn a_pull_settles_only_after_a_line_more_than_a_second_past_its_end() {
 }
 
 #[test]
-fn boss_pulls_of_a_running_key_wait_for_the_key_to_end() {
+fn a_running_key_is_listed_with_its_finished_boss_pulls() {
     let log = FIXTURES[1];
     let (_, after_settling) = cuts_after_encounter_end(log, 0);
 
-    let running = indexer_after(log, after_settling);
-    assert!(running.settled_index(None).fights.is_empty());
+    let settled = indexer_after(log, after_settling).settled_index(None);
+    let run = settled.fights.iter().find(|fight| fight.is_run()).unwrap();
+    assert_eq!(run.outcome, Outcome::Incomplete);
+    assert!(settled.fights.iter().any(|fight| {
+        fight.run_index == Some(run.index)
+            && fight.encounter_id != 0
+            && fight.outcome == Outcome::Kill
+    }));
+    assert_eq!(settled.provisional, [run.index]);
+}
 
-    let whole = index_bytes(log.as_bytes());
-    let mut finished = Indexer::new();
-    finished.feed(log.as_bytes());
-    let settled = finished.settled_index(None);
-    assert!(settled.fights.iter().any(|fight| fight.is_run()));
-    assert!(settled.fights.iter().any(|fight| fight.run_index.is_some()));
-    assert_eq!(settled.fights, whole.fights);
+#[test]
+fn a_left_run_is_provisional_until_another_dungeon_is_entered() {
+    let left = dungeon_log();
+    let settled = indexer_after(&left, left.len()).settled_index(None);
+    assert_eq!(
+        (settled.fights[0].outcome, settled.provisional.contains(&1)),
+        (Outcome::Ended, true)
+    );
+
+    let elsewhere = left + &zone("11/17/2026 20:04:00.0000", 229, "Blackrock Spire", 1);
+    let settled = indexer_after(&elsewhere, elsewhere.len()).settled_index(None);
+    assert!(settled.provisional.is_empty(), "{:?}", settled.provisional);
+    assert_eq!(
+        settled.fights[0],
+        index_bytes(elsewhere.as_bytes()).fights[0]
+    );
+}
+
+#[test]
+fn pulls_outside_after_a_left_run_are_provisional() {
+    let log = [
+        enter_brd(0),
+        pack(0, &GUARDSMAN),
+        leave(1),
+        pack(1, &BASILISK),
+    ]
+    .concat();
+    let settled = indexer_after(&log, log.len()).settled_index(None);
+    assert_eq!(settled.provisional, [1, 3]);
+}
+
+#[test]
+fn a_finished_index_has_no_provisional_entries() {
+    assert!(index_bytes(dungeon_log().as_bytes()).provisional.is_empty());
 }

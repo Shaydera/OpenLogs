@@ -2,9 +2,7 @@ use std::fmt::Write;
 use std::path::Path;
 use std::time::Duration;
 
-use openlogs_index::{
-    CacheStatus, ChallengeMode, FightSummary, GameFlavor, LogIndex, Outcome, difficulty_label,
-};
+use openlogs_index::{CacheStatus, FightSummary, GameFlavor, LogIndex, Outcome, difficulty_label};
 
 /// Human-readable fight table for `openlogs-cli dump-fights`.
 pub fn report(
@@ -67,11 +65,12 @@ pub fn report(
     let runs: Vec<String> = index
         .fights
         .iter()
-        .filter_map(|fight| Some(run_line(fight, fight.challenge.as_ref()?, &index.fights)))
+        .filter(|fight| fight.is_run())
+        .map(|run| run_line(run, &index.fights))
         .collect();
     if !runs.is_empty() {
         let _ = writeln!(out);
-        let _ = writeln!(out, "Mythic+ runs");
+        let _ = writeln!(out, "Runs");
         for line in runs {
             let _ = writeln!(out, "{line}");
         }
@@ -80,15 +79,14 @@ pub fn report(
 }
 
 fn fight_row(fight: &FightSummary) -> String {
-    let (difficulty, result) = match &fight.challenge {
+    let (difficulty, result) = match fight.keystone() {
         Some(challenge) => (
             format!("+{}", challenge.keystone_level),
             run_result(fight.outcome),
         ),
         None if fight.is_combat() => ("Combat".to_string(), pull_result(fight.outcome)),
         None => (
-            difficulty_label(fight.difficulty)
-                .map_or_else(|| fight.difficulty.to_string(), str::to_string),
+            difficulty_name(fight.difficulty),
             pull_result(fight.outcome),
         ),
     };
@@ -96,7 +94,7 @@ fn fight_row(fight: &FightSummary) -> String {
         Some(combat) if combat.enemy_count > 1 => format!(" +{}", combat.enemy_count - 1),
         _ => String::new(),
     };
-    // Pulls of a Mythic+ run sit indented under their run.
+    // Pulls of a run sit indented under their run.
     let name = match fight.run_index {
         Some(_) => format!("  {}{enemies}", fight.name),
         None => format!("{}{enemies}", fight.name),
@@ -126,7 +124,11 @@ fn pull_result(outcome: Outcome) -> &'static str {
     }
 }
 
-/// A run's result as the index reads it from the log (see `FightSummary::outcome`).
+fn difficulty_name(difficulty: u32) -> String {
+    difficulty_label(difficulty).map_or_else(|| difficulty.to_string(), str::to_string)
+}
+
+/// A key's result as the index reads it from the log (see `FightSummary::outcome`).
 fn run_result(outcome: Outcome) -> &'static str {
     match outcome {
         Outcome::Kill => "Completed",
@@ -136,8 +138,9 @@ fn run_result(outcome: Outcome) -> &'static str {
 }
 
 /// E.g. `  #1 Priory of the Sacred Flame +12: Completed in 10:00.0 (logged 10:00.0),
-/// affixes 10, 147, 9, boss pulls 2, 3, 4`.
-fn run_line(run: &FightSummary, challenge: &ChallengeMode, fights: &[FightSummary]) -> String {
+/// affixes 10, 147, 9, boss pulls 2, 3, 4`, or `  #1 Blackrock Depths Normal: Ended in
+/// 70:00.0, bosses killed 3, boss pulls 3, 5, 7`.
+fn run_line(run: &FightSummary, fights: &[FightSummary]) -> String {
     let list = |items: Vec<String>| {
         if items.is_empty() {
             "none".to_string()
@@ -145,10 +148,6 @@ fn run_line(run: &FightSummary, challenge: &ChallengeMode, fights: &[FightSummar
             items.join(", ")
         }
     };
-    let logged = challenge
-        .total_time_ms
-        .map_or_else(String::new, |ms| format!(" (logged {})", duration(ms)));
-    let affixes = list(challenge.affix_ids.iter().map(u32::to_string).collect());
     let pulls = list(
         fights
             .iter()
@@ -156,6 +155,21 @@ fn run_line(run: &FightSummary, challenge: &ChallengeMode, fights: &[FightSummar
             .map(|fight| fight.index.to_string())
             .collect(),
     );
+    let Some(challenge) = run.keystone() else {
+        return format!(
+            "  #{} {} {}: {} in {}, bosses killed {}, boss pulls {pulls}",
+            run.index,
+            run.name,
+            difficulty_name(run.difficulty),
+            pull_result(run.outcome),
+            duration(run.duration_ms),
+            run.killed_encounters(fights).len()
+        );
+    };
+    let logged = challenge
+        .total_time_ms
+        .map_or_else(String::new, |ms| format!(" (logged {})", duration(ms)));
+    let affixes = list(challenge.affix_ids.iter().map(u32::to_string).collect());
     format!(
         "  #{} {} +{}: {} in {}{logged}, affixes {affixes}, boss pulls {pulls}",
         run.index,
@@ -254,6 +268,34 @@ mod tests {
         assert!(
             text.contains(
                 "Completed in 10:00.0 (logged 10:00.0), affixes 10, 147, 9, boss pulls 3, 5, 6"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn report_lists_dungeon_runs_with_their_killed_bosses() {
+        let log = [
+            "11/17/2026 20:00:00.0000  ZONE_CHANGE,230,\"Blackrock Depths\",1",
+            "11/17/2026 20:00:10.0000  ENCOUNTER_START,227,\"High Interrogator Gerstahn\",1,5,230",
+            "11/17/2026 20:00:20.0000  ENCOUNTER_END,227,\"High Interrogator Gerstahn\",1,5,1,10000",
+            "11/17/2026 20:01:10.0000  ENCOUNTER_START,228,\"Lord Roccor\",1,5,230",
+            "11/17/2026 20:01:20.0000  ENCOUNTER_END,228,\"Lord Roccor\",1,5,0,10000",
+            "11/17/2026 20:02:00.0000  ZONE_CHANGE,0,\"Searing Gorge\",0",
+        ]
+        .map(|line| format!("{line}\n"))
+        .concat();
+        let index = index_bytes(log.as_bytes());
+        let text = report(
+            Path::new("Logs/brd.txt"),
+            8192,
+            &index,
+            Duration::from_millis(3),
+            None,
+        );
+        assert!(
+            text.contains(
+                "#1 Blackrock Depths Normal: Ended in 1:20.0, bosses killed 1, boss pulls 2, 3"
             ),
             "{text}"
         );
