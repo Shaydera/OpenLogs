@@ -114,10 +114,18 @@ export function dpsAreaPath(
   return [`M ${first} ${scale.height}`, ...line.map(([px, py]) => `L ${px} ${py}`), `L ${last} ${scale.height}`, 'Z'].join(' ');
 }
 
-/** A tick on every full minute of the axis but its very end, where the label would hang past the plot. */
+const TICK_STEPS_MINUTES = [1, 2, 5, 10, 15, 30, 60];
+const MAX_TICKS = 40;
+
+/**
+ * A tick on every full minute of the axis but its very end, where the label would hang past the plot;
+ * a long run gets every 2nd, 5th, … minute so it keeps at most 40 labels.
+ */
 export function minuteTicks(axisMs: number): { leftPct: number; label: string }[] {
+  const stepMs =
+    60_000 * (TICK_STEPS_MINUTES.find((minutes) => Math.ceil(axisMs / (minutes * 60_000)) <= MAX_TICKS) ?? TICK_STEPS_MINUTES.at(-1)!);
   const ticks: { leftPct: number; label: string }[] = [];
-  for (let ms = 0; ms === 0 || ms < axisMs; ms += 60_000) {
+  for (let ms = 0; ms === 0 || ms < axisMs; ms += stepMs) {
     ticks.push({ leftPct: percentOf(ms, axisMs), label: formatDuration(ms) });
   }
   return ticks;
