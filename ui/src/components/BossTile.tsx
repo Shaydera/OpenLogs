@@ -4,7 +4,7 @@ import { bossMonogram } from '../monogram';
 
 /**
  * The boss's Encounter Journal portrait, else a monogram tile — also for
- * Mythic+ runs, whose rows have no encounter (0). `large` is the Overview header's portrait.
+ * runs, whose rows have no encounter (0). `large` is the Overview header's portrait.
  */
 export function BossTile({ encounterId, name, large = false }: { encounterId: number; name: string; large?: boolean }) {
   const src = useIconSrc(encounterId > 0 ? bossIcon(encounterId) : null);

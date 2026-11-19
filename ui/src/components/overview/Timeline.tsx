@@ -13,7 +13,7 @@ import { TIMELINE_VIEW_BOX, percentOf, timelineGeometry, timelineSummary } from 
 /**
  * The Overview's timeline and its range brush: drag to select, click a phase (or its
  * label) to select it, the accent handles are sliders for the keyboard. It always draws the whole pull;
- * the range filters what lies below. `run`: a whole Mythic+ run, which has no boss HP line; its boss
+ * the range filters what lies below. `run`: a whole run, which has no boss HP line; its boss
  * pulls are the named phases.
  */
 export function Timeline({ overview, run = false }: { overview: QuickOverview; run?: boolean }) {

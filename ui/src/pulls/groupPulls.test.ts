@@ -7,13 +7,14 @@ import {
   pullStatus,
   pullView,
   rangeKey,
+  runBadge,
   runChipLabel,
   runProgress,
   runStatus,
   runSubtitle,
   type RunView,
 } from './groupPulls';
-import { runLogFixture } from '../test/runFixture';
+import { dungeonRunFixture, runLogFixture } from '../test/runFixture';
 
 let next = 1;
 function fight(
@@ -177,7 +178,7 @@ describe('combat pulls', () => {
 
   it('run card lists trash between boss pulls and still counts only boss pulls', () => {
     const MPLUS = { difficulty: 8, difficultyLabel: 'Mythic+', playerCount: 5 };
-    const info: RunInfo = { challengeModeId: 499, keystoneLevel: 12, affixIds: [], totalTimeMs: 600_000, bosses: null, timer: null };
+    const info = keyRun({ affixIds: [] });
     const run = fight('Priory of the Sacred Flame', 0, 'kill', 600_000, null, { ...MPLUS, run: info });
     const inRun = { ...MPLUS, runIndex: run.index };
     const log = [
@@ -218,7 +219,7 @@ describe('comparable pulls', () => {
 });
 
 describe('Mythic+ runs', () => {
-  const RUN: RunInfo = { challengeModeId: 499, keystoneLevel: 12, affixIds: [10, 147, 9], totalTimeMs: 600_000, bosses: null, timer: null };
+  const RUN = keyRun();
   const MPLUS = { difficulty: 8, difficultyLabel: 'Mythic+', playerCount: 5 };
   const RUN_LOG = [
     fight("Ula'tek", 3492, 'kill', 478_610, 0, { index: 101 }),
@@ -230,18 +231,18 @@ describe('Mythic+ runs', () => {
     fight('Priory of the Sacred Flame', 0, 'incomplete', 90_000, null, {
       ...MPLUS,
       index: 107,
-      run: { ...RUN, keystoneLevel: 13, totalTimeMs: null },
+      run: keyRun({ keystoneLevel: 13, totalTimeMs: null }),
     }),
     fight('Captain Dailcry', 2847, 'wipe', 45_000, 40, { ...MPLUS, index: 108, runIndex: 107 }),
   ];
 
   it('lists each run with its boss pulls numbered within the run and its dungeon data', () => {
     const runs = groupRuns(RUN_LOG, true);
-    expect(runs.map((run) => [run.index, run.dungeon, run.keystoneLevel, run.status, run.pullCount, run.bosses, run.timer])).toEqual([
-      [102, 'Priory of the Sacred Flame', 12, 'completed', 4, null, null],
-      [107, 'Priory of the Sacred Flame', 13, 'incomplete', 1, null, null],
+    expect(runs.map((run) => [run.index, run.dungeon, run.badge, run.status, run.pullCount, run.key?.bosses, run.key?.timer])).toEqual([
+      [102, 'Priory of the Sacred Flame', '+12', 'completed', 4, null, null],
+      [107, 'Priory of the Sacred Flame', '+13', 'incomplete', 1, null, null],
     ]);
-    expect(runs[0].affixIds).toEqual([10, 147, 9]);
+    expect(runs[0].key?.affixIds).toEqual([10, 147, 9]);
     const bossPulls = (run: RunView) => run.entries.flatMap((entry) => (entry.kind === 'boss' ? [entry.pull] : []));
     expect(bossPulls(runs[0]).map((pull) => [pull.index, pull.n, pull.name, pull.status])).toEqual([
       [103, 1, 'Captain Dailcry', 'kill'],
@@ -251,9 +252,9 @@ describe('Mythic+ runs', () => {
     expect(bossPulls(groupRuns(RUN_LOG, false)[0]).map((pull) => pull.n)).toEqual([1, 2, 3, 4]);
     expect(groupRuns(LOG, false)).toEqual([]);
 
-    const known: RunInfo = { ...RUN, bosses: { killed: 3, total: 3 }, timer: { kind: 'inTime', upgrades: 2 } };
+    const known = keyRun({ bosses: { killed: 3, total: 3 }, timer: { kind: 'inTime', upgrades: 2 } });
     const [run] = groupRuns([{ ...RUN_LOG[1], run: known }], false);
-    expect([run.bosses, run.timer]).toEqual([{ killed: 3, total: 3 }, { kind: 'inTime', upgrades: 2 }]);
+    expect([run.key?.bosses, run.key?.timer]).toEqual([{ killed: 3, total: 3 }, { kind: 'inTime', upgrades: 2 }]);
   });
 
   it('keeps runs and their boss pulls out of the boss groups and comparisons, with saved ranges per dungeon', () => {
@@ -276,13 +277,52 @@ describe('Mythic+ runs', () => {
 describe('run cards', () => {
   it("shows the logged key time, not an abandoned key's 0, with the result and the dungeon data", () => {
     const [run] = groupRuns(runLogFixture.fights, true);
-    expect(run.loggedMs).toBe(1_859_624);
-    const abandoned = { ...runLogFixture.fights[0], run: { ...runLogFixture.fights[0].run!, totalTimeMs: 0 } };
-    expect(groupRuns([abandoned], true)[0].loggedMs).toBeNull();
+    const key = run.key!;
+    expect(key.loggedMs).toBe(1_859_624);
+    const abandoned = { ...runLogFixture.fights[0], run: keyRun({ totalTimeMs: 0 }) };
+    expect(groupRuns([abandoned], true)[0].key?.loggedMs).toBeNull();
 
     expect(runSubtitle(run)).toBe('3/3 bosses · 5 boss pulls · Affixes 10, 147, 9');
-    expect(runSubtitle({ ...run, bosses: null, affixIds: [] })).toBe('5 boss pulls');
-    const chips = [run, { ...run, timer: { kind: 'overTime' as const } }, { ...run, timer: null, loggedMs: null }, { ...run, status: 'notCompleted' as const }];
+    expect(runSubtitle({ ...run, key: { ...key, bosses: null, affixIds: [] } })).toBe('5 boss pulls');
+    const chips = [
+      run,
+      { ...run, key: { ...key, timer: { kind: 'overTime' as const } } },
+      { ...run, key: { ...key, timer: null, loggedMs: null } },
+      { ...run, status: 'notCompleted' as const },
+    ];
     expect(chips.map(runChipLabel)).toEqual(['In time +1 · 30:59', 'Over time · 30:59', 'Completed · 31:00', 'Not completed']);
   });
 });
+
+describe('dungeon runs', () => {
+  it('groups a dungeon run with its pulls and counts its killed bosses', () => {
+    const [run] = groupRuns(dungeonRunFixture.fights, false);
+    expect([run.dungeon, run.badge, run.key, run.killedBosses, run.status]).toEqual(['Blackrock Depths', 'Normal', null, 2, 'ended']);
+    expect(run.entries.map((entry) => (entry.kind === 'boss' ? entry.pull.index : entry.pulls.map((pull) => pull.index)))).toEqual([[2], 3, 4]);
+    expect(runSubtitle(run)).toBe('2 bosses killed · 2 boss pulls');
+    expect(runChipLabel(run)).toBe('Ended · 31:00');
+  });
+
+  it('a running run has the running status', () => {
+    const [row] = dungeonRunFixture.fights;
+    const running = { ...row, outcome: 'incomplete' as const, run: { ...row.run!, running: true, provisional: true } };
+    expect(runStatus(running)).toBe('running');
+    expect(runChipLabel(groupRuns([running], false)[0])).toBe('Running');
+  });
+
+  it('a dungeon run keeps its saved range per dungeon and difficulty', () => {
+    const [row] = dungeonRunFixture.fights;
+    expect(rangeKey(row)).toBe('dungeon:230:1');
+    expect(runBadge({ ...row, run: row.run! })).toBe('Normal');
+  });
+});
+
+function keyRun(key: Partial<NonNullable<RunInfo['key']>> = {}): RunInfo {
+  return {
+    key: { challengeModeId: 499, keystoneLevel: 12, affixIds: [10, 147, 9], totalTimeMs: 600_000, bosses: null, timer: null, ...key },
+    instanceId: 2649,
+    killedBosses: 0,
+    running: false,
+    provisional: false,
+  };
+}

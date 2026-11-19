@@ -23,7 +23,14 @@ function fight(index: number, outcome: FightRow['outcome'], durationMs: number, 
   };
 }
 
-const RUN: RunInfo = { challengeModeId: 505, keystoneLevel: 12, affixIds: [10, 9], totalTimeMs: 0, bosses: null, timer: null };
+const RUN: RunInfo = {
+  key: { challengeModeId: 505, keystoneLevel: 12, affixIds: [10, 9], totalTimeMs: 0, bosses: null, timer: null },
+  instanceId: 2287,
+  killedBosses: 0,
+  running: false,
+  provisional: false,
+};
+const DUNGEON: RunInfo = { key: null, instanceId: 230, killedBosses: 2, running: false, provisional: false };
 
 const wipe = (index: number) => fight(index, 'wipe', 120_000);
 const kill = (index: number) => fight(index, 'kill', 300_000);
@@ -82,7 +89,41 @@ describe('followUpdate shown pull', () => {
   it('flags a shown pull that is no longer listed', () => {
     const before = [wipe(10), wipe(20)];
     const update = followUpdate(before, [wipe(10)], shown(20), true, false);
-    expect(update).toEqual({ jumpTo: null, set: null, shownVanished: true });
+    expect(update).toEqual({ jumpTo: null, set: null, shownVanished: true, reload: false });
+  });
+});
+
+describe('followUpdate running run', () => {
+  /** Running inside, left but possibly going on after a ghost run, or final. */
+  const brd = (durationMs: number, state: 'running' | 'left' | 'final') =>
+    fight(1, state === 'running' ? 'incomplete' : 'ended', durationMs, {
+      run: { ...DUNGEON, running: state === 'running', provisional: state !== 'final' },
+      name: 'Blackrock Depths',
+      encounterId: 0,
+    });
+  const gerstahn = fight(2, 'wipe', 12_000, { runIndex: 1, encounterId: 227 });
+  const roccor = fight(3, 'kill', 40_000, { runIndex: 1, encounterId: 228 });
+
+  it('a running run is never a jump target', () => {
+    const update = followUpdate([brd(100_000, 'running'), gerstahn], [brd(200_000, 'running'), gerstahn], shown(2), true, false);
+    expect([update.jumpTo, update.reload]).toEqual([null, false]);
+  });
+
+  it('stays on a shown running run and reloads it when one of its pulls arrives', () => {
+    const before = [brd(100_000, 'running'), gerstahn];
+    expect(followUpdate(before, [brd(200_000, 'running'), gerstahn, roccor], shown(1), true, false)).toMatchObject({ jumpTo: null, reload: true });
+    expect(followUpdate(before, [brd(200_000, 'running'), gerstahn], shown(1), true, false)).toMatchObject({ jumpTo: null, reload: false });
+  });
+
+  it('stays on the newest pull through a ghost run and follows the next boss pull of the run', () => {
+    const left = followUpdate([brd(100_000, 'running'), gerstahn], [brd(110_000, 'left'), gerstahn], shown(2), true, false);
+    expect(left.jumpTo).toBeNull();
+    const back = followUpdate([brd(110_000, 'left'), gerstahn], [brd(300_000, 'running'), gerstahn, roccor], shown(2), true, false);
+    expect(back.jumpTo).toBe(3);
+  });
+
+  it('jumps to a dungeon run once it is final', () => {
+    expect(followUpdate([brd(100_000, 'left'), gerstahn], [brd(100_000, 'final'), gerstahn], shown(2), true, false).jumpTo).toBe(1);
   });
 });
 
@@ -122,7 +163,13 @@ describe('liveNoticeOf', () => {
 
   it('describes a run', () => {
     const fights = [fight(5, 'incomplete', 600_000, { run: RUN, name: 'Halls of Atonement' })];
-    expect(liveNoticeOf(fights, 5)).toEqual({ kind: 'run', dungeon: 'Halls of Atonement', keystoneLevel: 12, status: 'incomplete' });
+    expect(liveNoticeOf(fights, 5)).toEqual({ kind: 'run', heading: 'Halls of Atonement +12', status: 'incomplete' });
+  });
+
+  it('describes a dungeon run', () => {
+    const brd = { run: DUNGEON, name: 'Blackrock Depths', difficulty: 1, difficultyLabel: 'Normal' };
+    const fights = [fight(5, 'ended', 600_000, brd)];
+    expect(liveNoticeOf(fights, 5)).toEqual({ kind: 'run', heading: 'Blackrock Depths Normal', status: 'ended' });
   });
 
   it('names a combat pull after its enemies', () => {

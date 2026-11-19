@@ -1661,6 +1661,30 @@ describe('live refresh', () => {
     expect(s).toMatchObject({ overview: overviewFixture, overviewCutoff: 3, report: { tab: 'deaths', data: deathsReportFixture }, timeline: timelineFixture });
   });
 
+  it('reads a shown running run again where it is when one of its pulls arrives', async () => {
+    const run = (durationMs: number): FightRow => ({
+      ...wipe(1),
+      name: 'Blackrock Depths',
+      encounterId: 0,
+      outcome: 'incomplete',
+      durationMs,
+      run: { key: null, instanceId: 230, killedBosses: 0, running: true, provisional: true },
+    });
+    const inRun = (index: number): FightRow => ({ ...wipe(index), runIndex: 1 });
+    const RUNNING: LogView = { ...LOG, fights: [run(600_000), inRun(2)] };
+    vi.mocked(api.openLog).mockResolvedValue(RUNNING);
+    await useApp.getState().openLog(chosen(RUNNING));
+    await useApp.getState().openFight(1);
+    await useApp.getState().setRange({ startMs: 0, endMs: 60_000 });
+    vi.mocked(api.quickOverview).mockClear();
+    vi.mocked(api.followLog).mockResolvedValueOnce({ ...RUNNING, fights: [run(900_000), inRun(2), inRun(3)] });
+    await vi.advanceTimersByTimeAsync(2000);
+    const s = useApp.getState();
+    expect([s.view, s.range, s.liveNotice]).toEqual([{ kind: 'fight', fightIndex: 1 }, { startMs: 0, endMs: 60_000 }, null]);
+    expect(api.quickOverview).toHaveBeenCalledWith(RUNNING.id, 1, WHOLE_PULL);
+    expect(s.overview).toEqual(overviewFixture);
+  });
+
   it('leaves a viewer of an older pull where they are', async () => {
     await useApp.getState().openLog(chosen(LIVE));
     await useApp.getState().openFight(1);

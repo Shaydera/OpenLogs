@@ -36,15 +36,17 @@ export function fightMeta(row: FightRow): MetaItem[] {
   return items.filter((item): item is MetaItem => item !== null);
 }
 
-/** A Mythic+ run: timer and bosses only from the dungeon data, never from the log alone. */
+/** A Mythic+ run: timer and bosses only from the dungeon data, never from the log alone. A dungeon visit: its killed bosses. */
 function runFacts(row: FightRow, run: RunInfo): (MetaItem | null)[] {
+  const common = [fact(t('fight.players', { count: row.playerCount })), fact(formatDateTime(row.startUnixMs))];
+  const key = run.key;
+  if (key === null) return [...common, fact(t('runs.bossesKilled', { count: run.killedBosses }))];
   return [
-    fact(t('fight.players', { count: row.playerCount })),
-    fact(formatDateTime(row.startUnixMs)),
+    ...common,
     // An abandoned key logs 0; that is no time worth showing.
-    run.totalTimeMs ? fact(t('runs.loggedTime', { time: formatDuration(run.totalTimeMs) })) : null,
-    ...runProgress(run).map((part) => fact(part)),
-    run.affixIds.length > 0 ? fact(t('runs.affixes', { ids: run.affixIds.join(', ') })) : null,
+    key.totalTimeMs ? fact(t('runs.loggedTime', { time: formatDuration(key.totalTimeMs) })) : null,
+    ...runProgress(key).map((part) => fact(part)),
+    key.affixIds.length > 0 ? fact(t('runs.affixes', { ids: key.affixIds.join(', ') })) : null,
   ];
 }
 

@@ -2,12 +2,18 @@ import type { FightRow, LogView, RunInfo } from '../api/types';
 
 /** 30:59.6 against the real limits 32:30 / 26:00 / 19:30: in time +1. */
 const PRIORY: RunInfo = {
-  challengeModeId: 499,
-  keystoneLevel: 12,
-  affixIds: [10, 147, 9],
-  totalTimeMs: 1_859_624,
-  bosses: { killed: 3, total: 3 },
-  timer: { kind: 'inTime', upgrades: 1 },
+  key: {
+    challengeModeId: 499,
+    keystoneLevel: 12,
+    affixIds: [10, 147, 9],
+    totalTimeMs: 1_859_624,
+    bosses: { killed: 3, total: 3 },
+    timer: { kind: 'inTime', upgrades: 1 },
+  },
+  instanceId: 2649,
+  killedBosses: 3,
+  running: false,
+  provisional: false,
 };
 
 function row(
@@ -70,5 +76,27 @@ export const runLogFixture: LogView = {
       zone: 'The Venomous Abyss',
       runIndex: null,
     }),
+  ],
+};
+
+const BRD = { difficulty: 1, difficultyLabel: 'Normal', zone: 'Blackrock Depths' };
+
+/** A Blackrock Depths Normal visit (log index 1), left after a combat pull and two boss kills. */
+export const dungeonRunFixture: LogView = {
+  ...runLogFixture,
+  id: 'WoWCombatLog-111726_200000.txt',
+  fileName: 'WoWCombatLog-111726_200000.txt',
+  game: { kind: 'forever' },
+  zone: 'Blackrock Depths',
+  startUnixMs: Date.UTC(2026, 9, 8, 20, 1),
+  fights: [
+    row(1, 'Blackrock Depths', 0, 'ended', 1_860_000, null, {
+      ...BRD,
+      run: { key: null, instanceId: 230, killedBosses: 2, running: false, provisional: false },
+      runIndex: null,
+    }),
+    row(2, 'Anvilrage Guardsman', 0, 'kill', 12_000, null, { ...BRD, combat: { enemyCount: 2 } }),
+    row(3, 'High Interrogator Gerstahn', 227, 'kill', 12_000, 0, BRD),
+    row(4, 'Lord Roccor', 228, 'kill', 40_000, 0, BRD),
   ],
 };

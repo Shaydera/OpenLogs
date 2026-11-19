@@ -5,7 +5,7 @@ import { DeathCutoffChip } from './DeathCutoffChip';
 import { OptionsMenu } from './OptionsMenu';
 import { ViewSwitch } from './ViewSwitch';
 
-/** The row under the tabs: whose view and which source at the start, the options menu, view switch and replay toggle at the end; the replay has none of them, a whole Mythic+ run no replay. */
+/** The row under the tabs: whose view and which source at the start, the options menu, view switch and replay toggle at the end; the replay has none of them, a whole run no replay. */
 export function ReportToolbar() {
   const tab = useApp((s) => s.tab);
   const withReplay = useApp(replayOffered);

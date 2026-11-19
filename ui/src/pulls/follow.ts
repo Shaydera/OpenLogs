@@ -1,6 +1,7 @@
 import type { FightRow, PullSet } from '../api/types';
 import type { View } from '../store';
-import { isAborted, isCombatPull, isGroupedBossPull, moreEnemies, pullNumber, pullStatus, runStatus, type PullStatus, type RunStatus } from './groupPulls';
+import { t } from '../i18n/i18n';
+import { isAborted, isCombatPull, isGroupedBossPull, moreEnemies, pullNumber, pullStatus, runBadge, runStatus, type PullStatus, type RunStatus } from './groupPulls';
 
 export interface FollowUpdate {
   /** Pull or run the view moves to; `null` = stay. */
@@ -9,25 +10,36 @@ export interface FollowUpdate {
   set: PullSet | null;
   /** The shown pull is no longer listed (an in-progress pull hidden once the log grows). */
   shownVanished: boolean;
+  /** The shown run is still running and one of its pulls arrived: read it again where it is. */
+  reload: boolean;
 }
 
 export type LiveNotice =
   | { kind: 'pull'; n: number; status: PullStatus; bossHpPercent: number | null }
   | { kind: 'combat'; name: string; moreEnemies: number; status: PullStatus }
-  | { kind: 'run'; dungeon: string; keystoneLevel: number; status: RunStatus };
+  | { kind: 'run'; heading: string; status: RunStatus };
 
-/** Follows only to rows of the kind shown, or to any while the shown row is unknown: reading a boss pull, new trash never pulls the view away. */
+/**
+ * Follows only to rows of the kind shown, or to any while the shown row is unknown: reading a boss pull, new trash never pulls the view away.
+ * A run arrives only once it is final: a left one may go on after a ghost run, so following stays with its pulls.
+ */
 export function followUpdate(before: FightRow[], after: FightRow[], view: View, hideAborted: boolean, comparing: boolean): FollowUpdate {
   const known = new Map(before.map((fight) => [fight.index, fight]));
   const isNew = (fight: FightRow) => {
     const old = known.get(fight.index);
-    return old === undefined || old.outcome !== fight.outcome || old.durationMs !== fight.durationMs;
+    return (
+      old === undefined || old.outcome !== fight.outcome || old.durationMs !== fight.durationMs || old.run?.provisional !== fight.run?.provisional
+    );
   };
   const isVisible = (fight: FightRow) => fight.run !== null || !(hideAborted && isAborted(fight));
-  const arrived = after.filter((fight) => isNew(fight) && isVisible(fight));
+  const arrived = after.filter((fight) => isNew(fight) && isVisible(fight) && !fight.run?.provisional);
 
   let jumpTo: number | null = null;
-  if (view.kind === 'fight' && !comparing) {
+  let reload = false;
+  const shownRunning = view.kind === 'fight' && after.some((fight) => fight.index === view.fightIndex && fight.run?.running);
+  if (view.kind === 'fight' && shownRunning) {
+    reload = arrived.some((fight) => fight.runIndex === view.fightIndex);
+  } else if (view.kind === 'fight' && !comparing) {
     const shownRow = known.get(view.fightIndex);
     const combatShown = shownRow !== undefined && isCombatPull(shownRow);
     const ofShownKind = (fight: FightRow) => isCombatPull(fight) === combatShown;
@@ -45,7 +57,7 @@ export function followUpdate(before: FightRow[], after: FightRow[], view: View, 
   const shownVanished = view.kind === 'fight' && jumpTo === null && known.has(view.fightIndex) && !present.has(view.fightIndex);
 
   const unchanged = new Set(after.filter((fight) => !isNew(fight)).map((fight) => fight.index));
-  return { jumpTo, set: view.kind === 'set' ? grownSet(view.set, unchanged, arrived) : null, shownVanished };
+  return { jumpTo, set: view.kind === 'set' ? grownSet(view.set, unchanged, arrived) : null, shownVanished, reload };
 }
 
 function newest(fights: FightRow[]): FightRow | null {
@@ -72,7 +84,8 @@ export function liveNoticeOf(fights: FightRow[], index: number): LiveNotice {
   const fight = fights.find((candidate) => candidate.index === index);
   if (!fight) throw new Error(`No pull with index ${index}`);
   if (fight.run !== null) {
-    return { kind: 'run', dungeon: fight.name, keystoneLevel: fight.run.keystoneLevel, status: runStatus(fight) };
+    const heading = t('runs.heading', { dungeon: fight.name, level: runBadge({ ...fight, run: fight.run }) });
+    return { kind: 'run', heading, status: runStatus(fight) };
   }
   if (isCombatPull(fight)) return { kind: 'combat', name: fight.name, moreEnemies: moreEnemies(fight.combat), status: pullStatus(fight) };
   return { kind: 'pull', n: pullNumber(fights, fight)!, status: pullStatus(fight), bossHpPercent: fight.bossHpPercent };

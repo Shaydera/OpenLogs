@@ -1,5 +1,5 @@
-import type { BossProgress, CombatInfo, FightRow, KeyTimer, PullSet, PullSetKind, RunInfo } from '../api/types';
-import { formatDuration, formatInteger, formatSeconds } from '../i18n/format';
+import type { BossProgress, CombatInfo, FightRow, KeyInfo, KeyTimer, PullSet, PullSetKind, RunInfo } from '../api/types';
+import { formatDuration, formatInteger, formatKeystoneLevel, formatSeconds } from '../i18n/format';
 import { t } from '../i18n/i18n';
 
 /** Non-kills shorter than this are "aborted" and can be hidden. */
@@ -7,11 +7,14 @@ const ABORT_THRESHOLD_MS = 10_000;
 
 export type PullStatus = 'kill' | 'wipe' | 'ended' | 'aborted' | 'incomplete';
 
-/** A run's result: completed, ended without completion, or no end in the log. */
-export type RunStatus = 'completed' | 'notCompleted' | 'incomplete';
+/**
+ * A run's result: a key completed or not, a dungeon visit left (`ended`), the log still being
+ * written inside the run (`running`), or no end in the log.
+ */
+export type RunStatus = 'completed' | 'notCompleted' | 'ended' | 'running' | 'incomplete';
 
 /** Chip style of a run result: completed like a kill, not completed like a wipe, no end neutral. */
-export const RUN_CHIP: Record<RunStatus, string> = { completed: 'kill', notCompleted: 'wipe', incomplete: 'abort' };
+export const RUN_CHIP: Record<RunStatus, string> = { completed: 'kill', notCompleted: 'wipe', ended: 'ended', running: 'abort', incomplete: 'abort' };
 
 export const PULL_CHIP: Record<PullStatus, string> = { kill: 'kill', wipe: 'wipe', incomplete: 'wipe', ended: 'ended', aborted: 'abort' };
 
@@ -48,7 +51,7 @@ export interface PullSetView {
   durationMs: number;
 }
 
-/** A boss pull inside a Mythic+ run; `n` counts within the run, hidden pulls included. */
+/** A boss pull inside a run; `n` counts within the run, hidden pulls included. */
 export interface RunPullView extends PullView {
   name: string;
 }
@@ -71,18 +74,26 @@ export interface CombatPullView {
 /** A boss pull of a run card, or the combat pulls between two of them; `after` is the index of the boss pull before them, or of the run. */
 export type RunEntry = { kind: 'boss'; pull: RunPullView } | { kind: 'trash'; after: number; pulls: CombatPullView[] };
 
-/** A Mythic+ run with its boss and combat pulls. */
-export interface RunView {
-  index: number;
-  dungeon: string;
-  keystoneLevel: number;
+/** What a run card shows of a key besides its level. */
+export interface KeyView {
   affixIds: number[];
-  status: RunStatus;
   /** From the dungeon data; `null` without it. */
   bosses: BossProgress | null;
   timer: KeyTimer | null;
   /** Logged key time (`CHALLENGE_MODE_END`, penalties included); `null` without an end or for an abandoned key's 0. */
   loggedMs: number | null;
+}
+
+/** A Mythic+ run or a dungeon visit with its boss and combat pulls. */
+export interface RunView {
+  index: number;
+  dungeon: string;
+  /** A key's level, a dungeon visit's difficulty. */
+  badge: string;
+  status: RunStatus;
+  /** `null` for a dungeon visit. */
+  key: KeyView | null;
+  killedBosses: number;
   durationMs: number;
   playerCount: number;
   startUnixMs: number;
@@ -134,14 +145,21 @@ export function pullViewTime(pull: PullView, durationMs = pull.durationMs): stri
 }
 
 export function runStatus(fight: FightRow): RunStatus {
+  if (fight.run?.running) return 'running';
   if (fight.outcome === 'kill') return 'completed';
-  return fight.outcome === 'wipe' ? 'notCompleted' : 'incomplete';
+  if (fight.outcome === 'wipe') return 'notCompleted';
+  return fight.outcome === 'ended' ? 'ended' : 'incomplete';
+}
+
+/** `+12` for a key, `Normal` for a dungeon visit: what follows the dungeon in a run's heading. */
+export function runBadge(row: FightRow & { run: RunInfo }): string {
+  return row.run.key ? formatKeystoneLevel(row.run.key.keystoneLevel) : difficultyName(row);
 }
 
 /** Difficulty ID of Mythic+ keystone dungeons. */
 const MYTHIC_PLUS_DIFFICULTY = 8;
 
-/** What boss groups, sets and comparisons are made of: boss pulls outside Mythic+ runs. */
+/** What boss groups, sets and comparisons are made of: boss pulls outside runs. */
 export function isGroupedBossPull(fight: FightRow): boolean {
   return fight.run === null && fight.runIndex === null && !isCombatPull(fight);
 }
@@ -150,7 +168,7 @@ export function difficultyName(fight: Pick<FightRow, 'difficulty' | 'difficultyL
   return fight.difficultyLabel ?? t('difficulty.unknown', { id: fight.difficulty });
 }
 
-/** Boss pulls outside Mythic+ runs, grouped by boss and difficulty; `groupRuns` lists the runs. */
+/** Boss pulls outside runs, grouped by boss and difficulty; `groupRuns` lists the runs. */
 export function groupPulls(fights: FightRow[], hideAborted: boolean): BossGroup[] {
   const groups = new Map<string, FightRow[]>();
   for (const fight of fights) {
@@ -200,16 +218,17 @@ function pullSets(boss: Pick<FightRow, 'encounterId' | 'difficulty'>, pulls: Pul
     }));
 }
 
-/** Combat pulls outside Mythic+ runs in log order; `groupRuns` lists those inside a run. */
+/** Combat pulls outside runs in log order; `groupRuns` lists those inside a run. */
 export function combatPulls(fights: FightRow[], hideAborted: boolean): CombatPullView[] {
   return fights.filter(isCombatPull).filter((fight) => fight.runIndex === null && !(hideAborted && isAborted(fight))).map(toCombatView);
 }
 
-/** Mythic+ runs in log order, each with its boss pulls numbered within the run and the combat pulls between them. */
+/** Runs in log order, each with its boss pulls numbered within the run and the combat pulls between them. */
 export function groupRuns(fights: FightRow[], hideAborted: boolean): RunView[] {
   return fights.flatMap((fight) => {
     const run = fight.run;
     if (run === null) return [];
+    const key = run.key;
     const numbered = runBossPulls(fights, fight.index);
     const entries: RunEntry[] = [];
     for (const pull of fights) {
@@ -223,12 +242,10 @@ export function groupRuns(fights: FightRow[], hideAborted: boolean): RunView[] {
       {
         index: fight.index,
         dungeon: fight.name,
-        keystoneLevel: run.keystoneLevel,
-        affixIds: run.affixIds,
+        badge: runBadge({ ...fight, run }),
         status: runStatus(fight),
-        bosses: run.bosses,
-        timer: run.timer,
-        loggedMs: run.totalTimeMs || null,
+        key: key && { affixIds: key.affixIds, bosses: key.bosses, timer: key.timer, loggedMs: key.totalTimeMs || null },
+        killedBosses: run.killedBosses,
         durationMs: fight.durationMs,
         playerCount: fight.playerCount,
         startUnixMs: fight.startUnixMs,
@@ -243,7 +260,7 @@ export function groupRuns(fights: FightRow[], hideAborted: boolean): RunView[] {
  * What the dungeon data tells about a run, e.g. `In time +2` and `3/3 bosses`; nothing
  * without it, so no time is ever claimed from the log alone.
  */
-export function runProgress(run: Pick<RunInfo, 'bosses' | 'timer'>): string[] {
+export function runProgress(run: Pick<KeyInfo, 'bosses' | 'timer'>): string[] {
   const timer =
     run.timer === null
       ? null
@@ -254,34 +271,41 @@ export function runProgress(run: Pick<RunInfo, 'bosses' | 'timer'>): string[] {
   return [timer, bosses].filter((part): part is string => part !== null);
 }
 
-/** Subtitle of a run card, e.g. `3/3 bosses · 5 boss pulls · Affixes 10, 147, 9`; affix IDs stay raw until curated names exist. */
+/**
+ * Subtitle of a run card, e.g. `3/3 bosses · 5 boss pulls · Affixes 10, 147, 9`, a dungeon visit's
+ * `2 bosses killed · 3 boss pulls`; affix IDs stay raw until curated names exist.
+ */
 export function runSubtitle(run: RunView): string {
+  const key = run.key;
+  if (key === null) return [t('runs.bossesKilled', { count: run.killedBosses }), t('runs.bossPulls', { count: run.pullCount })].join(' · ');
   return [
-    run.bosses === null ? null : t('runs.bosses', { killed: formatInteger(run.bosses.killed), count: run.bosses.total }),
+    key.bosses === null ? null : t('runs.bosses', { killed: formatInteger(key.bosses.killed), count: key.bosses.total }),
     t('runs.bossPulls', { count: run.pullCount }),
-    run.affixIds.length > 0 ? t('runs.affixes', { ids: run.affixIds.join(', ') }) : null,
+    key.affixIds.length > 0 ? t('runs.affixes', { ids: key.affixIds.join(', ') }) : null,
   ]
     .filter((part): part is string => part !== null)
     .join(' · ');
 }
 
-/** The one time a run card shows: the logged key time when the log has one, else the fight's length. */
-export function runTimeMs(run: Pick<RunView, 'durationMs' | 'loggedMs'>): number {
-  return run.loggedMs ?? run.durationMs;
+/** The one time a run card shows: the logged key time when the log has one, else the run's length. */
+export function runTimeMs(run: Pick<RunView, 'durationMs' | 'key'>): number {
+  return run.key?.loggedMs ?? run.durationMs;
 }
 
 /**
  * Result chip of a run card, like a boss card's "Kill 6:05": `In time +1 · 30:59`, `Over time · 34:10`,
- * `Completed · 31:00` (no dungeon data), else the status alone. The time is the logged key time when
- * the log has one.
+ * `Completed · 31:00` (no dungeon data), a left dungeon visit's `Ended · 31:00`, else the status
+ * alone. The time is the logged key time when the log has one.
  */
-export function runChipLabel(run: Pick<RunView, 'status' | 'timer' | 'durationMs' | 'loggedMs'>): string {
-  if (run.status !== 'completed') return t(`runs.status.${run.status}`);
+export function runChipLabel(run: Pick<RunView, 'status' | 'key' | 'durationMs'>): string {
   const duration = formatDuration(runTimeMs(run));
-  if (run.timer === null) return t('runs.chipCompleted', { duration });
-  return run.timer.kind === 'inTime'
-    ? t('runs.chipInTime', { upgrades: formatInteger(run.timer.upgrades), duration })
-    : t('runs.chipOverTime', { duration });
+  if (run.key === null && run.status === 'ended') {
+    return t('runs.chipDungeon', { status: t('runs.status.ended'), duration });
+  }
+  if (run.status !== 'completed') return t(`runs.status.${run.status}`);
+  const timer = run.key?.timer ?? null;
+  if (timer === null) return t('runs.chipCompleted', { duration });
+  return timer.kind === 'inTime' ? t('runs.chipInTime', { upgrades: formatInteger(timer.upgrades), duration }) : t('runs.chipOverTime', { duration });
 }
 
 function toView(fight: FightRow, n: number): PullView {
@@ -313,12 +337,16 @@ function toCombatView(fight: FightRow & { combat: CombatInfo }): CombatPullView 
   };
 }
 
-/** Key of saved ranges: per boss and difficulty, per dungeon for a Mythic+ run; `null` for a combat pull, which keeps none. */
+/**
+ * Key of saved ranges: per boss and difficulty, per key dungeon for a Mythic+ run, per dungeon and
+ * difficulty for a dungeon visit; `null` for a combat pull, which keeps none.
+ */
 export function rangeKey(fight: FightRow): string | null {
   if (isCombatPull(fight)) return null;
-  return fight.run ? `run:${fight.run.challengeModeId}` : `${fight.encounterId}:${fight.difficulty}`;
+  if (fight.run === null) return `${fight.encounterId}:${fight.difficulty}`;
+  return fight.run.key ? `run:${fight.run.key.challengeModeId}` : `dungeon:${fight.run.instanceId}:${fight.difficulty}`;
 }
-/** Pulls of one boss and difficulty outside Mythic+, numbered as in the pull list (hidden pulls count). */
+/** Pulls of one boss and difficulty outside runs, numbered as in the pull list (hidden pulls count). */
 function bossPulls(fights: FightRow[], boss: Pick<FightRow, 'encounterId' | 'difficulty'>): PullView[] {
   return fights
     .filter((fight) => isGroupedBossPull(fight) && fight.encounterId === boss.encounterId && fight.difficulty === boss.difficulty)
@@ -346,7 +374,7 @@ export function pullView(fights: FightRow[], index: number): PullView | null {
 
 /**
  * Pulls `current` can be compared with: same boss and difficulty, not aborted, not itself.
- * Comparison stays with boss pulls outside Mythic+, so runs, their boss pulls and combat pulls get none.
+ * Comparison stays with boss pulls outside runs, so runs, their boss pulls and combat pulls get none.
  */
 export function comparablePulls(fights: FightRow[], current: FightRow): PullView[] {
   // Mythic+ boss pulls stay out, also when their run is missing (logging started mid-key).
