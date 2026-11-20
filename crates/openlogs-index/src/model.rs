@@ -75,6 +75,32 @@ impl GameFlavor {
     }
 }
 
+/// The games with game data of their own: spell tables, and Forever's talent trees.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DataGame {
+    Retail,
+    Forever,
+}
+
+impl DataGame {
+    /// Forever has its own game data; every other game reads retail's.
+    pub fn of(flavor: Option<GameFlavor>) -> Self {
+        match flavor {
+            Some(GameFlavor::Forever) => Self::Forever,
+            _ => Self::Retail,
+        }
+    }
+
+    pub fn from_name(name: &str) -> Result<Self, String> {
+        match name {
+            "retail" => Ok(Self::Retail),
+            "forever" => Ok(Self::Forever),
+            _ => Err(format!("No game data for the game {name}")),
+        }
+    }
+}
+
 /// Difficulty ID of Mythic+ (Mythic Keystone) dungeons; run entries carry it too.
 pub const MYTHIC_KEYSTONE_DIFFICULTY: u32 = 8;
 /// Difficulties whose visit is a dungeon run: Normal, Heroic, Mythic, Timewalking, Follower.

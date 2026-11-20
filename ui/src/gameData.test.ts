@@ -91,7 +91,7 @@ describe('game data tables', () => {
         return new Response('', { status: 404 });
       }),
     );
-    const { setCurrentGame } = await import('./currentGame');
+    const { setCurrentLog } = await import('./currentGame');
     const { iconTables, loadIconTables, spellIconName, subscribeIconTables } = await import('./gameData');
     const bearForm = () => {
       const spells = iconTables().spells;
@@ -100,29 +100,29 @@ describe('game data tables', () => {
     const notified = vi.fn();
     subscribeIconTables(notified);
 
-    setCurrentGame({ kind: 'forever' });
+    setCurrentLog({ game: { kind: 'forever' }, dataGame: 'forever' });
     loadIconTables();
     await vi.waitFor(() => expect(bearForm()).toBe('ability_racial_bearform'));
 
     notified.mockClear();
-    setCurrentGame({ kind: 'retail' });
+    setCurrentLog({ game: { kind: 'retail' }, dataGame: 'retail' });
     expect(notified).toHaveBeenCalled();
     await vi.waitFor(() => expect(bearForm()).toBe('retail_icon'));
 
-    setCurrentGame({ kind: 'forever' });
+    setCurrentLog({ game: { kind: 'forever' }, dataGame: 'forever' });
     expect(bearForm(), 'a loaded table is shown again at once').toBe('ability_racial_bearform');
   });
 
   it('leaves the icons alone when a refreshed log keeps its game', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 404 })));
-    const { setCurrentGame } = await import('./currentGame');
+    const { setCurrentLog } = await import('./currentGame');
     const { iconTables, subscribeIconTables } = await import('./gameData');
-    setCurrentGame({ kind: 'forever' });
+    setCurrentLog({ game: { kind: 'forever' }, dataGame: 'forever' });
     const shown = iconTables();
     const notified = vi.fn();
     subscribeIconTables(notified);
 
-    setCurrentGame({ kind: 'forever' });
+    setCurrentLog({ game: { kind: 'forever' }, dataGame: 'forever' });
 
     expect(notified).not.toHaveBeenCalled();
     expect(iconTables()).toBe(shown);

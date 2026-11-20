@@ -1,8 +1,9 @@
 import { type Engine, workerEngine } from '../engine/engine';
-import { type DataGame, channelSpellsJson, dataGameOf, dungeonsJson, spellClassesJson, talentTreesJson } from '../gameData';
+import { channelSpellsJson, dungeonsJson, spellClassesJson, talentTreesJson } from '../gameData';
 import { t } from '../i18n/i18n';
 import { browserDatabase, type Database } from './db';
 import { fileGone, fileMissing, type LogSource, reopenHandle } from './logSource';
+import type { DataGame } from './types';
 import { type RecentRecord, recentRecords, rememberLog } from './recent';
 import type {
   Attribution,
@@ -175,7 +176,7 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
       const view = await quietly(() => engine.restoreIndex(stored.json, source.id, source.name, source.size));
       if (view) {
         await quietly(() => useIndex(key));
-        await loadSpellTables(engine, dataGameOf(view.game));
+        await loadSpellTables(engine, view.dataGame);
         return { view, key, followedBytes: 0 };
       }
     }
@@ -193,7 +194,7 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
     const view = await engine.finishIndex(source.id, source.name, source.size);
     const json = await engine.indexJson();
     await quietly(() => storeIndex(key, json));
-    await loadSpellTables(engine, dataGameOf(view.game));
+    await loadSpellTables(engine, view.dataGame);
     return { view, key, followedBytes: source.size };
   }
 
@@ -268,7 +269,7 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
         }
         const view = await engine.refreshIndex(source.id, source.name, source.size, settleAll);
         // A log opened before its header was written learns its game only now.
-        await loadSpellTables(engine, dataGameOf(view.game));
+        await loadSpellTables(engine, view.dataGame);
         await storeFollowed(engine, log, view, settleAll);
         return view;
       } finally {

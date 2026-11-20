@@ -56,6 +56,7 @@ export const runLogFixture: LogView = {
   logVersion: 22,
   build: '12.1.0',
   game: { kind: 'retail' },
+  dataGame: 'retail',
   advancedLogging: true,
   brokenLines: 0,
   brokenByEvent: {},

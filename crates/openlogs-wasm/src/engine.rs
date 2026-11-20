@@ -5,7 +5,7 @@ use openlogs_analysis::{
     load_fight_slice_with,
 };
 use openlogs_gamedata::{ChannelSpells, Curated, DungeonTable, SpellClasses, TalentTrees};
-use openlogs_index::{FightSummary, GameFlavor, Indexer, LogIndex};
+use openlogs_index::{DataGame, FightSummary, GameFlavor, Indexer, LogIndex};
 use openlogs_service::auras_dto::AuraKindDto;
 use openlogs_service::casts_dto::CastsReportDto;
 use openlogs_service::log_dto::log_view;
@@ -25,32 +25,6 @@ use serde_json::Value;
 
 /// Pulls kept loaded: the shown pull and the one it is compared with.
 const LOADED_PULLS: usize = 2;
-
-/// The games with spell tables of their own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DataGame {
-    Retail,
-    Forever,
-}
-
-impl DataGame {
-    /// Forever has its own tables; every other game reads retail's. The app follows the same
-    /// rule (`dataGameOf`).
-    pub fn of(flavor: Option<GameFlavor>) -> Self {
-        match flavor {
-            Some(GameFlavor::Forever) => Self::Forever,
-            _ => Self::Retail,
-        }
-    }
-
-    pub fn from_name(name: &str) -> Result<Self, String> {
-        match name {
-            "retail" => Ok(Self::Retail),
-            "forever" => Ok(Self::Forever),
-            _ => Err(format!("No game data for the game {name}")),
-        }
-    }
-}
 
 #[derive(Default)]
 struct GameTables {
