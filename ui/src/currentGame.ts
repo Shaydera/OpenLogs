@@ -8,9 +8,11 @@ export function currentGame(): Game | null {
   return game;
 }
 
+/** Listeners hear only of another game, not of every refresh of the open log. */
 export function setCurrentGame(next: Game | null) {
+  const changed = JSON.stringify(next) !== JSON.stringify(game);
   game = next;
-  listeners.forEach((listener) => listener());
+  if (changed) listeners.forEach((listener) => listener());
 }
 
 export function subscribeCurrentGame(listener: () => void): () => void {

@@ -34,14 +34,16 @@ impl OpenRun {
         matches!(self.summary.run, Some(RunKind::Dungeon))
     }
 
-    pub(crate) fn learn_copy(&mut self, event: &CombatEvent<'_>) {
+    /// Whether this line showed the dungeon run's copy for the first time.
+    pub(crate) fn learn_copy(&mut self, event: &CombatEvent<'_>) -> bool {
         if !self.is_dungeon() || self.copy.is_some() {
-            return;
+            return false;
         }
         self.copy = [event.source.guid, event.target.guid]
             .into_iter()
             .find_map(|guid| instance_copy(guid, self.summary.instance_id))
             .map(str::to_string);
+        self.copy.is_some()
     }
 
     /// Whether `visit` is in the same instance copy, which only an NPC seen in both proves.
@@ -50,6 +52,14 @@ impl OpenRun {
             && self.summary.difficulty == visit.summary.difficulty
             && self.copy.is_some()
             && self.copy == visit.copy
+    }
+
+    /// Whether `visit` may still turn out to be in the same copy, which it has not shown yet.
+    pub(crate) fn may_be_continued_by(&self, visit: &OpenRun) -> bool {
+        self.summary.instance_id == visit.summary.instance_id
+            && self.summary.difficulty == visit.summary.difficulty
+            && self.copy.is_some()
+            && visit.copy.is_none()
     }
 
     /// Extends this run, left earlier, by a later visit of the same copy.

@@ -26,6 +26,11 @@ fn runs(fights: &[FightSummary]) -> Vec<&FightSummary> {
 }
 
 fn gerstahn(minute: u32, success: bool) -> String {
+    gerstahn_fighting(minute, success, &GUARDSMAN)
+}
+
+/// Gerstahn's pull, whose only hit lands on `enemy`, so the copy is known only inside it.
+fn gerstahn_fighting(minute: u32, success: bool, enemy: &Unit) -> String {
     [
         boss_start(
             &format!("11/17/2026 20:{minute:02}:30.0000"),
@@ -36,7 +41,7 @@ fn gerstahn(minute: u32, success: bool) -> String {
         hit(
             &format!("11/17/2026 20:{minute:02}:31.0000"),
             &RAVEL,
-            &GUARDSMAN,
+            enemy,
             100,
         ),
         boss_end(
@@ -189,13 +194,31 @@ fn a_visit_without_a_pull_is_not_listed() {
 }
 
 #[test]
-fn a_revisit_starting_with_a_boss_pull_starts_a_new_run() {
+fn a_revisit_starting_with_a_boss_pull_continues_the_run_of_its_copy() {
     let log = [
         enter_brd(0),
         pack(0, &GUARDSMAN),
         leave(1),
         enter_brd(2),
         gerstahn(2, true),
+        leave(3),
+    ]
+    .concat();
+    let index = index_bytes(log.as_bytes());
+    assert_eq!(
+        entries(&index.fights),
+        [(1, true, None), (2, false, Some(1)), (4, false, Some(1))]
+    );
+}
+
+#[test]
+fn a_revisit_of_another_copy_starting_with_a_boss_pull_starts_a_new_run() {
+    let log = [
+        enter_brd(0),
+        pack(0, &GUARDSMAN),
+        leave(1),
+        enter_brd(2),
+        gerstahn_fighting(2, true, &OTHER_COPY_GUARDSMAN),
         leave(3),
     ]
     .concat();

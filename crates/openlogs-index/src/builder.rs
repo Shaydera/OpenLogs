@@ -192,8 +192,8 @@ impl IndexBuilder {
                 self.last_specs.insert(info.guid.to_string(), known);
             }
             Event::Combat(event) => {
-                if let Some(run) = &mut self.run {
-                    run.learn_copy(event);
+                if self.run.as_mut().is_some_and(|run| run.learn_copy(event)) {
+                    self.settle_copy();
                 }
                 if let CombatKind::UnitDied { unconscious: false } = event.kind
                     && event.target.is_enemy_npc()
@@ -679,23 +679,20 @@ impl IndexBuilder {
     }
 
     /// `index` of the open run for a pull opening now. A dungeon visit's first pull numbers
-    /// it, unless the visit continues the left run: then the pulls listed since that run
-    /// was left join it.
+    /// it, unless the visit continues the left run. While the visit's copy is unknown, the
+    /// left run waits for it; see [`Self::settle_copy`].
     fn number_run(&mut self) -> Option<u32> {
         if let Some(mut visit) = self.run.take_if(|run| !run.numbered) {
             match self.left_run.take_if(|left| left.continued_by(&visit)) {
-                Some(mut left) => {
-                    let index = left.summary.index;
-                    for fight in &mut self.index.fights {
-                        if fight.index > index && fight.run_index.is_none() && !fight.is_run() {
-                            fight.run_index = Some(index);
-                        }
-                    }
-                    left.absorb(visit);
-                    self.run = Some(left);
-                }
+                Some(left) => self.continue_run(left, visit),
                 None => {
-                    self.list_left_run();
+                    if !self
+                        .left_run
+                        .as_ref()
+                        .is_some_and(|left| left.may_be_continued_by(&visit))
+                    {
+                        self.list_left_run();
+                    }
                     visit.summary.index = self.next_index();
                     visit.numbered = true;
                     self.run = Some(visit);
@@ -703,6 +700,48 @@ impl IndexBuilder {
             }
         }
         self.run.as_ref().map(|run| run.summary.index)
+    }
+
+    /// The open visit, numbered before its copy was seen, has just learned it: it joins the
+    /// left run of the same copy, or that run is listed.
+    fn settle_copy(&mut self) {
+        if !self.run.as_ref().is_some_and(|run| run.numbered) {
+            return;
+        }
+        let Some(left) = self.left_run.take() else {
+            return;
+        };
+        match self.run.take_if(|visit| left.continued_by(visit)) {
+            Some(visit) => self.continue_run(left, visit),
+            None => self.index.fights.push(left.finish(Outcome::Ended)),
+        }
+    }
+
+    /// Continues the left run with `visit`: the pulls listed since it was left, and the
+    /// visit's own if it was numbered already, join it.
+    fn continue_run(&mut self, mut left: OpenRun, visit: OpenRun) {
+        let index = left.summary.index;
+        let visit_index = visit.numbered.then_some(visit.summary.index);
+        let joins = |run_index: Option<u32>| run_index.is_none() || run_index == visit_index;
+        for fight in &mut self.index.fights {
+            if fight.index > index && !fight.is_run() && joins(fight.run_index) {
+                fight.run_index = Some(index);
+            }
+        }
+        if let Some(visit_index) = visit_index {
+            let open = self.open.as_mut().into_iter().flat_map(|fight| {
+                let lead = fight.lead.as_mut().map(|lead| &mut lead.pull);
+                std::iter::once(&mut fight.summary).chain(lead)
+            });
+            let combat = self.combat.as_mut().map(|combat| &mut combat.summary);
+            for summary in open.chain(combat) {
+                if summary.run_index == Some(visit_index) {
+                    summary.run_index = Some(index);
+                }
+            }
+        }
+        left.absorb(visit);
+        self.run = Some(left);
     }
 
     /// Leaving the instance closes a key's run. A dungeon visit with a pull becomes the left
