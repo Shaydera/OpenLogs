@@ -1,4 +1,4 @@
-/* Mythic+ runs: boss-style cards; the grid's first row opens the whole run. */
+/* Runs: boss-style cards; the grid's first row opens the whole run. */
 /* "Not completed" (about 105px) needs a wider Result column than the boss cards' 92px. */
 .run-card .pull {
   grid-template-columns: 44px 120px 64px minmax(120px, 1fr) 70px 64px 20px;
@@ -45,4 +45,8 @@
 }
 .pull-fold .chevron.chevron-open {
   transform: rotate(90deg);
+}
+.run-killed {
+  font-size: 13px;
+  color: var(--text-soft);
 }

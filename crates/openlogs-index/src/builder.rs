@@ -8,10 +8,12 @@ use openlogs_parser::{
 use crate::combat::{DeadEnemies, Exchange, OpenCombat, counted_damage, exchange};
 use crate::markers::MarkerState;
 use crate::model::{
-    BOSS_TAIL_MICROS, ChallengeMode, END_GRACE_LINES, END_GRACE_MICROS, FightSummary, GameFlavor,
-    LEAD_MAX_MICROS, LogIndex, MYTHIC_KEYSTONE_DIFFICULTY, MapBounds, Outcome, PRELUDE_MICROS,
-    RESUME_MAX_GAP_MICROS, RosterEntry, SUPPORTED_LOG_VERSION, WorldMarker,
+    BOSS_TAIL_MICROS, ChallengeMode, DUNGEON_DIFFICULTIES, END_GRACE_LINES, END_GRACE_MICROS,
+    FightSummary, GameFlavor, LEAD_MAX_MICROS, LogIndex, MYTHIC_KEYSTONE_DIFFICULTY, MapBounds,
+    Outcome, PRELUDE_MICROS, RESUME_MAX_GAP_MICROS, RosterEntry, RunKind, SUPPORTED_LOG_VERSION,
+    WorldMarker,
 };
+use crate::runs::{OpenRun, run_outcome};
 
 /// Byte range of one line in the log file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,13 +29,16 @@ pub struct IndexBuilder {
     open: Option<OpenFight>,
     /// The combat pull in progress; never open together with a boss pull.
     combat: Option<OpenCombat>,
-    /// The Mythic+ run in progress; boss pulls opened meanwhile belong to it.
+    /// The Mythic+ run or dungeon visit in progress; pulls opened meanwhile belong to it.
     run: Option<OpenRun>,
+    /// The dungeon run last left, which a later visit of the same instance copy continues.
+    /// Listed once another instance or a key is entered, or another copy is fought in.
+    left_run: Option<OpenRun>,
     /// The run's `CHALLENGE_MODE_END`, held while its open boss pull may still end.
     held_end: Option<HeldEnd>,
     /// Lines of the last [`PRELUDE_MICROS`], oldest first, as (timestamp, offset).
     recent: VecDeque<(Timestamp, u64)>,
-    /// `end_offset` of the last closed boss pull or run; preludes never reach back past it.
+    /// `end_offset` of the last closed boss pull or key; preludes never reach back past it.
     /// Combat pulls leave it alone, so a boss pull keeps the trash before it in its prelude.
     last_fight_end: u64,
     /// `end_offset` of the last closed combat pull; combat pull preludes never reach back
@@ -69,6 +74,7 @@ impl IndexBuilder {
             open: None,
             combat: None,
             run: None,
+            left_run: None,
             held_end: None,
             recent: VecDeque::new(),
             last_fight_end: 0,
@@ -178,6 +184,9 @@ impl IndexBuilder {
                 }
             }
             Event::Combat(event) => {
+                if let Some(run) = &mut self.run {
+                    run.learn_copy(event);
+                }
                 if let CombatKind::UnitDied { unconscious: false } = event.kind
                     && event.target.is_enemy_npc()
                 {
@@ -243,6 +252,7 @@ impl IndexBuilder {
                 self.zone = Some((*name).to_string());
                 self.zone_instance_id = *zone_id;
                 self.zone_difficulty = *difficulty;
+                self.enter_zone(span, line.timestamp, *zone_id, name, *difficulty);
             }
         }
     }
@@ -257,23 +267,22 @@ impl IndexBuilder {
         self.close_combat(Outcome::Incomplete);
         self.close_open(Outcome::Incomplete);
         self.close_run(Outcome::Incomplete);
+        self.list_left_run();
         // A run closes after its boss pulls but is numbered before them.
         self.index.fights.sort_by_key(|fight| fight.index);
         self.index
     }
 
-    /// The closed entries that no later line can change, as an index. With `settle_ms`, only
-    /// those with a line more than `settle_ms` past their end, which the analysis may still read;
-    /// measured as it does, in whole ms from their start against `duration_ms`. Boss and combat
-    /// pulls of the open run wait for it.
+    /// The closed pulls, as an index, with the open run and the left run as of now. With
+    /// `settle_ms`, only pulls with a line more than `settle_ms` past their end, which the
+    /// analysis may still read; measured as it does, in whole ms from their start against
+    /// `duration_ms`. No later line changes an entry unless it is listed in `provisional`.
     pub fn settled(&self, settle_ms: Option<i64>) -> LogIndex {
-        let open_run = self.run.as_ref().map(|run| run.summary.index);
         let latest = self.recent.back().map(|&(timestamp, _)| timestamp);
         let mut fights: Vec<FightSummary> = self
             .index
             .fights
             .iter()
-            .filter(|fight| fight.run_index.is_none() || fight.run_index != open_run)
             .filter(|fight| match (settle_ms, latest) {
                 (None, _) => true,
                 (Some(settle), Some(latest)) => {
@@ -284,6 +293,20 @@ impl IndexBuilder {
             })
             .cloned()
             .collect();
+        let mut provisional = Vec::new();
+        if let Some(left) = &self.left_run {
+            let may_join = |fight: &&FightSummary| {
+                fight.index > left.summary.index && fight.run_index.is_none() && !fight.is_run()
+            };
+            provisional.extend(fights.iter().filter(may_join).map(|fight| fight.index));
+            provisional.push(left.summary.index);
+            fights.push(left.clone().finish(Outcome::Ended));
+        }
+        if let Some(run) = self.run.as_ref().filter(|run| run.numbered) {
+            provisional.push(run.summary.index);
+            fights.push(run.clone().finish(Outcome::Incomplete));
+        }
+        provisional.sort_unstable();
         fights.sort_by_key(|fight| fight.index);
         LogIndex {
             format_version: self.index.format_version,
@@ -297,6 +320,7 @@ impl IndexBuilder {
             unhandled_in_fights: self.index.unhandled_in_fights.clone(),
             warnings: self.index.warnings.clone(),
             fights,
+            provisional,
         }
     }
 
@@ -335,12 +359,18 @@ impl IndexBuilder {
                     .as_ref()
                     .is_some_and(|run| run.summary.instance_id != *zone_id)
                 {
-                    self.close_run(Outcome::Incomplete);
+                    self.leave_run();
                 }
             }
             Event::ChallengeModeStart(start) if !self.is_same_key(start, line.timestamp) => {
                 self.close_open(Outcome::Incomplete);
-                self.close_run(Outcome::Incomplete);
+                let dungeon = self.run.as_ref().is_some_and(OpenRun::is_dungeon);
+                self.close_run(if dungeon {
+                    Outcome::Ended
+                } else {
+                    Outcome::Incomplete
+                });
+                self.list_left_run();
             }
             Event::ChallengeModeEnd(end) if self.is_open_run(end.instance_id) => {
                 self.hold_end(span, line.timestamp, end);
@@ -476,7 +506,7 @@ impl IndexBuilder {
     fn is_open_run(&self, instance_id: u32) -> bool {
         self.run
             .as_ref()
-            .is_some_and(|run| run.summary.instance_id == instance_id)
+            .is_some_and(|run| !run.is_dungeon() && run.summary.instance_id == instance_id)
     }
 
     /// Whether `start`, logged at `timestamp`, repeats the key of the open run: same
@@ -485,7 +515,7 @@ impl IndexBuilder {
         self.run.as_ref().is_some_and(|run| {
             run.summary.instance_id == start.instance_id
                 && timestamp.0 - run.summary.end.0 <= RESUME_MAX_GAP_MICROS
-                && run.summary.challenge.as_ref().is_some_and(|key| {
+                && run.summary.keystone().is_some_and(|key| {
                     key.challenge_mode_id == start.challenge_mode_id
                         && key.keystone_level == start.keystone_level
                 })
@@ -500,6 +530,7 @@ impl IndexBuilder {
         lead: Option<Lead>,
     ) {
         self.close_open(Outcome::Incomplete);
+        let run_index = self.number_run();
         let index = match &lead {
             Some(lead) => lead.pull.index,
             None => self.next_index(),
@@ -524,8 +555,8 @@ impl IndexBuilder {
                 boss_hp_percent: None,
                 roster: Vec::new(),
                 broken_lines: 0,
-                challenge: None,
-                run_index: self.run.as_ref().map(|run| run.summary.index),
+                run: None,
+                run_index,
                 world_markers: self.markers.active(),
                 map_bounds: self.map_bounds.values().copied().collect(),
                 combat: None,
@@ -561,41 +592,128 @@ impl IndexBuilder {
 
     /// Opens a run; [`Self::close_before`] has already ended what was open.
     fn open_run(&mut self, span: LineSpan, timestamp: Timestamp, start: &ChallengeModeStart<'_>) {
-        let index = self.next_index();
-        let prelude_offset = self.prelude_offset(span, self.last_fight_end);
-        self.run = Some(OpenRun {
-            summary: FightSummary {
-                index,
-                encounter_id: 0,
-                name: start.zone_name.to_string(),
-                difficulty: MYTHIC_KEYSTONE_DIFFICULTY,
-                group_size: 0,
-                instance_id: start.instance_id,
-                zone: Some(start.zone_name.to_string()),
-                outcome: Outcome::Incomplete,
-                start: timestamp,
-                end: timestamp,
-                duration_ms: 0,
-                prelude_offset,
-                start_offset: span.offset,
-                end_offset: span.next_offset,
-                boss_hp_percent: None,
-                roster: Vec::new(),
-                broken_lines: 0,
-                challenge: Some(ChallengeMode {
-                    challenge_mode_id: start.challenge_mode_id,
-                    keystone_level: start.keystone_level,
-                    affix_ids: start.affix_ids(),
-                    total_time_ms: None,
-                }),
-                run_index: None,
-                world_markers: Vec::new(),
-                map_bounds: Vec::new(),
-                combat: None,
-            },
-            player_names: HashMap::new(),
-            last_pull: None,
-        });
+        let mut summary = self.run_summary(
+            span,
+            timestamp,
+            start.zone_name,
+            start.instance_id,
+            MYTHIC_KEYSTONE_DIFFICULTY,
+            RunKind::Keystone(ChallengeMode {
+                challenge_mode_id: start.challenge_mode_id,
+                keystone_level: start.keystone_level,
+                affix_ids: start.affix_ids(),
+                total_time_ms: None,
+            }),
+        );
+        summary.index = self.next_index();
+        self.run = Some(OpenRun::new(summary));
+    }
+
+    /// A `ZONE_CHANGE` into a dungeon difficulty opens a visit, numbered by its first pull.
+    /// Entering another instance or difficulty than the left run's lists that run; the open
+    /// world (difficulty 0) keeps it waiting.
+    fn enter_zone(
+        &mut self,
+        span: LineSpan,
+        timestamp: Timestamp,
+        zone_id: u32,
+        name: &str,
+        difficulty: u32,
+    ) {
+        if difficulty != 0
+            && self.left_run.as_ref().is_some_and(|left| {
+                (left.summary.instance_id, left.summary.difficulty) != (zone_id, difficulty)
+            })
+        {
+            self.list_left_run();
+        }
+        if self.run.is_none() && DUNGEON_DIFFICULTIES.contains(&difficulty) {
+            let summary =
+                self.run_summary(span, timestamp, name, zone_id, difficulty, RunKind::Dungeon);
+            self.run = Some(OpenRun::new(summary));
+        }
+    }
+
+    /// A run starting at this line, not numbered yet.
+    fn run_summary(
+        &self,
+        span: LineSpan,
+        timestamp: Timestamp,
+        name: &str,
+        instance_id: u32,
+        difficulty: u32,
+        kind: RunKind,
+    ) -> FightSummary {
+        FightSummary {
+            index: 0,
+            encounter_id: 0,
+            name: name.to_string(),
+            difficulty,
+            group_size: 0,
+            instance_id,
+            zone: Some(name.to_string()),
+            outcome: Outcome::Incomplete,
+            start: timestamp,
+            end: timestamp,
+            duration_ms: 0,
+            prelude_offset: self.prelude_offset(span, self.last_fight_end),
+            start_offset: span.offset,
+            end_offset: span.next_offset,
+            boss_hp_percent: None,
+            roster: Vec::new(),
+            broken_lines: 0,
+            run: Some(kind),
+            run_index: None,
+            world_markers: Vec::new(),
+            map_bounds: Vec::new(),
+            combat: None,
+        }
+    }
+
+    /// `index` of the open run for a pull opening now. A dungeon visit's first pull numbers
+    /// it, unless the visit continues the left run: then the pulls listed since that run
+    /// was left join it.
+    fn number_run(&mut self) -> Option<u32> {
+        if let Some(mut visit) = self.run.take_if(|run| !run.numbered) {
+            match self.left_run.take_if(|left| left.continued_by(&visit)) {
+                Some(mut left) => {
+                    let index = left.summary.index;
+                    for fight in &mut self.index.fights {
+                        if fight.index > index && fight.run_index.is_none() && !fight.is_run() {
+                            fight.run_index = Some(index);
+                        }
+                    }
+                    left.absorb(visit);
+                    self.run = Some(left);
+                }
+                None => {
+                    self.list_left_run();
+                    visit.summary.index = self.next_index();
+                    visit.numbered = true;
+                    self.run = Some(visit);
+                }
+            }
+        }
+        self.run.as_ref().map(|run| run.summary.index)
+    }
+
+    /// Leaving the instance closes a key's run. A dungeon visit with a pull becomes the left
+    /// run, which a later visit may continue; one without is dropped.
+    fn leave_run(&mut self) {
+        if !self.run.as_ref().is_some_and(OpenRun::is_dungeon) {
+            self.close_run(Outcome::Incomplete);
+            return;
+        }
+        if let Some(run) = self.run.take().filter(|run| run.numbered) {
+            self.list_left_run();
+            self.left_run = Some(run);
+        }
+    }
+
+    fn list_left_run(&mut self) {
+        if let Some(left) = self.left_run.take() {
+            self.index.fights.push(left.finish(Outcome::Ended));
+        }
     }
 
     /// An end for another instance leaves the open run alone, and a held end waits for
@@ -609,8 +727,8 @@ impl IndexBuilder {
     /// Closes the open run at its `CHALLENGE_MODE_END`, with the result the log shows.
     fn close_run_at_end(&mut self, end: &ChallengeModeEnd) {
         let Some(run) = &mut self.run else { return };
-        if let Some(challenge) = &mut run.summary.challenge {
-            challenge.total_time_ms = Some(end.total_time_ms);
+        if let Some(RunKind::Keystone(key)) = &mut run.summary.run {
+            key.total_time_ms = Some(end.total_time_ms);
         }
         let outcome = run_outcome(end, run.last_pull);
         self.close_run(outcome);
@@ -654,9 +772,13 @@ impl IndexBuilder {
         }
     }
 
+    /// Closes the open run; a dungeon visit without a pull is dropped. A dungeon visit, unlike
+    /// a key, leaves preludes alone: a key started right after it keeps its lookback.
     fn close_run(&mut self, outcome: Outcome) {
-        if let Some(run) = self.run.take() {
-            self.last_fight_end = self.last_fight_end.max(run.summary.end_offset);
+        if let Some(run) = self.run.take().filter(|run| run.numbered) {
+            if !run.is_dungeon() {
+                self.last_fight_end = self.last_fight_end.max(run.summary.end_offset);
+            }
             self.index.fights.push(run.finish(outcome));
         }
     }
@@ -686,6 +808,7 @@ impl IndexBuilder {
     }
 
     fn open_combat(&mut self, span: LineSpan, timestamp: Timestamp) {
+        let run_index = self.number_run();
         let index = self.next_index();
         let prelude_offset =
             self.prelude_offset(span, self.last_fight_end.max(self.last_combat_end));
@@ -707,8 +830,8 @@ impl IndexBuilder {
             boss_hp_percent: None,
             roster: Vec::new(),
             broken_lines: 0,
-            challenge: None,
-            run_index: self.run.as_ref().map(|run| run.summary.index),
+            run: None,
+            run_index,
             world_markers: self.markers.active(),
             map_bounds: self.map_bounds.values().copied().collect(),
             combat: None,
@@ -913,45 +1036,6 @@ struct HeldEnd {
     /// The run's end at its END, whenever the pull ends.
     run_end: Timestamp,
     run_end_offset: u64,
-}
-
-#[derive(Clone)]
-struct OpenRun {
-    summary: FightSummary,
-    /// Player names seen in the run's boss pulls.
-    player_names: HashMap<String, String>,
-    /// Outcome of the run's latest boss pull so far.
-    last_pull: Option<Outcome>,
-}
-
-/// `success` may mean "in time" or only "finished", so a completed key is told by its last
-/// boss pull being a kill; the flag decides only when no pull tells.
-fn run_outcome(end: &ChallengeModeEnd, last_pull: Option<Outcome>) -> Outcome {
-    let completed = match last_pull {
-        _ if end.total_time_ms == 0 => false,
-        Some(Outcome::Kill) => true,
-        Some(Outcome::Wipe) => false,
-        Some(Outcome::Incomplete | Outcome::Ended) | None => end.success,
-    };
-    if completed {
-        Outcome::Kill
-    } else {
-        Outcome::Wipe
-    }
-}
-
-impl OpenRun {
-    /// A run lasts from its start line to its last line, `CHALLENGE_MODE_END` included.
-    fn finish(mut self, outcome: Outcome) -> FightSummary {
-        let summary = &mut self.summary;
-        summary.outcome = outcome;
-        summary.duration_ms = u64::try_from(summary.end.millis_since(summary.start)).unwrap_or(0);
-        summary.group_size = summary.roster.len() as u32;
-        for entry in &mut summary.roster {
-            entry.name = self.player_names.get(&entry.guid).cloned();
-        }
-        self.summary
-    }
 }
 
 /// Bosses are the units with at least a fifth of the top damage taken and a quarter of the

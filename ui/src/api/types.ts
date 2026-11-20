@@ -15,8 +15,21 @@ export type Game = { kind: 'retail' } | { kind: 'classicEra' } | { kind: 'foreve
 /** A completed key against its time limits (mirrors `TimerDto`). */
 export type KeyTimer = { kind: 'inTime'; upgrades: number } | { kind: 'overTime' };
 
-/** Mythic+ details of a run row (mirrors `RunDto`). */
+/** A whole run (mirrors `RunDto`): a Mythic+ key or a dungeon visit. */
 export interface RunInfo {
+  /** Set for a Mythic+ run. */
+  key: KeyInfo | null;
+  instanceId: number;
+  /** Bosses with a killed boss pull in the run, each counted once. */
+  killedBosses: number;
+  /** The log is still being written inside the run, so the row changes as it grows. */
+  running: boolean;
+  /** A later line may still change the row: the run is running, or was left and a later visit may continue it. */
+  provisional: boolean;
+}
+
+/** Mythic+ details of a run row (mirrors `KeyDto`). */
+export interface KeyInfo {
   challengeModeId: number;
   keystoneLevel: number;
   /** Affix IDs as logged; shown raw until curated names exist. */
@@ -35,7 +48,7 @@ export interface CombatInfo {
   enemyCount: number;
 }
 
-/** A boss pull, a combat pull when `combat` is set, or a whole Mythic+ run when `run` is set; all open by `index`. */
+/** A boss pull, a combat pull when `combat` is set, or a whole run when `run` is set; all open by `index`. */
 export interface FightRow {
   index: number;
   encounterId: number;
@@ -49,7 +62,7 @@ export interface FightRow {
   playerCount: number;
   startUnixMs: number;
   zone: string | null;
-  /** Set when this row is a whole Mythic+ run; its boss pulls are rows of their own. */
+  /** Set when this row is a whole run; its pulls are rows of their own. */
   run: RunInfo | null;
   /** Log index of the run this boss or combat pull belongs to. */
   runIndex: number | null;
@@ -105,7 +118,7 @@ export interface Kpis {
 }
 
 export interface Phase {
-  /** `trash`: time between the boss pulls of a Mythic+ run. */
+  /** `trash`: time between the boss pulls of a run. */
   kind: 'boss' | 'intermission' | 'trash';
   number: number;
   startMs: number;

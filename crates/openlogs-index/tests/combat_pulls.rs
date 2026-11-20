@@ -1,5 +1,7 @@
+mod common;
+
+use common::{Unit, died, hit, ts};
 use openlogs_index::{CombatPull, FightSummary, Indexer, Outcome, index_bytes};
-use openlogs_parser::Timestamp;
 
 /// Open world in Tirisfal Glades: the logging rogue kills one Vile Fin Minor Oracle while
 /// players outside the group fight Puddlejumpers and Mongrels around them.
@@ -43,36 +45,11 @@ const WOLF: Unit = Unit {
     flags: "0x1111",
 };
 
-struct Unit {
-    guid: &'static str,
-    name: &'static str,
-    flags: &'static str,
-}
-
-fn hit(ts: &str, source: &Unit, target: &Unit, amount: u64) -> String {
-    let (s, t) = (source, target);
-    format!(
-        "{ts}  SPELL_DAMAGE,{},\"{}\",{},0x80000000,{},\"{}\",{},0x80000000,44425,\"Arcane Barrage\",0x40,{},0000000000000000,1000,50000000,0,0,0,0,0,0,1,0,0,0,1590.00,-3.00,2308,1.0000,80,{amount},{amount},-1,64,0,0,0,nil,nil,nil,ST\n",
-        s.guid, s.name, s.flags, t.guid, t.name, t.flags, t.guid
-    )
-}
-
-fn died(ts: &str, unit: &Unit) -> String {
-    format!(
-        "{ts}  UNIT_DIED,0000000000000000,nil,0x80000000,0x80000000,{},\"{}\",{},0x80000000,0\n",
-        unit.guid, unit.name, unit.flags
-    )
-}
-
 fn buff(ts: &str) -> String {
     format!(
         "{ts}  SPELL_AURA_APPLIED,{},\"{}\",{},0x80000000,{},\"{}\",{},0x80000000,774,\"Rejuvenation\",0x8,BUFF\n",
         PYRRIN.guid, PYRRIN.name, PYRRIN.flags, PYRRIN.guid, PYRRIN.name, PYRRIN.flags
     )
-}
-
-fn ts(text: &str) -> Timestamp {
-    Timestamp::parse(text).unwrap()
 }
 
 fn combat_pulls(fights: &[FightSummary]) -> Vec<&FightSummary> {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FightRow } from '../../api/types';
 import { compareLogFixture } from '../../test/compareFixture';
-import { runLogFixture } from '../../test/runFixture';
+import { dungeonRunFixture, runLogFixture } from '../../test/runFixture';
 import { type MetaItem, fightMeta, setIdentity, setMeta } from './fightMeta';
 
 /** The items as text, mono ones in brackets. */
@@ -20,8 +20,13 @@ describe('fight meta line', () => {
 
   it('claims nothing a run did not log or the dungeon data does not know', () => {
     const run = runLogFixture.fights[0];
-    const bare: FightRow = { ...run, outcome: 'incomplete', run: { ...run.run!, totalTimeMs: null, affixIds: [], bosses: null, timer: null } };
+    const key = { ...run.run!.key!, totalTimeMs: null, affixIds: [], bosses: null, timer: null };
+    const bare: FightRow = { ...run, outcome: 'incomplete', run: { ...run.run!, key } };
     expect(read(bare)).toEqual(['[31:00]', '5 players', 'Oct 8, 2026 · 20:01']);
+  });
+
+  it('a dungeon run lists players, date and killed bosses', () => {
+    expect(read(dungeonRunFixture.fights[0])).toEqual(['[31:00]', '5 players', 'Oct 8, 2026 · 20:01', '2 bosses killed']);
   });
 
   it('set_meta_counts_wipes_and_kills_and_sums_the_duration', () => {

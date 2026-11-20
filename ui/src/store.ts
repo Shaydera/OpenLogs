@@ -121,12 +121,12 @@ function showsWholeRun({ log, view }: Pick<State, 'log' | 'view'>): boolean {
   return log?.fights.find((fight) => fight.index === fightIndex)?.run != null;
 }
 
-/** Whole Mythic+ runs and pull sets have no replay; the boss pulls inside runs have one. */
+/** Whole runs and pull sets have no replay; the boss pulls inside runs have one. */
 export function replayOffered(s: Pick<State, 'log' | 'view'>): boolean {
   return s.view.kind !== 'set' && !showsWholeRun(s);
 }
 
-/** Whole Mythic+ runs have no death cutoff; a set cuts each of its pulls at its own death. */
+/** Whole runs have no death cutoff; a set cuts each of its pulls at its own death. */
 export function cutoffOffered(s: Pick<State, 'log' | 'view'>): boolean {
   return !showsWholeRun(s);
 }
@@ -1154,6 +1154,7 @@ function showGrownLog(get: () => Store, set: SetState, grown: LogView) {
   const update = followUpdate(log.fights, grown.fights, view, hideAborted, comparison !== null);
   set({ log: grown });
   if (update.jumpTo !== null) void followToFight(get, set, update.jumpTo);
+  else if (update.reload && view.kind === 'fight') void rereadShownFight(get, set, view.fightIndex);
   else if (update.set) void followSet(get, set, update.set);
   else if (update.shownVanished) get().backToPulls();
 }
@@ -1184,6 +1185,22 @@ async function followToFight(get: () => Store, set: SetState, fightIndex: number
     return { overview: await api.quickOverview(log.id, fightIndex, filter), overviewCutoff: filter.deathCutoff };
   });
   if (request === fightRequest && get().overview) await loadReport(get, set);
+}
+
+/** Reads the shown run again as the log grew, leaving tab, range, filters and detail pages where they are. */
+async function rereadShownFight(get: () => Store, set: SetState, fightIndex: number) {
+  const { log } = get();
+  if (!log) return;
+  const request = fightRequest;
+  const filter = reportFilter({ ...get(), range: null });
+  try {
+    const overview = await api.quickOverview(log.id, fightIndex, filter);
+    if (request !== fightRequest) return;
+    set({ overview, overviewCutoff: filter.deathCutoff });
+    await loadReport(get, set);
+  } catch {
+    // The next arriving pull reads it again; what is shown stays.
+  }
 }
 
 /** Shows the open set with its changed pulls; its figures are read again, overview included. */

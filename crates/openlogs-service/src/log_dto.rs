@@ -87,10 +87,26 @@ impl From<GameFlavor> for GameDto {
     }
 }
 
-/// Key details of a Mythic+ run row.
+/// A run row: a Mythic+ key or a dungeon visit.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunDto {
+    /// Set for a Mythic+ run.
+    pub key: Option<KeyDto>,
+    pub instance_id: u32,
+    /// Bosses with a killed boss pull in the run, each counted once.
+    pub killed_bosses: u32,
+    /// The log is still being written inside the run, so the row changes as it grows.
+    pub running: bool,
+    /// A later line may still change the row: the run is running, or was left and a later
+    /// visit may continue it.
+    pub provisional: bool,
+}
+
+/// Key details of a Mythic+ run row.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyDto {
     pub challenge_mode_id: u32,
     pub keystone_level: u32,
     /// Raw IDs until curated affix names exist.
@@ -110,7 +126,7 @@ pub struct CombatDto {
     pub enemy_count: u32,
 }
 
-/// A boss pull, a combat pull or a whole Mythic+ run; all open the same way by `index`.
+/// A boss pull, a combat pull or a whole run; all open the same way by `index`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FightRow {
@@ -125,7 +141,7 @@ pub struct FightRow {
     pub player_count: u32,
     pub start_unix_ms: i64,
     pub zone: Option<String>,
-    /// Set when the row is a whole Mythic+ run; its boss pulls are rows of their own.
+    /// Set when the row is a whole run; its pulls are rows of their own.
     pub run: Option<RunDto>,
     /// `index` of the run this boss or combat pull belongs to.
     pub run_index: Option<u32>,
@@ -158,14 +174,15 @@ pub fn unix_ms(timestamp: Timestamp) -> i64 {
     timestamp.0.div_euclid(1_000)
 }
 
-/// A row of the pull list. A run's result comes from the dungeon data when `dungeons`
+/// A row of the pull list. A key's result comes from the dungeon data when `dungeons`
 /// knows its boss list, otherwise from the index.
 pub fn fight_row(
     fight: &FightSummary,
-    fights: &[FightSummary],
+    index: &LogIndex,
     dungeons: Option<&DungeonTable>,
 ) -> FightRow {
-    let result = run_result(fight, fights, dungeons);
+    let result = run_result(fight, &index.fights, dungeons);
+    let provisional = index.provisional.contains(&fight.index);
     FightRow {
         index: fight.index,
         encounter_id: fight.encounter_id,
@@ -178,13 +195,19 @@ pub fn fight_row(
         player_count: fight.roster.len() as u32,
         start_unix_ms: unix_ms(fight.start),
         zone: fight.zone.clone(),
-        run: fight.challenge.as_ref().map(|challenge| RunDto {
-            challenge_mode_id: challenge.challenge_mode_id,
-            keystone_level: challenge.keystone_level,
-            affix_ids: challenge.affix_ids.clone(),
-            total_time_ms: challenge.total_time_ms,
-            bosses: result.bosses.map(Into::into),
-            timer: result.timer.map(Into::into),
+        run: fight.is_run().then(|| RunDto {
+            key: fight.keystone().map(|challenge| KeyDto {
+                challenge_mode_id: challenge.challenge_mode_id,
+                keystone_level: challenge.keystone_level,
+                affix_ids: challenge.affix_ids.clone(),
+                total_time_ms: challenge.total_time_ms,
+                bosses: result.bosses.map(Into::into),
+                timer: result.timer.map(Into::into),
+            }),
+            instance_id: fight.instance_id,
+            killed_bosses: result.killed_bosses,
+            running: provisional && fight.outcome == Outcome::Incomplete,
+            provisional,
         }),
         run_index: fight.run_index,
         combat: fight.combat.as_ref().map(|combat| CombatDto {
@@ -225,7 +248,7 @@ pub fn log_view(
         fights: index
             .fights
             .iter()
-            .map(|fight| fight_row(fight, &index.fights, dungeons))
+            .map(|fight| fight_row(fight, index, dungeons))
             .collect(),
     }
 }

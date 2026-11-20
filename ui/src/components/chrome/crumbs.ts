@@ -1,7 +1,7 @@
 import type { Detail, FightRow, LogView, PlayerRef, PullSet, QuickOverview } from '../../api/types';
-import { formatDuration, formatKeystoneLevel } from '../../i18n/format';
+import { formatDuration } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import { combatName, isCombatPull, moreEnemies, pullNumber, pullStatus, runStatus } from '../../pulls/groupPulls';
+import { combatName, isCombatPull, moreEnemies, pullNumber, pullStatus, runBadge, runStatus } from '../../pulls/groupPulls';
 import type { FightTab, ReportData } from '../../store';
 import { playerIndex, shortName, spellName } from '../overview/players';
 import { setIdentity } from './fightMeta';
@@ -38,7 +38,7 @@ type Level = Omit<Crumb, 'current'>;
 
 /** `Ula'tek · Pull #1`, a run's `Priory of the Sacred Flame +12`, a combat pull's `Venomfang Juggernaut +10`. */
 function pullLabel(fights: FightRow[], row: FightRow): string {
-  if (row.run) return t('runs.heading', { dungeon: row.name, level: formatKeystoneLevel(row.run.keystoneLevel) });
+  if (row.run) return t('runs.heading', { dungeon: row.name, level: runBadge({ ...row, run: row.run }) });
   if (isCombatPull(row)) return combatName(row.name, moreEnemies(row.combat));
   const n = pullNumber(fights, row);
   return n === null ? row.name : t('crumb.pull', { boss: row.name, n });

@@ -76,6 +76,7 @@ fn a_key_ended_after_a_mid_dungeon_kill_is_not_completed() {
             outcome: Outcome::Wipe,
             bosses: bosses(2),
             timer: None,
+            killed_bosses: 2,
         }
     );
 }
@@ -98,6 +99,7 @@ fn a_key_with_every_boss_killed_is_completed_with_its_timer() {
                 outcome: Outcome::Kill,
                 bosses: bosses(3),
                 timer: Some(timer),
+                killed_bosses: 3,
             },
             "{total_ms} ms"
         );
@@ -116,6 +118,7 @@ fn a_logged_time_of_zero_is_not_completed_even_with_every_boss_killed() {
             outcome: Outcome::Wipe,
             bosses: bosses(3),
             timer: None,
+            killed_bosses: 3,
         }
     );
 }
@@ -127,6 +130,7 @@ fn without_a_boss_list_the_index_result_stays() {
         outcome: Outcome::Kill,
         bosses: None,
         timer: None,
+        killed_bosses: 2,
     };
     let index = log_with(|_| {});
     assert_eq!(result(&index, None), unchanged, "no dungeon data");
@@ -138,4 +142,30 @@ fn without_a_boss_list_the_index_result_stays() {
         });
         assert_eq!(result(&index, Some(&table)), unchanged, "key {key}");
     }
+}
+
+#[test]
+fn a_run_counts_each_killed_boss_once() {
+    let log = [
+        "11/17/2026 20:00:00.0000  ZONE_CHANGE,230,\"Blackrock Depths\",1",
+        "11/17/2026 20:00:10.0000  ENCOUNTER_START,227,\"High Interrogator Gerstahn\",1,5,230",
+        "11/17/2026 20:00:20.0000  ENCOUNTER_END,227,\"High Interrogator Gerstahn\",1,5,1,10000",
+        "11/17/2026 20:01:10.0000  ENCOUNTER_START,227,\"High Interrogator Gerstahn\",1,5,230",
+        "11/17/2026 20:01:20.0000  ENCOUNTER_END,227,\"High Interrogator Gerstahn\",1,5,1,10000",
+        "11/17/2026 20:02:10.0000  ENCOUNTER_START,228,\"Lord Roccor\",1,5,230",
+        "11/17/2026 20:02:20.0000  ENCOUNTER_END,228,\"Lord Roccor\",1,5,0,10000",
+        "11/17/2026 20:03:00.0000  ZONE_CHANGE,0,\"Searing Gorge\",0",
+    ]
+    .map(|line| format!("{line}\n"))
+    .concat();
+    let index = index_bytes(log.as_bytes());
+    assert_eq!(
+        result(&index, Some(&table())),
+        RunResult {
+            outcome: Outcome::Ended,
+            bosses: None,
+            timer: None,
+            killed_bosses: 1,
+        }
+    );
 }

@@ -26,7 +26,7 @@ const replayIcon = (
 );
 
 /**
- * The fight's tab row: `lead` at its start, then the tabs with the Replay tab last; a whole Mythic+ run
+ * The fight's tab row: `lead` at its start, then the tabs with the Replay tab last; a whole run
  * has no replay. A pull set keeps the tabs it has not visible and focusable, disabled with the reason.
  */
 export function TabBar({ lead }: { lead?: ReactNode }) {

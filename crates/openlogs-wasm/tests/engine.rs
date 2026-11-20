@@ -704,12 +704,18 @@ fn opening_a_mythic_plus_log_lists_the_run_and_its_boss_pulls() {
     assert_eq!(
         run["run"],
         json!({
-            "challengeModeId": 499,
-            "keystoneLevel": 12,
-            "affixIds": [10, 147, 9],
-            "totalTimeMs": 600_000,
-            "bosses": null,
-            "timer": null,
+            "key": {
+                "challengeModeId": 499,
+                "keystoneLevel": 12,
+                "affixIds": [10, 147, 9],
+                "totalTimeMs": 600_000,
+                "bosses": null,
+                "timer": null,
+            },
+            "instanceId": 2649,
+            "killedBosses": 2,
+            "running": false,
+            "provisional": false,
         })
     );
     assert_eq!(
@@ -723,6 +729,36 @@ fn opening_a_mythic_plus_log_lists_the_run_and_its_boss_pulls() {
     assert_eq!(view["fights"][1]["run"], Value::Null);
     assert_eq!(view["fights"][1]["difficultyLabel"], "Mythic+");
     assert_eq!(view["zone"], "Priory of the Sacred Flame");
+}
+
+/// A Blackrock Depths visit: a trash pack, then High Interrogator Gerstahn killed.
+const DUNGEON_VISIT: &str = "11/17/2026 20:00:00.0000  ZONE_CHANGE,230,\"Blackrock Depths\",1
+11/17/2026 20:00:10.0000  SPELL_DAMAGE,Player-6949-0066C9DA,\"Ravel-Ashwood-Normal-EU\",0x511,0x80000000,Creature-0-5250-230-110435-8901-000016ABCD,\"Anvilrage Guardsman\",0xa48,0x80000000,44425,\"Arcane Barrage\",0x40,Creature-0-5250-230-110435-8901-000016ABCD,0000000000000000,1000,50000000,0,0,0,0,0,0,1,0,0,0,1590.00,-3.00,2308,1.0000,80,100,100,-1,64,0,0,0,nil,nil,nil,ST
+11/17/2026 20:00:12.0000  UNIT_DIED,0000000000000000,nil,0x80000000,0x80000000,Creature-0-5250-230-110435-8901-000016ABCD,\"Anvilrage Guardsman\",0xa48,0x80000000,0
+11/17/2026 20:00:30.0000  ENCOUNTER_START,227,\"High Interrogator Gerstahn\",1,5,230
+11/17/2026 20:00:40.0000  ENCOUNTER_END,227,\"High Interrogator Gerstahn\",1,5,1,10000
+11/17/2026 20:00:45.0000  ZONE_CHANGE,230,\"Blackrock Depths\",1
+";
+
+#[test]
+fn a_refresh_inside_a_dungeon_marks_the_run_running() {
+    let (mut engine, _) = open("");
+    engine.index_feed(DUNGEON_VISIT.as_bytes());
+    let view: Value = serde_json::from_str(&engine.refresh_index(
+        "log-1",
+        "WoWCombatLog-111726_200000.txt",
+        DUNGEON_VISIT.len() as u64,
+        true,
+    ))
+    .unwrap();
+    let run = &view["fights"][0];
+    assert_eq!(
+        (&run["outcome"], &run["run"]),
+        (
+            &json!("incomplete"),
+            &json!({ "key": null, "instanceId": 230, "killedBosses": 1, "running": true, "provisional": true })
+        )
+    );
 }
 
 /// Priory: three bosses, 1950/1560/1170 s.
@@ -763,8 +799,11 @@ fn dungeon_data_decides_the_result_of_a_run() {
     let (_, view) = open_with(with_dungeons(), MYTHIC_PLUS);
     let run = &view["fights"][0];
     assert_eq!(run["outcome"], "wipe", "Prioress Murrpray lives");
-    assert_eq!(run["run"]["bosses"], json!({ "killed": 2, "total": 3 }));
-    assert_eq!(run["run"]["timer"], Value::Null);
+    assert_eq!(
+        run["run"]["key"]["bosses"],
+        json!({ "killed": 2, "total": 3 })
+    );
+    assert_eq!(run["run"]["key"]["timer"], Value::Null);
     let outcomes: Vec<_> = runs_and_boss_pulls(&view)[1..]
         .iter()
         .map(|f| f["outcome"].clone())
@@ -782,10 +821,13 @@ fn dungeon_data_decides_the_result_of_a_run() {
         let (_, view) = open_with(with_dungeons(), &every_boss_killed(total_ms));
         assert_eq!(view["fights"][0]["outcome"], "kill");
         assert_eq!(
-            view["fights"][0]["run"]["bosses"],
+            view["fights"][0]["run"]["key"]["bosses"],
             json!({ "killed": 3, "total": 3 })
         );
-        assert_eq!(view["fights"][0]["run"]["timer"], timer, "{total_ms} ms");
+        assert_eq!(
+            view["fights"][0]["run"]["key"]["timer"], timer,
+            "{total_ms} ms"
+        );
     }
 }
 

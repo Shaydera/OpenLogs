@@ -5,6 +5,7 @@ mod cache;
 mod combat;
 mod markers;
 mod model;
+mod runs;
 mod scan;
 
 pub use builder::{IndexBuilder, LineSpan};

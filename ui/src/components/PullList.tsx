@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import type { PullSet } from '../api/types';
-import { formatClock, formatDuration, formatInteger, formatKeystoneLevel, formatPercent } from '../i18n/format';
+import { formatClock, formatDuration, formatInteger, formatPercent } from '../i18n/format';
 import { t } from '../i18n/i18n';
 import {
   type BossGroup,
@@ -189,9 +189,16 @@ export function CombatPullList({ pulls, onOpen }: { pulls: CombatPullView[]; onO
   );
 }
 
-/** Bosses killed of the dungeon's list as a bar and `3/3`; empty and `—` without dungeon data. */
+/** Bosses killed of the dungeon's list as a bar and `3/3`; empty and `—` without dungeon data. A dungeon visit has no boss list: `2 bosses killed`. */
 function RunProgress({ run }: { run: RunView }) {
-  const bosses = run.bosses;
+  if (run.key === null) {
+    return (
+      <span className="hp">
+        <span className="run-killed">{t('runs.bossesKilled', { count: run.killedBosses })}</span>
+      </span>
+    );
+  }
+  const bosses = run.key.bosses;
   const width = bosses !== null && bosses.total > 0 ? (bosses.killed / bosses.total) * 100 : 0;
   const fill = bosses === null ? 'fill-abort' : run.status === 'completed' ? 'fill-kill' : 'fill-wipe';
   return (
@@ -263,12 +270,12 @@ interface RunProps {
   onOpen: (fightIndex: number) => void;
 }
 
-/** One card per Mythic+ run, built like a boss card: the first row opens the whole run, the boss pulls and the folded combat pulls follow. */
+/** One card per run, built like a boss card: the first row opens the whole run, the boss pulls and the folded combat pulls follow. */
 export function RunCards({ runs, onOpen }: RunProps) {
   return (
     <>
       {runs.map((run) => {
-        const level = formatKeystoneLevel(run.keystoneLevel);
+        const level = run.badge;
         return (
           <section key={run.index} className="panel boss run-card" aria-label={t('runs.heading', { dungeon: run.dungeon, level })}>
             <div className="boss-head">

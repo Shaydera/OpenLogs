@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { formatInteger, formatShare } from '../../i18n/format';
+import { formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import type { LiveNotice as Notice } from '../../pulls/follow';
 import { spokenCombatName } from '../../pulls/groupPulls';
@@ -9,11 +9,7 @@ const NOTICE_MS = 4000;
 
 function message(notice: Notice): string {
   if (notice.kind === 'run') {
-    return t('live.runLoaded', {
-      dungeon: notice.dungeon,
-      level: formatInteger(notice.keystoneLevel),
-      result: t(`runs.status.${notice.status}`),
-    });
+    return t('live.runLoaded', { run: notice.heading, result: t(`runs.status.${notice.status}`) });
   }
   const label = t(`status.${notice.status}`);
   if (notice.kind === 'combat') return t('live.combatLoaded', { pull: spokenCombatName(notice.name, notice.moreEnemies), result: label });

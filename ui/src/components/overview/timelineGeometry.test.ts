@@ -38,6 +38,13 @@ describe('timelineGeometry', () => {
     ]);
   });
 
+  it('spaces the ticks of a long run so their labels never crowd', () => {
+    const labels = (durationMs: number) => timelineGeometry(base, durationMs).ticks.map((tick) => tick.label);
+    expect(labels(40 * 60_000)).toHaveLength(40);
+    expect(labels(125 * 60_000).slice(0, 3)).toEqual(['0:00', '5:00', '10:00']);
+    expect(labels(125 * 60_000).length).toBeLessThanOrEqual(40);
+  });
+
   it('numbers a boss pulled twice in a run but leaves repeated raid phase names plain', () => {
     const run: Phase[] = [
       { kind: 'trash', number: 1, startMs: 0, endMs: 60_000, name: null },

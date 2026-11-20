@@ -1,8 +1,8 @@
 import { Fragment, type RefObject } from 'react';
 import type { FightRow, LogView, PullSet } from '../../api/types';
-import { formatDuration, formatKeystoneLevel } from '../../i18n/format';
+import { formatDuration } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import { PULL_CHIP, RUN_CHIP, isCombatPull, moreEnemies, pullStatus, runStatus } from '../../pulls/groupPulls';
+import { PULL_CHIP, RUN_CHIP, isCombatPull, moreEnemies, pullStatus, runBadge, runStatus } from '../../pulls/groupPulls';
 import { BossTile } from '../BossTile';
 import { CombatName } from '../CombatName';
 import { Kpi, KpiStrip } from '../Kpi';
@@ -17,7 +17,7 @@ import type { HeaderTile } from './headerTiles';
 function fightIdentity(row: FightRow): Pick<Heading, 'title' | 'moreEnemies' | 'chip'> {
   const run = row.run;
   const status = pullStatus(row);
-  const title = run ? t('runs.heading', { dungeon: row.name, level: formatKeystoneLevel(run.keystoneLevel) }) : row.name;
+  const title = run ? t('runs.heading', { dungeon: row.name, level: runBadge({ ...row, run }) }) : row.name;
   const chip = run
     ? { className: RUN_CHIP[runStatus(row)], label: t(`runs.status.${runStatus(row)}`) }
     : { className: PULL_CHIP[status], label: t(`status.${status}`) };
