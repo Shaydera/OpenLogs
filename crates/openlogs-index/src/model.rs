@@ -63,6 +63,16 @@ impl GameFlavor {
     pub fn describe(flavor: Option<Self>) -> String {
         flavor.map_or_else(|| "Unknown game".to_string(), Self::name)
     }
+
+    /// A player's name as shown, from the logged `Name-Realm-Region`. A Forever name may itself
+    /// contain `-` ("Ravel-Ashwood-Normal-EU" is "Ravel Ashwood"); elsewhere the first part.
+    pub fn player_name(flavor: Option<Self>, logged: &str) -> String {
+        let parts: Vec<&str> = logged.split('-').collect();
+        match flavor {
+            Some(Self::Forever) if parts.len() > 2 => parts[..parts.len() - 2].join(" "),
+            _ => parts[0].to_string(),
+        }
+    }
 }
 
 /// Difficulty ID of Mythic+ (Mythic Keystone) dungeons; run entries carry it too.

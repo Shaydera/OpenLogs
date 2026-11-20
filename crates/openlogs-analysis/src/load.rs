@@ -260,6 +260,7 @@ impl FightBuilder {
                 heal_grants: Vec::new(),
                 delayed_hits: Vec::new(),
                 roster: BTreeSet::new(),
+                flavor: None,
             },
             last_power: HashMap::new(),
             last_t: i32::MIN,

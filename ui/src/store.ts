@@ -53,6 +53,7 @@ import { replayClock } from './components/replay/replayClock';
 import { t } from './i18n/i18n';
 import { rowValue } from './components/filters/labels';
 import { APP_VERSION } from './build';
+import { setCurrentGame } from './currentGame';
 import { followUpdate, type LiveNotice, liveNoticeOf } from './pulls/follow';
 import { effectiveView, lanesOf } from './reportViews';
 import { type FilterTab, isFilterTab, SIDES } from './scopeSides';
@@ -1886,3 +1887,7 @@ export const useApp = create<Store>()(derivingScope((set, get) => ({
     get().setReplayTime(ms);
   },
 })));
+
+useApp.subscribe((state, previous) => {
+  if (state.log !== previous.log) setCurrentGame(state.log?.game ?? null);
+});

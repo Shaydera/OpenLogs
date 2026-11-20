@@ -4,7 +4,7 @@ use openlogs_analysis::{
     Actors, Fight, LANDED_MATCH_MS, infer_classes, load_fight_slice, load_fight_slice_with,
 };
 use openlogs_gamedata::{ChannelSpells, Curated, DungeonTable, SpellClasses};
-use openlogs_index::{FightSummary, Indexer, LogIndex};
+use openlogs_index::{FightSummary, GameFlavor, Indexer, LogIndex};
 use openlogs_service::auras_dto::AuraKindDto;
 use openlogs_service::casts_dto::CastsReportDto;
 use openlogs_service::log_dto::log_view;
@@ -159,7 +159,7 @@ impl Engine {
     ) -> Result<(), String> {
         let summary = self.summary(fight_index)?.clone();
         let mut fight = load_fight_slice(part, base_offset, &summary);
-        infer_classes(&mut fight, &self.spell_classes);
+        ready_for_reports(&mut fight, self.index.flavor, &self.spell_classes);
         self.fights.retain(|pulled| pulled.index != fight_index);
         self.fights.insert(
             0,
@@ -210,7 +210,7 @@ impl Engine {
         let summary = summary_of(&self.index, fight_index)?;
         let mut fight =
             load_fight_slice_with(part, base_offset, summary, pass.actors.carried_over());
-        infer_classes(&mut fight, &self.spell_classes);
+        ready_for_reports(&mut fight, self.index.flavor, &self.spell_classes);
         let mut cuts = PullCuts::new(&fight);
         for command in &mut pass.commands {
             command.add(fight_index, &fight, &self.curated, &mut cuts);
@@ -472,6 +472,11 @@ struct LoadedPull {
     index: u32,
     fight: Fight,
     summary: FightSummary,
+}
+
+fn ready_for_reports(fight: &mut Fight, flavor: Option<GameFlavor>, spell_classes: &SpellClasses) {
+    fight.flavor = flavor;
+    infer_classes(fight, spell_classes);
 }
 
 fn summary_of(index: &LogIndex, fight_index: u32) -> Result<&FightSummary, String> {
