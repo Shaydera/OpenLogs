@@ -210,7 +210,7 @@ mod tests {
         );
         assert_eq!(
             json["units"],
-            json!({ hunter.to_string(): "Brannoc-Emberfall-EU", wolf.to_string(): "Wolf" })
+            json!({ hunter.to_string(): "Brannoc", wolf.to_string(): "Wolf" })
         );
         let taken = meter(&fight, &filter, MeterCategory::DamageTaken, Some(hunter));
         assert_eq!(

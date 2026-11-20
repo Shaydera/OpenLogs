@@ -1,6 +1,5 @@
 import type { FilterOption, PlayerRef } from '../../api/types';
 import { t } from '../../i18n/i18n';
-import { shortName } from '../overview/players';
 import { type ScopeValue, optionLabel, optionValue, sameValue, valueLabel } from './labels';
 
 export interface PickerSection {
@@ -68,7 +67,7 @@ export function selectionLabel(value: ScopeValue, options: FilterOption[], roste
   switch (value.kind) {
     case 'player': {
       const player = roster.get(value.actorId);
-      return player ? shortName(player.name) : t('report.unknownPlayer');
+      return player?.name ?? t('report.unknownPlayer');
     }
     case 'instance': {
       for (const o of options) {

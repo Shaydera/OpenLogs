@@ -7,7 +7,7 @@ use openlogs_analysis::{
 use serde::{Deserialize, Serialize};
 
 use crate::overview_dto::{PlayerRef, SpellRef};
-use crate::refs::Refs;
+use crate::refs::{Refs, shown};
 use crate::scope_dto::{DimensionDto, RowKeyDto, key_dto};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -92,9 +92,11 @@ pub struct AurasReportDto {
     pub spells: BTreeMap<SpellId, SpellRef>,
 }
 
-fn holder_dto(refs: &mut Refs, holder: &AuraHolder) -> AuraHolderDto {
+fn holder_dto(fight: &Fight, refs: &mut Refs, holder: &AuraHolder) -> AuraHolderDto {
     AuraHolderDto {
-        name: holder.name.clone(),
+        name: holder
+            .player
+            .map_or_else(|| holder.name.clone(), |p| shown(fight, p, &holder.name)),
         player: holder.player.map(|p| refs.player(p)),
     }
 }
@@ -127,7 +129,7 @@ pub fn auras_report_dto(
                 name,
                 spell_id: refs.spell(fight, row.spell),
                 spell_ids: row.spells.iter().map(|&s| refs.spell(fight, s)).collect(),
-                holder: row.holder.as_ref().map(|h| holder_dto(&mut refs, h)),
+                holder: row.holder.as_ref().map(|h| holder_dto(fight, &mut refs, h)),
                 sources: row.sources.iter().map(|&p| refs.player(p)).collect(),
                 applications: row.applications,
                 uptime: row.uptime,
@@ -135,7 +137,7 @@ pub fn auras_report_dto(
                     .lanes
                     .iter()
                     .map(|lane| AuraLaneDto {
-                        holder: holder_dto(&mut refs, &lane.holder),
+                        holder: holder_dto(fight, &mut refs, &lane.holder),
                         spell_id: refs.spell(fight, lane.spell),
                         spell_ids: lane.spells.iter().map(|&s| refs.spell(fight, s)).collect(),
                         sources: lane.sources.iter().map(|&p| refs.player(p)).collect(),

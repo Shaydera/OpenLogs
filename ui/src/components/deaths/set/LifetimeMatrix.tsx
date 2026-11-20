@@ -3,7 +3,6 @@ import type { SetDeaths } from '../../../api/types';
 import { formatEventTimeTenths, formatPercent, formatShare } from '../../../i18n/format';
 import { t } from '../../../i18n/i18n';
 import { PULL_CHIP } from '../../../pulls/groupPulls';
-import { shortName } from '../../overview/players';
 import { PlayerName } from '../../reports/PlayerName';
 import { rosterIndex } from '../../reports/reportData';
 import { LIFE_BANDS, type LifetimeCell, lifeBand, lifetimeRows, minPullOptions } from './lifetimeModel';
@@ -32,7 +31,7 @@ export function LifetimeMatrix({ parts, report }: { parts: PullPart[]; report: S
   const titleId = useId();
   const roster = useMemo(() => rosterIndex(report.roster), [report.roster]);
   const rows = useMemo(
-    () => lifetimeRows(parts.map(({ part }) => part), (id) => shortName(roster.get(id)?.name ?? '')),
+    () => lifetimeRows(parts.map(({ part }) => part), (id) => roster.get(id)?.name ?? ''),
     [parts, roster],
   );
   const options = minPullOptions(parts.length);

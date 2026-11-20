@@ -2,7 +2,7 @@ import type { DeathEntry, PullComparison, QuickOverview } from '../../api/types'
 import { formatEventTime } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { GameIcon } from '../GameIcon';
-import { classColor, playerIndex, shortName, spellName } from '../overview/players';
+import { classColor, playerIndex, spellName } from '../overview/players';
 import { hitIcon, hitName, sourceLabel } from '../reports/reportData';
 
 /** Every death of both pulls in time order: time, player, killing blow. */
@@ -52,7 +52,7 @@ function DeathLine({ death, overview, color }: { death: DeathEntry; overview: Qu
     <li className="cmp-death">
       <span className="num">{formatEventTime(death.t)}</span>
       <span className="death-name" style={{ color }}>
-        {shortName(death.playerName)}
+        {death.playerName}
       </span>
       {kb ? (
         <span className="spell-line">

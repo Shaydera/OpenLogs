@@ -10,7 +10,7 @@ use openlogs_index::MapBounds;
 use serde::Serialize;
 
 use crate::overview_dto::{PhaseDto, PhaseKindDto, PlayerRef, SpellRef};
-use crate::refs::Refs;
+use crate::refs::{Refs, shown};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -272,7 +272,7 @@ pub fn replay_dto(fight: &Fight, replay: &Replay, advanced_logging: bool) -> Rep
         duration_ms: replay.duration_ms,
         roster,
         spells,
-        units: replay.units.iter().map(unit_dto).collect(),
+        units: replay.units.iter().map(|u| unit_dto(fight, u)).collect(),
         tracks: replay.tracks.iter().map(track_dto).collect(),
         health: replay.health.iter().map(health_dto).collect(),
         power: replay
@@ -340,10 +340,10 @@ pub fn replay_dto(fight: &Fight, replay: &Replay, advanced_logging: bool) -> Rep
     }
 }
 
-fn unit_dto(unit: &ReplayUnit) -> ReplayUnitDto {
+fn unit_dto(fight: &Fight, unit: &ReplayUnit) -> ReplayUnitDto {
     ReplayUnitDto {
         actor: unit.actor,
-        name: unit.name.clone(),
+        name: shown(fight, unit.actor, &unit.name),
         kind: match unit.kind {
             UnitKind::Player => UnitKindDto::Player,
             UnitKind::Pet => UnitKindDto::Pet,
@@ -591,7 +591,16 @@ mod tests {
 
         assert_eq!(json["advancedLogging"], true);
         assert_eq!(json["encounterId"], 3492);
-        assert_eq!(json["roster"][0]["name"], "Faelan-Emberfall-EU");
+        assert_eq!(json["roster"][0]["name"], "Faelan");
+        let unit_name = |actor: ActorId| {
+            dto.units
+                .iter()
+                .find(|u| u.actor == actor)
+                .unwrap()
+                .name
+                .clone()
+        };
+        assert_eq!(unit_name(mage), "Faelan");
         assert_eq!(json["spells"]["44425"]["name"], "Arcane Barrage");
         assert_eq!(json["casts"][0]["spellId"], 44425);
         assert_eq!(

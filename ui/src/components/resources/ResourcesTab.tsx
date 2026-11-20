@@ -10,7 +10,7 @@ import { Kpi } from '../Kpi';
 import { valueLabel } from '../filters/labels';
 import { NoMatch } from '../filters/NoMatch';
 import { ReportPickers } from '../filters/ReportPickers';
-import { classColor, shortName } from '../overview/players';
+import { classColor } from '../overview/players';
 import { band } from '../player/chartGeometry';
 import { PlayerIcon } from '../reports/PlayerName';
 import { reportSpellName, rosterIndex } from '../reports/reportData';
@@ -47,7 +47,7 @@ export function ResourcesTab({ report }: { report: ResourcesReport }) {
   const playerOf = (u: UnitResources) => (u.unit.unit.kind === 'player' ? roster.get(u.unit.unit.actorId) : undefined);
   const nameOf = (u: UnitResources) => {
     const player = playerOf(u);
-    return player ? shortName(player.name) : valueLabel(u.unit.unit, u.unit.name, u.unit.number);
+    return player?.name ?? valueLabel(u.unit.unit, u.unit.name, u.unit.number);
   };
   const factsOf = (u: UnitResources): UnitFacts => ({
     boss: u.boss,

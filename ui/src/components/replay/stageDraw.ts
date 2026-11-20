@@ -4,7 +4,6 @@ import { t } from '../../i18n/i18n';
 import { type IconRef, bossIcon, classIcon, specIcon } from '../../icons';
 import { bossMonogram, initials } from '../../monogram';
 import type { ReplayFilters, ReplayLayers } from '../../store';
-import { shortName } from '../overview/players';
 import { type Bounds, type Camera, facingOnScreen, gridStep, toScreen, toWorld } from './camera';
 import type { EffectState } from './effects';
 import { type MapBoundsYd, type StageMap, stageMap } from './mapArt';
@@ -97,7 +96,6 @@ export function indexStage(data: ReplayData, mapArt: MapArtTable | null): StageI
   for (const unit of data.units) {
     const track = tracks.get(unit.actor);
     if (!track) continue;
-    const label = unit.kind === 'player' ? shortName(unit.name) : unit.name;
     units.push({
       unit,
       track,
@@ -106,9 +104,9 @@ export function indexStage(data: ReplayData, mapArt: MapArtTable | null): StageI
       health: health.get(unit.actor),
       goneAfterMs: goneAfterMs(unit.kind, track, health.get(unit.actor)),
       classKey: classTokens.get(unit.kind === 'pet' ? (unit.owner ?? -1) : unit.actor) ?? null,
-      label,
+      label: unit.name,
       icon: unitIcon(unit, data.encounterId),
-      monogram: unit.kind === 'boss' ? bossMonogram(label) : unit.kind === 'player' ? label.slice(0, 2) : initials(label).toUpperCase(),
+      monogram: unit.kind === 'boss' ? bossMonogram(unit.name) : unit.kind === 'player' ? unit.name.slice(0, 2) : initials(unit.name).toUpperCase(),
     });
   }
   return {

@@ -413,7 +413,7 @@ mod tests {
             serde_json::Value::Null
         );
         assert_eq!(death["events"][1]["sourceName"], "Stormstream Totem");
-        assert_eq!(death["events"][1]["sourceOwnerName"], "Mulgar-Emberfall-EU");
+        assert_eq!(death["events"][1]["sourceOwnerName"], "Mulgar");
         assert_eq!(
             death["lethalBurst"],
             serde_json::json!({ "spellId": 1302982, "count": 2, "windowMs": 1009 })

@@ -8,7 +8,7 @@ import { Facts } from '../detail/Facts';
 import { PageFilter } from '../detail/PageFilter';
 import { TimeAxis } from '../detail/TimeAxis';
 import { Kpi, KpiStrip } from '../Kpi';
-import { classColor, shortName } from '../overview/players';
+import { classColor } from '../overview/players';
 import { PlayerIcon } from '../reports/PlayerName';
 import { rosterIndex } from '../reports/reportData';
 import { EnemyTile } from './EnemyTile';
@@ -236,7 +236,7 @@ export function TargetDetailView({ detail }: { detail: TargetDetail }) {
                       </span>
                       <span role="cell" className="bp-name-cell">
                         <button type="button" className="bp-name" style={{ color }} onClick={() => void openPlayer(row.player)}>
-                          {player ? shortName(player.name) : t('report.unknownPlayer')}
+                          {player?.name ?? t('report.unknownPlayer')}
                         </button>
                       </span>
                       <span role="cell">

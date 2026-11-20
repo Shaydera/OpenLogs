@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::overview_dto::{
     ContextDto, HitDto, PlayerRef, SpellRef, context_dtos, player_ref, without_shields,
 };
+use crate::refs::shown_name;
 use crate::report_dto::{
     AbilityRowDto, AttributionDto, BuffShareDto, Names, PlayerAmount, TakenSpellDto, TargetShareDto,
 };
@@ -314,9 +315,7 @@ pub fn player_detail_dto(
                 killing_blow: death.killing_blow.map(|hit| HitDto {
                     t: hit.t,
                     spell_id: names.spell(hit.spell),
-                    source_name: (hit.source != NOBODY)
-                        .then(|| fight.actors.get(hit.source).name.clone())
-                        .flatten(),
+                    source_name: shown_name(fight, hit.source),
                     amount: hit.amount,
                     overkill: hit.overkill,
                     environmental: hit.environmental,

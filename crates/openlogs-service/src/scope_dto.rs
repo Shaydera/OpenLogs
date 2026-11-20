@@ -3,10 +3,10 @@ use openlogs_analysis::{
     FilterOption, MissType, Misses, OptionValue, RowKey, Scope, ScopeMetric, Side, SpellId,
     UnitRef,
 };
-use openlogs_index::GameFlavor;
 use serde::{Deserialize, Serialize};
 
 use crate::overview_dto::{PlayerRef, player_ref};
+use crate::refs::shown_name;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -407,16 +407,7 @@ fn instance_number(fight: &Fight, id: ActorId) -> u32 {
 
 pub(crate) fn unit_name(fight: &Fight, unit: &UnitRef) -> (String, Option<u32>) {
     match unit {
-        UnitRef::Player(id) => (
-            fight
-                .actors
-                .get(*id)
-                .name
-                .as_deref()
-                .map(|name| GameFlavor::player_name(fight.flavor, name))
-                .unwrap_or_default(),
-            None,
-        ),
+        UnitRef::Player(id) => (shown_name(fight, *id).unwrap_or_default(), None),
         UnitRef::Pet { name, .. } | UnitRef::Unit(name) => (name.clone(), None),
         UnitRef::Instance(id) => (
             fight.actors.get(*id).name.clone().unwrap_or_default(),

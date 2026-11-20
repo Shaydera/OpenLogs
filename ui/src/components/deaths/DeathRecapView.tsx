@@ -3,7 +3,6 @@ import { spellIcon } from '../../icons';
 import { t } from '../../i18n/i18n';
 import type { PullView } from '../../pulls/groupPulls';
 import { GameIcon } from '../GameIcon';
-import { shortName } from '../overview/players';
 import { hitIcon, reportSpellName } from '../reports/reportData';
 import { RecapPanel } from './RecapPanel';
 import { contextRows, recapRows, type ContextRow } from './recapModel';
@@ -23,7 +22,7 @@ export function DeathRecapView({ recap, report, pull = null }: { recap: DeathRec
             <h3 id="recap-events-title" className="h2">
               {events}
             </h3>
-            <span className="panel-hint">{t('recap.eventsOn', { name: shortName(recap.playerName) })}</span>
+            <span className="panel-hint">{t('recap.eventsOn', { name: recap.playerName })}</span>
           </div>
           {rows.length === 0 ? (
             <p className="muted pad">{t('recap.noEvents')}</p>

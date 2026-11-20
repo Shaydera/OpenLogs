@@ -3,7 +3,7 @@ import { formatDuration } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { combatName, isCombatPull, moreEnemies, pullNumber, pullStatus, runBadge, runStatus } from '../../pulls/groupPulls';
 import type { FightTab, ReportData } from '../../store';
-import { playerIndex, shortName, spellName } from '../overview/players';
+import { playerIndex, spellName } from '../overview/players';
 import { setIdentity } from './fightMeta';
 import { tabLabel } from './fightTabs';
 
@@ -56,7 +56,7 @@ function detailLevels(details: Detail[], overview: QuickOverview | null, report:
   const playerName = (id: number) => {
     const loaded = report?.tab === 'player' && report.data.player.actorId === id ? report.data.player.name : null;
     const name = roster.get(id)?.name ?? loaded;
-    return name === null ? t('report.unknownPlayer') : shortName(name);
+    return name === null ? t('report.unknownPlayer') : name;
   };
   return details.flatMap((detail, depth): Level[] => {
     const action: CrumbAction = { kind: 'detail', depth };

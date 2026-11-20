@@ -13,7 +13,7 @@ const faelan = recapFixture.deaths[0];
 const sabrel: DeathRecap = {
   ...faelan,
   player: 7,
-  playerName: 'Sabrel-Emberfall-EU',
+  playerName: 'Sabrel',
   t: 419_080,
   number: 5,
   specName: 'Windwalker Monk',
@@ -29,7 +29,7 @@ const report: DeathsReport = {
   ...recapFixture,
   roster: [
     ...recapFixture.roster,
-    { actorId: 7, name: 'Sabrel-Emberfall-EU', specId: 269, specIcon: 'spell_monk_windwalker_spec', specName: 'Windwalker Monk', classId: 10, classToken: 'MONK', role: 'damage' },
+    { actorId: 7, name: 'Sabrel', specId: 269, specIcon: 'spell_monk_windwalker_spec', specName: 'Windwalker Monk', classId: 10, classToken: 'MONK', role: 'damage' },
   ],
   deaths: [faelan, sabrel],
 };
@@ -64,7 +64,7 @@ describe('DeathsTab', () => {
   it('lists enemy kills with their killing blow, killer and time alive', () => {
     useApp.setState({ filters: { ...initialState().filters, perspective: 'enemy' } });
     const rawling: ReportUnit = { unit: { kind: 'instance', actorId: 9 }, name: 'Blightscale Rawling', number: 7 };
-    const kill = { t: 61_000, unit: rawling, killingBlow: { ...faelan.killingBlow!, sourceName: 'Faelan-Emberfall-EU' }, killer: { unit: { kind: 'player' as const, actorId: 4 }, name: 'Faelan', number: null }, aliveMs: 12_000 };
+    const kill = { t: 61_000, unit: rawling, killingBlow: { ...faelan.killingBlow!, sourceName: 'Faelan' }, killer: { unit: { kind: 'player' as const, actorId: 4 }, name: 'Faelan', number: null }, aliveMs: 12_000 };
     render(<DeathsTab report={{ ...report, deaths: [], kills: [kill] }} />);
     const rows = within(screen.getByRole('table', { name: 'Kills · 1' })).getAllByRole('row');
     expect(rows[1]).toHaveTextContent('1:01Blightscale Rawling #7Virulent SpitFaelan0:12');

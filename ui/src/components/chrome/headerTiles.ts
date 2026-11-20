@@ -20,7 +20,6 @@ import { rowLabel, valueLabel } from '../filters/labels';
 import { deathWindowMs, medianMs } from '../deaths/set/lifetimeModel';
 import { kickTotals } from '../interrupts/kickTotals';
 import type { KpiTone } from '../Kpi';
-import { shortName } from '../overview/players';
 import { type PullFirst, type SetRow, averageFirstDeath, bestPull, earliestOfPulls, pullFirstDeaths } from '../overview/setOverviewModel';
 import { formatCapTime, powerName } from '../resources/powerNames';
 import { overhealShare } from '../reports/overheal';
@@ -180,7 +179,7 @@ const share = (part: number, whole: number) => formatShare(whole > 0 ? (part / w
 
 function playerName(roster: { actorId: number; name: string }[], id: number): string {
   const player = roster.find((p) => p.actorId === id);
-  return player ? shortName(player.name) : t('report.unknownPlayer');
+  return player?.name ?? t('report.unknownPlayer');
 }
 
 function damageTiles(report: ReportOf['damage'] | null): HeaderTile[] {

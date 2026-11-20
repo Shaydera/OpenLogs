@@ -5,7 +5,7 @@ import { PlayerName } from './PlayerName';
 
 const FAELAN: PlayerRef = {
   actorId: 4,
-  name: 'Faelan-Emberfall-EU',
+  name: 'Faelan',
   specId: 62,
   specName: 'Arcane Mage',
   specIcon: 'spell_holy_magicalsentry',

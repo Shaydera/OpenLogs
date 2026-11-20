@@ -7,7 +7,7 @@ import { t } from '../../i18n/i18n';
 import type { PullView } from '../../pulls/groupPulls';
 import { replayOffered, useApp } from '../../store';
 import { GameIcon, MonogramTile } from '../GameIcon';
-import { classColor, shortName } from '../overview/players';
+import { classColor } from '../overview/players';
 import { hitIcon, hitName, reportSpellName, rosterIndex } from '../reports/reportData';
 import { deathJumpMs } from '../replay/playback';
 import { hitSource, recapCallout, recapPlot } from './recapModel';
@@ -22,7 +22,7 @@ export function RecapPanel({ recap, report, pull = null }: { recap: DeathRecap; 
   const spellName = (id: number) => reportSpellName(report.spells, id);
   const roster = rosterIndex(report.roster);
   const player = roster.get(recap.player);
-  const name = shortName(recap.playerName);
+  const name = recap.playerName;
   const colour = classColor(player?.classToken ?? null);
   const kb = recap.killingBlow;
   const rezzer = recap.resurrectedBy?.source != null ? roster.get(recap.resurrectedBy.source) : undefined;
@@ -35,7 +35,7 @@ export function RecapPanel({ recap, report, pull = null }: { recap: DeathRecap; 
     recap.resurrectedAt === null
       ? null
       : rezzer
-        ? t('recap.resurrectedBy', { time: formatEventTime(recap.resurrectedAt), name: shortName(rezzer.name) })
+        ? t('recap.resurrectedBy', { time: formatEventTime(recap.resurrectedAt), name: rezzer.name })
         : t('recap.resurrected', { time: formatEventTime(recap.resurrectedAt) });
 
   return (

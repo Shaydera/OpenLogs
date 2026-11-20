@@ -11,7 +11,7 @@ import {
 } from '../../i18n/format';
 import { locale, t } from '../../i18n/i18n';
 import type { MessageKey } from '../../i18n/i18n';
-import { shortName, usedAtLabel } from '../overview/players';
+import { usedAtLabel } from '../overview/players';
 import { hitName } from '../reports/reportData';
 
 /** HP curve and event window before a death (matches the backend). */
@@ -169,7 +169,7 @@ export function recapCallout(recap: DeathRecap, spellName: (id: number) => strin
 
 /** Who dealt a hit: its source (a player without the realm), else world damage, a debuff whose caster is gone, or unknown. */
 export function hitSource(hit: { sourceName: string | null; environmental: boolean; periodic: boolean }): string {
-  if (hit.sourceName) return shortName(hit.sourceName);
+  if (hit.sourceName) return hit.sourceName;
   if (hit.environmental) return t('deaths.environment');
   return t(hit.periodic ? 'recap.debuffSource' : 'deaths.unknownSource');
 }
@@ -178,9 +178,9 @@ export function hitSource(hit: { sourceName: string | null; environmental: boole
 export function eventSource(e: RecapEvent): string {
   if (e.sourceOwnerName) {
     const kind = /totem/i.test(e.sourceName ?? '') ? t('recap.totem') : t('recap.pet');
-    return t('recap.ownedSource', { owner: shortName(e.sourceOwnerName), kind });
+    return t('recap.ownedSource', { owner: e.sourceOwnerName, kind });
   }
-  return e.sourceName ? shortName(e.sourceName) : hitSource(e);
+  return e.sourceName || hitSource(e);
 }
 
 export interface RecapRow {

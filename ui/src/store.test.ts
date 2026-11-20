@@ -21,7 +21,7 @@ import {
   targetDetailFixture,
 } from './test/reportFixtures';
 import { eventsPageFixture, timelineFixture } from './test/viewFixtures';
-import { currentGame } from './currentGame';
+import { currentDataGame } from './currentGame';
 import { type FightTab, initialState, useApp } from './store';
 
 vi.mock('./api/client', () => ({
@@ -135,13 +135,13 @@ describe('logs and pulls', () => {
     expect(useApp.getState().view).toEqual({ kind: 'start' });
   });
 
-  it('opening a log sets the game its names follow', async () => {
-    const forever: LogView = { ...LOG, game: { kind: 'forever' } };
+  it('opening a log sets the game data its icons follow', async () => {
+    const forever: LogView = { ...LOG, game: { kind: 'forever' }, dataGame: 'forever' };
     vi.mocked(api.openLog).mockResolvedValueOnce(forever);
     await useApp.getState().openLog(chosen(forever));
-    expect(currentGame()).toEqual({ kind: 'forever' });
+    expect(currentDataGame()).toBe('forever');
     await useApp.getState().openLog(chosen(LOG));
-    expect(currentGame()).toEqual(LOG.game);
+    expect(currentDataGame()).toBe('retail');
   });
 
   it('shows the indexing progress while a log opens', async () => {

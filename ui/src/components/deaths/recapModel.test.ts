@@ -55,9 +55,9 @@ describe('recapCallout', () => {
 
 describe('eventSource', () => {
   it('names the owner of a totem or pet and drops the realm of players', () => {
-    expect(eventSource(event({ sourceName: 'Stormstream Totem', sourceOwnerName: 'Mulgar-Emberfall-EU' }))).toBe('Mulgar (Totem)');
-    expect(eventSource(event({ sourceName: 'Fel Imp', sourceOwnerName: 'Årvel-Emberfall-EU' }))).toBe('Årvel (Pet)');
-    expect(eventSource(event({ sourceName: 'Tyrell-Highmarch-EU' }))).toBe('Tyrell');
+    expect(eventSource(event({ sourceName: 'Stormstream Totem', sourceOwnerName: 'Mulgar' }))).toBe('Mulgar (Totem)');
+    expect(eventSource(event({ sourceName: 'Fel Imp', sourceOwnerName: 'Årvel' }))).toBe('Årvel (Pet)');
+    expect(eventSource(event({ sourceName: 'Tyrell' }))).toBe('Tyrell');
   });
 });
 

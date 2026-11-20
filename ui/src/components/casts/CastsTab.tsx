@@ -8,7 +8,7 @@ import { GameIcon, MonogramTile } from '../GameIcon';
 import { rowLabel, rowValue, valueLabel } from '../filters/labels';
 import { NoMatch } from '../filters/NoMatch';
 import { ReportHead } from '../filters/ReportHead';
-import { classColor, playerIndex, shortName } from '../overview/players';
+import { classColor, playerIndex } from '../overview/players';
 import { PlayerIcon } from '../reports/PlayerName';
 import { barWidth, rosterIndex } from '../reports/reportData';
 import { SideActions } from '../reports/ReportParts';
@@ -78,7 +78,7 @@ export function CastsTab({ report }: { report: CastsReport }) {
   const linesOf = (player: number) => extras.filter((e) => e.player === player).map(extraLine);
   const selected = breakdown.rows.find((r) => keyOf(r) === selectedKey) ?? breakdown.rows[0];
   const split = (row: GroupedRow | undefined, dimension: 'source' | 'ability') => row?.splits.find((s) => s.dimension === dimension)?.rows;
-  const nameOf = (player: number) => shortName(roster.get(player)?.name ?? t('report.unknownPlayer'));
+  const nameOf = (player: number) => roster.get(player)?.name ?? t('report.unknownPlayer');
   const friendly = scope.perspective === 'friendly';
   const caption = t(friendly ? 'report.player' : 'scope.source');
   const noteKey = inSet ? 'casts.noteSet' : range ? 'casts.noteRange' : cutDeath !== null ? 'casts.noteCut' : 'casts.note';

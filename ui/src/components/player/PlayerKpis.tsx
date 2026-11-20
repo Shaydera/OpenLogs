@@ -4,7 +4,6 @@ import { t } from '../../i18n/i18n';
 import type { MessageKey } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { Kpi, KpiStrip } from '../Kpi';
-import { shortName } from '../overview/players';
 
 const CONSUMABLE_LABEL: Record<ConsumableKind, MessageKey> = {
   combat_potion: 'consumables.combatPotion',
@@ -17,7 +16,7 @@ export function PlayerKpis({ detail }: { detail: PlayerDetail }) {
   const openDeathRecap = useApp((s) => s.openDeathRecap);
   const healing = detail.metric === 'healing';
   const otherMode = t(detail.attribution === 'augmented' ? 'aug.reattributed' : 'aug.augmented');
-  const names = new Map(detail.roster.map((p) => [p.actorId, shortName(p.name)]));
+  const names = new Map(detail.roster.map((p) => [p.actorId, p.name]));
   const firstDeath = detail.deaths[0];
   const kinds = [...new Set(detail.consumables.map((u) => u.kind))].map((kind) => t(CONSUMABLE_LABEL[kind]));
   const noConsumables = detail.consumables.length === 0;

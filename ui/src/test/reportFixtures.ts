@@ -1,10 +1,10 @@
 import type { AbilityDetail, AuraLane, AuraRow, AurasReport, CastsReport, Breakdown, DamageReport, DamageTakenReport, DeathRecap, DeathsReport, HealingReport, InterruptsReport, PlayerAbility, PlayerDetail, PlayerRef, ReportUnit, ResourcesReport, TargetDetail } from '../api/types';
 
 const roster: PlayerRef[] = [
-  { actorId: 3, name: 'Wendel-Emberfall-EU', specId: 71, specIcon: 'ability_warrior_savageblow', specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
-  { actorId: 4, name: 'Faelan-Emberfall-EU', specId: 62, specIcon: 'spell_holy_magicalsentry', specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' },
-  { actorId: 5, name: 'Speronis-Stonevale-EU', specId: 1473, specIcon: 'classicon_evoker_augmentation', specName: 'Augmentation Evoker', classId: 13, classToken: 'EVOKER', role: 'damage' },
-  { actorId: 2, name: 'Pyrrin-Emberfall-EU', specId: 105, specIcon: 'spell_nature_healingtouch', specName: 'Restoration Druid', classId: 11, classToken: 'DRUID', role: 'healer' },
+  { actorId: 3, name: 'Wendel', specId: 71, specIcon: 'ability_warrior_savageblow', specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
+  { actorId: 4, name: 'Faelan', specId: 62, specIcon: 'spell_holy_magicalsentry', specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' },
+  { actorId: 5, name: 'Speronis', specId: 1473, specIcon: 'classicon_evoker_augmentation', specName: 'Augmentation Evoker', classId: 13, classToken: 'EVOKER', role: 'damage' },
+  { actorId: 2, name: 'Pyrrin', specId: 105, specIcon: 'spell_nature_healingtouch', specName: 'Restoration Druid', classId: 11, classToken: 'DRUID', role: 'healer' },
 ];
 
 const spells = {
@@ -255,7 +255,7 @@ export const abilityDetailFixture: AbilityDetail = {
   uptime: null,
   dead: [[12_000, 16_000]],
   targetNames: { '10': "Ula'tek", '11': 'Blightscale Rawling', '12': 'Blightscale Rawling' },
-  playerTargets: [],
+  shownNames: {},
 };
 
 /** Blightscale Rawlings over 60 s. */
@@ -347,8 +347,8 @@ export const castsReportFixture: CastsReport = {
   ],
 };
 
-const faelanHolder = { name: 'Faelan-Emberfall-EU', player: 4 };
-const wendelHolder = { name: 'Wendel-Emberfall-EU', player: 3 };
+const faelanHolder = { name: 'Faelan', player: 4 };
+const wendelHolder = { name: 'Wendel', player: 3 };
 const lane = (holder: AuraLane['holder'], spellId: number, sources: number[], applications: number, uptime: number, intervals: [number, number][]): AuraLane => ({
   holder,
   spellId,
@@ -444,7 +444,7 @@ export const resourcesReportFixture: ResourcesReport = {
 /** Faelan's death in the reference pull, with its events, HP and context. */
 const faelanRecap: DeathRecap = {
   player: 4,
-  playerName: 'Faelan-Emberfall-EU',
+  playerName: 'Faelan',
   t: 239_100,
   killingBlow: { t: 239_100, spellId: 1302982, sourceName: "Ula'tek", amount: 355_265, overkill: 4_923, environmental: false, periodic: false },
   damageLast5s: [{ spellId: 1302982, amount: 710_530, environmental: false }],
@@ -470,11 +470,11 @@ const faelanRecap: DeathRecap = {
   events: [
     { t: 231_990, spellId: 1286835, sourceName: "Ula'tek", kind: 'damage', amount: 33_163, absorbed: 0, excess: 0, hpPct: 94, environmental: false, periodic: false, sourceOwnerName: null },
     { t: 236_470, spellId: 1297338, sourceName: null, kind: 'damage', amount: 45_999, absorbed: 0, excess: 0, hpPct: 68, environmental: false, periodic: true, sourceOwnerName: null },
-    { t: 236_728, spellId: 1267745, sourceName: 'Stormstream Totem', kind: 'heal', amount: 14_195, absorbed: 0, excess: 0, hpPct: null, environmental: false, periodic: true, sourceOwnerName: 'Mulgar-Emberfall-EU' },
+    { t: 236_728, spellId: 1267745, sourceName: 'Stormstream Totem', kind: 'heal', amount: 14_195, absorbed: 0, excess: 0, hpPct: null, environmental: false, periodic: true, sourceOwnerName: 'Mulgar' },
     { t: 237_990, spellId: 1286835, sourceName: "Ula'tek", kind: 'damage', amount: 35_444, absorbed: 0, excess: 0, hpPct: 74, environmental: false, periodic: false, sourceOwnerName: null },
     { t: 238_090, spellId: 1302982, sourceName: "Ula'tek", kind: 'damage', amount: 355_265, absorbed: 0, excess: 0, hpPct: 36, environmental: false, periodic: false, sourceOwnerName: null },
-    { t: 238_270, spellId: 1287908, sourceName: 'Faelan-Emberfall-EU', kind: 'heal', amount: 12_552, absorbed: 0, excess: 0, hpPct: null, environmental: false, periodic: false, sourceOwnerName: null },
-    { t: 238_600, spellId: 235450, sourceName: 'Faelan-Emberfall-EU', kind: 'absorb', amount: 20_000, absorbed: 0, excess: 0, hpPct: null, environmental: false, periodic: false, sourceOwnerName: null },
+    { t: 238_270, spellId: 1287908, sourceName: 'Faelan', kind: 'heal', amount: 12_552, absorbed: 0, excess: 0, hpPct: null, environmental: false, periodic: false, sourceOwnerName: null },
+    { t: 238_600, spellId: 235450, sourceName: 'Faelan', kind: 'absorb', amount: 20_000, absorbed: 0, excess: 0, hpPct: null, environmental: false, periodic: false, sourceOwnerName: null },
     { t: 239_100, spellId: 1302982, sourceName: "Ula'tek", kind: 'damage', amount: 394_738, absorbed: 39_473, excess: 4_923, hpPct: 0, environmental: false, periodic: false, sourceOwnerName: null },
   ],
   hp: [
@@ -490,8 +490,8 @@ const faelanRecap: DeathRecap = {
 /** The Deaths tab: Faelan's death and the druid who resurrected him. */
 export const recapFixture: DeathsReport = {
   roster: [
-    { actorId: 4, name: 'Faelan-Emberfall-EU', specId: 62, specIcon: 'spell_holy_magicalsentry', specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' },
-    { actorId: 6, name: 'Serrik-Silverbrook-EU', specId: 105, specIcon: 'spell_nature_healingtouch', specName: 'Restoration Druid', classId: 11, classToken: 'DRUID', role: 'healer' },
+    { actorId: 4, name: 'Faelan', specId: 62, specIcon: 'spell_holy_magicalsentry', specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' },
+    { actorId: 6, name: 'Serrik', specId: 105, specIcon: 'spell_nature_healingtouch', specName: 'Restoration Druid', classId: 11, classToken: 'DRUID', role: 'healer' },
   ],
   spells: {
     '1302982': { name: 'Virulent Spit' },

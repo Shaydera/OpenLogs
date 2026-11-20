@@ -1,7 +1,6 @@
 import type { BuffShare, PlayerAmount, PlayerRef } from '../../api/types';
 import { formatScaled, formatSignedScaled } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
-import { shortName } from '../overview/players';
 import { reportSpellName, type SpellNames } from './reportData';
 
 /** A player's total in both Aug modes and the parts the Aug tooltip shows. */
@@ -68,7 +67,7 @@ export function augTipLines(split: AugSplit, roster: Map<number, PlayerRef>, met
     }));
   const lines = [line(t(first), formatScaled(split.own))];
   for (const from of split.supportReceivedFrom) {
-    lines.push(line(t('aug.tipFrom', { name: shortName(roster.get(from.player)?.name ?? '?') }), formatSignedScaled(-from.amount), 'loss'));
+    lines.push(line(t('aug.tipFrom', { name: roster.get(from.player)?.name ?? '?' }), formatSignedScaled(-from.amount), 'loss'));
     lines.push(...byBuff(split.supportReceivedByBuff.filter((share) => share.evoker === from.player), 'loss'));
   }
   const named = split.supportReceivedFrom.reduce((sum, from) => sum + from.amount, 0);

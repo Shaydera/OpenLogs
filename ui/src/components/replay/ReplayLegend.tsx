@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { ReplayData, ReplayUnitKind } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { type ReplayFilters, useApp } from '../../store';
-import { classColor, shortName } from '../overview/players';
+import { classColor } from '../overview/players';
 import { roleRank } from './hudIndex';
 
 interface LegendEntry {
@@ -23,7 +23,7 @@ function legendEntries(data: ReplayData, filters: ReplayFilters): LegendEntry[] 
   const roster = new Map(data.roster.map((player) => [player.actorId, player]));
   const players = data.units
     .filter((unit) => unit.kind === 'player')
-    .map((unit) => ({ unit, player: roster.get(unit.actor), label: shortName(unit.name) }))
+    .map((unit) => ({ unit, player: roster.get(unit.actor), label: unit.name }))
     .sort((a, b) => roleRank(a.player) - roleRank(b.player) || a.label.localeCompare(b.label))
     .map(({ unit, player, label }): LegendEntry => ({ key: `player-${unit.actor}`, label, kind: 'player', actors: [unit.actor], color: classColor(player?.classToken ?? null) }));
   const groups = new Map<string, LegendEntry>();

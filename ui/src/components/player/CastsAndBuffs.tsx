@@ -6,7 +6,7 @@ import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { TimeAxis } from '../detail/TimeAxis';
 import { GameIcon } from '../GameIcon';
-import { classColor, shortName } from '../overview/players';
+import { classColor } from '../overview/players';
 import { reportSpellName, rosterIndex } from '../reports/reportData';
 import { buffColor } from './buffColors';
 import { band, castsCrowd, intervalList } from './chartGeometry';
@@ -140,7 +140,7 @@ export function CastsAndBuffs({ detail }: { detail: PlayerDetail }) {
                         <span className="pcb-label">
                           <GameIcon name={name(row.spellId)} icon={spellIcon(row.spellId)} size={18} />
                           <span className="pcb-name">{name(row.spellId)}</span>
-                          {external && <span className="pcb-source">{t('player.buffFrom', { name: shortName(source?.name ?? '?') })}</span>}
+                          {external && <span className="pcb-source">{t('player.buffFrom', { name: source?.name ?? '?' })}</span>}
                         </span>
                         <span className="track" {...laneProps(list ? t('chart.intervals', { name: name(row.spellId), list }) : null)}>
                           {dead}

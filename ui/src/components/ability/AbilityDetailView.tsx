@@ -10,7 +10,7 @@ import { PageFilter } from '../detail/PageFilter';
 import { TimeAxis } from '../detail/TimeAxis';
 import { GameIcon } from '../GameIcon';
 import { Kpi, KpiStrip } from '../Kpi';
-import { classColor, shortName } from '../overview/players';
+import { classColor } from '../overview/players';
 import { band } from '../player/chartGeometry';
 import { abilityTraits, directHitsPerCast } from './abilityTraits';
 import { hitHistogram, schoolName } from './hitHistogram';
@@ -25,13 +25,11 @@ export function AbilityDetailView({ detail }: { detail: AbilityDetail }) {
   const [target, setTarget] = useState<string | null>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   useFocusRequest('page', () => titleRef.current);
-  const name = shortName(detail.player.name);
+  const name = detail.player.name;
   // Melee swings have no spell entry in the log.
   const title = detail.spellName || (detail.spellId === 0 ? t('overview.melee') : t('overview.unknownSpell', { id: detail.spellId }));
   const healing = detail.metric === 'healing';
-  // Only player names carry a realm suffix; NPC names may contain hyphens of their own.
-  const players = new Set(detail.playerTargets);
-  const display = (unit: string) => (players.has(unit) ? shortName(unit) : unit);
+  const display = (unit: string) => detail.shownNames[unit] ?? unit;
   const rawTarget = (hit: AbilityHit) => detail.targetNames[String(hit.target)] ?? '?';
   const targetName = (hit: AbilityHit) => display(rawTarget(hit));
   const visible = detail.hits.filter((h) => (!critsOnly || h.critical) && (target === null || rawTarget(h) === target));
