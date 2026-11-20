@@ -150,6 +150,13 @@ describe('followUpdate set', () => {
     expect(followUpdate(before, after, set('wipes', [10, 20, 30]), true, false).set?.fights).toEqual(fights);
   });
 
+  it('drops a pull that joined a run without following it', () => {
+    const after = [wipe(10), wipe(20), fight(30, 'wipe', 120_000, { runIndex: 5 })];
+    const update = followUpdate(before, after, set('wipes', [10, 20, 30]), true, false);
+    expect(update.set?.fights).toEqual([10, 20]);
+    expect(followUpdate(before, after, shown(30), true, false).jumpTo).toBeNull();
+  });
+
   it('leaves the set alone when nothing changes for it', () => {
     expect(followUpdate(before, [...before, kill(40)], set('wipes', [10, 20]), true, false).set).toBeNull();
   });
