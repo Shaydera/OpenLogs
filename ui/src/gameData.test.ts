@@ -112,4 +112,19 @@ describe('game data tables', () => {
     setCurrentGame({ kind: 'forever' });
     expect(bearForm(), 'a loaded table is shown again at once').toBe('ability_racial_bearform');
   });
+
+  it('leaves the icons alone when a refreshed log keeps its game', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 404 })));
+    const { setCurrentGame } = await import('./currentGame');
+    const { iconTables, subscribeIconTables } = await import('./gameData');
+    setCurrentGame({ kind: 'forever' });
+    const shown = iconTables();
+    const notified = vi.fn();
+    subscribeIconTables(notified);
+
+    setCurrentGame({ kind: 'forever' });
+
+    expect(notified).not.toHaveBeenCalled();
+    expect(iconTables()).toBe(shown);
+  });
 });
