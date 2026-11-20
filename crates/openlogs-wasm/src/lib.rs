@@ -5,7 +5,7 @@ mod engine;
 
 use std::cell::RefCell;
 
-pub use engine::Engine;
+pub use engine::{DataGame, Engine};
 use wasm_bindgen::prelude::*;
 
 thread_local! {
@@ -39,12 +39,14 @@ impl Session {
         self.engine.set_dungeons(json).map_err(to_js)
     }
 
-    pub fn set_channel_spells(&mut self, json: &str) -> Result<(), JsValue> {
-        self.engine.set_channel_spells(json).map_err(to_js)
+    pub fn set_channel_spells(&mut self, json: &str, game: &str) -> Result<(), JsValue> {
+        let game = DataGame::from_name(game).map_err(to_js)?;
+        self.engine.set_channel_spells(game, json).map_err(to_js)
     }
 
-    pub fn set_spell_classes(&mut self, json: &str) -> Result<(), JsValue> {
-        self.engine.set_spell_classes(json).map_err(to_js)
+    pub fn set_spell_classes(&mut self, json: &str, game: &str) -> Result<(), JsValue> {
+        let game = DataGame::from_name(game).map_err(to_js)?;
+        self.engine.set_spell_classes(game, json).map_err(to_js)
     }
 
     pub fn begin_index(&mut self) {

@@ -25,6 +25,60 @@ use serde_json::Value;
 /// Pulls kept loaded: the shown pull and the one it is compared with.
 const LOADED_PULLS: usize = 2;
 
+/// The games with spell tables of their own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataGame {
+    Retail,
+    Forever,
+}
+
+impl DataGame {
+    /// Forever has its own tables; every other game reads retail's. The app follows the same
+    /// rule (`dataGameOf`).
+    pub fn of(flavor: Option<GameFlavor>) -> Self {
+        match flavor {
+            Some(GameFlavor::Forever) => Self::Forever,
+            _ => Self::Retail,
+        }
+    }
+
+    pub fn from_name(name: &str) -> Result<Self, String> {
+        match name {
+            "retail" => Ok(Self::Retail),
+            "forever" => Ok(Self::Forever),
+            _ => Err(format!("No game data for the game {name}")),
+        }
+    }
+}
+
+#[derive(Default)]
+struct GameTables {
+    channels: ChannelSpells,
+    spell_classes: SpellClasses,
+}
+
+#[derive(Default)]
+struct TablesByGame {
+    retail: GameTables,
+    forever: GameTables,
+}
+
+impl TablesByGame {
+    fn of_flavor(&self, flavor: Option<GameFlavor>) -> &GameTables {
+        match DataGame::of(flavor) {
+            DataGame::Retail => &self.retail,
+            DataGame::Forever => &self.forever,
+        }
+    }
+
+    fn of_mut(&mut self, game: DataGame) -> &mut GameTables {
+        match game {
+            DataGame::Retail => &mut self.retail,
+            DataGame::Forever => &mut self.forever,
+        }
+    }
+}
+
 /// One open log: its index, the most recently loaded pulls and the game data reports use.
 pub struct Engine {
     indexer: Indexer,
@@ -33,8 +87,7 @@ pub struct Engine {
     fights: Vec<LoadedPull>,
     curated: Curated,
     dungeons: Option<DungeonTable>,
-    channels: ChannelSpells,
-    spell_classes: SpellClasses,
+    spell_tables: TablesByGame,
     pass: Option<SetPass>,
 }
 
@@ -46,8 +99,7 @@ impl Default for Engine {
             fights: Vec::new(),
             curated: Curated::bundled(),
             dungeons: None,
-            channels: ChannelSpells::default(),
-            spell_classes: SpellClasses::default(),
+            spell_tables: TablesByGame::default(),
             pass: None,
         }
     }
@@ -59,14 +111,20 @@ impl Engine {
         Ok(())
     }
 
-    pub fn set_channel_spells(&mut self, json: &str) -> Result<(), String> {
-        self.channels = ChannelSpells::from_json(json).map_err(|err| err.to_string())?;
+    pub fn set_channel_spells(&mut self, game: DataGame, json: &str) -> Result<(), String> {
+        self.spell_tables.of_mut(game).channels =
+            ChannelSpells::from_json(json).map_err(|err| err.to_string())?;
         Ok(())
     }
 
-    pub fn set_spell_classes(&mut self, json: &str) -> Result<(), String> {
-        self.spell_classes = SpellClasses::from_json(json).map_err(|err| err.to_string())?;
+    pub fn set_spell_classes(&mut self, game: DataGame, json: &str) -> Result<(), String> {
+        self.spell_tables.of_mut(game).spell_classes =
+            SpellClasses::from_json(json).map_err(|err| err.to_string())?;
         Ok(())
+    }
+
+    fn tables(&self) -> &GameTables {
+        self.spell_tables.of_flavor(self.index.flavor)
     }
 
     /// Starts indexing a new log; the previous log and its pulls are dropped.
@@ -159,7 +217,7 @@ impl Engine {
     ) -> Result<(), String> {
         let summary = self.summary(fight_index)?.clone();
         let mut fight = load_fight_slice(part, base_offset, &summary);
-        ready_for_reports(&mut fight, self.index.flavor, &self.spell_classes);
+        ready_for_reports(&mut fight, self.index.flavor, &self.tables().spell_classes);
         self.fights.retain(|pulled| pulled.index != fight_index);
         self.fights.insert(
             0,
@@ -210,7 +268,8 @@ impl Engine {
         let summary = summary_of(&self.index, fight_index)?;
         let mut fight =
             load_fight_slice_with(part, base_offset, summary, pass.actors.carried_over());
-        ready_for_reports(&mut fight, self.index.flavor, &self.spell_classes);
+        let tables = self.spell_tables.of_flavor(self.index.flavor);
+        ready_for_reports(&mut fight, self.index.flavor, &tables.spell_classes);
         let mut cuts = PullCuts::new(&fight);
         for command in &mut pass.commands {
             command.add(fight_index, &fight, &self.curated, &mut cuts);
@@ -409,7 +468,7 @@ impl Engine {
                 json(openlogs_service::timeline(
                     self.fight(args.fight_index)?,
                     curated,
-                    &self.channels,
+                    &self.tables().channels,
                     args.filter,
                     args.scope,
                     args.metric,
@@ -432,8 +491,8 @@ impl Engine {
                 json(openlogs_service::replay(
                     self.fight(args.fight_index)?,
                     curated,
-                    &self.channels,
-                    &self.spell_classes,
+                    &self.tables().channels,
+                    &self.tables().spell_classes,
                     self.index.advanced_logging,
                 ))
             }

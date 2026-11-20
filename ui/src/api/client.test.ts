@@ -185,6 +185,51 @@ describe('opening logs', () => {
     expect(given).toEqual(['keys', classes, '{"ids":[5143]}']);
   });
 
+  it('gives a Forever log the Forever tables and a retail log the retail ones', async () => {
+    const fake = fakeEngine();
+    const given: [string, string][] = [];
+    fake.engine.setChannelSpells = async (json, game) => void given.push([json, game]);
+    fake.engine.setSpellClasses = async (json, game) => void given.push([json, game]);
+    fake.engine.finishIndex = async (logId) => ({ ...view(logId), game: { kind: logId.startsWith('f') ? 'forever' : 'retail' } });
+    const api = createClient({
+      engine: () => fake.engine,
+      dungeons: async () => null,
+      channelSpells: async (game) => `${game}-channels`,
+      spellClasses: async (game) => `${game}-classes`,
+      db: memoryDatabase(),
+      now: () => 1,
+    });
+    await api.openLog(source('f.txt', 10));
+    await api.openLog(source('r.txt', 10));
+    await api.openLog(source('f.txt', 11));
+    expect(given).toEqual([
+      ['forever-channels', 'forever'],
+      ['forever-classes', 'forever'],
+      ['retail-channels', 'retail'],
+      ['retail-classes', 'retail'],
+    ]);
+  });
+
+  it('gives a Forever log reopened from its stored index the Forever tables', async () => {
+    const db = memoryDatabase();
+    const forever = (engine: Engine) => {
+      engine.finishIndex = async (logId) => ({ ...view(logId), game: { kind: 'forever' } });
+      engine.restoreIndex = async (_, logId) => ({ ...view(logId), game: { kind: 'forever' }, cacheHit: true });
+    };
+    const first = fakeEngine();
+    forever(first.engine);
+    const deps = { dungeons: async () => null, channelSpells: async () => null, spellClasses: async () => 'classes', db, now: () => 1 };
+    await createClient({ engine: () => first.engine, ...deps }).openLog(source('f.txt', 10));
+
+    const second = fakeEngine();
+    forever(second.engine);
+    const given: string[] = [];
+    second.engine.setSpellClasses = async (_, game) => void given.push(game);
+    const reopened = await createClient({ engine: () => second.engine, ...deps }).openLog(source('f.txt', 10));
+    expect(reopened.cacheHit).toBe(true);
+    expect(given).toEqual(['forever']);
+  });
+
   it('opens a log without a game table the engine rejects', async () => {
     const fake = fakeEngine();
     fake.engine.setChannelSpells = async () => {
@@ -375,6 +420,21 @@ describe('following a log that grows', () => {
 
     expect(fed).toEqual([3 * MiB]);
     expect(result).not.toBeNull();
+  });
+
+  it('gives a log the Forever tables once its growth shows it is a Forever log', async () => {
+    const fake = fakeEngine();
+    const given: string[] = [];
+    fake.engine.setSpellClasses = async (_, game) => void given.push(game);
+    fake.engine.refreshIndex = async (logId) => ({ ...view(logId), game: { kind: 'forever' } });
+    const api = createClient({ engine: () => fake.engine, dungeons: async () => null, channelSpells: async () => null, spellClasses: async () => '{}', db: memoryDatabase(), now: () => 1 });
+    const log = growable('today.txt', 0);
+    await api.openLog(log);
+
+    log.grow(10);
+    await api.followLog('today.txt', false);
+
+    expect(given).toEqual(['retail', 'forever']);
   });
 
   it('feeds each appended byte once, also when later refreshes find no growth', async () => {

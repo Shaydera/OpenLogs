@@ -1,8 +1,8 @@
 //! Hits the real services. `cargo test -p openlogs-gamedata --test online -- --ignored`
 
 use openlogs_gamedata::{
-    HttpFetch, download_boss_portraits, download_dungeons, download_map_art,
-    download_spell_classes, download_spell_tables,
+    HttpFetch, download_boss_portraits, download_dungeons, download_forever_tables,
+    download_map_art, download_spell_classes, download_spell_tables,
 };
 
 #[test]
@@ -62,4 +62,20 @@ fn wago_tools_provides_every_table() {
     let sszorak_room = map_art.maps[&2609];
     assert_eq!((sszorak_room.zone, sszorak_room.floor), (16915, Some(3)));
     assert_eq!(map_art.pins[&3420].ui_map_id, 2609, "Sszorak has a pin");
+}
+
+#[test]
+#[ignore = "needs network access to wago.tools"]
+fn wago_tools_provides_the_forever_tables() {
+    let tables = download_forever_tables(&HttpFetch::for_bulk_data()).unwrap();
+    assert!(tables.build.starts_with("1."), "got build {}", tables.build);
+    assert!(
+        tables.spells.icons.icon(5487).is_some(),
+        "Bear Form has an icon"
+    );
+    assert!(
+        tables.classes.class_spell_count() > 1_000,
+        "got {} class spells",
+        tables.classes.class_spell_count()
+    );
 }

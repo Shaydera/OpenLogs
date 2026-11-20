@@ -8,7 +8,7 @@ import { THEMES, type ThemeName } from '../theme';
 import { effectiveScale, SCALE_AT_BASE, UI_SIZES } from '../uiScale';
 import { useAutoScale } from '../hooks/useAutoScale';
 
-const TABLES: { key: keyof Omit<GameDataManifest, 'fetchedUnixMs'>; name: MessageKey; entries: MessageKey }[] = [
+const TABLES: { key: keyof Omit<GameDataManifest, 'fetchedUnixMs' | 'forever'>; name: MessageKey; entries: MessageKey }[] = [
   { key: 'spellIcons', name: 'settings.spellIcons', entries: 'settings.entries.spellIcons' },
   { key: 'channelSpells', name: 'settings.channelSpells', entries: 'settings.entries.spellIcons' },
   { key: 'dungeons', name: 'settings.dungeons', entries: 'settings.entries.dungeons' },

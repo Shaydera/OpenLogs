@@ -29,11 +29,12 @@ pub use curated::{
     RAID_FRAME_AURAS_FILE, RaidFrameAura, RaidFrameAuras,
 };
 pub use download::{
-    DownloadError, SpellTables, WAGO_AREA_TABLE_URL, WAGO_DUNGEON_ENCOUNTER_URL,
-    WAGO_JOURNAL_ENCOUNTER_CREATURE_URL, WAGO_JOURNAL_ENCOUNTER_URL, WAGO_MANIFEST_URL,
-    WAGO_MAP_CHALLENGE_MODE_URL, WAGO_MAP_URL, WAGO_SPELL_CLASS_OPTIONS_URL, WAGO_SPELL_EFFECT_URL,
-    WAGO_SPELL_MISC_URL, WAGO_UI_MAP_ASSIGNMENT_URL, WAGO_UI_MAP_GROUP_MEMBER_URL,
-    download_boss_portraits, download_dungeons, download_map_art, download_spell_classes,
+    DownloadError, FOREVER_PRODUCT, ForeverTables, SpellTables, WAGO_AREA_TABLE_URL,
+    WAGO_DUNGEON_ENCOUNTER_URL, WAGO_JOURNAL_ENCOUNTER_CREATURE_URL, WAGO_JOURNAL_ENCOUNTER_URL,
+    WAGO_LATEST_BUILDS_URL, WAGO_MANIFEST_URL, WAGO_MAP_CHALLENGE_MODE_URL, WAGO_MAP_URL,
+    WAGO_SPELL_CLASS_OPTIONS_URL, WAGO_SPELL_EFFECT_URL, WAGO_SPELL_MISC_URL,
+    WAGO_UI_MAP_ASSIGNMENT_URL, WAGO_UI_MAP_GROUP_MEMBER_URL, download_boss_portraits,
+    download_dungeons, download_forever_tables, download_map_art, download_spell_classes,
     download_spell_tables,
 };
 pub use dungeons::{Dungeon, DungeonBoss, DungeonTable, DungeonTableError, KeyTimer};

@@ -1,6 +1,6 @@
 use openlogs_gamedata::DungeonTable;
 use openlogs_parser::Timestamp;
-use openlogs_wasm::Engine;
+use openlogs_wasm::{DataGame, Engine};
 use serde_json::{Value, json};
 
 const FIXTURE: &str = include_str!("../../openlogs-index/tests/fixtures/mini_raid.txt");
@@ -896,6 +896,66 @@ fn a_run_opens_like_a_pull_with_boss_phases_and_no_boss_hp() {
     );
 }
 
+/// The class each player of the open-world log's combat pull takes from their casts.
+fn classes_from_casts(engine: Engine, log: &str) -> (Value, Value) {
+    let (mut engine, view) = open_with(engine, log);
+    let pull = view["fights"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| !f["combat"].is_null())
+        .unwrap()["index"]
+        .as_u64()
+        .unwrap() as u32;
+    load(&mut engine, log, pull);
+    let report = call(
+        &engine,
+        "damage_done_report",
+        json!({ "fightIndex": pull, "filter": whole_pull() }),
+    );
+    let class_of = |name: &str| {
+        report["roster"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["name"] == name)
+            .unwrap()["classId"]
+            .clone()
+    };
+    (
+        class_of("Ravel-Ashwood-Normal-EU"),
+        class_of("Brakk-Thornfield-Normal-EU"),
+    )
+}
+
+#[test]
+fn a_log_reads_the_spell_classes_of_its_own_game() {
+    const FOREVER: &str =
+        include_str!("../../openlogs-index/tests/fixtures/forever_open_world.txt");
+    let retail = FOREVER.replacen("PROJECT_ID,18", "PROJECT_ID,1", 1);
+    let rogue_and_warrior = r#"{"classSpells":[100,1657],"crowdControl":[],"families":[4,8]}"#;
+    let warrior_and_rogue = r#"{"classSpells":[100,1657],"crowdControl":[],"families":[8,4]}"#;
+    let engine = |retail_table: &str, forever_table: &str| {
+        let mut engine = Engine::default();
+        engine
+            .set_spell_classes(DataGame::Retail, retail_table)
+            .unwrap();
+        engine
+            .set_spell_classes(DataGame::Forever, forever_table)
+            .unwrap();
+        engine
+    };
+
+    assert_eq!(
+        classes_from_casts(engine(warrior_and_rogue, rogue_and_warrior), FOREVER),
+        (json!(4), json!(1))
+    );
+    assert_eq!(
+        classes_from_casts(engine(rogue_and_warrior, warrior_and_rogue), &retail),
+        (json!(4), json!(1))
+    );
+}
+
 #[test]
 fn players_without_a_spec_take_the_class_of_their_casts() {
     const OPEN_WORLD: &str =
@@ -904,7 +964,7 @@ fn players_without_a_spec_take_the_class_of_their_casts() {
     let charge_and_sinister_strike =
         r#"{"classSpells":[100,1657],"crowdControl":[],"families":[4,8]}"#;
     engine
-        .set_spell_classes(charge_and_sinister_strike)
+        .set_spell_classes(DataGame::Forever, charge_and_sinister_strike)
         .unwrap();
     let (mut engine, view) = open_with(engine, OPEN_WORLD);
     let pull = view["fights"]

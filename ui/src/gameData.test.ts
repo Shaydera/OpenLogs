@@ -47,4 +47,69 @@ describe('game data tables', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(mapArtRequests(), 'a loaded table is kept').toBe(2);
   });
+
+  it('asks for no Forever table when the export has none', async () => {
+    const requested: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        requested.push(url);
+        if (url.includes('manifest.json')) return json('{"fetchedUnixMs":1}');
+        return json('{}');
+      }),
+    );
+    const { spellClassesJson } = await import('./gameData');
+
+    expect(await spellClassesJson('forever')).toBeNull();
+    expect(requested.filter((url) => url.includes('forever/'))).toEqual([]);
+  });
+
+  it('reads the Forever tables from their own directory', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('manifest.json')) return json('{"fetchedUnixMs":1,"forever":{"build":"1.60.1.71037","spellIcons":1,"channelSpells":1,"spellClasses":1}}');
+        if (url.includes('forever/spell-classes.json')) return json('forever classes');
+        if (url.includes('spell-classes.json')) return json('retail classes');
+        return new Response('', { status: 404 });
+      }),
+    );
+    const { spellClassesJson } = await import('./gameData');
+
+    expect(await spellClassesJson('forever')).toBe('forever classes');
+    expect(await spellClassesJson('retail')).toBe('retail classes');
+  });
+
+  it('shows the spell icons of the game of the open log', async () => {
+    const icons = (name: string) => json(JSON.stringify({ ids: [5487], icons: [0], names: [name] }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('manifest.json')) return json('{"fetchedUnixMs":1,"forever":{"build":"1.60.1.71037","spellIcons":1,"channelSpells":1,"spellClasses":1}}');
+        if (url.includes('forever/spell-icons.json')) return icons('ability_racial_bearform');
+        if (url.includes('spell-icons.json')) return icons('retail_icon');
+        return new Response('', { status: 404 });
+      }),
+    );
+    const { setCurrentGame } = await import('./currentGame');
+    const { iconTables, loadIconTables, spellIconName, subscribeIconTables } = await import('./gameData');
+    const bearForm = () => {
+      const spells = iconTables().spells;
+      return spells && spellIconName(spells, 5487);
+    };
+    const notified = vi.fn();
+    subscribeIconTables(notified);
+
+    setCurrentGame({ kind: 'forever' });
+    loadIconTables();
+    await vi.waitFor(() => expect(bearForm()).toBe('ability_racial_bearform'));
+
+    notified.mockClear();
+    setCurrentGame({ kind: 'retail' });
+    expect(notified).toHaveBeenCalled();
+    await vi.waitFor(() => expect(bearForm()).toBe('retail_icon'));
+
+    setCurrentGame({ kind: 'forever' });
+    expect(bearForm(), 'a loaded table is shown again at once').toBe('ability_racial_bearform');
+  });
 });

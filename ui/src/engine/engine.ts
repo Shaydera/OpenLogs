@@ -1,4 +1,5 @@
 import type { LogView } from '../api/types';
+import type { DataGame } from '../gameData';
 import type { EngineMethod, EngineRequest, EngineResponse } from './protocol';
 
 /** The analysis engine (Rust, as WebAssembly) in its Web Worker. It holds one log at a time. */
@@ -8,9 +9,9 @@ export interface Engine {
   /** The Mythic+ dungeon table, which decides run results and key timers. */
   setDungeons(json: string): Promise<void>;
   /** The spells the game channels, which draw as channels where the log has no channel aura. */
-  setChannelSpells(json: string): Promise<void>;
+  setChannelSpells(json: string, game: DataGame): Promise<void>;
   /** Which spells belong to a player class and which of those are crowd control. */
-  setSpellClasses(json: string): Promise<void>;
+  setSpellClasses(json: string, game: DataGame): Promise<void>;
   beginIndex(): Promise<void>;
   /** Takes ownership of `bytes`, which are empty afterwards; resolves to how many it took. */
   feed(bytes: Uint8Array): Promise<number>;
@@ -77,8 +78,8 @@ export function workerEngine(): Engine {
   return {
     indexFormatVersion: () => send('index_format_version'),
     setDungeons: (json) => send('set_dungeons', [json]),
-    setChannelSpells: (json) => send('set_channel_spells', [json]),
-    setSpellClasses: (json) => send('set_spell_classes', [json]),
+    setChannelSpells: (json, game) => send('set_channel_spells', [json, game]),
+    setSpellClasses: (json, game) => send('set_spell_classes', [json, game]),
     beginIndex: () => send('begin_index'),
     feed: async (bytes) => {
       const { length } = bytes;
