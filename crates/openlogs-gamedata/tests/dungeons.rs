@@ -1,6 +1,6 @@
 //! The dungeon table from trimmed real wago.tools exports.
 
-use openlogs_gamedata::{DungeonBoss, DungeonTable, DungeonTableError, KeyTimer};
+use openlogs_gamedata::{DungeonBoss, DungeonTable, DungeonTableError, KeyTimer, MissingColumn};
 
 const MAP_CHALLENGE_MODE: &[u8] = include_bytes!("fixtures/MapChallengeMode.csv");
 const DUNGEON_ENCOUNTER: &[u8] = include_bytes!("fixtures/DungeonEncounter.csv");
@@ -115,7 +115,7 @@ fn time_limits_need_a_falling_ladder_and_decide_the_timer() {
 fn unusable_exports_are_rejected() {
     assert!(matches!(
         DungeonTable::from_csv(MAP_CHALLENGE_MODE, b"<!DOCTYPE html>\n"),
-        Err(DungeonTableError::MissingColumn("ID"))
+        Err(DungeonTableError::MissingColumn(MissingColumn("ID")))
     ));
     assert!(matches!(
         DungeonTable::from_csv(KEYS_HEADER.as_bytes(), ENCOUNTERS_HEADER.as_bytes()),

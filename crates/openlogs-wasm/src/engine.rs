@@ -2,10 +2,10 @@ use std::collections::BTreeSet;
 
 use openlogs_analysis::{
     Actors, Fight, LANDED_MATCH_MS, assign_talent_specs, infer_classes, load_fight_slice,
-    load_fight_slice_with,
+    load_fight_slice_with, note_roster_talents,
 };
 use openlogs_gamedata::{ChannelSpells, Curated, DungeonTable, SpellClasses, TalentTrees};
-use openlogs_index::{FightSummary, GameFlavor, Indexer, LogIndex};
+use openlogs_index::{DataGame, FightSummary, GameFlavor, Indexer, LogIndex};
 use openlogs_service::auras_dto::AuraKindDto;
 use openlogs_service::casts_dto::CastsReportDto;
 use openlogs_service::log_dto::log_view;
@@ -25,32 +25,6 @@ use serde_json::Value;
 
 /// Pulls kept loaded: the shown pull and the one it is compared with.
 const LOADED_PULLS: usize = 2;
-
-/// The games with spell tables of their own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DataGame {
-    Retail,
-    Forever,
-}
-
-impl DataGame {
-    /// Forever has its own tables; every other game reads retail's. The app follows the same
-    /// rule (`dataGameOf`).
-    pub fn of(flavor: Option<GameFlavor>) -> Self {
-        match flavor {
-            Some(GameFlavor::Forever) => Self::Forever,
-            _ => Self::Retail,
-        }
-    }
-
-    pub fn from_name(name: &str) -> Result<Self, String> {
-        match name {
-            "retail" => Ok(Self::Retail),
-            "forever" => Ok(Self::Forever),
-            _ => Err(format!("No game data for the game {name}")),
-        }
-    }
-}
 
 #[derive(Default)]
 struct GameTables {
@@ -225,7 +199,7 @@ impl Engine {
     ) -> Result<(), String> {
         let summary = self.summary(fight_index)?.clone();
         let mut fight = load_fight_slice(part, base_offset, &summary);
-        ready_for_reports(&mut fight, self.index.flavor, self.tables());
+        ready_for_reports(&mut fight, &summary, &self.index, self.tables());
         self.fights.retain(|pulled| pulled.index != fight_index);
         self.fights.insert(
             0,
@@ -277,7 +251,7 @@ impl Engine {
         let mut fight =
             load_fight_slice_with(part, base_offset, summary, pass.actors.carried_over());
         let tables = self.spell_tables.of_flavor(self.index.flavor);
-        ready_for_reports(&mut fight, self.index.flavor, tables);
+        ready_for_reports(&mut fight, summary, &self.index, tables);
         let mut cuts = PullCuts::new(&fight);
         for command in &mut pass.commands {
             command.add(fight_index, &fight, &self.curated, &mut cuts);
@@ -541,9 +515,15 @@ struct LoadedPull {
     summary: FightSummary,
 }
 
-fn ready_for_reports(fight: &mut Fight, flavor: Option<GameFlavor>, tables: &GameTables) {
-    fight.flavor = flavor;
+fn ready_for_reports(
+    fight: &mut Fight,
+    summary: &FightSummary,
+    index: &LogIndex,
+    tables: &GameTables,
+) {
+    fight.flavor = index.flavor;
     if !tables.talent_trees.is_empty() {
+        note_roster_talents(fight, summary, index);
         assign_talent_specs(fight, &tables.talent_trees);
     }
     infer_classes(fight, &tables.spell_classes);

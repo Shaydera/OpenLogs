@@ -10,6 +10,9 @@ export interface BossProgress {
 }
 
 /** The game a log comes from (mirrors `GameDto`). */
+/** The games with game data of their own; every other game reads retail's. */
+export type DataGame = 'retail' | 'forever';
+
 export type Game = { kind: 'retail' } | { kind: 'classicEra' } | { kind: 'forever' } | { kind: 'other'; projectId: number };
 
 /** A completed key against its time limits (mirrors `TimerDto`). */
@@ -79,6 +82,8 @@ export interface LogView {
   build: string | null;
   /** `null` for logs whose header names no project. */
   game: Game | null;
+  /** The game data the log's game reads. */
+  dataGame: DataGame;
   advancedLogging: boolean;
   brokenLines: number;
   /** Unreadable lines by event name; lines without a readable name count only in `brokenLines`. */

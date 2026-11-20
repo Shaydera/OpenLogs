@@ -53,6 +53,8 @@ pub struct IndexBuilder {
     zone_difficulty: u32,
     /// Spec of each player's latest `COMBATANT_INFO`, by GUID.
     last_specs: HashMap<String, KnownSpec>,
+    /// Position of each talent list in the index's `talent_sets`.
+    talent_set_ids: HashMap<Vec<(u32, u32)>, u32>,
     markers: MarkerState,
     /// Latest bounds per `MAP_CHANGE` map ID; facts about the map, so never reset.
     map_bounds: BTreeMap<u32, MapBounds>,
@@ -85,6 +87,7 @@ impl IndexBuilder {
             zone_instance_id: 0,
             zone_difficulty: 0,
             last_specs: HashMap::new(),
+            talent_set_ids: HashMap::new(),
             markers: MarkerState::default(),
             map_bounds: BTreeMap::new(),
             last_index: 0,
@@ -177,11 +180,8 @@ impl IndexBuilder {
             Event::CombatantInfo(info) => {
                 let known = KnownSpec {
                     spec_id: info.spec_id,
-                    talents: if self.index.flavor == Some(GameFlavor::Forever) {
-                        info.talents().collect()
-                    } else {
-                        Vec::new()
-                    },
+                    talent_set: (self.index.flavor == Some(GameFlavor::Forever))
+                        .then(|| self.talent_set(info.talents().collect())),
                 };
                 if let Some(fight) = &mut self.open {
                     add_combatant(&mut fight.summary.roster, info.guid, &known);
@@ -329,6 +329,7 @@ impl IndexBuilder {
             warnings: self.index.warnings.clone(),
             fights,
             provisional,
+            talent_sets: self.index.talent_sets.clone(),
         }
     }
 
@@ -912,6 +913,16 @@ impl IndexBuilder {
         }
     }
 
+    fn talent_set(&mut self, talents: Vec<(u32, u32)>) -> u32 {
+        if let Some(&set) = self.talent_set_ids.get(&talents) {
+            return set;
+        }
+        let set = self.index.talent_sets.len() as u32;
+        self.index.talent_sets.push(talents.clone());
+        self.talent_set_ids.insert(talents, set);
+        set
+    }
+
     fn list_combat(&mut self, summary: FightSummary) {
         self.last_combat_end = summary.end_offset;
         self.index.fights.push(summary);
@@ -945,7 +956,7 @@ fn add_combatant(roster: &mut Vec<RosterEntry>, guid: &str, known: &KnownSpec) {
             guid: guid.to_string(),
             name: None,
             spec_id: known.spec_id,
-            talents: known.talents.clone(),
+            talent_set: known.talent_set,
         });
     }
 }

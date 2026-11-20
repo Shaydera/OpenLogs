@@ -34,6 +34,7 @@ function view(id: string, logVersion: number | null = 22): LogView {
     logVersion,
     build: null,
     game: null,
+    dataGame: 'retail',
     advancedLogging: true,
     brokenLines: 0,
     brokenByEvent: {},
@@ -191,7 +192,7 @@ describe('opening logs', () => {
     const given: [string, string][] = [];
     fake.engine.setChannelSpells = async (json, game) => void given.push([json, game]);
     fake.engine.setSpellClasses = async (json, game) => void given.push([json, game]);
-    fake.engine.finishIndex = async (logId) => ({ ...view(logId), game: { kind: logId.startsWith('f') ? 'forever' : 'retail' } });
+    fake.engine.finishIndex = async (logId) => ({ ...view(logId), game: { kind: logId.startsWith('f') ? 'forever' : 'retail' }, dataGame: logId.startsWith('f') ? 'forever' : 'retail' });
     const api = createClient({
       engine: () => fake.engine,
       dungeons: async () => null,
@@ -215,7 +216,7 @@ describe('opening logs', () => {
     const fake = fakeEngine();
     const given: string[] = [];
     fake.engine.setTalentTrees = async (json, game) => void given.push(`${json}:${game}`);
-    fake.engine.finishIndex = async (logId) => ({ ...view(logId), game: { kind: logId.startsWith('f') ? 'forever' : 'retail' } });
+    fake.engine.finishIndex = async (logId) => ({ ...view(logId), game: { kind: logId.startsWith('f') ? 'forever' : 'retail' }, dataGame: logId.startsWith('f') ? 'forever' : 'retail' });
     const api = createClient({
       engine: () => fake.engine,
       dungeons: async () => null,
@@ -234,8 +235,8 @@ describe('opening logs', () => {
   it('gives a Forever log reopened from its stored index the Forever tables', async () => {
     const db = memoryDatabase();
     const forever = (engine: Engine) => {
-      engine.finishIndex = async (logId) => ({ ...view(logId), game: { kind: 'forever' } });
-      engine.restoreIndex = async (_, logId) => ({ ...view(logId), game: { kind: 'forever' }, cacheHit: true });
+      engine.finishIndex = async (logId) => ({ ...view(logId), game: { kind: 'forever' }, dataGame: 'forever' });
+      engine.restoreIndex = async (_, logId) => ({ ...view(logId), game: { kind: 'forever' }, dataGame: 'forever', cacheHit: true });
     };
     const first = fakeEngine();
     forever(first.engine);
@@ -447,7 +448,7 @@ describe('following a log that grows', () => {
     const fake = fakeEngine();
     const given: string[] = [];
     fake.engine.setSpellClasses = async (_, game) => void given.push(game);
-    fake.engine.refreshIndex = async (logId) => ({ ...view(logId), game: { kind: 'forever' } });
+    fake.engine.refreshIndex = async (logId) => ({ ...view(logId), game: { kind: 'forever' }, dataGame: 'forever' });
     const api = createClient({ engine: () => fake.engine, dungeons: async () => null, channelSpells: async () => null, spellClasses: async () => '{}', talentTrees: async () => null, db: memoryDatabase(), now: () => 1 });
     const log = growable('today.txt', 0);
     await api.openLog(log);

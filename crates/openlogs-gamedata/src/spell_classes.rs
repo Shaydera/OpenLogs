@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 
 use thiserror::Error;
 
+use crate::csv_columns::{MissingColumn, column};
+
 /// The player class families of `SpellClassOptions.SpellClassSet` with their class IDs: mage 3,
 /// warrior 4, warlock 5, priest 6, druid 7, rogue 8, hunter and its pets 9, paladin 10, shaman 11,
 /// death knight 15, monk 53, warlock pets 57, demon hunter 107, evoker 224. Not
@@ -32,8 +34,8 @@ const CROWD_CONTROL_AURAS: [u32; 8] = [5, 7, 12, 26, 27, 60, 298, 455];
 pub enum SpellClassesError {
     #[error("CSV error: {0}")]
     Csv(#[from] csv::Error),
-    #[error("CSV is missing the column {0}")]
-    MissingColumn(&'static str),
+    #[error(transparent)]
+    MissingColumn(#[from] MissingColumn),
     #[error("the export lists no class spells")]
     Empty,
     #[error("JSON error: {0}")]
@@ -196,11 +198,4 @@ fn undeltas(deltas: Vec<u32>) -> Vec<u32> {
             id
         })
         .collect()
-}
-
-fn column(headers: &csv::StringRecord, name: &'static str) -> Result<usize, SpellClassesError> {
-    headers
-        .iter()
-        .position(|header| header == name)
-        .ok_or(SpellClassesError::MissingColumn(name))
 }

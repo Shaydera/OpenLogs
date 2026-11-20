@@ -1,6 +1,6 @@
 //! Class and crowd-control spells from trimmed real wago.tools exports.
 
-use openlogs_gamedata::{SpellClasses, SpellClassesError};
+use openlogs_gamedata::{MissingColumn, SpellClasses, SpellClassesError};
 
 const SPELL_CLASS_OPTIONS: &[u8] = include_bytes!("fixtures/SpellClassOptions.csv");
 const SPELL_EFFECT: &[u8] = include_bytes!("fixtures/SpellEffect.csv");
@@ -43,11 +43,15 @@ fn a_class_stun_is_crowd_control_and_a_damage_spell_is_not() {
 fn an_html_page_fails_with_a_missing_column() {
     assert!(matches!(
         SpellClasses::from_csv(b"<!DOCTYPE html>\n", SPELL_EFFECT),
-        Err(SpellClassesError::MissingColumn("SpellClassSet"))
+        Err(SpellClassesError::MissingColumn(MissingColumn(
+            "SpellClassSet"
+        )))
     ));
     assert!(matches!(
         SpellClasses::from_csv(SPELL_CLASS_OPTIONS, b"<!DOCTYPE html>\n"),
-        Err(SpellClassesError::MissingColumn("EffectAura"))
+        Err(SpellClassesError::MissingColumn(MissingColumn(
+            "EffectAura"
+        )))
     ));
 }
 

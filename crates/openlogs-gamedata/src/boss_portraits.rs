@@ -6,6 +6,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use thiserror::Error;
 
+use crate::csv_columns::{MissingColumn, column};
+
 use crate::icon_name::{icon_name_from_file, is_valid_icon_name};
 
 /// The journal's generic silhouette: a boss without its own portrait gets the monogram instead.
@@ -17,8 +19,8 @@ const PORTRAIT_PREFIX: &str = "ui-ej-boss-";
 pub enum BossPortraitError {
     #[error("CSV error: {0}")]
     Csv(#[from] csv::Error),
-    #[error("CSV is missing the column {0}")]
-    MissingColumn(&'static str),
+    #[error(transparent)]
+    MissingColumn(#[from] MissingColumn),
     #[error("the exports hold no boss portrait")]
     Empty,
 }
@@ -146,11 +148,4 @@ fn read_portrait_files(manifest: &[u8]) -> Result<HashMap<u32, String>, BossPort
         }
     }
     Ok(files)
-}
-
-fn column(headers: &csv::StringRecord, name: &'static str) -> Result<usize, BossPortraitError> {
-    headers
-        .iter()
-        .position(|header| header == name)
-        .ok_or(BossPortraitError::MissingColumn(name))
 }

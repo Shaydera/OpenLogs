@@ -3,6 +3,7 @@
 
 mod boss_portraits;
 mod channel_spells;
+mod csv_columns;
 mod curated;
 mod download;
 mod dungeons;
@@ -18,6 +19,7 @@ mod talent_trees;
 
 pub use boss_portraits::{BossPortraitError, BossPortraitTable};
 pub use channel_spells::{ChannelSpellError, ChannelSpells};
+pub use csv_columns::MissingColumn;
 pub use curated::{
     ARENA_FRAMES_DIR, ArenaFrame, BOSS_EFFECTS_DIR, BossEffects, CONSUMABLES_FILE, Consumable,
     ConsumableKind, ConsumableList, CooldownCategory, CooldownList, CooldownSpell, Curated,

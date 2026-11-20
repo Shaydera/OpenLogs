@@ -56,7 +56,9 @@ export function followUpdate(before: FightRow[], after: FightRow[], view: View, 
   const present = new Set(after.map((fight) => fight.index));
   const shownVanished = view.kind === 'fight' && jumpTo === null && known.has(view.fightIndex) && !present.has(view.fightIndex);
 
-  const unchanged = new Set(after.filter((fight) => !isNew(fight)).map((fight) => fight.index));
+  // A pull that joined a run on a revisit is no new pull, but it leaves any set it was in.
+  const regrouped = (fight: FightRow) => known.get(fight.index)?.runIndex !== fight.runIndex;
+  const unchanged = new Set(after.filter((fight) => !isNew(fight) && !regrouped(fight)).map((fight) => fight.index));
   return { jumpTo, set: view.kind === 'set' ? grownSet(view.set, unchanged, arrived) : null, shownVanished, reload };
 }
 

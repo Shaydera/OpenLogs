@@ -4,7 +4,7 @@ use openlogs_parser::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// Bumped whenever the index layout or its rules change; invalidates cached indexes.
-pub const INDEX_FORMAT_VERSION: u32 = 18;
+pub const INDEX_FORMAT_VERSION: u32 = 19;
 /// The combat log format this tool is built and tested against.
 pub const SUPPORTED_LOG_VERSION: u32 = 22;
 /// Lookback before `ENCOUNTER_START` that belongs to a fight (pre-pots, pre-casts).
@@ -75,6 +75,32 @@ impl GameFlavor {
     }
 }
 
+/// The games with game data of their own: spell tables, and Forever's talent trees.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DataGame {
+    Retail,
+    Forever,
+}
+
+impl DataGame {
+    /// Forever has its own game data; every other game reads retail's.
+    pub fn of(flavor: Option<GameFlavor>) -> Self {
+        match flavor {
+            Some(GameFlavor::Forever) => Self::Forever,
+            _ => Self::Retail,
+        }
+    }
+
+    pub fn from_name(name: &str) -> Result<Self, String> {
+        match name {
+            "retail" => Ok(Self::Retail),
+            "forever" => Ok(Self::Forever),
+            _ => Err(format!("No game data for the game {name}")),
+        }
+    }
+}
+
 /// Difficulty ID of Mythic+ (Mythic Keystone) dungeons; run entries carry it too.
 pub const MYTHIC_KEYSTONE_DIFFICULTY: u32 = 8;
 /// Difficulties whose visit is a dungeon run: Normal, Heroic, Mythic, Timewalking, Follower.
@@ -104,9 +130,20 @@ pub struct LogIndex {
     /// still being written: the open run, a left run and the entries after it that may join it.
     #[serde(default)]
     pub provisional: Vec<u32>,
+    /// `(node, rank)` talent lists, each once; roster entries refer to them by position.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub talent_sets: Vec<Vec<(u32, u32)>>,
 }
 
 impl LogIndex {
+    /// The `(node, rank)` talents of a roster entry; none when the index kept none.
+    pub fn talents_of(&self, entry: &RosterEntry) -> &[(u32, u32)] {
+        entry
+            .talent_set
+            .and_then(|set| self.talent_sets.get(set as usize))
+            .map_or(&[], Vec::as_slice)
+    }
+
     pub fn empty() -> Self {
         Self {
             format_version: INDEX_FORMAT_VERSION,
@@ -121,6 +158,7 @@ impl LogIndex {
             warnings: Vec::new(),
             fights: Vec::new(),
             provisional: Vec::new(),
+            talent_sets: Vec::new(),
         }
     }
 }
@@ -274,9 +312,10 @@ pub struct RosterEntry {
     /// `None` if the player never appeared in a combat event during the fight.
     pub name: Option<String>,
     pub spec_id: u32,
-    /// `(node, rank)` of each talent; kept for Forever only, whose spec comes from them.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub talents: Vec<(u32, u32)>,
+    /// Position of the player's talents in [`LogIndex::talent_sets`]; kept for Forever only,
+    /// whose spec comes from them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub talent_set: Option<u32>,
 }
 
 /// Display name of a difficulty ID; `None` for unknown IDs, which are shown raw.

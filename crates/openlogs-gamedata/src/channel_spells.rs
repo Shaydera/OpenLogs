@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use thiserror::Error;
 
+use crate::csv_columns::{MissingColumn, column};
+
 /// `SPELL_ATTR1_IS_CHANNELLED` and `SPELL_ATTR1_IS_SELF_CHANNELLED` of `SpellMisc.Attributes_1`.
 const CHANNEL_ATTRIBUTES: u32 = 0x4 | 0x40;
 
@@ -9,8 +11,8 @@ const CHANNEL_ATTRIBUTES: u32 = 0x4 | 0x40;
 pub enum ChannelSpellError {
     #[error("CSV error: {0}")]
     Csv(#[from] csv::Error),
-    #[error("CSV is missing the column {0}")]
-    MissingColumn(&'static str),
+    #[error(transparent)]
+    MissingColumn(#[from] MissingColumn),
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -114,11 +116,4 @@ impl ChannelSpells {
             .collect();
         Ok(Self { ids })
     }
-}
-
-fn column(headers: &csv::StringRecord, name: &'static str) -> Result<usize, ChannelSpellError> {
-    headers
-        .iter()
-        .position(|header| header == name)
-        .ok_or(ChannelSpellError::MissingColumn(name))
 }

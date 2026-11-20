@@ -3,6 +3,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::csv_columns::{MissingColumn, column};
+
 use crate::specs::Role;
 use crate::spell_icons::{SpellIconError, read_icon_files};
 
@@ -16,8 +18,8 @@ const COLUMN_STARTS: [i64; 2] = [4000, 8000];
 pub enum TalentTreesError {
     #[error("CSV error: {0}")]
     Csv(#[from] csv::Error),
-    #[error("CSV is missing the column {0}")]
-    MissingColumn(&'static str),
+    #[error(transparent)]
+    MissingColumn(#[from] MissingColumn),
     #[error("{0}")]
     Icons(#[from] SpellIconError),
     #[error("JSON error: {0}")]
@@ -121,7 +123,7 @@ impl TalentTrees {
                     let (node, tree) = (u32::try_from(node).ok()?, u32::try_from(tree).ok()?);
                     class_trees
                         .contains(&tree)
-                        .then_some((node, (tree, column(x))))
+                        .then_some((node, (tree, tree_column(x))))
                 })
                 .collect();
         let mut votes: HashMap<(u32, usize), BTreeMap<u32, u32>> = HashMap::new();
@@ -267,7 +269,7 @@ impl TalentTrees {
     }
 }
 
-fn column(x: i64) -> usize {
+fn tree_column(x: i64) -> usize {
     COLUMN_STARTS.iter().filter(|&&start| x >= start).count()
 }
 
@@ -280,7 +282,7 @@ fn class_of_mask(mask: u32) -> Option<u32> {
 fn classic_talent_tabs(talent: &[u8]) -> Result<HashMap<u32, u32>, TalentTreesError> {
     let mut reader = csv::Reader::from_reader(talent);
     let headers = reader.headers()?.clone();
-    let tab_col = column_of(&headers, "TabID")?;
+    let tab_col = column(&headers, "TabID")?;
     let rank_cols: Vec<usize> = headers
         .iter()
         .enumerate()
@@ -308,10 +310,10 @@ fn talent_tabs(talent_tab: &[u8]) -> Result<Vec<(u32, u32, String, u32)>, Talent
     let mut reader = csv::Reader::from_reader(talent_tab);
     let headers = reader.headers()?.clone();
     let cols = [
-        column_of(&headers, "ID")?,
-        column_of(&headers, "ClassMask")?,
-        column_of(&headers, "Name_lang")?,
-        column_of(&headers, "SpellIconID")?,
+        column(&headers, "ID")?,
+        column(&headers, "ClassMask")?,
+        column(&headers, "Name_lang")?,
+        column(&headers, "SpellIconID")?,
     ];
     let mut tabs = Vec::new();
     for record in reader.records() {
@@ -354,7 +356,7 @@ fn signed<const N: usize>(
     let headers = reader.headers()?.clone();
     let mut cols = [0; N];
     for (col, name) in cols.iter_mut().zip(names) {
-        *col = column_of(&headers, name)?;
+        *col = column(&headers, name)?;
     }
     let mut rows = Vec::new();
     for record in reader.records() {
@@ -372,11 +374,4 @@ fn signed<const N: usize>(
         }
     }
     Ok(rows)
-}
-
-fn column_of(headers: &csv::StringRecord, name: &'static str) -> Result<usize, TalentTreesError> {
-    headers
-        .iter()
-        .position(|header| header == name)
-        .ok_or(TalentTreesError::MissingColumn(name))
 }

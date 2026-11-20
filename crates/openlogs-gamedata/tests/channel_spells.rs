@@ -1,4 +1,4 @@
-use openlogs_gamedata::{ChannelSpellError, ChannelSpells};
+use openlogs_gamedata::{ChannelSpellError, ChannelSpells, MissingColumn};
 
 const SPELL_MISC: &str = "ID,Attributes_0,Attributes_1,DifficultyID,SpellID\n\
 1,0,872432772,0,5143\n\
@@ -40,6 +40,8 @@ fn the_web_table_lists_the_ids_in_order_as_differences_and_reads_back() {
     assert_eq!(ChannelSpells::from_json(&json).unwrap(), table());
     assert!(matches!(
         ChannelSpells::from_csv(b"ID,DifficultyID,SpellID\n1,0,5\n"),
-        Err(ChannelSpellError::MissingColumn("Attributes_1"))
+        Err(ChannelSpellError::MissingColumn(MissingColumn(
+            "Attributes_1"
+        )))
     ));
 }

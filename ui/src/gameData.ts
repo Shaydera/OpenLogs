@@ -1,5 +1,5 @@
-import type { Game, MapArtTable } from './api/types';
-import { currentGame, subscribeCurrentGame } from './currentGame';
+import type { DataGame, MapArtTable } from './api/types';
+import { currentDataGame, subscribeCurrentGame } from './currentGame';
 
 /** Game data shipped next to the app in `game-data/`, written by `openlogs-cli export-game-data`. */
 export interface GameDataManifest {
@@ -16,14 +16,6 @@ export interface GameDataManifest {
   mapArt?: number;
   /** The spell tables of the Forever build, in `forever/`; absent in an export made before them. */
   forever?: { build: string; spellIcons: number; channelSpells: number; spellClasses: number; talentTrees?: number };
-}
-
-/** The games with spell tables of their own. */
-export type DataGame = 'retail' | 'forever';
-
-/** Forever has its own tables; every other game reads retail's. The engine follows the same rule (`DataGame::of`). */
-export function dataGameOf(game: Game | null): DataGame {
-  return game?.kind === 'forever' ? 'forever' : 'retail';
 }
 
 /** Spell ID → icon name, as sorted parallel arrays. */
@@ -122,7 +114,7 @@ const listeners = new Set<() => void>();
 const nextAttempt = new Map<string, number>();
 
 function publish() {
-  tables = { spells: spellIcons[dataGameOf(currentGame())], portraits, mapArt };
+  tables = { spells: spellIcons[currentDataGame()], portraits, mapArt };
   listeners.forEach((listener) => listener());
 }
 
@@ -140,7 +132,7 @@ function loadTable(table: string, loaded: boolean, read: () => Promise<string | 
 
 /** Components re-render through `subscribeIconTables` when the tables arrive or the open log's game changes. */
 export function loadIconTables() {
-  const game = dataGameOf(currentGame());
+  const game = currentDataGame();
   loadTable(`spells:${game}`, spellIcons[game] !== null, () => tableText('spell-icons.json', game), (text) => {
     spellIcons[game] = decodeSpellIcons(JSON.parse(text));
   });

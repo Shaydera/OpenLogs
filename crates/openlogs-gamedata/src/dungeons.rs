@@ -6,6 +6,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::csv_columns::{MissingColumn, column};
+
 /// `DungeonEncounter.DifficultyID` of a row that holds on every difficulty.
 const ANY_DIFFICULTY: u32 = 0;
 /// `DungeonEncounter.DifficultyID` of Mythic Keystone, the difficulty of M+ boss pulls.
@@ -22,8 +24,8 @@ const IGNORED_ENCOUNTERS: [u32; 1] = [3463];
 pub enum DungeonTableError {
     #[error("CSV error: {0}")]
     Csv(#[from] csv::Error),
-    #[error("CSV is missing the column {0}")]
-    MissingColumn(&'static str),
+    #[error(transparent)]
+    MissingColumn(#[from] MissingColumn),
     #[error("stored dungeon table is invalid: {0}")]
     Stored(#[from] serde_json::Error),
     #[error("the export holds no dungeon with a boss list")]
@@ -254,11 +256,4 @@ fn time_limits(criteria: [u32; 3]) -> Vec<u32> {
         limits.push(limit);
     }
     limits
-}
-
-fn column(headers: &csv::StringRecord, name: &'static str) -> Result<usize, DungeonTableError> {
-    headers
-        .iter()
-        .position(|header| header == name)
-        .ok_or(DungeonTableError::MissingColumn(name))
 }

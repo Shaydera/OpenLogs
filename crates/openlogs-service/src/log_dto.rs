@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use openlogs_analysis::{BossProgress, run_result};
 use openlogs_gamedata::{DungeonTable, KeyTimer};
-use openlogs_index::{FightSummary, GameFlavor, LogIndex, Outcome, difficulty_label};
+use openlogs_index::{DataGame, FightSummary, GameFlavor, LogIndex, Outcome, difficulty_label};
 use openlogs_parser::Timestamp;
 use serde::Serialize;
 
@@ -160,6 +160,8 @@ pub struct LogView {
     pub log_version: Option<u32>,
     pub build: Option<String>,
     pub game: Option<GameDto>,
+    /// The game data the log's game reads.
+    pub data_game: DataGame,
     pub advanced_logging: bool,
     pub broken_lines: u64,
     pub broken_by_event: BTreeMap<String, u64>,
@@ -239,6 +241,7 @@ pub fn log_view(
         log_version: index.log_version,
         build: index.build.clone(),
         game: index.flavor.map(Into::into),
+        data_game: DataGame::of(index.flavor),
         advanced_logging: index.advanced_logging,
         broken_lines: index.broken_lines,
         broken_by_event: index.broken_by_event.clone(),

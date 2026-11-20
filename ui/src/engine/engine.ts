@@ -1,5 +1,5 @@
 import type { LogView } from '../api/types';
-import type { DataGame } from '../gameData';
+import type { DataGame } from '../api/types';
 import type { EngineMethod, EngineRequest, EngineResponse } from './protocol';
 
 /** The analysis engine (Rust, as WebAssembly) in its Web Worker. It holds one log at a time. */

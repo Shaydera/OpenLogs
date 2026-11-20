@@ -1,17 +1,23 @@
-import type { Game } from './api/types';
+import type { DataGame, Game, LogView } from './api/types';
 
-let game: Game | null = null;
+let log: Pick<LogView, 'game' | 'dataGame'> | null = null;
 const listeners = new Set<() => void>();
 
-/** The game of the open log, which decides how names read and which spell icons show; the store keeps it in step. */
+/** The game of the open log, which decides how names read; the store keeps it in step. */
 export function currentGame(): Game | null {
-  return game;
+  return log?.game ?? null;
+}
+
+/** The game data of the open log, which decides which spell icons show. */
+export function currentDataGame(): DataGame {
+  return log?.dataGame ?? 'retail';
 }
 
 /** Listeners hear only of another game, not of every refresh of the open log. */
-export function setCurrentGame(next: Game | null) {
-  const changed = JSON.stringify(next) !== JSON.stringify(game);
-  game = next;
+export function setCurrentLog(next: Pick<LogView, 'game' | 'dataGame'> | null) {
+  const key = (value: typeof next) => JSON.stringify([value?.game ?? null, value?.dataGame ?? null]);
+  const changed = key(next) !== key(log);
+  log = next;
   if (changed) listeners.forEach((listener) => listener());
 }
 

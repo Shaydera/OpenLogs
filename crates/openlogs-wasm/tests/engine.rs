@@ -1082,6 +1082,14 @@ fn opening_a_forever_open_world_log_lists_its_combat_pull() {
 }
 
 #[test]
+fn a_log_view_names_the_game_data_its_game_reads() {
+    const OPEN_WORLD: &str =
+        include_str!("../../openlogs-index/tests/fixtures/forever_open_world.txt");
+    assert_eq!(open(OPEN_WORLD).1["dataGame"], "forever");
+    assert_eq!(open(FIXTURE).1["dataGame"], "retail");
+}
+
+#[test]
 fn a_forever_log_names_its_players_in_full() {
     const OPEN_WORLD: &str =
         include_str!("../../openlogs-index/tests/fixtures/forever_open_world.txt");

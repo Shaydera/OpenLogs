@@ -5,7 +5,8 @@ mod engine;
 
 use std::cell::RefCell;
 
-pub use engine::{DataGame, Engine};
+pub use engine::Engine;
+pub use openlogs_index::DataGame;
 use wasm_bindgen::prelude::*;
 
 thread_local! {
