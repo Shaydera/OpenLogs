@@ -1,12 +1,18 @@
 import type { PlayerRef, QuickOverview, Role } from '../../api/types';
+import { currentGame } from '../../currentGame';
 import { formatEventTime } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 
 export const ROLE_ORDER: (Role | null)[] = ['tank', 'healer', 'damage', null];
 
-/** "Faelan-Emberfall-EU" → "Faelan"; character names cannot contain hyphens. */
+/**
+ * A player's name from the logged `Name-Realm-Region`: "Faelan-Emberfall-EU" → "Faelan". A Forever name
+ * may itself contain `-`: "Ravel-Ashwood-Normal-EU" → "Ravel Ashwood". Keep in step with the service's
+ * `GameFlavor::player_name`.
+ */
 export function shortName(name: string): string {
-  return name.split('-')[0];
+  const parts = name.split('-');
+  return currentGame()?.kind === 'forever' && parts.length > 2 ? parts.slice(0, -2).join(' ') : parts[0];
 }
 
 export function classColor(token: string | null): string {

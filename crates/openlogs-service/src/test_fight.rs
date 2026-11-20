@@ -48,6 +48,7 @@ pub fn fight(actors: Actors, mut events: Vec<Event>) -> Fight {
         heal_grants: Vec::new(),
         delayed_hits: Vec::new(),
         roster: BTreeSet::new(),
+        flavor: None,
     }
 }
 

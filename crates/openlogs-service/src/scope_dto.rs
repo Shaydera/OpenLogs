@@ -3,6 +3,7 @@ use openlogs_analysis::{
     FilterOption, MissType, Misses, OptionValue, RowKey, Scope, ScopeMetric, Side, SpellId,
     UnitRef,
 };
+use openlogs_index::GameFlavor;
 use serde::{Deserialize, Serialize};
 
 use crate::overview_dto::{PlayerRef, player_ref};
@@ -394,10 +395,6 @@ impl DimensionDto {
     }
 }
 
-fn short(name: &str) -> String {
-    name.split('-').next().unwrap_or(name).to_string()
-}
-
 fn instance_number(fight: &Fight, id: ActorId) -> u32 {
     let name = &fight.actors.get(id).name;
     fight
@@ -416,7 +413,7 @@ pub(crate) fn unit_name(fight: &Fight, unit: &UnitRef) -> (String, Option<u32>) 
                 .get(*id)
                 .name
                 .as_deref()
-                .map(short)
+                .map(|name| GameFlavor::player_name(fight.flavor, name))
                 .unwrap_or_default(),
             None,
         ),

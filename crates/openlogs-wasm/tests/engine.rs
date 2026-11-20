@@ -965,3 +965,25 @@ fn opening_a_forever_open_world_log_lists_its_combat_pull() {
     );
     assert!(report["total"].as_u64().unwrap() > 0);
 }
+
+#[test]
+fn a_forever_log_names_its_players_in_full() {
+    const OPEN_WORLD: &str =
+        include_str!("../../openlogs-index/tests/fixtures/forever_open_world.txt");
+    let (mut engine, view) = open(OPEN_WORLD);
+    let pull = view["fights"][0]["index"].as_u64().unwrap() as u32;
+    load(&mut engine, OPEN_WORLD, pull);
+    let scope = json!({ "perspective": "friendly", "source": [], "target": [], "ability": [] });
+    let breakdown = call(
+        &engine,
+        "breakdown_report",
+        json!({ "fightIndex": pull, "filter": whole_pull(), "scope": scope, "metric": "damageDone", "group": "source" }),
+    );
+    let names: Vec<_> = breakdown["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["name"].as_str().unwrap())
+        .collect();
+    assert!(names.contains(&"Ravel Ashwood"), "{names:?}");
+}

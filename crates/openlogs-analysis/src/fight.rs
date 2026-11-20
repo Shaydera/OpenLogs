@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use openlogs_index::{MapBounds, Outcome};
+use openlogs_index::{GameFlavor, MapBounds, Outcome};
 pub use openlogs_parser::{AuraAction, AuraType, DamageVia};
 
 use crate::actors::{ActorId, ActorKind, Actors, NOBODY};
@@ -56,6 +56,9 @@ pub struct Fight {
     /// The index's roster: players with `COMBATANT_INFO` in a boss pull or run, the players
     /// who fought in a combat pull.
     pub roster: BTreeSet<ActorId>,
+    /// The log's game, which decides how player names are shown; `None` until the caller
+    /// that knows the log sets it.
+    pub flavor: Option<GameFlavor>,
 }
 
 impl Fight {
