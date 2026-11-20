@@ -1,5 +1,5 @@
 import { type Engine, workerEngine } from '../engine/engine';
-import { type DataGame, channelSpellsJson, dataGameOf, dungeonsJson, spellClassesJson } from '../gameData';
+import { type DataGame, channelSpellsJson, dataGameOf, dungeonsJson, spellClassesJson, talentTreesJson } from '../gameData';
 import { t } from '../i18n/i18n';
 import { browserDatabase, type Database } from './db';
 import { fileGone, fileMissing, type LogSource, reopenHandle } from './logSource';
@@ -61,6 +61,7 @@ export interface ClientDeps {
   dungeons: () => Promise<string | null>;
   channelSpells: (game: DataGame) => Promise<string | null>;
   spellClasses: (game: DataGame) => Promise<string | null>;
+  talentTrees: (game: DataGame) => Promise<string | null>;
   db: Database;
   now: () => number;
 }
@@ -83,7 +84,7 @@ async function readSome(source: LogSource, offset: number): Promise<Uint8Array> 
 
 export class SetCancelled extends Error {}
 
-export function createClient({ engine: getEngine, dungeons, channelSpells, spellClasses, db, now }: ClientDeps) {
+export function createClient({ engine: getEngine, dungeons, channelSpells, spellClasses, talentTrees, db, now }: ClientDeps) {
   let current: {
     source: LogSource;
     /** The `openLog` call that opened it; a later one supersedes it. */
@@ -158,6 +159,7 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
   async function loadSpellTables(engine: Engine, game: DataGame) {
     await loadTable(`channelSpells:${game}`, () => channelSpells(game), (json) => engine.setChannelSpells(json, game));
     await loadTable(`spellClasses:${game}`, () => spellClasses(game), (json) => engine.setSpellClasses(json, game));
+    await loadTable(`talentTrees:${game}`, () => talentTrees(game), (json) => engine.setTalentTrees(json, game));
   }
 
   async function index(
@@ -395,6 +397,7 @@ export const api = createClient({
   dungeons: dungeonsJson,
   channelSpells: channelSpellsJson,
   spellClasses: spellClassesJson,
+  talentTrees: talentTreesJson,
   db: browserDatabase,
   now: Date.now,
 });

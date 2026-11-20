@@ -12,6 +12,8 @@ export interface Engine {
   setChannelSpells(json: string, game: DataGame): Promise<void>;
   /** Which spells belong to a player class and which of those are crowd control. */
   setSpellClasses(json: string, game: DataGame): Promise<void>;
+  /** The talent trees a player's spec comes from, in a game without specs. */
+  setTalentTrees(json: string, game: DataGame): Promise<void>;
   beginIndex(): Promise<void>;
   /** Takes ownership of `bytes`, which are empty afterwards; resolves to how many it took. */
   feed(bytes: Uint8Array): Promise<number>;
@@ -80,6 +82,7 @@ export function workerEngine(): Engine {
     setDungeons: (json) => send('set_dungeons', [json]),
     setChannelSpells: (json, game) => send('set_channel_spells', [json, game]),
     setSpellClasses: (json, game) => send('set_spell_classes', [json, game]),
+    setTalentTrees: (json, game) => send('set_talent_trees', [json, game]),
     beginIndex: () => send('begin_index'),
     feed: async (bytes) => {
       const { length } = bytes;

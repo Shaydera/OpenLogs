@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use openlogs_index::{GameFlavor, MapBounds, Outcome};
 pub use openlogs_parser::{AuraAction, AuraType, DamageVia};
@@ -56,6 +56,8 @@ pub struct Fight {
     /// The index's roster: players with `COMBATANT_INFO` in a boss pull or run, the players
     /// who fought in a combat pull.
     pub roster: BTreeSet<ActorId>,
+    /// `(node, rank)` of each player's talents, from `COMBATANT_INFO` in the pull or the index.
+    pub talents: HashMap<ActorId, Vec<(u32, u32)>>,
     /// The log's game, which decides how player names are shown; `None` until the caller
     /// that knows the log sets it.
     pub flavor: Option<GameFlavor>,

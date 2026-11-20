@@ -24,7 +24,7 @@ const report: SetDeaths = {
   ...recapFixture,
   roster: [
     ...recapFixture.roster,
-    { actorId: 8, name: 'Tovric-Emberfall-EU', specId: 71, specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
+    { actorId: 8, name: 'Tovric-Emberfall-EU', specId: 71, specIcon: 'ability_warrior_savageblow', specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
   ],
   deaths: [],
   pulls: [

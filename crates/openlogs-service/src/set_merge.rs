@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::mem::take;
 
 use openlogs_analysis::{
-    ActorId, COLOR_GROUPS, SpellId, TOP_ABILITIES_PER_GROUP, largest_first, per_second, spec_class,
+    ActorId, COLOR_GROUPS, SpellId, TOP_ABILITIES_PER_GROUP, largest_first, per_second,
 };
 use serde::Serialize;
 
@@ -399,12 +399,7 @@ fn merge_rows<T>(
 /// Keeps the later pull's entry unless only an earlier one knows the spec, or without a known
 /// spec the class.
 fn merge_roster(roster: &mut Vec<PlayerRef>, next: Vec<PlayerRef>) {
-    let knowledge = |player: &PlayerRef| {
-        (
-            spec_class(player.spec_id).is_some(),
-            player.class_id.is_some(),
-        )
-    };
+    let knowledge = |player: &PlayerRef| (player.spec_name.is_some(), player.class_id.is_some());
     for player in next {
         match roster
             .iter_mut()
@@ -1418,6 +1413,7 @@ mod tests {
             name: "Ravel-Ashwood-EU".into(),
             spec_id: None,
             spec_name: None,
+            spec_icon: None,
             class_id,
             class_token: class_id.map(|_| "ROGUE".into()),
             role: None,

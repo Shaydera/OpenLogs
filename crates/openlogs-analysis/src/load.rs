@@ -83,6 +83,12 @@ fn apply_roster(fight: &mut Fight, roster: &[RosterEntry]) {
         if entry.spec_id != 0 && fight.actors.get(id).spec_id.is_none() {
             fight.actors.set_spec(id, entry.spec_id);
         }
+        if !entry.talents.is_empty() {
+            fight
+                .talents
+                .entry(id)
+                .or_insert_with(|| entry.talents.clone());
+        }
     }
 }
 
@@ -259,6 +265,7 @@ impl FightBuilder {
                 logger_turned: Vec::new(),
                 heal_grants: Vec::new(),
                 delayed_hits: Vec::new(),
+                talents: HashMap::new(),
                 roster: BTreeSet::new(),
                 flavor: None,
             },
@@ -288,6 +295,7 @@ impl FightBuilder {
             LogEvent::CombatantInfo(info) => {
                 let id = self.fight.actors.intern_guid(info.guid);
                 self.fight.actors.set_spec(id, info.spec_id);
+                self.fight.talents.insert(id, info.talents().collect());
             }
             LogEvent::Combat(event) => {
                 let converted = self.convert(t, event);

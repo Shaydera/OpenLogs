@@ -1,7 +1,7 @@
 // Each test binary uses a different subset of these helpers.
 #![allow(dead_code)]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use openlogs_analysis::{
     ActorId, Actors, Damage, DamageVia, Event, EventKind, Fight, FightKind, Heal, NO_SPELL, NOBODY,
@@ -47,6 +47,7 @@ impl FightBuilder {
                 logger_turned: Vec::new(),
                 heal_grants: Vec::new(),
                 delayed_hits: Vec::new(),
+                talents: HashMap::new(),
                 roster: BTreeSet::new(),
                 flavor: None,
             },

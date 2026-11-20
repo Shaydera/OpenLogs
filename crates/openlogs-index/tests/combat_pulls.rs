@@ -429,6 +429,66 @@ fn combat_pulls_take_the_last_known_spec() {
     );
 }
 
+/// A boss pull with Faelan's combatant info, then a trash pull, logged by `project_id`.
+fn boss_then_trash(project_id: u32) -> String {
+    [
+        &format!("10/7/2026 19:03:00.0000  COMBAT_LOG_VERSION,22,ADVANCED_LOG_ENABLED,1,BUILD_VERSION,1.60.1,PROJECT_ID,{project_id}
+"),
+        "10/7/2026 19:03:02.0762  ENCOUNTER_START,3492,\"Ula'tek\",15,23,3004
+",
+        "10/7/2026 19:03:02.0762  COMBATANT_INFO,Player-4101-8E8C0182,1,100,200,300,400,0,0,0,0,10,10,10,0,92,1025,1025,1025,230,807,110,110,110,2726,1488,[(105722,130451,5),(105724,130453,3)],(0,0,0,0),[(249976,330,(),(7364,0),())],[],57,0,0,0
+",
+        &hit("10/7/2026 19:03:03.0000", &FAELAN, &KNIGHT, 100),
+        "10/7/2026 19:04:02.0762  ENCOUNTER_END,3492,\"Ula'tek\",15,23,0,60000
+",
+        &hit("10/7/2026 19:05:00.0000", &FAELAN, &KNIGHT, 100),
+        &hit("10/7/2026 19:05:01.0000", &KNIGHT, &PYRRIN, 100),
+    ]
+    .concat()
+}
+
+/// Each player's `(node, rank)` talents, by GUID.
+type RosterTalents<'a> = Vec<(&'a str, Vec<(u32, u32)>)>;
+
+fn talents_of_pulls(index: &openlogs_index::LogIndex) -> Vec<RosterTalents<'_>> {
+    index
+        .fights
+        .iter()
+        .map(|fight| {
+            fight
+                .roster
+                .iter()
+                .map(|entry| (entry.guid.as_str(), entry.talents.clone()))
+                .collect()
+        })
+        .collect()
+}
+
+#[test]
+fn a_forever_combat_pull_keeps_the_last_logged_talents() {
+    let index = index_bytes(boss_then_trash(18).as_bytes());
+    let faelan = vec![(105722, 5), (105724, 3)];
+    assert_eq!(
+        talents_of_pulls(&index),
+        [
+            vec![(FAELAN.guid, faelan.clone())],
+            vec![(FAELAN.guid, faelan), (PYRRIN.guid, vec![])],
+        ]
+    );
+}
+
+#[test]
+fn a_retail_index_keeps_no_talents() {
+    let index = index_bytes(boss_then_trash(1).as_bytes());
+    assert!(
+        index
+            .fights
+            .iter()
+            .flat_map(|fight| &fight.roster)
+            .all(|entry| entry.talents.is_empty())
+    );
+}
+
 #[test]
 fn boss_pulls_are_unchanged() {
     let index = index_bytes(MINI_RAID.as_bytes());

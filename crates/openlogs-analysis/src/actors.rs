@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use openlogs_gamedata::Role;
 use openlogs_parser::unit_flags::{
     AFFILIATION_GROUP, CONTROL_NPC, REACTION_FRIENDLY, REACTION_HOSTILE, TYPE_GUARDIAN, TYPE_PET,
 };
@@ -45,6 +46,26 @@ pub struct Actor {
     pub item_level: Option<u32>,
     /// Largest max HP the advanced block reported; players only.
     pub max_hp: Option<u64>,
+    /// The talent tree a player of a game without specs put most points into; see
+    /// [`crate::assign_talent_specs`].
+    pub talent_spec: Option<TalentSpec>,
+}
+
+/// A talent tree as a player's spec, with their role in this pull.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TalentSpec {
+    pub tree_id: u32,
+    pub name: String,
+    pub icon: String,
+    pub role: Role,
+}
+
+/// The spec a player is shown with: their spec, else their talent spec.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShownSpec<'a> {
+    pub name: &'a str,
+    pub icon: &'a str,
+    pub role: Role,
 }
 
 impl Actor {
@@ -65,6 +86,21 @@ impl Actor {
 
     pub fn spec_class(&self) -> Option<u32> {
         spec_class(self.spec_id)
+    }
+
+    pub fn shown_spec(&self) -> Option<ShownSpec<'_>> {
+        match self.spec_id.and_then(openlogs_gamedata::spec) {
+            Some(spec) => Some(ShownSpec {
+                name: &spec.name,
+                icon: &spec.icon,
+                role: spec.role,
+            }),
+            None => self.talent_spec.as_ref().map(|spec| ShownSpec {
+                name: &spec.name,
+                icon: &spec.icon,
+                role: spec.role,
+            }),
+        }
     }
 
     /// Belongs to the logging player's group (mine, party or raid) and is not hostile.
@@ -118,6 +154,7 @@ impl Actors {
                 class_id: None,
                 item_level: None,
                 max_hp: None,
+                talent_spec: None,
             }],
             by_guid: HashMap::new(),
         }
@@ -137,6 +174,7 @@ impl Actors {
             actor.class_id = None;
             actor.item_level = None;
             actor.max_hp = None;
+            actor.talent_spec = None;
         }
         carried
     }
@@ -188,6 +226,7 @@ impl Actors {
             class_id: None,
             item_level: None,
             max_hp: None,
+            talent_spec: None,
         });
         self.by_guid.insert(guid.to_string(), id);
         id
@@ -242,6 +281,10 @@ impl Actors {
 
     pub(crate) fn set_class(&mut self, unit: ActorId, class_id: Option<u32>) {
         self.list[unit as usize].class_id = class_id;
+    }
+
+    pub(crate) fn set_talent_spec(&mut self, unit: ActorId, spec: Option<TalentSpec>) {
+        self.list[unit as usize].talent_spec = spec;
     }
 
     /// Records a player's item level and max HP from an advanced block, keeping the largest.

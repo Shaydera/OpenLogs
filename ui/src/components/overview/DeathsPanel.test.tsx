@@ -23,4 +23,11 @@ describe('DeathsPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Death recap of Faelan' }));
     expect(openDeathRecap).toHaveBeenCalledWith(4, 239_100);
   });
+
+  it('shows the class icon of a player without a known spec', () => {
+    const players = overviewFixture.players.map((p) => (p.actorId === 4 ? { ...p, specId: 1482, specName: null, specIcon: null } : p));
+    render(<DeathsPanel overview={{ ...overviewFixture, players }} />);
+    const faelan = screen.getByRole('button', { name: 'Death recap of Faelan' }).parentElement;
+    expect(faelan?.querySelector('img')?.getAttribute('src')).toMatch(/class\/8$/);
+  });
 });

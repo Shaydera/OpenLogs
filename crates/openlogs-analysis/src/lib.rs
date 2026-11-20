@@ -29,6 +29,7 @@ mod reports;
 mod resources;
 mod run_result;
 mod scope;
+mod talent_specs;
 mod targets;
 mod timeline;
 mod turned;
@@ -36,7 +37,7 @@ mod usage;
 mod views;
 
 pub use ability::{AbilityDetail, AbilityHit, TargetHits, ability_detail};
-pub use actors::{Actor, ActorId, ActorKind, Actors, NOBODY, spec_class};
+pub use actors::{Actor, ActorId, ActorKind, Actors, NOBODY, ShownSpec, TalentSpec, spec_class};
 pub use aura_report::{AuraHolder, AuraLane, AuraRow, AurasReport, SourceSpec, auras_report};
 pub use auras::{AuraInterval, aura_intervals, coverage, union_ms};
 pub use breakdown::{
@@ -98,6 +99,7 @@ pub use resources::{
 };
 pub use run_result::{BossProgress, RunResult, run_result};
 pub use scope::{AbilityRef, Scope, Side, UnitRef, side_of, unit_of};
+pub use talent_specs::assign_talent_specs;
 pub use targets::{
     EnemyGroup, TargetDetail, UnitLife, WAVE_GAP_MS, Wave, enemy_groups, target_detail,
 };

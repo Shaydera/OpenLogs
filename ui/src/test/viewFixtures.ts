@@ -1,9 +1,9 @@
 import type { EventRow, EventsPage, PlayerRef, Timeline, UnitInfo } from '../api/types';
 
 const roster: PlayerRef[] = [
-  { actorId: 3, name: 'Wendel-Emberfall-EU', specId: 71, specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
-  { actorId: 4, name: 'Faelan-Emberfall-EU', specId: 62, specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' },
-  { actorId: 5, name: 'Speronis-Stonevale-EU', specId: 1473, specName: 'Augmentation Evoker', classId: 13, classToken: 'EVOKER', role: 'damage' },
+  { actorId: 3, name: 'Wendel-Emberfall-EU', specId: 71, specIcon: 'ability_warrior_savageblow', specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
+  { actorId: 4, name: 'Faelan-Emberfall-EU', specId: 62, specIcon: 'spell_holy_magicalsentry', specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' },
+  { actorId: 5, name: 'Speronis-Stonevale-EU', specId: 1473, specIcon: 'classicon_evoker_augmentation', specName: 'Augmentation Evoker', classId: 13, classToken: 'EVOKER', role: 'damage' },
 ];
 
 const units: UnitInfo[] = [

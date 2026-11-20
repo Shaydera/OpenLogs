@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { decodeSpellIcons } from './gameData';
-import { bossIcon, classIcon, iconSrc, specIcon, spellIcon } from './icons';
+import { bossIcon, classIcon, iconSrc, spellIcon } from './icons';
 
 const ICONS = 'https://wow.zamimg.com/images/wow/icons/large/';
 
@@ -20,10 +20,9 @@ describe('iconSrc', () => {
     expect(iconSrc(spellIcon(5), { spells: null, portraits: null, mapArt: null }), 'tables still loading').toBeNull();
   });
 
-  it('knows class and spec icons without game data and boss portraits with it', () => {
+  it('knows class icons without game data and boss portraits with it', () => {
     const none = { spells: null, portraits: null, mapArt: null };
     expect(iconSrc(classIcon(8), none)).toBe(`${ICONS}classicon_mage.jpg`);
-    expect(iconSrc(specIcon(62), none)).toBe(`${ICONS}spell_holy_magicalsentry.jpg`);
     expect(iconSrc(bossIcon(3492), tables)).toBe('https://wow.zamimg.com/images/wow/journal/ui-ej-boss-ulatek.png');
     expect(iconSrc(bossIcon(1), tables)).toBeNull();
   });

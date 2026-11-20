@@ -81,7 +81,7 @@ export function stageBounds(data: ReplayData): Bounds | null {
 
 function unitIcon(unit: ReplayUnit, encounterId: number): IconRef | null {
   if (unit.kind === 'boss') return encounterId > 0 ? bossIcon(encounterId) : null;
-  if (unit.specId !== null) return specIcon(unit.specId);
+  if (unit.specIcon !== null) return specIcon(unit.specIcon);
   if (unit.classId !== null && unit.kind === 'player') return classIcon(unit.classId);
   return null;
 }

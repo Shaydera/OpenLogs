@@ -4,18 +4,18 @@ import { type IconTables, iconTables, loadIconTables, spellIconName, subscribeIc
 import { imageUrl } from './imageBase';
 import { MELEE_ICON, type NamedIcon, classIconName, iconPath, portraitPath } from './imagePaths';
 
-/** What a game icon shows: `spell/<id>`, `class/<id>`, `spec/<id>`, `icon/<name>` or `boss/<encounter id>`. */
+/** What a game icon shows: `spell/<id>`, `class/<id>`, `icon/<name>` or `boss/<encounter id>`. */
 export type IconRef = string;
 
 export const spellIcon = (spellId: number): IconRef => `spell/${spellId}`;
 export const classIcon = (classId: number): IconRef => `class/${classId}`;
-export const specIcon = (specId: number): IconRef => `spec/${specId}`;
+/** A spec's icon, by the icon name the service sends with the player. */
+export const specIcon = (icon: string): IconRef => `icon/${icon}`;
 export const namedIcon = (name: NamedIcon): IconRef => `icon/${name}`;
 /** A boss's Encounter Journal portrait; none for encounters without one. */
 export const bossIcon = (encounterId: number): IconRef => `boss/${encounterId}`;
 
 const classTokens = new Map(classesSpecs.classes.map((c) => [c.id, c.token]));
-const specIcons = new Map(classesSpecs.specs.map((s) => [s.id, s.icon]));
 
 /** The image URL of `ref`; `null` when there is none, also while the tables are loading. */
 export function iconSrc(ref: IconRef, tables: IconTables): string | null {
@@ -33,8 +33,6 @@ export function iconSrc(ref: IconRef, tables: IconTables): string | null {
       const token = classTokens.get(Number(value));
       return icon(token && classIconName(token));
     }
-    case 'spec':
-      return icon(specIcons.get(Number(value)));
     case 'icon':
       return icon(value);
     case 'boss': {

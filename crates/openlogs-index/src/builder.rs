@@ -1,11 +1,11 @@
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use openlogs_parser::{
-    ChallengeModeEnd, ChallengeModeStart, CombatEvent, CombatKind, CombatantInfo, EncounterEnd,
-    EncounterStart, Event, LogLine, Timestamp,
+    ChallengeModeEnd, ChallengeModeStart, CombatEvent, CombatKind, EncounterEnd, EncounterStart,
+    Event, LogLine, Timestamp,
 };
 
-use crate::combat::{DeadEnemies, Exchange, OpenCombat, counted_damage, exchange};
+use crate::combat::{DeadEnemies, Exchange, KnownSpec, OpenCombat, counted_damage, exchange};
 use crate::markers::MarkerState;
 use crate::model::{
     BOSS_TAIL_MICROS, ChallengeMode, DUNGEON_DIFFICULTIES, END_GRACE_LINES, END_GRACE_MICROS,
@@ -52,7 +52,7 @@ pub struct IndexBuilder {
     zone_instance_id: u32,
     zone_difficulty: u32,
     /// Spec of each player's latest `COMBATANT_INFO`, by GUID.
-    last_specs: HashMap<String, u32>,
+    last_specs: HashMap<String, KnownSpec>,
     markers: MarkerState,
     /// Latest bounds per `MAP_CHANGE` map ID; facts about the map, so never reset.
     map_bounds: BTreeMap<u32, MapBounds>,
@@ -175,13 +175,21 @@ impl IndexBuilder {
             Event::ChallengeModeStart(_) => {}
             Event::ChallengeModeEnd(end) => self.end_run(end),
             Event::CombatantInfo(info) => {
-                self.last_specs.insert(info.guid.to_string(), info.spec_id);
+                let known = KnownSpec {
+                    spec_id: info.spec_id,
+                    talents: if self.index.flavor == Some(GameFlavor::Forever) {
+                        info.talents().collect()
+                    } else {
+                        Vec::new()
+                    },
+                };
                 if let Some(fight) = &mut self.open {
-                    add_combatant(&mut fight.summary.roster, info);
+                    add_combatant(&mut fight.summary.roster, info.guid, &known);
                 }
                 if let Some(run) = &mut self.run {
-                    add_combatant(&mut run.summary.roster, info);
+                    add_combatant(&mut run.summary.roster, info.guid, &known);
                 }
+                self.last_specs.insert(info.guid.to_string(), known);
             }
             Event::Combat(event) => {
                 if let Some(run) = &mut self.run {
@@ -892,12 +900,13 @@ fn extend(summary: &mut FightSummary, span: LineSpan, timestamp: Timestamp) {
     summary.end_offset = span.next_offset;
 }
 
-fn add_combatant(roster: &mut Vec<RosterEntry>, info: &CombatantInfo<'_>) {
-    if roster.iter().all(|entry| entry.guid != info.guid) {
+fn add_combatant(roster: &mut Vec<RosterEntry>, guid: &str, known: &KnownSpec) {
+    if roster.iter().all(|entry| entry.guid != guid) {
         roster.push(RosterEntry {
-            guid: info.guid.to_string(),
+            guid: guid.to_string(),
             name: None,
-            spec_id: info.spec_id,
+            spec_id: known.spec_id,
+            talents: known.talents.clone(),
         });
     }
 }

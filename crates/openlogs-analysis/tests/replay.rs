@@ -115,6 +115,7 @@ fn units_are_classified_and_adds_numbered_per_name() {
         name: name.into(),
         kind,
         spec_id: None,
+        spec_icon: None,
         class_id: None,
         owner: None,
         add_number: None,
@@ -124,6 +125,7 @@ fn units_are_classified_and_adds_numbered_per_name() {
         vec![
             ReplayUnit {
                 spec_id: Some(62),
+                spec_icon: Some(openlogs_gamedata::spec(62).unwrap().icon.clone()),
                 class_id: Some(8),
                 ..unit(mage, "Ilvaren", UnitKind::Player)
             },

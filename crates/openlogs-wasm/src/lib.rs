@@ -49,6 +49,11 @@ impl Session {
         self.engine.set_spell_classes(game, json).map_err(to_js)
     }
 
+    pub fn set_talent_trees(&mut self, json: &str, game: &str) -> Result<(), JsValue> {
+        let game = DataGame::from_name(game).map_err(to_js)?;
+        self.engine.set_talent_trees(game, json).map_err(to_js)
+    }
+
     pub fn begin_index(&mut self) {
         self.engine.begin_index();
     }

@@ -1,9 +1,10 @@
 import type { DeathEntry, PlayerRef, QuickOverview } from '../../api/types';
-import { specIcon, spellIcon } from '../../icons';
+import { spellIcon } from '../../icons';
 import { formatAmountWhole, formatEventTime, formatPercent } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
+import { PlayerIcon } from '../reports/PlayerName';
 import { hitIcon, hitName } from '../reports/reportData';
 import { contextBadges, damageParts, deathSource } from './deathModel';
 import { classColor, playerIndex, shortName, spellName } from './players';
@@ -69,7 +70,7 @@ function DeathRow({ n, death, player, overview }: { n: number; death: DeathEntry
         <span className="death-n">{t('deaths.ordinal', { n })}</span>
       </div>
       <div className="death-player">
-        {player && player.specId !== null && <GameIcon icon={specIcon(player.specId)} size={22} name={name} />}
+        {player && (player.specIcon !== null || player.classId !== null) && <PlayerIcon player={player} size={22} />}
         <button
           type="button"
           className="link-btn death-who"

@@ -4,6 +4,7 @@ export type EngineMethod =
   | 'set_dungeons'
   | 'set_channel_spells'
   | 'set_spell_classes'
+  | 'set_talent_trees'
   | 'begin_index'
   | 'index_feed'
   | 'finish_index'

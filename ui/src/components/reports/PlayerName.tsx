@@ -10,7 +10,7 @@ import { classColor, shortName } from '../overview/players';
  */
 export function PlayerIcon({ player, size = 22 }: { player: PlayerRef | undefined; size?: number }) {
   const name = player ? shortName(player.name) : t('report.unknownPlayer');
-  if (player?.specId != null) return <GameIcon icon={specIcon(player.specId)} size={size} name={name} />;
+  if (player?.specIcon != null) return <GameIcon icon={specIcon(player.specIcon)} size={size} name={name} />;
   if (player?.classId != null) return <GameIcon icon={classIcon(player.classId)} size={size} name={name} />;
   return <MonogramTile name={name} size={size} />;
 }

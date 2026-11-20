@@ -19,6 +19,7 @@ pub struct ReplayUnit {
     pub name: String,
     pub kind: UnitKind,
     pub spec_id: Option<u32>,
+    pub spec_icon: Option<String>,
     pub class_id: Option<u32>,
     pub owner: Option<ActorId>,
     /// Adds of one name are numbered from 1 in the order they were first positioned.
@@ -61,6 +62,7 @@ impl Roster {
                     name: actor.name.clone().unwrap_or_default(),
                     kind,
                     spec_id: actor.spec_id,
+                    spec_icon: actor.shown_spec().map(|spec| spec.icon.to_string()),
                     class_id: actor.class(),
                     owner: actor.owner,
                     add_number: None,

@@ -11,7 +11,7 @@ pub fn infer_classes(fight: &mut Fight, spell_classes: &SpellClasses) {
     let mut casts: HashMap<ActorId, HashMap<u32, u32>> = fight
         .actors
         .players()
-        .filter(|player| player.spec_class().is_none())
+        .filter(|player| player.class().is_none())
         .map(|player| (player.id, HashMap::new()))
         .collect();
     for event in &fight.events {

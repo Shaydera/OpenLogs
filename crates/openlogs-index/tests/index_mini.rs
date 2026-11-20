@@ -66,12 +66,14 @@ fn wipe_with_roster_boss_hp_and_prelude() {
             RosterEntry {
                 guid: "Player-4101-8E8C0182".into(),
                 name: Some("Faelan-Emberfall-EU".into()),
-                spec_id: 62
+                spec_id: 62,
+                talents: Vec::new(),
             },
             RosterEntry {
                 guid: "Player-4101-77D4A765".into(),
                 name: Some("Pyrrin-Emberfall-EU".into()),
-                spec_id: 105
+                spec_id: 105,
+                talents: Vec::new(),
             },
         ]
     );

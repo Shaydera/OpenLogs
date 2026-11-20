@@ -957,6 +957,61 @@ fn a_log_reads_the_spell_classes_of_its_own_game() {
 }
 
 #[test]
+fn a_forever_player_shows_the_tree_of_their_talents() {
+    const OPEN_WORLD: &str =
+        include_str!("../../openlogs-index/tests/fixtures/forever_open_world.txt");
+    let header_end = OPEN_WORLD.find('\n').unwrap() + 1;
+    let log = format!(
+        "{}11/5/2026 02:45:20.8301  COMBATANT_INFO,Player-6949-0066C9DA,0,118,217,173,35,63,0,0,0,56,56,56,0,0,0,0,0,0,0,0,0,0,1372,1488,[(1,1,5),(1,2,30),(2,1,16)],(0,0,0,0),[],[],0,0,0,0\n{}",
+        &OPEN_WORLD[..header_end],
+        &OPEN_WORLD[header_end..]
+    );
+    let mut engine = Engine::default();
+    engine
+        .set_talent_trees(
+            DataGame::Forever,
+            r#"{"trees":[{"id":181,"classId":4,"name":"Combat","icon":"ability_backstab"},{"id":182,"classId":4,"name":"Assassination","icon":"ability_rogue_eviscerate"}],"nodes":[[1,181],[2,182]],"specClasses":[[1488,4]]}"#,
+        )
+        .unwrap();
+    let (mut engine, view) = open_with(engine, &log);
+    let pull = view["fights"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| !f["combat"].is_null())
+        .unwrap()["index"]
+        .as_u64()
+        .unwrap() as u32;
+    load(&mut engine, &log, pull);
+    let report = call(
+        &engine,
+        "damage_done_report",
+        json!({ "fightIndex": pull, "filter": whole_pull() }),
+    );
+    let ravel = report["roster"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["name"] == "Ravel-Ashwood-Normal-EU")
+        .unwrap();
+
+    assert_eq!(
+        (
+            &ravel["classId"],
+            &ravel["specName"],
+            &ravel["specIcon"],
+            &ravel["role"]
+        ),
+        (
+            &json!(4),
+            &json!("Combat Rogue"),
+            &json!("ability_backstab"),
+            &json!("damage")
+        )
+    );
+}
+
+#[test]
 fn players_without_a_spec_take_the_class_of_their_casts() {
     const OPEN_WORLD: &str =
         include_str!("../../openlogs-index/tests/fixtures/forever_open_world.txt");

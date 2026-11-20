@@ -118,17 +118,34 @@ fn parses_log_encounter_and_key_events() {
     }
 }
 
+fn combatant_info(line: &str) -> CombatantInfo<'_> {
+    match event(line) {
+        Event::CombatantInfo(info) => info,
+        other => panic!("not combatant info: {other:?}"),
+    }
+}
+
 #[test]
 fn combatant_info_from_a_real_log() {
-    let text = include_str!("fixtures/combatant_info.txt").trim_end();
+    let info = combatant_info(include_str!("fixtures/combatant_info.txt").trim_end());
     assert_eq!(
-        event(text),
-        Event::CombatantInfo(CombatantInfo {
-            guid: "Player-4101-0EE857C6",
-            faction: 1,
-            spec_id: 71,
-        })
+        (info.guid, info.faction, info.spec_id),
+        ("Player-4101-0EE857C6", 1, 71)
     );
+}
+
+#[test]
+fn combatant_info_reads_the_talents() {
+    let line = include_str!("fixtures/combatant_info_forever.txt").trim_end();
+    let talents: Vec<(u32, u32)> = combatant_info(line).talents().collect();
+    assert_eq!(talents.len(), 21);
+    assert_eq!(talents[..2], [(105722, 5), (105708, 3)]);
+    assert_eq!(talents.iter().map(|&(_, rank)| rank).sum::<u32>(), 51);
+
+    let without_talents = &line[..line.find(",[").unwrap()];
+    let info = combatant_info(without_talents);
+    assert_eq!(info.spec_id, 1488);
+    assert_eq!(info.talents().count(), 0);
 }
 
 #[test]

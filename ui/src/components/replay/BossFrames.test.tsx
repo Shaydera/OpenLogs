@@ -54,7 +54,7 @@ describe('BossFrames', () => {
   });
 
   it('numbers adds per name and caps the list', () => {
-    const clutches = Array.from({ length: 12 }, (_, i): ReplayUnit => ({ actor: 100 + i, name: 'Clutch', kind: 'add', specId: null, classId: null, owner: null, addNumber: i + 1 }));
+    const clutches = Array.from({ length: 12 }, (_, i): ReplayUnit => ({ actor: 100 + i, name: 'Clutch', kind: 'add', specId: null, specIcon: null, classId: null, owner: null, addNumber: i + 1 }));
     const data: ReplayData = {
       ...replayFixture,
       units: [...replayFixture.units, ...clutches],
@@ -72,7 +72,7 @@ describe('BossFrames', () => {
   });
 
   it('leaves out an add that stopped logging, so the live ones keep their frames', () => {
-    const clutches = Array.from({ length: 9 }, (_, i): ReplayUnit => ({ actor: 100 + i, name: 'Clutch', kind: 'add', specId: null, classId: null, owner: null, addNumber: i + 1 }));
+    const clutches = Array.from({ length: 9 }, (_, i): ReplayUnit => ({ actor: 100 + i, name: 'Clutch', kind: 'add', specId: null, specIcon: null, classId: null, owner: null, addNumber: i + 1 }));
     const data: ReplayData = {
       ...replayFixture,
       units: [...replayFixture.units.filter((unit) => unit.kind !== 'add'), ...clutches],

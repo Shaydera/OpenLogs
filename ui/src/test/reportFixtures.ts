@@ -1,10 +1,10 @@
 import type { AbilityDetail, AuraLane, AuraRow, AurasReport, CastsReport, Breakdown, DamageReport, DamageTakenReport, DeathRecap, DeathsReport, HealingReport, InterruptsReport, PlayerAbility, PlayerDetail, PlayerRef, ReportUnit, ResourcesReport, TargetDetail } from '../api/types';
 
 const roster: PlayerRef[] = [
-  { actorId: 3, name: 'Wendel-Emberfall-EU', specId: 71, specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
-  { actorId: 4, name: 'Faelan-Emberfall-EU', specId: 62, specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' },
-  { actorId: 5, name: 'Speronis-Stonevale-EU', specId: 1473, specName: 'Augmentation Evoker', classId: 13, classToken: 'EVOKER', role: 'damage' },
-  { actorId: 2, name: 'Pyrrin-Emberfall-EU', specId: 105, specName: 'Restoration Druid', classId: 11, classToken: 'DRUID', role: 'healer' },
+  { actorId: 3, name: 'Wendel-Emberfall-EU', specId: 71, specIcon: 'ability_warrior_savageblow', specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
+  { actorId: 4, name: 'Faelan-Emberfall-EU', specId: 62, specIcon: 'spell_holy_magicalsentry', specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' },
+  { actorId: 5, name: 'Speronis-Stonevale-EU', specId: 1473, specIcon: 'classicon_evoker_augmentation', specName: 'Augmentation Evoker', classId: 13, classToken: 'EVOKER', role: 'damage' },
+  { actorId: 2, name: 'Pyrrin-Emberfall-EU', specId: 105, specIcon: 'spell_nature_healingtouch', specName: 'Restoration Druid', classId: 11, classToken: 'DRUID', role: 'healer' },
 ];
 
 const spells = {
@@ -490,8 +490,8 @@ const faelanRecap: DeathRecap = {
 /** The Deaths tab: Faelan's death and the druid who resurrected him. */
 export const recapFixture: DeathsReport = {
   roster: [
-    { actorId: 4, name: 'Faelan-Emberfall-EU', specId: 62, specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' },
-    { actorId: 6, name: 'Serrik-Silverbrook-EU', specId: 105, specName: 'Restoration Druid', classId: 11, classToken: 'DRUID', role: 'healer' },
+    { actorId: 4, name: 'Faelan-Emberfall-EU', specId: 62, specIcon: 'spell_holy_magicalsentry', specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' },
+    { actorId: 6, name: 'Serrik-Silverbrook-EU', specId: 105, specIcon: 'spell_nature_healingtouch', specName: 'Restoration Druid', classId: 11, classToken: 'DRUID', role: 'healer' },
   ],
   spells: {
     '1302982': { name: 'Virulent Spit' },
