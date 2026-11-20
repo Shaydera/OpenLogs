@@ -14,8 +14,9 @@ const ATTEMPTS = 4;
 const TIMEOUT_MS = 30_000;
 
 const readJson = async (path) => JSON.parse(await readFile(join(ui, path), 'utf8'));
-const [spellIcons, portraits, mapArt, classesSpecs] = await Promise.all([
+const [spellIcons, foreverSpellIcons, portraits, mapArt, classesSpecs] = await Promise.all([
   readJson('public/game-data/spell-icons.json'),
+  readJson('public/game-data/forever/spell-icons.json'),
   readJson('public/game-data/boss-portraits.json'),
   readJson('public/game-data/map-art.json'),
   readJson('../crates/openlogs-gamedata/data/classes_specs.json'),
@@ -23,6 +24,7 @@ const [spellIcons, portraits, mapArt, classesSpecs] = await Promise.all([
 
 const iconNames = [
   ...spellIcons.names,
+  ...foreverSpellIcons.names,
   ...classesSpecs.classes.map((c) => classIconName(c.token)),
   ...classesSpecs.specs.map((s) => s.icon),
   ...NAMED_ICONS,

@@ -1,5 +1,5 @@
 import { type Engine, workerEngine } from '../engine/engine';
-import { channelSpellsJson, dungeonsJson, spellClassesJson } from '../gameData';
+import { type DataGame, channelSpellsJson, dataGameOf, dungeonsJson, spellClassesJson } from '../gameData';
 import { t } from '../i18n/i18n';
 import { browserDatabase, type Database } from './db';
 import { fileGone, fileMissing, type LogSource, reopenHandle } from './logSource';
@@ -59,8 +59,8 @@ interface IndexUse {
 export interface ClientDeps {
   engine: () => Engine;
   dungeons: () => Promise<string | null>;
-  channelSpells: () => Promise<string | null>;
-  spellClasses: () => Promise<string | null>;
+  channelSpells: (game: DataGame) => Promise<string | null>;
+  spellClasses: (game: DataGame) => Promise<string | null>;
   db: Database;
   now: () => number;
 }
@@ -96,7 +96,8 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
     forgotten: boolean;
   } | null = null;
   const openings = new Set<{ logId: string; forgotten: boolean }>();
-  const gameDataLoaded = { dungeons: false, channelSpells: false, spellClasses: false };
+  /** `dungeons`, or a spell table and its game such as `spellClasses:forever`. */
+  const gameDataLoaded = new Set<string>();
   let latestOpen = 0;
   let queue: Promise<unknown> = Promise.resolve();
 
@@ -145,22 +146,18 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
     await useIndex(key);
   }
 
-  async function loadTable(table: keyof typeof gameDataLoaded, load: () => Promise<string | null>, give: (json: string) => Promise<void>) {
-    if (gameDataLoaded[table]) return;
+  /** Without game data, logs still open: run results and channels then come from the log alone. */
+  async function loadTable(table: string, load: () => Promise<string | null>, give: (json: string) => Promise<void>) {
+    if (gameDataLoaded.has(table)) return;
     const json = await load().catch(() => null);
     if (json === null) return;
     // A table the engine rejects is asked for again with the next log; this one opens without it.
-    gameDataLoaded[table] = await give(json).then(
-      () => true,
-      () => false,
-    );
+    if (await give(json).then(() => true, () => false)) gameDataLoaded.add(table);
   }
 
-  /** Without game data, logs still open: run results and channels then come from the log alone. */
-  async function loadGameData(engine: Engine) {
-    await loadTable('dungeons', dungeons, (json) => engine.setDungeons(json));
-    await loadTable('channelSpells', channelSpells, (json) => engine.setChannelSpells(json));
-    await loadTable('spellClasses', spellClasses, (json) => engine.setSpellClasses(json));
+  async function loadSpellTables(engine: Engine, game: DataGame) {
+    await loadTable(`channelSpells:${game}`, () => channelSpells(game), (json) => engine.setChannelSpells(json, game));
+    await loadTable(`spellClasses:${game}`, () => spellClasses(game), (json) => engine.setSpellClasses(json, game));
   }
 
   async function index(
@@ -169,13 +166,14 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
     superseded: () => boolean,
   ): Promise<{ view: LogView; key: string; followedBytes: number }> {
     const engine = getEngine();
-    await loadGameData(engine);
+    await loadTable('dungeons', dungeons, (json) => engine.setDungeons(json));
     const key = await indexKey(engine, source);
     const stored = await quietly(() => db.get<StoredIndex>('indexes', key));
     if (stored) {
       const view = await quietly(() => engine.restoreIndex(stored.json, source.id, source.name, source.size));
       if (view) {
         await quietly(() => useIndex(key));
+        await loadSpellTables(engine, dataGameOf(view.game));
         return { view, key, followedBytes: 0 };
       }
     }
@@ -193,6 +191,7 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
     const view = await engine.finishIndex(source.id, source.name, source.size);
     const json = await engine.indexJson();
     await quietly(() => storeIndex(key, json));
+    await loadSpellTables(engine, dataGameOf(view.game));
     return { view, key, followedBytes: source.size };
   }
 
@@ -266,6 +265,8 @@ export function createClient({ engine: getEngine, dungeons, channelSpells, spell
           log.followedBytes += await engine.feed(await readSome(source, log.followedBytes));
         }
         const view = await engine.refreshIndex(source.id, source.name, source.size, settleAll);
+        // A log opened before its header was written learns its game only now.
+        await loadSpellTables(engine, dataGameOf(view.game));
         await storeFollowed(engine, log, view, settleAll);
         return view;
       } finally {

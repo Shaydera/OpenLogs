@@ -1,4 +1,5 @@
-import type { MapArtTable } from './api/types';
+import type { Game, MapArtTable } from './api/types';
+import { currentGame, subscribeCurrentGame } from './currentGame';
 
 /** Game data shipped next to the app in `game-data/`, written by `openlogs-cli export-game-data`. */
 export interface GameDataManifest {
@@ -13,6 +14,16 @@ export interface GameDataManifest {
   bossPortraits: number;
   /** Absent in an export made before map art was exported. */
   mapArt?: number;
+  /** The spell tables of the Forever build, in `forever/`; absent in an export made before them. */
+  forever?: { build: string; spellIcons: number; channelSpells: number; spellClasses: number };
+}
+
+/** The games with spell tables of their own. */
+export type DataGame = 'retail' | 'forever';
+
+/** Forever has its own tables; every other game reads retail's. The engine follows the same rule (`DataGame::of`). */
+export function dataGameOf(game: Game | null): DataGame {
+  return game?.kind === 'forever' ? 'forever' : 'retail';
 }
 
 /** Spell ID → icon name, as sorted parallel arrays. */
@@ -23,6 +34,7 @@ export interface SpellIcons {
 }
 
 export interface IconTables {
+  /** Of the open log's game. */
   spells: SpellIcons | null;
   /** Encounter ID → Encounter Journal portrait name. */
   portraits: Record<string, string> | null;
@@ -51,19 +63,21 @@ export function gameDataManifest(): Promise<GameDataManifest | null> {
 }
 
 /** A table named by the manifest; the manifest's time keeps browser caches from serving an older export. */
-async function tableText(file: string): Promise<string | null> {
+async function tableText(file: string, game: DataGame = 'retail'): Promise<string | null> {
   const manifest = await gameDataManifest();
-  return manifest ? fetchText(`${file}?v=${manifest.fetchedUnixMs}`) : null;
+  if (!manifest || (game === 'forever' && !manifest.forever)) return null;
+  const path = game === 'forever' ? `forever/${file}` : file;
+  return fetchText(`${path}?v=${manifest.fetchedUnixMs}`);
 }
 
 /** The Mythic+ dungeon table for the engine. */
 export const dungeonsJson = (): Promise<string | null> => tableText('dungeons.json').catch(() => null);
 
 /** The spells the game channels, for the engine. */
-export const channelSpellsJson = (): Promise<string | null> => tableText('channel-spells.json').catch(() => null);
+export const channelSpellsJson = (game: DataGame): Promise<string | null> => tableText('channel-spells.json', game).catch(() => null);
 
 /** The class and crowd-control spells, for the engine. */
-export const spellClassesJson = (): Promise<string | null> => tableText('spell-classes.json').catch(() => null);
+export const spellClassesJson = (game: DataGame): Promise<string | null> => tableText('spell-classes.json', game).catch(() => null);
 
 /** Decodes the export's spell IDs, stored as differences to the previous ID. */
 export function decodeSpellIcons(table: { ids: number[]; icons: number[]; names: string[] }): SpellIcons {
@@ -92,28 +106,50 @@ export function spellIconName(spells: SpellIcons, spellId: number): string | nul
 /** A table that could not be loaded is asked for again after this long. */
 const RETRY_MS = 30_000;
 
+const spellIcons: Record<DataGame, SpellIcons | null> = { retail: null, forever: null };
+let portraits: IconTables['portraits'] = null;
+let mapArt: IconTables['mapArt'] = null;
 let tables: IconTables = { spells: null, portraits: null, mapArt: null };
 const listeners = new Set<() => void>();
-const nextAttempt: Record<keyof IconTables, number> = { spells: 0, portraits: 0, mapArt: 0 };
+/** By table, and for spell icons by game too, such as `spells:forever`. */
+const nextAttempt = new Map<string, number>();
 
-function loadTable<K extends keyof IconTables>(key: K, file: string, parse: (text: string) => IconTables[K]) {
-  if (tables[key] !== null || Date.now() < nextAttempt[key]) return;
-  nextAttempt[key] = Number.POSITIVE_INFINITY;
-  void tableText(file)
+function publish() {
+  tables = { spells: spellIcons[dataGameOf(currentGame())], portraits, mapArt };
+  listeners.forEach((listener) => listener());
+}
+
+function loadTable(table: string, loaded: boolean, read: () => Promise<string | null>, keep: (text: string) => void) {
+  if (loaded || Date.now() < (nextAttempt.get(table) ?? 0)) return;
+  nextAttempt.set(table, Number.POSITIVE_INFINITY);
+  void read()
     .then((text) => {
-      if (text === null) throw new Error(`${file} is missing`);
-      tables = { ...tables, [key]: parse(text) };
-      listeners.forEach((listener) => listener());
+      if (text === null) throw new Error(`${table} is missing`);
+      keep(text);
+      publish();
     })
-    .catch(() => (nextAttempt[key] = Date.now() + RETRY_MS));
+    .catch(() => nextAttempt.set(table, Date.now() + RETRY_MS));
 }
 
-/** Components re-render through `subscribeIconTables` when the tables arrive. */
+/** Components re-render through `subscribeIconTables` when the tables arrive or the open log's game changes. */
 export function loadIconTables() {
-  loadTable('spells', 'spell-icons.json', (text) => decodeSpellIcons(JSON.parse(text)));
-  loadTable('portraits', 'boss-portraits.json', (text) => JSON.parse(text));
-  loadTable('mapArt', 'map-art.json', (text) => JSON.parse(text));
+  const game = dataGameOf(currentGame());
+  loadTable(`spells:${game}`, spellIcons[game] !== null, () => tableText('spell-icons.json', game), (text) => {
+    spellIcons[game] = decodeSpellIcons(JSON.parse(text));
+  });
+  loadTable('portraits', portraits !== null, () => tableText('boss-portraits.json'), (text) => {
+    portraits = JSON.parse(text);
+  });
+  loadTable('mapArt', mapArt !== null, () => tableText('map-art.json'), (text) => {
+    mapArt = JSON.parse(text);
+  });
 }
+
+subscribeCurrentGame(() => {
+  publish();
+  // The tables load on first use (`useIconSrc`); before that, a game change has nothing to load for.
+  if (listeners.size > 0) loadIconTables();
+});
 
 export const iconTables = () => tables;
 

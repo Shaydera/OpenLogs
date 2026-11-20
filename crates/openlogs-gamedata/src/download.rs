@@ -21,6 +21,9 @@ pub const WAGO_UI_MAP_ASSIGNMENT_URL: &str = "https://wago.tools/db2/UiMapAssign
 pub const WAGO_UI_MAP_GROUP_MEMBER_URL: &str = "https://wago.tools/db2/UiMapGroupMember/csv";
 pub const WAGO_AREA_TABLE_URL: &str = "https://wago.tools/db2/AreaTable/csv";
 pub const WAGO_MAP_URL: &str = "https://wago.tools/db2/Map/csv";
+/// The newest build of each product, as `{ "<product>": { "version": "…" }, … }`.
+pub const WAGO_LATEST_BUILDS_URL: &str = "https://wago.tools/api/builds/latest";
+pub const FOREVER_PRODUCT: &str = "wowf";
 
 #[derive(Debug, Error)]
 pub enum DownloadError {
@@ -38,6 +41,10 @@ pub enum DownloadError {
     BossPortraits(#[from] BossPortraitError),
     #[error("downloaded map art data is invalid: {0}")]
     MapArt(#[from] MapArtError),
+    #[error("downloaded build list is invalid: {0}")]
+    Builds(#[from] serde_json::Error),
+    #[error("wago.tools lists no build of {0}")]
+    NoBuild(&'static str),
 }
 
 /// The tables read from the spells' `SpellMisc` rows.
@@ -46,20 +53,61 @@ pub struct SpellTables {
     pub channels: ChannelSpells,
 }
 
+/// The spell tables of the Forever build they were exported from.
+pub struct ForeverTables {
+    pub build: String,
+    pub spells: SpellTables,
+    pub classes: SpellClasses,
+}
+
 /// Builds the spell icon and channel tables from the wago.tools exports.
 pub fn download_spell_tables<F: Fetch>(fetch: &F) -> Result<SpellTables, DownloadError> {
-    let spell_misc = fetch.get(WAGO_SPELL_MISC_URL)?;
-    let manifest = fetch.get(WAGO_MANIFEST_URL)?;
+    spell_tables(fetch, None)
+}
+
+/// Builds the class and crowd-control spell table from the wago.tools exports.
+pub fn download_spell_classes<F: Fetch>(fetch: &F) -> Result<SpellClasses, DownloadError> {
+    spell_classes(fetch, None)
+}
+
+/// Builds the spell tables of the newest Forever build.
+pub fn download_forever_tables<F: Fetch>(fetch: &F) -> Result<ForeverTables, DownloadError> {
+    let build = latest_build(fetch, FOREVER_PRODUCT)?;
+    Ok(ForeverTables {
+        spells: spell_tables(fetch, Some(&build))?,
+        classes: spell_classes(fetch, Some(&build))?,
+        build,
+    })
+}
+
+fn latest_build<F: Fetch>(fetch: &F, product: &'static str) -> Result<String, DownloadError> {
+    let builds: serde_json::Value = serde_json::from_slice(&fetch.get(WAGO_LATEST_BUILDS_URL)?)?;
+    builds[product]["version"]
+        .as_str()
+        .map(str::to_string)
+        .ok_or(DownloadError::NoBuild(product))
+}
+
+/// A table of `build`, or of the newest retail build without one.
+fn table_url(base: &str, build: Option<&str>) -> String {
+    match build {
+        Some(build) => format!("{base}?build={build}"),
+        None => base.to_string(),
+    }
+}
+
+fn spell_tables<F: Fetch>(fetch: &F, build: Option<&str>) -> Result<SpellTables, DownloadError> {
+    let spell_misc = fetch.get(&table_url(WAGO_SPELL_MISC_URL, build))?;
+    let manifest = fetch.get(&table_url(WAGO_MANIFEST_URL, build))?;
     Ok(SpellTables {
         icons: SpellIconTable::from_csv(&spell_misc, &manifest)?,
         channels: ChannelSpells::from_csv(&spell_misc)?,
     })
 }
 
-/// Builds the class and crowd-control spell table from the wago.tools exports.
-pub fn download_spell_classes<F: Fetch>(fetch: &F) -> Result<SpellClasses, DownloadError> {
-    let spell_class_options = fetch.get(WAGO_SPELL_CLASS_OPTIONS_URL)?;
-    let spell_effect = fetch.get(WAGO_SPELL_EFFECT_URL)?;
+fn spell_classes<F: Fetch>(fetch: &F, build: Option<&str>) -> Result<SpellClasses, DownloadError> {
+    let spell_class_options = fetch.get(&table_url(WAGO_SPELL_CLASS_OPTIONS_URL, build))?;
+    let spell_effect = fetch.get(&table_url(WAGO_SPELL_EFFECT_URL, build))?;
     Ok(SpellClasses::from_csv(&spell_class_options, &spell_effect)?)
 }
 
