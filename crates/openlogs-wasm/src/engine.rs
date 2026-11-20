@@ -1,9 +1,10 @@
 use std::collections::BTreeSet;
 
 use openlogs_analysis::{
-    Actors, Fight, LANDED_MATCH_MS, infer_classes, load_fight_slice, load_fight_slice_with,
+    Actors, Fight, LANDED_MATCH_MS, assign_talent_specs, infer_classes, load_fight_slice,
+    load_fight_slice_with,
 };
-use openlogs_gamedata::{ChannelSpells, Curated, DungeonTable, SpellClasses};
+use openlogs_gamedata::{ChannelSpells, Curated, DungeonTable, SpellClasses, TalentTrees};
 use openlogs_index::{FightSummary, GameFlavor, Indexer, LogIndex};
 use openlogs_service::auras_dto::AuraKindDto;
 use openlogs_service::casts_dto::CastsReportDto;
@@ -55,6 +56,7 @@ impl DataGame {
 struct GameTables {
     channels: ChannelSpells,
     spell_classes: SpellClasses,
+    talent_trees: TalentTrees,
 }
 
 #[derive(Default)]
@@ -120,6 +122,12 @@ impl Engine {
     pub fn set_spell_classes(&mut self, game: DataGame, json: &str) -> Result<(), String> {
         self.spell_tables.of_mut(game).spell_classes =
             SpellClasses::from_json(json).map_err(|err| err.to_string())?;
+        Ok(())
+    }
+
+    pub fn set_talent_trees(&mut self, game: DataGame, json: &str) -> Result<(), String> {
+        self.spell_tables.of_mut(game).talent_trees =
+            TalentTrees::from_json(json).map_err(|err| err.to_string())?;
         Ok(())
     }
 
@@ -217,7 +225,7 @@ impl Engine {
     ) -> Result<(), String> {
         let summary = self.summary(fight_index)?.clone();
         let mut fight = load_fight_slice(part, base_offset, &summary);
-        ready_for_reports(&mut fight, self.index.flavor, &self.tables().spell_classes);
+        ready_for_reports(&mut fight, self.index.flavor, self.tables());
         self.fights.retain(|pulled| pulled.index != fight_index);
         self.fights.insert(
             0,
@@ -269,7 +277,7 @@ impl Engine {
         let mut fight =
             load_fight_slice_with(part, base_offset, summary, pass.actors.carried_over());
         let tables = self.spell_tables.of_flavor(self.index.flavor);
-        ready_for_reports(&mut fight, self.index.flavor, &tables.spell_classes);
+        ready_for_reports(&mut fight, self.index.flavor, tables);
         let mut cuts = PullCuts::new(&fight);
         for command in &mut pass.commands {
             command.add(fight_index, &fight, &self.curated, &mut cuts);
@@ -533,9 +541,12 @@ struct LoadedPull {
     summary: FightSummary,
 }
 
-fn ready_for_reports(fight: &mut Fight, flavor: Option<GameFlavor>, spell_classes: &SpellClasses) {
+fn ready_for_reports(fight: &mut Fight, flavor: Option<GameFlavor>, tables: &GameTables) {
     fight.flavor = flavor;
-    infer_classes(fight, spell_classes);
+    if !tables.talent_trees.is_empty() {
+        assign_talent_specs(fight, &tables.talent_trees);
+    }
+    infer_classes(fight, &tables.spell_classes);
 }
 
 fn summary_of(index: &LogIndex, fight_index: u32) -> Result<&FightSummary, String> {

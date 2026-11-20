@@ -154,6 +154,8 @@ export interface PlayerRef {
   specId: number | null;
   /** E.g. "Arcane Mage"; `null` without a known spec. */
   specName: string | null;
+  /** Icon name of the spec; `null` without a known spec. */
+  specIcon: string | null;
   classId: number | null;
   classToken: string | null;
   role: Role | null;
@@ -1206,6 +1208,7 @@ export interface ReplayUnit {
   name: string;
   kind: ReplayUnitKind;
   specId: number | null;
+  specIcon: string | null;
   classId: number | null;
   owner: number | null;
   /** Adds of one name are numbered from 1 in the order they were first positioned. */

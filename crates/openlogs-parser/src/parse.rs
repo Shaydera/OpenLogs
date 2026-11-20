@@ -91,6 +91,7 @@ fn parse_event<'a>(f: &Fields<'_, 'a>) -> Result<Event<'a>, ParseError> {
             guid: f.str(1)?,
             faction: f.num(2)?,
             spec_id: f.num(25)?,
+            talents: f.str(26).unwrap_or(""),
         }),
         name => match parse_combat(f)? {
             Some(event) => Event::Combat(event),

@@ -73,6 +73,38 @@ fn wago_tools_provides_the_forever_tables() {
         tables.spells.icons.icon(5487).is_some(),
         "Bear Form has an icon"
     );
+    assert_eq!(tables.talent_trees.len(), 27, "every class has three trees");
+    let rogue = [
+        (105722, 5),
+        (105708, 3),
+        (105715, 1),
+        (105716, 2),
+        (105720, 2),
+        (105721, 3),
+        (105724, 1),
+        (105726, 2),
+        (105727, 5),
+        (105728, 1),
+        (105730, 3),
+        (105732, 2),
+        (105736, 2),
+        (105737, 3),
+        (105738, 1),
+        (105739, 3),
+        (105740, 5),
+        (105741, 2),
+        (105759, 2),
+        (108100, 1),
+        (113635, 2),
+    ];
+    assert_eq!(
+        tables
+            .talent_trees
+            .spec_of(rogue)
+            .map(|tree| tree.name.as_str()),
+        Some("Combat")
+    );
+    assert_eq!(tables.talent_trees.class_of_spec(1484), Some(11));
     assert!(
         tables.classes.class_spell_count() > 1_000,
         "got {} class spells",

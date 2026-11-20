@@ -7,6 +7,13 @@ use crate::model::{
     COMBAT_QUIET_MICROS, CombatPull, DEAD_ENEMY_MEMORY_MICROS, FightSummary, Outcome, RosterEntry,
 };
 
+/// A player's spec and talents from their latest `COMBATANT_INFO`.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct KnownSpec {
+    pub(crate) spec_id: u32,
+    pub(crate) talents: Vec<(u32, u32)>,
+}
+
 /// A combat pull still going on.
 #[derive(Clone)]
 pub(crate) struct OpenCombat {
@@ -147,7 +154,11 @@ impl OpenCombat {
     }
 
     /// An `Ended` pull ends at its last exchange, any other at its latest line.
-    pub(crate) fn finish(mut self, outcome: Outcome, specs: &HashMap<String, u32>) -> FightSummary {
+    pub(crate) fn finish(
+        mut self,
+        outcome: Outcome,
+        specs: &HashMap<String, KnownSpec>,
+    ) -> FightSummary {
         let summary = &mut self.summary;
         summary.outcome = outcome;
         if outcome == Outcome::Ended {
@@ -173,7 +184,10 @@ impl OpenCombat {
             self.players.len()
         } as u32;
         for entry in &mut summary.roster {
-            entry.spec_id = specs.get(&entry.guid).copied().unwrap_or(0);
+            if let Some(known) = specs.get(&entry.guid) {
+                entry.spec_id = known.spec_id;
+                entry.talents.clone_from(&known.talents);
+            }
         }
         self.summary
     }
@@ -185,6 +199,7 @@ impl OpenCombat {
                 guid: player.guid.to_string(),
                 name: player.name.map(str::to_string),
                 spec_id: 0,
+                talents: Vec::new(),
             });
         }
     }

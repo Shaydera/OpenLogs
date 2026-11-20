@@ -62,6 +62,7 @@ function fakeEngine() {
     setDungeons: async () => {},
     setChannelSpells: async () => {},
     setSpellClasses: async () => {},
+    setTalentTrees: async () => {},
     beginIndex: async () => {
       state.beginIndexCalls += 1;
       fed.splice(0);
@@ -135,7 +136,7 @@ function client() {
     engine: () => fake.engine,
     dungeons: async () => null,
     channelSpells: async () => null,
-    spellClasses: async () => null,
+    spellClasses: async () => null, talentTrees: async () => null,
     db: memoryDatabase(),
     now: () => ++clock,
   });
@@ -174,7 +175,7 @@ describe('opening logs', () => {
       engine: () => fake.engine,
       dungeons: async () => 'keys',
       channelSpells: async () => channels,
-      spellClasses: async () => classes,
+      spellClasses: async () => classes, talentTrees: async () => null,
       db: memoryDatabase(),
       now: () => 1,
     });
@@ -195,7 +196,7 @@ describe('opening logs', () => {
       engine: () => fake.engine,
       dungeons: async () => null,
       channelSpells: async (game) => `${game}-channels`,
-      spellClasses: async (game) => `${game}-classes`,
+      spellClasses: async (game) => `${game}-classes`, talentTrees: async () => null,
       db: memoryDatabase(),
       now: () => 1,
     });
@@ -210,6 +211,26 @@ describe('opening logs', () => {
     ]);
   });
 
+  it('gives only a Forever log the talent trees', async () => {
+    const fake = fakeEngine();
+    const given: string[] = [];
+    fake.engine.setTalentTrees = async (json, game) => void given.push(`${json}:${game}`);
+    fake.engine.finishIndex = async (logId) => ({ ...view(logId), game: { kind: logId.startsWith('f') ? 'forever' : 'retail' } });
+    const api = createClient({
+      engine: () => fake.engine,
+      dungeons: async () => null,
+      channelSpells: async () => null,
+      spellClasses: async () => null,
+      talentTrees: async (game) => (game === 'forever' ? 'trees' : null),
+      db: memoryDatabase(),
+      now: () => 1,
+    });
+    await api.openLog(source('r.txt', 10));
+    await api.openLog(source('f.txt', 10));
+    await api.openLog(source('f.txt', 11));
+    expect(given).toEqual(['trees:forever']);
+  });
+
   it('gives a Forever log reopened from its stored index the Forever tables', async () => {
     const db = memoryDatabase();
     const forever = (engine: Engine) => {
@@ -218,7 +239,7 @@ describe('opening logs', () => {
     };
     const first = fakeEngine();
     forever(first.engine);
-    const deps = { dungeons: async () => null, channelSpells: async () => null, spellClasses: async () => 'classes', db, now: () => 1 };
+    const deps = { dungeons: async () => null, channelSpells: async () => null, spellClasses: async () => 'classes', talentTrees: async () => null, db, now: () => 1 };
     await createClient({ engine: () => first.engine, ...deps }).openLog(source('f.txt', 10));
 
     const second = fakeEngine();
@@ -239,7 +260,7 @@ describe('opening logs', () => {
       engine: () => fake.engine,
       dungeons: async () => null,
       channelSpells: async () => '{}',
-      spellClasses: async () => null,
+      spellClasses: async () => null, talentTrees: async () => null,
       db: memoryDatabase(),
       now: () => 1,
     });
@@ -251,7 +272,7 @@ describe('opening logs', () => {
     const bossPull = runLogFixture.fights[1];
     const trash: FightRow = { ...bossPull, index: 20, encounterId: 0, name: 'Arathi Knight', combat: { enemyCount: 2 } };
     fake.engine.finishIndex = async (logId) => ({ ...view(logId), fights: [...runLogFixture.fights, trash, { ...trash, index: 21, runIndex: null }] });
-    const api = createClient({ engine: () => fake.engine, dungeons: async () => null, channelSpells: async () => null, spellClasses: async () => null, db: memoryDatabase(), now: () => 1 });
+    const api = createClient({ engine: () => fake.engine, dungeons: async () => null, channelSpells: async () => null, spellClasses: async () => null, talentTrees: async () => null, db: memoryDatabase(), now: () => 1 });
     await api.openLog(source('a.txt', 10));
     expect((await api.recentLogs())[0].pullCount).toBe(6);
   });
@@ -427,7 +448,7 @@ describe('following a log that grows', () => {
     const given: string[] = [];
     fake.engine.setSpellClasses = async (_, game) => void given.push(game);
     fake.engine.refreshIndex = async (logId) => ({ ...view(logId), game: { kind: 'forever' } });
-    const api = createClient({ engine: () => fake.engine, dungeons: async () => null, channelSpells: async () => null, spellClasses: async () => '{}', db: memoryDatabase(), now: () => 1 });
+    const api = createClient({ engine: () => fake.engine, dungeons: async () => null, channelSpells: async () => null, spellClasses: async () => '{}', talentTrees: async () => null, db: memoryDatabase(), now: () => 1 });
     const log = growable('today.txt', 0);
     await api.openLog(log);
 
@@ -558,7 +579,7 @@ describe('following a log that grows', () => {
       engine: () => fake.engine,
       dungeons: async () => null,
       channelSpells: async () => null,
-      spellClasses: async () => null,
+      spellClasses: async () => null, talentTrees: async () => null,
       db,
       now: () => clock,
     });

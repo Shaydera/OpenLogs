@@ -1,6 +1,6 @@
 //! Hand-built fights for DTO unit tests.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use openlogs_analysis::{
     ActorId, Actors, Damage, DamageVia, Event, EventKind, Fight, FightKind, Heal, NOBODY, SpellId,
@@ -47,6 +47,7 @@ pub fn fight(actors: Actors, mut events: Vec<Event>) -> Fight {
         logger_turned: Vec::new(),
         heal_grants: Vec::new(),
         delayed_hits: Vec::new(),
+        talents: HashMap::new(),
         roster: BTreeSet::new(),
         flavor: None,
     }

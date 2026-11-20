@@ -109,13 +109,26 @@ pub struct ChallengeModeEnd {
     pub total_time_ms: u64,
 }
 
-/// Player snapshot written right after `ENCOUNTER_START`. Talents and gear are not
-/// modelled yet.
+/// Player snapshot written right after `ENCOUNTER_START`. Gear is not modelled yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CombatantInfo<'a> {
     pub guid: &'a str,
     pub faction: u32,
     pub spec_id: u32,
+    /// As logged, `[(node,entry,rank),…]`; empty when the line has none.
+    pub talents: &'a str,
+}
+
+impl<'a> CombatantInfo<'a> {
+    /// `(node, rank)` of each talent.
+    pub fn talents(&self) -> impl Iterator<Item = (u32, u32)> + 'a {
+        self.talents.split(')').filter_map(|tuple| {
+            let mut parts = tuple.trim_start_matches(['[', ',', '(']).split(',');
+            let node = parts.next()?.parse().ok()?;
+            let rank = parts.nth(1)?.parse().ok()?;
+            Some((node, rank))
+        })
+    }
 }
 
 /// `COMBATLOG_OBJECT_*` bits of a unit's flags.

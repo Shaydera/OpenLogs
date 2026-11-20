@@ -110,6 +110,8 @@ pub struct PlayerRef {
     pub spec_id: Option<u32>,
     /// E.g. "Arcane Mage"; `None` without a known spec.
     pub spec_name: Option<String>,
+    /// Icon name of the spec; `None` without a known spec.
+    pub spec_icon: Option<String>,
     pub class_id: Option<u32>,
     pub class_token: Option<String>,
     pub role: Option<Role>,
@@ -568,13 +570,14 @@ pub fn quick_overview_dto(
 /// Name, class, spec and role of an actor for the UI.
 pub fn player_ref(fight: &Fight, id: ActorId) -> PlayerRef {
     let actor = fight.actors.get(id);
-    let spec = actor.spec_id.and_then(openlogs_gamedata::spec);
+    let spec = actor.shown_spec();
     let class = actor.class().and_then(openlogs_gamedata::class);
     PlayerRef {
         actor_id: id,
         name: actor.name.clone().unwrap_or_else(|| actor.guid.clone()),
         spec_id: actor.spec_id,
         spec_name: crate::player_dto::spec_name(fight, id),
+        spec_icon: spec.map(|s| s.icon.to_string()),
         class_id: class.map(|c| c.id),
         class_token: class.map(|c| c.token.clone()),
         role: spec.map(|s| s.role),
@@ -604,6 +607,29 @@ mod tests {
             dead_until: None,
             lethal_burst: None,
         }
+    }
+
+    #[test]
+    fn a_retail_player_ref_keeps_its_spec() {
+        let mut actors = Actors::new();
+        let mage = unit(&mut actors, "Player-1", "Faelan-Emberfall-EU", PLAYER_FLAGS);
+        actors.set_spec(mage, 62);
+        let player = player_ref(&fight(actors, Vec::new()), mage);
+        let arcane = openlogs_gamedata::spec(62).unwrap();
+        assert_eq!(
+            (
+                player.spec_name.as_deref(),
+                player.spec_icon.as_deref(),
+                player.role,
+                player.class_id
+            ),
+            (
+                Some("Arcane Mage"),
+                Some(arcane.icon.as_str()),
+                Some(Role::Damage),
+                Some(8)
+            )
+        );
     }
 
     #[test]

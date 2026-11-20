@@ -248,8 +248,9 @@ pub struct PlayerDetailDto {
 }
 
 pub(crate) fn spec_name(fight: &Fight, player: ActorId) -> Option<String> {
-    let spec = openlogs_gamedata::spec(fight.actors.get(player).spec_id?)?;
-    let class = openlogs_gamedata::class(spec.class_id)?;
+    let actor = fight.actors.get(player);
+    let spec = actor.shown_spec()?;
+    let class = openlogs_gamedata::class(actor.class()?)?;
     Some(format!("{} {}", spec.name, class.name))
 }
 

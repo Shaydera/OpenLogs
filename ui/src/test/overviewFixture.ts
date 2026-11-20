@@ -40,10 +40,10 @@ export const overviewFixture: QuickOverview = {
     ],
   },
   players: [
-    { actorId: 1, name: 'Edrin-Emberfall-EU', specId: 581, specName: 'Vengeance Demon Hunter', classId: 12, classToken: 'DEMONHUNTER', role: 'tank' },
-    { actorId: 2, name: 'Pyrrin-Emberfall-EU', specId: 105, specName: 'Restoration Druid', classId: 11, classToken: 'DRUID', role: 'healer' },
-    { actorId: 3, name: 'Wendel-Emberfall-EU', specId: 71, specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
-    { actorId: 4, name: 'Faelan-Emberfall-EU', specId: 62, specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' },
+    { actorId: 1, name: 'Edrin-Emberfall-EU', specId: 581, specIcon: 'ability_demonhunter_spectank', specName: 'Vengeance Demon Hunter', classId: 12, classToken: 'DEMONHUNTER', role: 'tank' },
+    { actorId: 2, name: 'Pyrrin-Emberfall-EU', specId: 105, specIcon: 'spell_nature_healingtouch', specName: 'Restoration Druid', classId: 11, classToken: 'DRUID', role: 'healer' },
+    { actorId: 3, name: 'Wendel-Emberfall-EU', specId: 71, specIcon: 'ability_warrior_savageblow', specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
+    { actorId: 4, name: 'Faelan-Emberfall-EU', specId: 62, specIcon: 'spell_holy_magicalsentry', specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' },
   ],
   spells: {
     '1236994': { name: 'Potion of Recklessness' },

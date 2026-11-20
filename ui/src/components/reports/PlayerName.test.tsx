@@ -8,6 +8,7 @@ const FAELAN: PlayerRef = {
   name: 'Faelan-Emberfall-EU',
   specId: 62,
   specName: 'Arcane Mage',
+  specIcon: 'spell_holy_magicalsentry',
   classId: 8,
   classToken: 'MAGE',
   role: 'damage',
@@ -16,10 +17,12 @@ const FAELAN: PlayerRef = {
 describe('PlayerName', () => {
   it('shows the spec icon, falls back to the class icon, then the monogram', () => {
     const { container, rerender } = render(<PlayerName player={FAELAN} />);
-    expect(container.querySelector('img')?.getAttribute('src')).toMatch(/spec\/62$/);
-    rerender(<PlayerName player={{ ...FAELAN, specId: null, specName: null }} />);
+    expect(container.querySelector('img')?.getAttribute('src')).toMatch(/icon\/spell_holy_magicalsentry$/);
+    rerender(<PlayerName player={{ ...FAELAN, specId: null, specName: null, specIcon: null }} />);
     expect(container.querySelector('img')?.getAttribute('src')).toMatch(/class\/8$/);
-    rerender(<PlayerName player={{ ...FAELAN, specId: null, specName: null, classId: null, classToken: null }} />);
+    rerender(<PlayerName player={{ ...FAELAN, specId: 1482, specName: null, specIcon: null }} />);
+    expect(container.querySelector('img')?.getAttribute('src'), 'a spec ID without a known spec').toMatch(/class\/8$/);
+    rerender(<PlayerName player={{ ...FAELAN, specId: null, specName: null, specIcon: null, classId: null, classToken: null }} />);
     expect(container.querySelector('img')).toBeNull();
     expect(screen.getByText('F')).toBeInTheDocument();
     rerender(<PlayerName player={undefined} />);

@@ -14,6 +14,7 @@ mod map_art;
 mod specs;
 mod spell_classes;
 mod spell_icons;
+mod talent_trees;
 
 pub use boss_portraits::{BossPortraitError, BossPortraitTable};
 pub use channel_spells::{ChannelSpellError, ChannelSpells};
@@ -46,3 +47,6 @@ pub use map_art::{BossPin, MapArt, MapArtError, MapArtTable};
 pub use specs::{ClassInfo, Role, SpecInfo, class, classes, spec, specs};
 pub use spell_classes::{SpellClasses, SpellClassesError};
 pub use spell_icons::{SpellIconError, SpellIconTable};
+pub use talent_trees::{
+    BEAR_FORMS, TalentTree, TalentTreeCsvs, TalentTrees, TalentTreesError, TreeRole, tree_role,
+};

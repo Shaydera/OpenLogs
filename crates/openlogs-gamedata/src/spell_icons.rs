@@ -98,7 +98,7 @@ impl SpellIconTable {
 }
 
 /// File data ID → icon name for every file under `Interface\ICONS\` with a usable name.
-fn read_icon_files(manifest: &[u8]) -> Result<HashMap<u32, String>, SpellIconError> {
+pub(crate) fn read_icon_files(manifest: &[u8]) -> Result<HashMap<u32, String>, SpellIconError> {
     let mut reader = csv::Reader::from_reader(manifest);
     let headers = reader.headers()?.clone();
     let id_col = column(&headers, "ID")?;

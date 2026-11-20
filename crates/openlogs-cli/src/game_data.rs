@@ -43,6 +43,10 @@ pub fn export(out_dir: &Path) -> Result<(), Box<dyn Error>> {
         forever_dir.join("spell-classes.json"),
         forever.classes.to_json(),
     )?;
+    fs::write(
+        forever_dir.join("talent-trees.json"),
+        forever.talent_trees.to_json(),
+    )?;
     // Written last: the app reads the tables only once the manifest names them.
     let manifest = serde_json::json!({
         "fetchedUnixMs": fetched_unix_ms,
@@ -57,6 +61,7 @@ pub fn export(out_dir: &Path) -> Result<(), Box<dyn Error>> {
             "spellIcons": forever.spells.icons.len(),
             "channelSpells": forever.spells.channels.len(),
             "spellClasses": forever.classes.class_spell_count(),
+            "talentTrees": forever.talent_trees.len(),
         },
     });
     fs::write(out_dir.join("manifest.json"), manifest.to_string())?;
@@ -72,11 +77,12 @@ pub fn export(out_dir: &Path) -> Result<(), Box<dyn Error>> {
         out_dir.display()
     );
     println!(
-        "Forever {}: {} spells, {} channel spells and {} class spells written to {}",
+        "Forever {}: {} spells, {} channel spells, {} class spells and {} talent trees written to {}",
         forever.build,
         forever.spells.icons.len(),
         forever.spells.channels.len(),
         forever.classes.class_spell_count(),
+        forever.talent_trees.len(),
         forever_dir.display()
     );
     Ok(())

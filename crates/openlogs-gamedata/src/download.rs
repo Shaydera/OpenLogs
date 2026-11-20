@@ -7,6 +7,7 @@ use crate::fetch::{Fetch, FetchError};
 use crate::map_art::{MapArtError, MapArtTable};
 use crate::spell_classes::{SpellClasses, SpellClassesError};
 use crate::spell_icons::{SpellIconError, SpellIconTable};
+use crate::talent_trees::{TalentTreeCsvs, TalentTrees, TalentTreesError};
 
 pub const WAGO_SPELL_MISC_URL: &str = "https://wago.tools/db2/SpellMisc/csv";
 pub const WAGO_SPELL_CLASS_OPTIONS_URL: &str = "https://wago.tools/db2/SpellClassOptions/csv";
@@ -41,6 +42,8 @@ pub enum DownloadError {
     BossPortraits(#[from] BossPortraitError),
     #[error("downloaded map art data is invalid: {0}")]
     MapArt(#[from] MapArtError),
+    #[error("downloaded talent tree data is invalid: {0}")]
+    TalentTrees(#[from] TalentTreesError),
     #[error("downloaded build list is invalid: {0}")]
     Builds(#[from] serde_json::Error),
     #[error("wago.tools lists no build of {0}")]
@@ -58,11 +61,13 @@ pub struct ForeverTables {
     pub build: String,
     pub spells: SpellTables,
     pub classes: SpellClasses,
+    pub talent_trees: TalentTrees,
 }
 
 /// Builds the spell icon and channel tables from the wago.tools exports.
 pub fn download_spell_tables<F: Fetch>(fetch: &F) -> Result<SpellTables, DownloadError> {
-    spell_tables(fetch, None)
+    let manifest = fetch.get(WAGO_MANIFEST_URL)?;
+    spell_tables(fetch, None, &manifest)
 }
 
 /// Builds the class and crowd-control spell table from the wago.tools exports.
@@ -73,11 +78,37 @@ pub fn download_spell_classes<F: Fetch>(fetch: &F) -> Result<SpellClasses, Downl
 /// Builds the spell tables of the newest Forever build.
 pub fn download_forever_tables<F: Fetch>(fetch: &F) -> Result<ForeverTables, DownloadError> {
     let build = latest_build(fetch, FOREVER_PRODUCT)?;
+    let manifest = fetch.get(&table_url(WAGO_MANIFEST_URL, Some(&build)))?;
     Ok(ForeverTables {
-        spells: spell_tables(fetch, Some(&build))?,
+        spells: spell_tables(fetch, Some(&build), &manifest)?,
         classes: spell_classes(fetch, Some(&build))?,
+        talent_trees: talent_trees(fetch, &build, &manifest)?,
         build,
     })
+}
+
+fn talent_trees<F: Fetch>(
+    fetch: &F,
+    build: &str,
+    manifest: &[u8],
+) -> Result<TalentTrees, DownloadError> {
+    let table = |name: &str| {
+        fetch.get(&table_url(
+            &format!("https://wago.tools/db2/{name}/csv"),
+            Some(build),
+        ))
+    };
+    Ok(TalentTrees::from_csv(&TalentTreeCsvs {
+        trait_node: &table("TraitNode")?,
+        node_x_entry: &table("TraitNodeXTraitNodeEntry")?,
+        node_entry: &table("TraitNodeEntry")?,
+        definition: &table("TraitDefinition")?,
+        talent: &table("Talent")?,
+        talent_tab: &table("TalentTab")?,
+        skill_line_x_trait_tree: &table("SkillLineXTraitTree")?,
+        chr_specialization: &table("ChrSpecialization")?,
+        manifest,
+    })?)
 }
 
 fn latest_build<F: Fetch>(fetch: &F, product: &'static str) -> Result<String, DownloadError> {
@@ -96,11 +127,14 @@ fn table_url(base: &str, build: Option<&str>) -> String {
     }
 }
 
-fn spell_tables<F: Fetch>(fetch: &F, build: Option<&str>) -> Result<SpellTables, DownloadError> {
+fn spell_tables<F: Fetch>(
+    fetch: &F,
+    build: Option<&str>,
+    manifest: &[u8],
+) -> Result<SpellTables, DownloadError> {
     let spell_misc = fetch.get(&table_url(WAGO_SPELL_MISC_URL, build))?;
-    let manifest = fetch.get(&table_url(WAGO_MANIFEST_URL, build))?;
     Ok(SpellTables {
-        icons: SpellIconTable::from_csv(&spell_misc, &manifest)?,
+        icons: SpellIconTable::from_csv(&spell_misc, manifest)?,
         channels: ChannelSpells::from_csv(&spell_misc)?,
     })
 }

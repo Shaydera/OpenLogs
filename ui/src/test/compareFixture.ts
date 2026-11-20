@@ -2,7 +2,7 @@ import type { FightRow, LogView, Outcome, PullComparison, QuickOverview } from '
 import { overviewFixture } from './overviewFixture';
 
 const [edrin, pyrrin, wendel, faelan] = overviewFixture.players;
-const spero = { actorId: 5, name: 'Speronis-Stonevale-EU', specId: 1473, specName: 'Augmentation Evoker', classId: 13, classToken: 'EVOKER', role: 'damage' as const };
+const spero = { actorId: 5, name: 'Speronis-Stonevale-EU', specId: 1473, specIcon: 'classicon_evoker_augmentation', specName: 'Augmentation Evoker', classId: 13, classToken: 'EVOKER', role: 'damage' as const };
 
 /** Pull 1: a 2:22 wipe at 60.4 %; Wendel died to world damage at 0:47. */
 const wipeOverview: QuickOverview = {

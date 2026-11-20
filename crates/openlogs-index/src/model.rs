@@ -4,7 +4,7 @@ use openlogs_parser::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// Bumped whenever the index layout or its rules change; invalidates cached indexes.
-pub const INDEX_FORMAT_VERSION: u32 = 16;
+pub const INDEX_FORMAT_VERSION: u32 = 17;
 /// The combat log format this tool is built and tested against.
 pub const SUPPORTED_LOG_VERSION: u32 = 22;
 /// Lookback before `ENCOUNTER_START` that belongs to a fight (pre-pots, pre-casts).
@@ -274,6 +274,9 @@ pub struct RosterEntry {
     /// `None` if the player never appeared in a combat event during the fight.
     pub name: Option<String>,
     pub spec_id: u32,
+    /// `(node, rank)` of each talent; kept for Forever only, whose spec comes from them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub talents: Vec<(u32, u32)>,
 }
 
 /// Display name of a difficulty ID; `None` for unknown IDs, which are shown raw.

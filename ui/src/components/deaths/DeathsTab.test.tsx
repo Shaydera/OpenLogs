@@ -29,7 +29,7 @@ const report: DeathsReport = {
   ...recapFixture,
   roster: [
     ...recapFixture.roster,
-    { actorId: 7, name: 'Sabrel-Emberfall-EU', specId: 269, specName: 'Windwalker Monk', classId: 10, classToken: 'MONK', role: 'damage' },
+    { actorId: 7, name: 'Sabrel-Emberfall-EU', specId: 269, specIcon: 'spell_monk_windwalker_spec', specName: 'Windwalker Monk', classId: 10, classToken: 'MONK', role: 'damage' },
   ],
   deaths: [faelan, sabrel],
 };

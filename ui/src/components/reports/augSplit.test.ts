@@ -3,8 +3,8 @@ import type { PlayerRef } from '../../api/types';
 import { type AugSplit, augDelta, augTipLines, deltaClass, reattributedTotal } from './augSplit';
 
 const roster = new Map<number, PlayerRef>([
-  [4, { actorId: 4, name: 'Faelan-Emberfall-EU', specId: 62, specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' }],
-  [5, { actorId: 5, name: 'Speronis-Stonevale-EU', specId: 1473, specName: 'Augmentation Evoker', classId: 13, classToken: 'EVOKER', role: 'damage' }],
+  [4, { actorId: 4, name: 'Faelan-Emberfall-EU', specId: 62, specIcon: 'spell_holy_magicalsentry', specName: 'Arcane Mage', classId: 8, classToken: 'MAGE', role: 'damage' }],
+  [5, { actorId: 5, name: 'Speronis-Stonevale-EU', specId: 1473, specIcon: 'classicon_evoker_augmentation', specName: 'Augmentation Evoker', classId: 13, classToken: 'EVOKER', role: 'damage' }],
 ]);
 const spells = { '395152': { name: 'Ebon Might' }, '409311': { name: 'Prescience' } };
 const split = (parts: Partial<AugSplit>): AugSplit => ({

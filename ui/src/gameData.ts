@@ -15,7 +15,7 @@ export interface GameDataManifest {
   /** Absent in an export made before map art was exported. */
   mapArt?: number;
   /** The spell tables of the Forever build, in `forever/`; absent in an export made before them. */
-  forever?: { build: string; spellIcons: number; channelSpells: number; spellClasses: number };
+  forever?: { build: string; spellIcons: number; channelSpells: number; spellClasses: number; talentTrees?: number };
 }
 
 /** The games with spell tables of their own. */
@@ -78,6 +78,13 @@ export const channelSpellsJson = (game: DataGame): Promise<string | null> => tab
 
 /** The class and crowd-control spells, for the engine. */
 export const spellClassesJson = (game: DataGame): Promise<string | null> => tableText('spell-classes.json', game).catch(() => null);
+
+/** The talent trees a Forever player's spec comes from, for the engine; no other game has them. */
+export async function talentTreesJson(game: DataGame): Promise<string | null> {
+  const manifest = await gameDataManifest();
+  if (game !== 'forever' || !manifest?.forever?.talentTrees) return null;
+  return tableText('talent-trees.json', game).catch(() => null);
+}
 
 /** Decodes the export's spell IDs, stored as differences to the previous ID. */
 export function decodeSpellIcons(table: { ids: number[]; icons: number[]; names: string[] }): SpellIcons {
