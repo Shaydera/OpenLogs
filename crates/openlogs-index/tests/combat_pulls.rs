@@ -458,7 +458,7 @@ fn talents_of_pulls(index: &openlogs_index::LogIndex) -> Vec<RosterTalents<'_>> 
             fight
                 .roster
                 .iter()
-                .map(|entry| (entry.guid.as_str(), entry.talents.clone()))
+                .map(|entry| (entry.guid.as_str(), index.talents_of(entry).to_vec()))
                 .collect()
         })
         .collect()
@@ -475,18 +475,17 @@ fn a_forever_combat_pull_keeps_the_last_logged_talents() {
             vec![(FAELAN.guid, faelan), (PYRRIN.guid, vec![])],
         ]
     );
+    assert_eq!(
+        index.talent_sets.len(),
+        1,
+        "both pulls share one talent set"
+    );
 }
 
 #[test]
 fn a_retail_index_keeps_no_talents() {
     let index = index_bytes(boss_then_trash(1).as_bytes());
-    assert!(
-        index
-            .fights
-            .iter()
-            .flat_map(|fight| &fight.roster)
-            .all(|entry| entry.talents.is_empty())
-    );
+    assert!(index.talent_sets.is_empty());
 }
 
 #[test]

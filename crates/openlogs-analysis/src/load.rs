@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use openlogs_index::{FightSummary, MapBounds, Outcome, RosterEntry};
+use openlogs_index::{FightSummary, LogIndex, MapBounds, Outcome, RosterEntry};
 use openlogs_parser::{
     CombatEvent, CombatKind, EncounterEnd, EncounterStart, Event as LogEvent, HealVia, Lines,
     LogLine, Spell, Timestamp, parse_line,
@@ -83,11 +83,18 @@ fn apply_roster(fight: &mut Fight, roster: &[RosterEntry]) {
         if entry.spec_id != 0 && fight.actors.get(id).spec_id.is_none() {
             fight.actors.set_spec(id, entry.spec_id);
         }
-        if !entry.talents.is_empty() {
-            fight
-                .talents
-                .entry(id)
-                .or_insert_with(|| entry.talents.clone());
+    }
+}
+
+/// A combat pull's talents come from `COMBATANT_INFO` before its range, which only the index
+/// kept; talents logged inside the range win.
+pub fn note_roster_talents(fight: &mut Fight, summary: &FightSummary, index: &LogIndex) {
+    for entry in &summary.roster {
+        let talents = index.talents_of(entry);
+        if let Some(id) = fight.actors.id(&entry.guid)
+            && !talents.is_empty()
+        {
+            fight.talents.entry(id).or_insert_with(|| talents.to_vec());
         }
     }
 }

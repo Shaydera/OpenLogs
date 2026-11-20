@@ -7,11 +7,11 @@ use crate::model::{
     COMBAT_QUIET_MICROS, CombatPull, DEAD_ENEMY_MEMORY_MICROS, FightSummary, Outcome, RosterEntry,
 };
 
-/// A player's spec and talents from their latest `COMBATANT_INFO`.
-#[derive(Debug, Clone, Default)]
+/// A player's spec and talent set from their latest `COMBATANT_INFO`.
+#[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct KnownSpec {
     pub(crate) spec_id: u32,
-    pub(crate) talents: Vec<(u32, u32)>,
+    pub(crate) talent_set: Option<u32>,
 }
 
 /// A combat pull still going on.
@@ -186,7 +186,7 @@ impl OpenCombat {
         for entry in &mut summary.roster {
             if let Some(known) = specs.get(&entry.guid) {
                 entry.spec_id = known.spec_id;
-                entry.talents.clone_from(&known.talents);
+                entry.talent_set = known.talent_set;
             }
         }
         self.summary
@@ -199,7 +199,7 @@ impl OpenCombat {
                 guid: player.guid.to_string(),
                 name: player.name.map(str::to_string),
                 spec_id: 0,
-                talents: Vec::new(),
+                talent_set: None,
             });
         }
     }
