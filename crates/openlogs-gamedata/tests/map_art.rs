@@ -1,6 +1,6 @@
 //! The replay's map art index from trimmed real wago.tools exports.
 
-use openlogs_gamedata::{BossPin, MapArtError, MapArtTable};
+use openlogs_gamedata::{BossPin, MapArtError, MapArtTable, MissingColumn};
 
 const UI_MAP_ASSIGNMENT: &[u8] = include_bytes!("fixtures/UiMapAssignment.csv");
 const UI_MAP_GROUP_MEMBER: &[u8] = include_bytes!("fixtures/UiMapGroupMember.csv");
@@ -125,7 +125,7 @@ fn an_html_page_fails_with_a_missing_column() {
             MAP,
             JOURNAL_ENCOUNTER
         ),
-        Err(MapArtError::MissingColumn("UiMapID"))
+        Err(MapArtError::MissingColumn(MissingColumn("UiMapID")))
     ));
     assert!(matches!(
         MapArtTable::from_csv(
@@ -135,7 +135,7 @@ fn an_html_page_fails_with_a_missing_column() {
             MAP,
             b"<!DOCTYPE html>\n"
         ),
-        Err(MapArtError::MissingColumn("ID"))
+        Err(MapArtError::MissingColumn(MissingColumn("ID")))
     ));
 }
 

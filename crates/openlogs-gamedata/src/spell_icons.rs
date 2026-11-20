@@ -2,14 +2,16 @@ use std::collections::HashMap;
 
 use thiserror::Error;
 
+use crate::csv_columns::{MissingColumn, column};
+
 use crate::icon_name::{icon_name_from_file, is_valid_icon_name};
 
 #[derive(Debug, Error)]
 pub enum SpellIconError {
     #[error("CSV error: {0}")]
     Csv(#[from] csv::Error),
-    #[error("CSV is missing the column {0}")]
-    MissingColumn(&'static str),
+    #[error(transparent)]
+    MissingColumn(#[from] MissingColumn),
 }
 
 /// Spell ID → zamimg icon name.
@@ -119,11 +121,4 @@ pub(crate) fn read_icon_files(manifest: &[u8]) -> Result<HashMap<u32, String>, S
         }
     }
     Ok(files)
-}
-
-fn column(headers: &csv::StringRecord, name: &'static str) -> Result<usize, SpellIconError> {
-    headers
-        .iter()
-        .position(|header| header == name)
-        .ok_or(SpellIconError::MissingColumn(name))
 }

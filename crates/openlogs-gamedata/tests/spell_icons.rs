@@ -1,4 +1,4 @@
-use openlogs_gamedata::{SpellIconError, SpellIconTable, is_valid_icon_name};
+use openlogs_gamedata::{MissingColumn, SpellIconError, SpellIconTable, is_valid_icon_name};
 
 const MANIFEST: &str = "ID,FilePath,FileName\n\
 236205,Interface\\ICONS\\,Ability_Mage_ArcaneBarrage.blp\n\
@@ -54,7 +54,9 @@ fn the_web_table_lists_spells_in_order_and_names_each_icon_once() {
     );
     assert!(matches!(
         SpellIconTable::from_csv(b"ID,DifficultyID,SpellID\n1,0,5\n", MANIFEST.as_bytes()),
-        Err(SpellIconError::MissingColumn("SpellIconFileDataID"))
+        Err(SpellIconError::MissingColumn(MissingColumn(
+            "SpellIconFileDataID"
+        )))
     ));
 }
 

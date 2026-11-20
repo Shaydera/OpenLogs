@@ -8,6 +8,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::csv_columns::{MissingColumn, column};
+
 /// `Map.InstanceType` of a raid.
 const RAID_INSTANCE: u32 = 2;
 
@@ -15,8 +17,8 @@ const RAID_INSTANCE: u32 = 2;
 pub enum MapArtError {
     #[error("CSV error: {0}")]
     Csv(#[from] csv::Error),
-    #[error("CSV is missing the column {0}")]
-    MissingColumn(&'static str),
+    #[error(transparent)]
+    MissingColumn(#[from] MissingColumn),
     #[error("stored map art table is invalid: {0}")]
     Stored(#[from] serde_json::Error),
     #[error("the exports hold no map art or no boss pin")]
@@ -268,11 +270,4 @@ fn read_pins(csv: &[u8]) -> Result<BTreeMap<u32, BossPin>, MapArtError> {
         pins.entry(encounter).or_insert(pin);
     }
     Ok(pins)
-}
-
-fn column(headers: &csv::StringRecord, name: &'static str) -> Result<usize, MapArtError> {
-    headers
-        .iter()
-        .position(|header| header == name)
-        .ok_or(MapArtError::MissingColumn(name))
 }

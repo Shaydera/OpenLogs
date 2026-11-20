@@ -1,6 +1,6 @@
 //! Boss portraits from trimmed real wago.tools exports.
 
-use openlogs_gamedata::{BossPortraitError, BossPortraitTable};
+use openlogs_gamedata::{BossPortraitError, BossPortraitTable, MissingColumn};
 
 const JOURNAL_ENCOUNTER: &[u8] = include_bytes!("fixtures/JournalEncounter.csv");
 const JOURNAL_ENCOUNTER_CREATURE: &[u8] = include_bytes!("fixtures/JournalEncounterCreature.csv");
@@ -46,7 +46,7 @@ fn the_web_table_maps_encounters_to_portraits_and_unusable_exports_fail() {
     );
     assert!(matches!(
         BossPortraitTable::from_csv(b"<!DOCTYPE html>\n", JOURNAL_ENCOUNTER_CREATURE, MANIFEST),
-        Err(BossPortraitError::MissingColumn("ID"))
+        Err(BossPortraitError::MissingColumn(MissingColumn("ID")))
     ));
     assert!(matches!(
         BossPortraitTable::from_csv(
