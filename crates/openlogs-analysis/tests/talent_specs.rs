@@ -103,6 +103,22 @@ fn a_feral_druid_tanks_a_pull_spent_in_bear_form() {
 }
 
 #[test]
+fn a_feral_druid_who_began_the_pull_in_bear_form_tanks_it() {
+    let mut b = FightBuilder::new(60_000);
+    let druid = b.player("Player-1", "Brakk-Thornfield-Normal-EU", 1484);
+    b.fight.talents.insert(druid, vec![(FERAL_NODE, 31)]);
+    b.fight.in_bear_form_at_start.insert(druid);
+    let mut fight = b.build();
+
+    assign_talent_specs(&mut fight, &trees());
+
+    assert_eq!(
+        shown(&fight, druid).map(|(_, _, role)| role),
+        Some(Role::Tank)
+    );
+}
+
+#[test]
 fn shown_spec_prefers_the_retail_spec() {
     let mut b = FightBuilder::new(60_000);
     let warrior = b.player("Player-1", "Faelan-Emberfall-EU", 73);

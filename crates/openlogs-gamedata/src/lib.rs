@@ -50,5 +50,5 @@ pub use specs::{ClassInfo, Role, SpecInfo, class, classes, spec, specs};
 pub use spell_classes::{SpellClasses, SpellClassesError};
 pub use spell_icons::{SpellIconError, SpellIconTable};
 pub use talent_trees::{
-    BEAR_FORMS, TalentTree, TalentTreeCsvs, TalentTrees, TalentTreesError, TreeRole, tree_role,
+    TalentTree, TalentTreeCsvs, TalentTrees, TalentTreesError, TreeRole, tree_role,
 };

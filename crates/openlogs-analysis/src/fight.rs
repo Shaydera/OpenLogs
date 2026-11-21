@@ -58,6 +58,8 @@ pub struct Fight {
     pub roster: BTreeSet<ActorId>,
     /// `(node, rank)` of each player's talents, from `COMBATANT_INFO` in the pull or the index.
     pub talents: HashMap<ActorId, Vec<(u32, u32)>>,
+    /// Players the index saw in a bear form when the pull began.
+    pub in_bear_form_at_start: BTreeSet<ActorId>,
     /// The log's game, which decides how player names are shown; `None` until the caller
     /// that knows the log sets it.
     pub flavor: Option<GameFlavor>,

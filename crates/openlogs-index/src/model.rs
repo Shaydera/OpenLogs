@@ -4,7 +4,7 @@ use openlogs_parser::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// Bumped whenever the index layout or its rules change; invalidates cached indexes.
-pub const INDEX_FORMAT_VERSION: u32 = 19;
+pub const INDEX_FORMAT_VERSION: u32 = 20;
 /// The combat log format this tool is built and tested against.
 pub const SUPPORTED_LOG_VERSION: u32 = 22;
 /// Lookback before `ENCOUNTER_START` that belongs to a fight (pre-pots, pre-casts).
@@ -100,6 +100,9 @@ impl DataGame {
         }
     }
 }
+
+/// Bear Form and Dire Bear Form: a Feral Combat druid's time in them decides whether they tank.
+pub const BEAR_FORMS: [u32; 2] = [5487, 9634];
 
 /// Difficulty ID of Mythic+ (Mythic Keystone) dungeons; run entries carry it too.
 pub const MYTHIC_KEYSTONE_DIFFICULTY: u32 = 8;
@@ -316,6 +319,10 @@ pub struct RosterEntry {
     /// whose spec comes from them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub talent_set: Option<u32>,
+    /// In one of the [`BEAR_FORMS`] when the pull began, as the log last showed; kept for
+    /// Forever only. Forms taken long before a pull leave no line inside it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bear_form: bool,
 }
 
 /// Display name of a difficulty ID; `None` for unknown IDs, which are shown raw.

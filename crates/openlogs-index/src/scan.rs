@@ -4,7 +4,7 @@ use std::path::Path;
 use openlogs_parser::{Lines, RawLine, parse_header, parse_line};
 
 use crate::builder::{IndexBuilder, LineSpan};
-use crate::model::LogIndex;
+use crate::model::{BEAR_FORMS, LogIndex};
 
 /// Events that matter to the index even outside fights. Mythic+ runs start, end and list
 /// their players between boss pulls.
@@ -39,6 +39,14 @@ const COMBAT_PULL_EVENTS: [&str; 15] = [
     "DAMAGE_SPLIT",
     "UNIT_DIED",
 ];
+
+/// Entering or leaving a bear form, which a pull begun later inherits.
+fn is_bear_form_line(name: &str, text: &str) -> bool {
+    matches!(name, "SPELL_AURA_APPLIED" | "SPELL_AURA_REMOVED")
+        && BEAR_FORMS
+            .iter()
+            .any(|spell| text.contains(&format!(",{spell},")))
+}
 
 /// A longer line is no combat log line. It counts as broken instead of being kept, which bounds
 /// the memory a wrong file (a video, an archive) can take.
@@ -152,6 +160,12 @@ impl Indexer {
                 Ok((timestamp, name))
                     if !META_EVENTS.contains(&name) && !COMBAT_PULL_EVENTS.contains(&name) =>
                 {
+                    if self.builder.tracks_bear_forms()
+                        && is_bear_form_line(name, text)
+                        && let Ok(line) = parse_line(text, fields)
+                    {
+                        self.builder.note_bear_form_line(&line);
+                    }
                     self.builder.push_skipped(span, timestamp);
                     return;
                 }

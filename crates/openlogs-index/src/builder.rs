@@ -1,17 +1,17 @@
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use openlogs_parser::{
-    ChallengeModeEnd, ChallengeModeStart, CombatEvent, CombatKind, EncounterEnd, EncounterStart,
-    Event, LogLine, Timestamp,
+    AuraAction, ChallengeModeEnd, ChallengeModeStart, CombatEvent, CombatKind, EncounterEnd,
+    EncounterStart, Event, LogLine, Timestamp,
 };
 
 use crate::combat::{DeadEnemies, Exchange, KnownSpec, OpenCombat, counted_damage, exchange};
 use crate::markers::MarkerState;
 use crate::model::{
-    BOSS_TAIL_MICROS, ChallengeMode, DUNGEON_DIFFICULTIES, END_GRACE_LINES, END_GRACE_MICROS,
-    FightSummary, GameFlavor, LEAD_MAX_MICROS, LogIndex, MYTHIC_KEYSTONE_DIFFICULTY, MapBounds,
-    Outcome, PRELUDE_MICROS, RESUME_MAX_GAP_MICROS, RosterEntry, RunKind, SUPPORTED_LOG_VERSION,
-    WorldMarker,
+    BEAR_FORMS, BOSS_TAIL_MICROS, ChallengeMode, DUNGEON_DIFFICULTIES, END_GRACE_LINES,
+    END_GRACE_MICROS, FightSummary, GameFlavor, LEAD_MAX_MICROS, LogIndex,
+    MYTHIC_KEYSTONE_DIFFICULTY, MapBounds, Outcome, PRELUDE_MICROS, RESUME_MAX_GAP_MICROS,
+    RosterEntry, RunKind, SUPPORTED_LOG_VERSION, WorldMarker,
 };
 use crate::runs::{OpenRun, run_outcome};
 
@@ -55,6 +55,8 @@ pub struct IndexBuilder {
     last_specs: HashMap<String, KnownSpec>,
     /// Position of each talent list in the index's `talent_sets`.
     talent_set_ids: HashMap<Vec<(u32, u32)>, u32>,
+    /// Players in one of the [`BEAR_FORMS`] as the log last showed; tracked for Forever only.
+    bears: HashSet<String>,
     markers: MarkerState,
     /// Latest bounds per `MAP_CHANGE` map ID; facts about the map, so never reset.
     map_bounds: BTreeMap<u32, MapBounds>,
@@ -88,6 +90,7 @@ impl IndexBuilder {
             zone_difficulty: 0,
             last_specs: HashMap::new(),
             talent_set_ids: HashMap::new(),
+            bears: HashSet::new(),
             markers: MarkerState::default(),
             map_bounds: BTreeMap::new(),
             last_index: 0,
@@ -99,6 +102,41 @@ impl IndexBuilder {
     /// open, except damage, miss and death events, which start and end combat pulls.
     pub fn in_fight(&self) -> bool {
         self.open.is_some()
+    }
+
+    /// Whether the index reads the bear form lines outside fights, which only Forever needs.
+    pub fn tracks_bear_forms(&self) -> bool {
+        self.index.flavor == Some(GameFlavor::Forever)
+    }
+
+    /// A bear form line outside boss pulls, which is otherwise skipped like other aura lines.
+    pub fn note_bear_form_line(&mut self, line: &LogLine<'_>) {
+        if let Event::Combat(event) = &line.event {
+            self.note_bear_form(event);
+        }
+    }
+
+    fn note_bear_form(&mut self, event: &CombatEvent<'_>) {
+        let CombatKind::Aura(change) = event.kind else {
+            return;
+        };
+        if !self.tracks_bear_forms()
+            || event.source.guid != event.target.guid
+            || !event
+                .spell
+                .is_some_and(|spell| BEAR_FORMS.contains(&spell.id))
+        {
+            return;
+        }
+        match change.action {
+            AuraAction::Applied => {
+                self.bears.insert(event.target.guid.to_string());
+            }
+            AuraAction::Removed => {
+                self.bears.remove(event.target.guid);
+            }
+            _ => {}
+        }
     }
 
     /// Records a line outside boss pulls that was only parsed up to its event name.
@@ -183,15 +221,17 @@ impl IndexBuilder {
                     talent_set: (self.index.flavor == Some(GameFlavor::Forever))
                         .then(|| self.talent_set(info.talents().collect())),
                 };
+                let bear = self.bears.contains(info.guid);
                 if let Some(fight) = &mut self.open {
-                    add_combatant(&mut fight.summary.roster, info.guid, &known);
+                    add_combatant(&mut fight.summary.roster, info.guid, &known, bear);
                 }
                 if let Some(run) = &mut self.run {
-                    add_combatant(&mut run.summary.roster, info.guid, &known);
+                    add_combatant(&mut run.summary.roster, info.guid, &known, bear);
                 }
                 self.last_specs.insert(info.guid.to_string(), known);
             }
             Event::Combat(event) => {
+                self.note_bear_form(event);
                 if self.run.as_mut().is_some_and(|run| run.learn_copy(event)) {
                     self.settle_copy();
                 }
@@ -847,7 +887,11 @@ impl IndexBuilder {
         let Some(combat) = &mut self.combat else {
             return;
         };
+        let known_players = combat.summary.roster.len();
         combat.observe(event, span, timestamp, spent);
+        for entry in &mut combat.summary.roster[known_players..] {
+            entry.bear_form = self.bears.contains(&entry.guid);
+        }
         if let CombatKind::UnitDied { unconscious: false } = event.kind
             && let Some(outcome) = combat.on_death(event.target.guid)
         {
@@ -950,13 +994,14 @@ fn extend(summary: &mut FightSummary, span: LineSpan, timestamp: Timestamp) {
     summary.end_offset = span.next_offset;
 }
 
-fn add_combatant(roster: &mut Vec<RosterEntry>, guid: &str, known: &KnownSpec) {
+fn add_combatant(roster: &mut Vec<RosterEntry>, guid: &str, known: &KnownSpec, bear: bool) {
     if roster.iter().all(|entry| entry.guid != guid) {
         roster.push(RosterEntry {
             guid: guid.to_string(),
             name: None,
             spec_id: known.spec_id,
             talent_set: known.talent_set,
+            bear_form: bear,
         });
     }
 }

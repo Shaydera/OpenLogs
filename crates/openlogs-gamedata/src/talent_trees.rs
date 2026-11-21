@@ -8,9 +8,6 @@ use crate::csv_columns::{MissingColumn, column};
 use crate::specs::Role;
 use crate::spell_icons::{SpellIconError, read_icon_files};
 
-/// Bear Form and Dire Bear Form.
-pub const BEAR_FORMS: [u32; 2] = [5487, 9634];
-
 /// `TraitNode.PosX` where the middle and the right column of a class tree begin.
 const COLUMN_STARTS: [i64; 2] = [4000, 8000];
 

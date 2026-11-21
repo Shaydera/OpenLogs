@@ -48,6 +48,7 @@ impl FightBuilder {
                 heal_grants: Vec::new(),
                 delayed_hits: Vec::new(),
                 talents: HashMap::new(),
+                in_bear_form_at_start: BTreeSet::new(),
                 roster: BTreeSet::new(),
                 flavor: None,
             },

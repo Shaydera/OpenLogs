@@ -80,6 +80,9 @@ fn apply_roster(fight: &mut Fight, roster: &[RosterEntry]) {
             continue;
         };
         fight.roster.insert(id);
+        if entry.bear_form {
+            fight.in_bear_form_at_start.insert(id);
+        }
         if entry.spec_id != 0 && fight.actors.get(id).spec_id.is_none() {
             fight.actors.set_spec(id, entry.spec_id);
         }
@@ -273,6 +276,7 @@ impl FightBuilder {
                 heal_grants: Vec::new(),
                 delayed_hits: Vec::new(),
                 talents: HashMap::new(),
+                in_bear_form_at_start: BTreeSet::new(),
                 roster: BTreeSet::new(),
                 flavor: None,
             },
