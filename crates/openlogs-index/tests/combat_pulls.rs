@@ -431,20 +431,61 @@ fn combat_pulls_take_the_last_known_spec() {
 
 /// A boss pull with Faelan's combatant info, then a trash pull, logged by `project_id`.
 fn boss_then_trash(project_id: u32) -> String {
+    boss_then_trash_with(project_id, "", "")
+}
+
+/// [`boss_then_trash`] with `before` logged before the boss pull and `between` after it.
+fn boss_then_trash_with(project_id: u32, before: &str, between: &str) -> String {
     [
-        &format!("10/7/2026 19:03:00.0000  COMBAT_LOG_VERSION,22,ADVANCED_LOG_ENABLED,1,BUILD_VERSION,1.60.1,PROJECT_ID,{project_id}
-"),
-        "10/7/2026 19:03:02.0762  ENCOUNTER_START,3492,\"Ula'tek\",15,23,3004
-",
-        "10/7/2026 19:03:02.0762  COMBATANT_INFO,Player-4101-8E8C0182,1,100,200,300,400,0,0,0,0,10,10,10,0,92,1025,1025,1025,230,807,110,110,110,2726,1488,[(105722,130451,5),(105724,130453,3)],(0,0,0,0),[(249976,330,(),(7364,0),())],[],57,0,0,0
-",
+        &format!("10/7/2026 19:03:00.0000  COMBAT_LOG_VERSION,22,ADVANCED_LOG_ENABLED,1,BUILD_VERSION,1.60.1,PROJECT_ID,{project_id}\n"),
+        before,
+        "10/7/2026 19:03:02.0762  ENCOUNTER_START,3492,\"Ula'tek\",15,23,3004\n",
+        "10/7/2026 19:03:02.0762  COMBATANT_INFO,Player-4101-8E8C0182,1,100,200,300,400,0,0,0,0,10,10,10,0,92,1025,1025,1025,230,807,110,110,110,2726,1488,[(105722,130451,5),(105724,130453,3)],(0,0,0,0),[(249976,330,(),(7364,0),())],[],57,0,0,0\n",
         &hit("10/7/2026 19:03:03.0000", &FAELAN, &KNIGHT, 100),
-        "10/7/2026 19:04:02.0762  ENCOUNTER_END,3492,\"Ula'tek\",15,23,0,60000
-",
+        "10/7/2026 19:04:02.0762  ENCOUNTER_END,3492,\"Ula'tek\",15,23,0,60000\n",
+        between,
         &hit("10/7/2026 19:05:00.0000", &FAELAN, &KNIGHT, 100),
         &hit("10/7/2026 19:05:01.0000", &KNIGHT, &PYRRIN, 100),
     ]
     .concat()
+}
+
+/// Faelan entering (`APPLIED`) or leaving (`REMOVED`) Dire Bear Form at `timestamp`.
+fn dire_bear(timestamp: &str, action: &str) -> String {
+    format!(
+        "{timestamp}  SPELL_AURA_{action},{guid},\"{name}\",0x511,0x0,{guid},\"{name}\",0x511,0x0,9634,\"Dire Bear Form\",0x1,BUFF\n",
+        guid = FAELAN.guid,
+        name = FAELAN.name,
+    )
+}
+
+/// Each pull's players who were in bear form when it began.
+fn bears_of_pulls(index: &openlogs_index::LogIndex) -> Vec<Vec<&str>> {
+    index
+        .fights
+        .iter()
+        .map(|fight| {
+            fight
+                .roster
+                .iter()
+                .filter(|entry| entry.bear_form)
+                .map(|entry| entry.guid.as_str())
+                .collect()
+        })
+        .collect()
+}
+
+#[test]
+fn a_forever_pull_knows_who_began_it_in_bear_form() {
+    let log = boss_then_trash_with(
+        18,
+        &dire_bear("10/7/2026 19:02:00.0000", "APPLIED"),
+        &dire_bear("10/7/2026 19:04:30.0000", "REMOVED"),
+    );
+    assert_eq!(
+        bears_of_pulls(&index_bytes(log.as_bytes())),
+        [vec![FAELAN.guid], vec![]]
+    );
 }
 
 /// Each player's `(node, rank)` talents, by GUID.
@@ -483,9 +524,11 @@ fn a_forever_combat_pull_keeps_the_last_logged_talents() {
 }
 
 #[test]
-fn a_retail_index_keeps_no_talents() {
-    let index = index_bytes(boss_then_trash(1).as_bytes());
+fn a_retail_index_keeps_no_talents_or_bear_forms() {
+    let log = boss_then_trash_with(1, &dire_bear("10/7/2026 19:02:00.0000", "APPLIED"), "");
+    let index = index_bytes(log.as_bytes());
     assert!(index.talent_sets.is_empty());
+    assert!(bears_of_pulls(&index).iter().all(Vec::is_empty));
 }
 
 #[test]

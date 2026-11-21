@@ -200,6 +200,7 @@ impl OpenCombat {
                 name: player.name.map(str::to_string),
                 spec_id: 0,
                 talent_set: None,
+                bear_form: false,
             });
         }
     }

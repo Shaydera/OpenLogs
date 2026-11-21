@@ -1,4 +1,5 @@
-use openlogs_gamedata::{BEAR_FORMS, Role, TalentTrees, TreeRole, tree_role};
+use openlogs_gamedata::{Role, TalentTrees, TreeRole, tree_role};
+use openlogs_index::BEAR_FORMS;
 
 use crate::actors::{ActorId, TalentSpec};
 use crate::auras::{AuraInterval, aura_intervals, union_ms};
@@ -64,5 +65,8 @@ fn bear_form_share(fight: &Fight, bear_forms: &[AuraInterval], player: ActorId) 
         .filter(|interval| interval.target == player)
         .map(|interval| (interval.start_ms, interval.end_ms))
         .collect();
+    if spans.is_empty() && fight.in_bear_form_at_start.contains(&player) {
+        return 1.0;
+    }
     union_ms(&spans, 0, duration) as f64 / f64::from(duration)
 }

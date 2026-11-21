@@ -122,12 +122,14 @@ fn a_run_is_indexed_with_its_key_its_roster_and_its_prelude() {
                 name: Some("Faelan-Emberfall-EU".into()),
                 spec_id: 62,
                 talent_set: None,
+                bear_form: false,
             },
             RosterEntry {
                 guid: "Player-4101-77D4A765".into(),
                 name: Some("Pyrrin-Emberfall-EU".into()),
                 spec_id: 105,
                 talent_set: None,
+                bear_form: false,
             },
         ]
     );
