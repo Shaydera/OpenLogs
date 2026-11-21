@@ -1,11 +1,13 @@
 use std::collections::BTreeMap;
 
 use openlogs_analysis::{
-    ActorId, ContextItem, ContextState, Death, DeathContext, Fight, Hit, NO_SPELL, NOBODY,
-    PhaseKind, QuickOverview, SpellId, listed_player,
+    ActorId, ContextItem, ContextState, Death, DeathContext, Fight, Hit, NO_SPELL, PhaseKind,
+    QuickOverview, SpellId, listed_player,
 };
 use openlogs_gamedata::{ConsumableKind, CooldownCategory, Curated, Role};
 use serde::Serialize;
+
+use crate::refs::name_of;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -265,11 +267,6 @@ fn note_spell(
     spells.entry(id).or_insert(SpellRef { name });
 }
 
-fn actor_name(fight: &Fight, id: ActorId) -> String {
-    let actor = fight.actors.get(id);
-    actor.name.clone().unwrap_or_else(|| actor.guid.clone())
-}
-
 /// The death context without absorb shields: the overview's death list and the player page's
 /// death sentence do not show rotational shields; only the death recap lists them.
 pub(crate) fn without_shields(curated: &Curated, context: &[DeathContext]) -> Vec<DeathContext> {
@@ -359,7 +356,7 @@ pub(crate) fn hit_dto(
     HitDto {
         t: hit.t,
         spell_id: hit.spell,
-        source_name: (hit.source != NOBODY).then(|| actor_name(fight, hit.source)),
+        source_name: name_of(fight, hit.source),
         amount: hit.amount,
         overkill: hit.overkill,
         environmental: hit.environmental,
@@ -391,7 +388,7 @@ pub fn death_dto(
     let context = context_dtos(fight, curated, context, spells);
     DeathDto {
         player: death.player,
-        player_name: actor_name(fight, death.player),
+        player_name: name_of(fight, death.player).unwrap_or_default(),
         t: death.t,
         killing_blow,
         damage_last_5s,
@@ -574,7 +571,7 @@ pub fn player_ref(fight: &Fight, id: ActorId) -> PlayerRef {
     let class = actor.class().and_then(openlogs_gamedata::class);
     PlayerRef {
         actor_id: id,
-        name: actor.name.clone().unwrap_or_else(|| actor.guid.clone()),
+        name: name_of(fight, id).unwrap_or_default(),
         spec_id: actor.spec_id,
         spec_name: crate::player_dto::spec_name(fight, id),
         spec_icon: spec.map(|s| s.icon.to_string()),
@@ -586,7 +583,9 @@ pub fn player_ref(fight: &Fight, id: ActorId) -> PlayerRef {
 
 #[cfg(test)]
 mod tests {
-    use openlogs_analysis::{Actors, Attribution, Event, EventKind, ReportFilter, SpellInfo};
+    use openlogs_analysis::{
+        Actors, Attribution, Event, EventKind, NOBODY, ReportFilter, SpellInfo,
+    };
 
     use super::*;
     use crate::test_fight::{PLAYER_FLAGS, fight, unit};

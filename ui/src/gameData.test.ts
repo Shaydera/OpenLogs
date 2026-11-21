@@ -100,29 +100,29 @@ describe('game data tables', () => {
     const notified = vi.fn();
     subscribeIconTables(notified);
 
-    setCurrentLog({ game: { kind: 'forever' }, dataGame: 'forever' });
+    setCurrentLog({ dataGame: 'forever' });
     loadIconTables();
     await vi.waitFor(() => expect(bearForm()).toBe('ability_racial_bearform'));
 
     notified.mockClear();
-    setCurrentLog({ game: { kind: 'retail' }, dataGame: 'retail' });
+    setCurrentLog({ dataGame: 'retail' });
     expect(notified).toHaveBeenCalled();
     await vi.waitFor(() => expect(bearForm()).toBe('retail_icon'));
 
-    setCurrentLog({ game: { kind: 'forever' }, dataGame: 'forever' });
+    setCurrentLog({ dataGame: 'forever' });
     expect(bearForm(), 'a loaded table is shown again at once').toBe('ability_racial_bearform');
   });
 
-  it('leaves the icons alone when a refreshed log keeps its game', async () => {
+  it('leaves the icons alone when a refreshed log keeps its game data', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 404 })));
     const { setCurrentLog } = await import('./currentGame');
     const { iconTables, subscribeIconTables } = await import('./gameData');
-    setCurrentLog({ game: { kind: 'forever' }, dataGame: 'forever' });
+    setCurrentLog({ dataGame: 'forever' });
     const shown = iconTables();
     const notified = vi.fn();
     subscribeIconTables(notified);
 
-    setCurrentLog({ game: { kind: 'forever' }, dataGame: 'forever' });
+    setCurrentLog({ dataGame: 'forever' });
 
     expect(notified).not.toHaveBeenCalled();
     expect(iconTables()).toBe(shown);

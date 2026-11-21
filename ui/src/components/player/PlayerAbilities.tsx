@@ -5,7 +5,7 @@ import { formatAmountTenths, formatCount, formatShare } from '../../i18n/format'
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
-import { classColor, shortName } from '../overview/players';
+import { classColor } from '../overview/players';
 import { toneClass } from '../reports/augSplit';
 import { PlayerIcon } from '../reports/PlayerName';
 import { barWidth, reportSpellName, rosterIndex } from '../reports/reportData';
@@ -117,7 +117,7 @@ export function PlayerAbilities({ detail }: { detail: PlayerDetail }) {
           <div
             className={classes('ab-rows', healing && 'ab-rows-heal', reattributed && 'ab-rows-aug')}
             role="table"
-            aria-label={t('report.abilitiesOf', { name: shortName(detail.player.name) })}
+            aria-label={t('report.abilitiesOf', { name: detail.player.name })}
           >
             <div className={`${table.grid} ab-row-head`} role="row">
               <span role="columnheader">
@@ -186,7 +186,7 @@ function partsLabel(row: PlayerAbility, name: string, hasPets: boolean, healing:
 const targetsOf = (name: string, healing: boolean) => t(healing ? 'targets.healedOf' : 'targets.of', { name });
 
 function rowLabel(row: PlayerAbility, detail: PlayerDetail): string {
-  if (row.kind === 'pet') return t('player.petGroup', { name: shortName(row.actorName), count: row.pets });
+  if (row.kind === 'pet') return t('player.petGroup', { name: row.actorName, count: row.pets });
   if (row.kind === 'unmatched') return t('report.unmatchedHits');
   return reportSpellName(detail.spells, row.spellId);
 }
@@ -296,7 +296,7 @@ function AbilityLine({ row, table, onOpen, toggle, part = false }: LineProps) {
         ) : (
           <span className="ab-name">{label}</span>
         )}
-        {part && <span className="ab-pet">{shortName(row.actorName)}</span>}
+        {part && <span className="ab-pet">{row.actorName}</span>}
         {row.aug && <span className="rtag rtag-support">{t('player.augTag')}</span>}
         {given && <span className="rtag rtag-support">{t('report.supportTag')}</span>}
         {own && row.ticks * 2 > row.hits && <span className="rtag">{t(healing ? 'player.hotTag' : 'player.dotTag')}</span>}
@@ -458,7 +458,7 @@ function AugPopup({ at, popup, table }: { at: PopupAnchor; popup: AbilityPopup; 
               <GameIcon name={buff} icon={spellIcon(share.buffId)} size={16} />
               {buff}
               <span className="ab-sep"> · </span>
-              <span style={{ color: classColor(evoker?.classToken ?? null) }}>{evoker ? shortName(evoker.name) : t('report.unknownPlayer')}</span>
+              <span style={{ color: classColor(evoker?.classToken ?? null) }}>{evoker?.name ?? t('report.unknownPlayer')}</span>
             </span>
             <span className={`num ${toneClass('loss')}`}>{formatAmountTenths(-share.amount)}</span>
           </div>
@@ -506,7 +506,7 @@ function PartLine({ table, depth, icon, name, amount, id }: { table: Table; dept
 /** The supported abilities stay in the parent rowgroup (rowgroups may not nest): the disclosure controls them by row id. */
 function RecipientLines({ recipient, table, idPrefix, open, onToggle }: { recipient: SupportRecipient; table: Table; idPrefix: string; open: boolean; onToggle: () => void }) {
   const player = table.roster.get(recipient.player);
-  const name = player ? shortName(player.name) : t('report.unknownPlayer');
+  const name = player?.name ?? t('report.unknownPlayer');
   const rowId = (i: number) => `${idPrefix}-${i}`;
   const toggle: Toggle = { open, onToggle, controls: recipient.abilities.map((_, i) => rowId(i)).join(' ') };
   return (
@@ -535,7 +535,7 @@ function RecipientLines({ recipient, table, idPrefix, open, onToggle }: { recipi
               name={
                 <>
                   <span className="ab-name">{spell}</span>
-                  {ability.petName && <span className="ab-pet">{shortName(ability.petName)}</span>}
+                  {ability.petName && <span className="ab-pet">{ability.petName}</span>}
                 </>
               }
               amount={ability.amount}

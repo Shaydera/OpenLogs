@@ -7,7 +7,7 @@ import { PullCutoffShade, afterCutTitle } from '../reports/CutoffShade';
 import { clickToRange, fullRange, phaseInPull, rangeSpan, sameRange } from '../reports/rangeGeometry';
 import { useBrush } from '../reports/useBrush';
 import { useRangeKeys } from '../reports/useRangeKeys';
-import { playerIndex, shortName, spellName } from './players';
+import { playerIndex, spellName } from './players';
 import { TIMELINE_VIEW_BOX, percentOf, timelineGeometry, timelineSummary } from './timelineGeometry';
 
 /**
@@ -26,7 +26,7 @@ export function Timeline({ overview, run = false }: { overview: QuickOverview; r
   const geometry = timelineGeometry(overview.timeline, duration);
   const phaseRanges = phases.map((phase) => phaseInPull(phase, end));
   const players = playerIndex(overview);
-  const nameOf = (actorId: number) => shortName(players.get(actorId)?.name ?? '');
+  const nameOf = (actorId: number) => players.get(actorId)?.name ?? '';
   const plotRef = useRef<HTMLDivElement>(null);
   const hintId = useId();
 

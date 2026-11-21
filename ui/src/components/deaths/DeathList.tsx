@@ -7,7 +7,7 @@ import { pullCutDeath, replaySplitShown, useApp } from '../../store';
 import { GameIcon, MonogramTile } from '../GameIcon';
 import { NoMatch } from '../filters/NoMatch';
 import { ReportHead } from '../filters/ReportHead';
-import { classColor, playerIndex, shortName } from '../overview/players';
+import { classColor, playerIndex } from '../overview/players';
 import { hitIcon, hitName, reportSpellName, rosterIndex } from '../reports/reportData';
 import { deathJumpMs } from '../replay/playback';
 import { PullHead } from '../set/PullHead';
@@ -68,7 +68,7 @@ export function DeathList({ report, groups }: { report: DeathsReport; groups: De
 
   const one = scope.target.length === 1 ? scope.target[0] : null;
   const onePlayer = one?.kind === 'player' ? roster.get(one.actorId) : undefined;
-  const title = onePlayer ? t('deaths.of', { name: shortName(onePlayer.name) }) : t('recap.all', { count });
+  const title = onePlayer ? t('deaths.of', { name: onePlayer.name }) : t('recap.all', { count });
   // A set's filter pickers sit on its first panel.
   const head = (id: string, text: string) =>
     inSet ? (
@@ -95,7 +95,7 @@ export function DeathList({ report, groups }: { report: DeathsReport; groups: De
     [scope.ability.length === 0 && hitName(kb, spellName), scope.source.length === 0 && hitSource(kb)].filter(Boolean).join(' · ');
   const item = (entry: ListedDeath) => {
     const { group, death } = entry;
-    const name = shortName(death.playerName);
+    const name = death.playerName;
     const kb = death.killingBlow;
     const blow = kb ? hitName(kb, spellName) : '';
     const on = keyOf(entry) === selectedKey;

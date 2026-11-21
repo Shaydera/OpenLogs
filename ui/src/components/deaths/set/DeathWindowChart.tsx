@@ -5,7 +5,7 @@ import { type MessageKey, t } from '../../../i18n/i18n';
 import type { PullView } from '../../../pulls/groupPulls';
 import { useApp } from '../../../store';
 import { ReportHead } from '../../filters/ReportHead';
-import { classColor, shortName } from '../../overview/players';
+import { classColor } from '../../overview/players';
 import { hitName, reportSpellName, rosterIndex } from '../../reports/reportData';
 import { CompactPullHead, SeamRow } from '../../set/PullHead';
 import { deathWindowMs, windowScaleMs, windowTicksMs } from './lifetimeModel';
@@ -79,7 +79,7 @@ export function DeathWindowChart({ parts, report, selected }: { parts: PullPart[
                 aria-label={t('setDeaths.bar', {
                   n: pull.n,
                   time: formatEventTimeTenths(death.t),
-                  name: shortName(death.playerName),
+                  name: death.playerName,
                   window: formatSeconds(deathWindowMs(death)),
                 })}
                 aria-pressed={on}
@@ -147,7 +147,7 @@ function DeathTip(props: {
   const blow = !kb
     ? t('setDeaths.diesNoBlow')
     : kb.sourceName
-      ? t('setDeaths.diesFrom', { source: shortName(kb.sourceName), spell: hitName(kb, spellName) })
+      ? t('setDeaths.diesFrom', { source: kb.sourceName, spell: hitName(kb, spellName) })
       : t('setDeaths.diesFromSpell', { spell: hitName(kb, spellName) });
   const x = atPct(death.t, durationMs);
   const side = openLeft ? { right: `${100 - x + 1}%` } : { left: `${x + 1}%` };
@@ -155,7 +155,7 @@ function DeathTip(props: {
     <div role="tooltip" id={id} className="dw-tip" style={side}>
       <span className="num text-muted">{t('setDeaths.tipAt', { n: pull.n, time: formatEventTimeTenths(death.t) })}</span>
       <span>
-        <b style={{ color: classColor(player?.classToken ?? null) }}>{shortName(death.playerName)}</b> {blow}
+        <b style={{ color: classColor(player?.classToken ?? null) }}>{death.playerName}</b> {blow}
       </span>
       <span className="text-muted">{t(windowKey(death), { window: formatSeconds(deathWindowMs(death)) })}</span>
     </div>

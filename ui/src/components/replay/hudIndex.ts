@@ -1,6 +1,6 @@
 import type { PlayerRef, ReplayAura, ReplayCast, ReplayData, ReplayDeath, ReplayHealthTrack, ReplayPowerTrack, ReplayRaidMarker, ReplayTargetTrack, ReplayUnit } from '../../api/types';
 import { t } from '../../i18n/i18n';
-import { ROLE_ORDER, shortName } from '../overview/players';
+import { ROLE_ORDER } from '../overview/players';
 import { goneAfterMs, groupBy, healthAt } from './playback';
 
 const MAX_ADD_FRAMES = 8;
@@ -46,7 +46,7 @@ export function indexHud(data: ReplayData): HudIndex {
     .map(({ unit }) => unit);
   const players = data.units
     .filter((unit) => unit.kind === 'player')
-    .sort((a, b) => roleRank(roster.get(a.actor)) - roleRank(roster.get(b.actor)) || shortName(a.name).localeCompare(shortName(b.name)));
+    .sort((a, b) => roleRank(roster.get(a.actor)) - roleRank(roster.get(b.actor)) || a.name.localeCompare(b.name));
   return {
     data,
     units: new Map(data.units.map((unit) => [unit.actor, unit])),
@@ -72,7 +72,6 @@ export function indexHud(data: ReplayData): HudIndex {
 
 /** A player's short name, an add with its number (`Clutch 3`), else the logged name. */
 export function unitLabel(unit: ReplayUnit): string {
-  if (unit.kind === 'player') return shortName(unit.name);
   if (unit.kind === 'add' && unit.addNumber !== null) return t('replay.addName', { name: unit.name, number: unit.addNumber });
   return unit.name;
 }

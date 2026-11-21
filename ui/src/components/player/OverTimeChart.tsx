@@ -4,7 +4,7 @@ import { formatAmount, formatAxisAmount, formatPercent } from '../../i18n/format
 import { t } from '../../i18n/i18n';
 import { TimeAxis } from '../detail/TimeAxis';
 import { GameIcon } from '../GameIcon';
-import { classColor, shortName } from '../overview/players';
+import { classColor } from '../overview/players';
 import { reportSpellName, rosterIndex } from '../reports/reportData';
 import { band, intervalList, manaPath, seriesPaths } from './chartGeometry';
 
@@ -48,7 +48,7 @@ export function OverTimeChart({ detail }: { detail: PlayerDetail }) {
     const text = !rez
       ? t('player.dead')
       : caster
-        ? t('player.deadRezBy', { spell: name(rez.spellId), name: shortName(caster.name) })
+        ? t('player.deadRezBy', { spell: name(rez.spellId), name: caster.name })
         : t('player.deadRez', { spell: name(rez.spellId) });
     return [{ key: death.t, leftPct: Math.round((at.leftPct + at.widthPct / 2) * 100) / 100, text }];
   });

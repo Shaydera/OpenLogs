@@ -5,7 +5,7 @@ import { type MessageKey, t } from '../../i18n/i18n';
 import { spellIcon } from '../../icons';
 import { METER_CATEGORIES, METER_WINDOWS, type MeterMode, useApp } from '../../store';
 import { GameIcon, MonogramTile } from '../GameIcon';
-import { classColor, shortName } from '../overview/players';
+import { classColor } from '../overview/players';
 import { PlayerIcon } from '../reports/PlayerName';
 import { barWidth, hitIcon, hitName, reportSpellName } from '../reports/reportData';
 import type { HudIndex } from './hudIndex';
@@ -68,7 +68,7 @@ function EntryLabel({ entry, data, hud }: { entry: MeterEntry; data: MeterData; 
         <>
           <PlayerIcon player={player} size={ICON_PX} />
           <span className="hud-meter-entry-name" style={{ color: classColor(player.classToken) }}>
-            {shortName(player.name)}
+            {player.name}
           </span>
         </>
       );
@@ -103,7 +103,7 @@ function EntryLabel({ entry, data, hud }: { entry: MeterEntry; data: MeterData; 
       <GameIcon icon={spellIcon(entry.spellId)} size={ICON_PX} name={name} />
       <span className="hud-meter-entry-name">
         {name}
-        {pet && <span className="hud-meter-entry-note">{shortName(pet)}</span>}
+        {pet && <span className="hud-meter-entry-note">{pet}</span>}
         {entry.rowKind === 'support_given' && <span className="rtag rtag-support">{t('report.supportTag')}</span>}
       </span>
     </>
@@ -220,7 +220,7 @@ function MeterBody({ hud, bounds }: { hud: HudIndex; bounds: Bounds }) {
         <ol className="hud-meter-rows" aria-label={t('replay.players')}>
           {rows.map((row) => {
             const player = hud.roster.get(row.player);
-            const name = player ? shortName(player.name) : t('report.unknownPlayer');
+            const name = player?.name ?? t('report.unknownPlayer');
             const open = row.player === expand;
             const { value, rate } = rowValue(row, shown);
             const color = { '--meter-color': classColor(player?.classToken ?? null) } as CSSProperties;

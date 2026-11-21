@@ -1,6 +1,6 @@
 import type { PlayerRef, TargetRef, TargetShare } from '../../api/types';
 import { t } from '../../i18n/i18n';
-import { classColor, shortName } from '../overview/players';
+import { classColor } from '../overview/players';
 
 export type TargetMetric = 'damage' | 'healing';
 
@@ -78,7 +78,7 @@ export function targetName(target: TargetRef, roster: Map<number, PlayerRef>): s
   if (target.kind === 'unit') return target.name;
   if (target.kind === 'player' && target.player !== null) {
     const player = roster.get(target.player);
-    return player ? shortName(player.name) : t('report.unknownPlayer');
+    return player?.name ?? t('report.unknownPlayer');
   }
   return t('targets.unknown');
 }

@@ -3,13 +3,13 @@ import { spellIcon } from '../../icons';
 import { formatScaled, formatShare } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { GameIcon } from '../GameIcon';
-import { classColor, shortName } from '../overview/players';
+import { classColor } from '../overview/players';
 import type { AugMetric } from './augSplit';
 import { PlayerIcon } from './PlayerName';
 import { barWidth, reportSpellName, type SpellNames } from './reportData';
 
 const classes = (...names: (string | false | null | undefined)[]) => names.filter(Boolean).join(' ');
-const playerLabel = (player: PlayerRef | undefined) => (player ? shortName(player.name) : t('report.unknownPlayer'));
+const playerLabel = (player: PlayerRef | undefined) => (player?.name ?? t('report.unknownPlayer'));
 
 export interface RankedColumn {
   label: string;

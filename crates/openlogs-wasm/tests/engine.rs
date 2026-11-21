@@ -6,9 +6,9 @@ use serde_json::{Value, json};
 const FIXTURE: &str = include_str!("../../openlogs-index/tests/fixtures/mini_raid.txt");
 /// A synthetic +12 in the real line format.
 const MYTHIC_PLUS: &str = include_str!("../../openlogs-index/tests/fixtures/mythic_plus.txt");
-const FAELAN: &str = "Faelan-Emberfall-EU";
+const FAELAN: &str = "Faelan";
 /// In pull 1 only.
-const PYRRIN: &str = "Pyrrin-Emberfall-EU";
+const PYRRIN: &str = "Pyrrin";
 
 fn whole_pull() -> Value {
     json!({ "startMs": null, "endMs": null, "attribution": "augmented", "includeOverkill": false })
@@ -896,8 +896,8 @@ fn a_run_opens_like_a_pull_with_boss_phases_and_no_boss_hp() {
     );
 }
 
-/// The class each player of the open-world log's combat pull takes from their casts.
-fn classes_from_casts(engine: Engine, log: &str) -> (Value, Value) {
+/// The class each named player of the open-world log's combat pull takes from their casts.
+fn classes_from_casts(engine: Engine, log: &str, [ravel, brakk]: [&str; 2]) -> (Value, Value) {
     let (mut engine, view) = open_with(engine, log);
     let pull = view["fights"]
         .as_array()
@@ -922,10 +922,7 @@ fn classes_from_casts(engine: Engine, log: &str) -> (Value, Value) {
             .unwrap()["classId"]
             .clone()
     };
-    (
-        class_of("Ravel-Ashwood-Normal-EU"),
-        class_of("Brakk-Thornfield-Normal-EU"),
-    )
+    (class_of(ravel), class_of(brakk))
 }
 
 #[test]
@@ -947,11 +944,19 @@ fn a_log_reads_the_spell_classes_of_its_own_game() {
     };
 
     assert_eq!(
-        classes_from_casts(engine(warrior_and_rogue, rogue_and_warrior), FOREVER),
+        classes_from_casts(
+            engine(warrior_and_rogue, rogue_and_warrior),
+            FOREVER,
+            ["Ravel Ashwood", "Brakk Thornfield"]
+        ),
         (json!(4), json!(1))
     );
     assert_eq!(
-        classes_from_casts(engine(rogue_and_warrior, warrior_and_rogue), &retail),
+        classes_from_casts(
+            engine(rogue_and_warrior, warrior_and_rogue),
+            &retail,
+            ["Ravel", "Brakk"]
+        ),
         (json!(4), json!(1))
     );
 }
@@ -992,7 +997,7 @@ fn a_forever_player_shows_the_tree_of_their_talents() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|p| p["name"] == "Ravel-Ashwood-Normal-EU")
+        .find(|p| p["name"] == "Ravel Ashwood")
         .unwrap();
 
     assert_eq!(
@@ -1049,8 +1054,8 @@ fn players_without_a_spec_take_the_class_of_their_casts() {
     let set = feed_set(&mut engine, OPEN_WORLD, &[pull], set_damage()).remove(0);
 
     for report in [single, set] {
-        assert_eq!(class_of(&report, "Ravel-Ashwood-Normal-EU"), 4);
-        assert_eq!(class_of(&report, "Brakk-Thornfield-Normal-EU"), 1);
+        assert_eq!(class_of(&report, "Ravel Ashwood"), 4);
+        assert_eq!(class_of(&report, "Brakk Thornfield"), 1);
     }
 }
 

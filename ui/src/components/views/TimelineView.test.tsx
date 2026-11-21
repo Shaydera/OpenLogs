@@ -429,7 +429,7 @@ describe('TimelineView', () => {
     const shown = (names: RegExp) => screen.getAllByText(names).map((element) => element.textContent);
 
     it('orders the players by role, then by name', () => {
-      const lirael: PlayerRef = { actorId: 6, name: 'Lirael-Emberfall-EU', specId: 65, specIcon: 'spell_holy_holybolt', specName: 'Holy Paladin', classId: 2, classToken: 'PALADIN', role: 'healer' };
+      const lirael: PlayerRef = { actorId: 6, name: 'Lirael', specId: 65, specIcon: 'spell_holy_holybolt', specName: 'Holy Paladin', classId: 2, classToken: 'PALADIN', role: 'healer' };
       const lanes = [lane({ kind: 'player', actorId: 3 }, 'Wendel'), lane({ kind: 'player', actorId: 4 }, 'Faelan'), lane({ kind: 'player', actorId: 6 }, 'Lirael')];
       useApp.setState({ tab: 'resources', timeline: { ...resourcesTimelineFixture, roster: [...resourcesTimelineFixture.roster, lirael], lanes } });
       render(<TimelineView tab="resources" />);

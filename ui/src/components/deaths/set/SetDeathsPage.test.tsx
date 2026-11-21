@@ -24,14 +24,14 @@ const report: SetDeaths = {
   ...recapFixture,
   roster: [
     ...recapFixture.roster,
-    { actorId: 8, name: 'Tovric-Emberfall-EU', specId: 71, specIcon: 'ability_warrior_savageblow', specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
+    { actorId: 8, name: 'Tovric', specId: 71, specIcon: 'ability_warrior_savageblow', specName: 'Arms Warrior', classId: 1, classToken: 'WARRIOR', role: 'damage' },
   ],
   deaths: [],
   pulls: [
     {
       fightIndex: 1,
       durationMs: 100_000,
-      deaths: [death(4, 'Faelan-Emberfall-EU', 50_000)],
+      deaths: [death(4, 'Faelan', 50_000)],
       kills: [],
       lifetime: [
         { player: 4, firstDeathMs: 50_000 },
@@ -51,7 +51,7 @@ const report: SetDeaths = {
     {
       fightIndex: 3,
       durationMs: 150_000,
-      deaths: [death(8, 'Tovric-Emberfall-EU', 30_000), death(6, 'Serrik-Silverbrook-EU', 61_000)],
+      deaths: [death(8, 'Tovric', 30_000), death(6, 'Serrik', 61_000)],
       kills: [],
       lifetime: [
         { player: 4, firstDeathMs: null },
@@ -84,7 +84,7 @@ describe('set deaths page', () => {
 
   it('the same death time in two pulls selects only the clicked pull', async () => {
     const [first, second, third] = report.pulls;
-    const twice = { ...report, pulls: [first, { ...second, deaths: [death(4, 'Faelan-Emberfall-EU', 50_000)] }, third] };
+    const twice = { ...report, pulls: [first, { ...second, deaths: [death(4, 'Faelan', 50_000)] }, third] };
     render(<SetDeathsPage report={twice} />);
     const list = within(screen.getByRole('complementary', { name: /^All deaths/ }));
     await userEvent.click(within(list.getByRole('group', { name: 'Pull #2' })).getByRole('button', { name: /Faelan/ }));

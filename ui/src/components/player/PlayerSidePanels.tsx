@@ -4,7 +4,7 @@ import { formatCount, formatEventTime, formatMillions } from '../../i18n/format'
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { GameIcon } from '../GameIcon';
-import { classColor, shortName } from '../overview/players';
+import { classColor } from '../overview/players';
 import { hitIcon, hitName, reportSpellName, rosterIndex, sourceLabel } from '../reports/reportData';
 import { TargetBreakdown, targetRows } from '../reports/TargetParts';
 import { targetColors } from '../reports/targetGroups';
@@ -52,7 +52,7 @@ export function PlayerSidePanels({ detail, targets = true }: { detail: PlayerDet
   // "Survived the range." only while a time range is set; the whole pull reads "Survived.".
   const range = useApp((s) => s.range);
   const { colorOf } = targetColors(detail.metric, detail.colorGroups, roster);
-  const name = shortName(detail.player.name);
+  const name = detail.player.name;
   return (
     <div className="player-panels">
       {targets && (
@@ -142,7 +142,7 @@ function DeathBlock({ detail, death, roster }: { detail: PlayerDetail; death: Pl
             {caster && (
               <>
                 {` ${t('player.rezBy')} `}
-                <span style={{ color: classColor(caster.classToken) }}>{shortName(caster.name)}</span>
+                <span style={{ color: classColor(caster.classToken) }}>{caster.name}</span>
               </>
             )}
             {' · '}

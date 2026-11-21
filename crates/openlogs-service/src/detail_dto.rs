@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use openlogs_analysis::{
     AbilityDetail, ActorId, ActorKind, EnemyGroup, Fight, SpellId, TargetDetail,
@@ -7,6 +7,7 @@ use serde::Serialize;
 
 use crate::overview_dto::{PlayerRef, player_ref};
 use crate::player_dto::MetricDto;
+use crate::refs::{logged_name, shown};
 use crate::report_dto::PlayerAmount;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -50,8 +51,8 @@ pub struct AbilityDetailDto {
     pub dead: Vec<[i32; 2]>,
     /// Names of the units in `hits`, keyed by actor id.
     pub target_names: BTreeMap<ActorId, String>,
-    /// Names in `target_names` that belong to players; only these are shortened in the UI.
-    pub player_targets: Vec<String>,
+    /// The shown name of each player in `target_names`; other units are shown as logged.
+    pub shown_names: BTreeMap<String, String>,
 }
 
 pub fn ability_detail_dto(
@@ -60,25 +61,15 @@ pub fn ability_detail_dto(
     metric: MetricDto,
 ) -> AbilityDetailDto {
     let info = fight.spells.get(&detail.spell);
-    let target_names = detail
+    let target_names: BTreeMap<ActorId, String> = detail
         .hits
         .iter()
-        .map(|hit| {
-            let actor = fight.actors.get(hit.target);
-            (
-                hit.target,
-                actor.name.clone().unwrap_or_else(|| actor.guid.clone()),
-            )
-        })
+        .map(|hit| (hit.target, logged_name(fight, hit.target).to_owned()))
         .collect();
-    let player_targets: BTreeSet<String> = detail
-        .hits
+    let shown_names = target_names
         .iter()
-        .filter(|hit| fight.actors.get(hit.target).kind == ActorKind::Player)
-        .map(|hit| {
-            let actor = fight.actors.get(hit.target);
-            actor.name.clone().unwrap_or_else(|| actor.guid.clone())
-        })
+        .filter(|&(&id, _)| fight.actors.get(id).kind == ActorKind::Player)
+        .map(|(&id, logged)| (logged.clone(), shown(fight, id, logged)))
         .collect();
     AbilityDetailDto {
         player: player_ref(fight, detail.player),
@@ -117,7 +108,7 @@ pub fn ability_detail_dto(
         uptime: detail.uptime,
         dead: detail.dead.iter().map(|&(a, b)| [a, b]).collect(),
         target_names,
-        player_targets: player_targets.into_iter().collect(),
+        shown_names,
     }
 }
 
@@ -240,7 +231,7 @@ mod tests {
     use crate::test_fight::{PLAYER_FLAGS, fight, heal_event, unit};
 
     #[test]
-    fn only_players_are_listed_as_player_targets() {
+    fn only_player_targets_get_a_shown_name() {
         let mut actors = Actors::new();
         let priest = unit(&mut actors, "Player-1", "Ulvara-Emberfall-EU", PLAYER_FLAGS);
         actors.set_spec(priest, 256);
@@ -265,7 +256,10 @@ mod tests {
         )
         .unwrap();
         let dto = ability_detail_dto(&fight, &detail, MetricDto::Healing);
-        assert_eq!(dto.player_targets, vec!["Faelan-Emberfall-EU".to_string()]);
+        assert_eq!(
+            dto.shown_names,
+            BTreeMap::from([("Faelan-Emberfall-EU".to_string(), "Faelan".to_string())])
+        );
         assert!(dto.target_names.values().any(|name| name == "Ky-Veth Ward"));
     }
 }

@@ -7,7 +7,7 @@ import { GameIcon } from '../GameIcon';
 import { PlayerIcon } from '../reports/PlayerName';
 import { hitIcon, hitName } from '../reports/reportData';
 import { contextBadges, damageParts, deathSource } from './deathModel';
-import { classColor, playerIndex, shortName, spellName } from './players';
+import { classColor, playerIndex, spellName } from './players';
 
 const MAX_ROWS = 5;
 
@@ -59,7 +59,7 @@ export function DeathsPanel({ overview }: { overview: QuickOverview }) {
 
 function DeathRow({ n, death, player, overview }: { n: number; death: DeathEntry; player: PlayerRef | undefined; overview: QuickOverview }) {
   const openDeathRecap = useApp((s) => s.openDeathRecap);
-  const name = shortName(death.playerName);
+  const name = death.playerName;
   const kb = death.killingBlow;
   const kbName = kb ? hitName(kb, (id) => spellName(overview, id)) : '';
   const parts = damageParts(overview, death);

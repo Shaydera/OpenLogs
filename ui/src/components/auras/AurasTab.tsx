@@ -10,7 +10,7 @@ import { GameIcon, MonogramTile } from '../GameIcon';
 import { rowValue } from '../filters/labels';
 import { NoMatch } from '../filters/NoMatch';
 import { ReportHead } from '../filters/ReportHead';
-import { classColor, shortName } from '../overview/players';
+import { classColor } from '../overview/players';
 import { band, intervalList } from '../player/chartGeometry';
 import { PlayerIcon } from '../reports/PlayerName';
 import { reportSpellName, rosterIndex } from '../reports/reportData';
@@ -41,7 +41,7 @@ export function AurasTab({ report }: { report: AurasReport | SetAuras }) {
   const seams = isSetReport(report) ? report.pulls : null;
   const roster = rosterIndex(report.roster);
   const spellName = (id: number) => reportSpellName(report.spells, id);
-  const holderName = (holder: AuraHolder) => (holder.player !== null ? shortName(roster.get(holder.player)?.name ?? holder.name) : holder.name);
+  const holderName = (holder: AuraHolder) => (holder.player !== null ? (roster.get(holder.player)?.name ?? holder.name) : holder.name);
   const rowName = (row: AuraRow) => (row.holder ? holderName(row.holder) : spellName(row.spellId));
   const byTarget = report.group === 'target';
   // A holder row's uptime would mix different auras, so by target it is neither shown nor sorted by.
@@ -240,7 +240,7 @@ function AuraLanes(props: {
                   <>
                     <PlayerIcon player={player} size={18} />
                     <span className="atl-player" style={{ color: classColor(player.classToken) }}>
-                      {shortName(player.name)}
+                      {player.name}
                     </span>
                   </>
                 ) : (

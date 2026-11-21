@@ -739,8 +739,8 @@ export interface AbilityDetail {
   dead: [number, number][];
   /** Unit names by actor id (JSON keys are strings). */
   targetNames: Record<string, string>;
-  /** Names in `targetNames` that belong to players; only these drop their realm in the UI. */
-  playerTargets: string[];
+  /** The shown name of each player in `targetNames`; other units are shown as logged. */
+  shownNames: Record<string, string>;
 }
 
 export interface UnitLife {

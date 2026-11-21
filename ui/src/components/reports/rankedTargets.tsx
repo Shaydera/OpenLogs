@@ -2,7 +2,6 @@ import { type ReactNode, useState } from 'react';
 import type { AbilityRow, GroupAbilities, PlayerRef, TargetRef, TargetShare } from '../../api/types';
 import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
-import { shortName } from '../overview/players';
 import { AugTip } from './AugTip';
 import type { TipLine } from './augSplit';
 import { abilityBreakdown } from './breakdown';
@@ -113,7 +112,7 @@ export function RankedPopupView<P extends RankedPlayer>({
         id={id}
         at={popup.at}
         part={popup.data.part}
-        ofName={player ? shortName(player.name) : t('report.unknownPlayer')}
+        ofName={player?.name ?? t('report.unknownPlayer')}
         total={p.total}
         metric={metric}
         spells={report.spells}

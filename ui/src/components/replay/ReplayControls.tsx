@@ -3,7 +3,6 @@ import type { ReplayData } from '../../api/types';
 import { formatEventTime } from '../../i18n/format';
 import { type MessageKey, t } from '../../i18n/i18n';
 import { type ReplayFilters, type ReplayLayers, type ReplaySpeed, type TimeRange, useApp } from '../../store';
-import { shortName } from '../overview/players';
 import { phaseLabels } from '../overview/timelineGeometry';
 import { CutoffShade, cutoffRest } from '../reports/CutoffShade';
 import { percentIn, timeAtX } from '../views/zoomGeometry';
@@ -190,7 +189,7 @@ function ReplayScrubber({ data, bounds, limitMs, time }: { data: ReplayData; bou
       ))}
       <span className="replay-played" style={{ width: `${played}%` }} />
       {deaths.map((death) => {
-        const name = shortName(roster.get(death.actor)?.name ?? data.units.find((unit) => unit.actor === death.actor)?.name ?? '');
+        const name = roster.get(death.actor)?.name ?? data.units.find((unit) => unit.actor === death.actor)?.name ?? '';
         return (
           <span
             key={`${death.actor}-${death.t}`}

@@ -165,7 +165,7 @@ mod tests {
         let faelan = &dto.players[0];
         assert_eq!(
             (faelan.player.name.as_str(), faelan.player.spec_id),
-            ("Faelan-Emberfall-EU", Some(62))
+            ("Faelan", Some(62))
         );
         assert_eq!(
             faelan.player.actor_id, faelan_a,

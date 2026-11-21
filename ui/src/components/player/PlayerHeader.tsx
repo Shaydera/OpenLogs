@@ -7,7 +7,7 @@ import { t } from '../../i18n/i18n';
 import { useApp } from '../../store';
 import { Facts } from '../detail/Facts';
 import { GameIcon } from '../GameIcon';
-import { classColor, shortName } from '../overview/players';
+import { classColor } from '../overview/players';
 
 export function PlayerHeader({ detail }: { detail: PlayerDetail }) {
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -18,7 +18,7 @@ export function PlayerHeader({ detail }: { detail: PlayerDetail }) {
   // Opened on top of an enemy page: go back to it instead of closing every page.
   const nested = useApp((s) => s.details.length > 1);
   const player = detail.player;
-  const name = shortName(player.name);
+  const name = player.name;
   const color = classColor(player.classToken);
   return (
     <section className="dhead">
@@ -57,7 +57,7 @@ export function PlayerHeader({ detail }: { detail: PlayerDetail }) {
             .filter((entry) => entry.specId !== null || entry.actorId === player.actorId)
             .map((entry) => (
               <option key={entry.actorId} value={entry.actorId}>
-                {shortName(entry.name)}
+                {entry.name}
               </option>
             ))}
         </select>

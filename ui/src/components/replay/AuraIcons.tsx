@@ -3,7 +3,7 @@ import { formatInteger, formatSpan } from '../../i18n/format';
 import { t } from '../../i18n/i18n';
 import { spellIcon } from '../../icons';
 import { GameIcon } from '../GameIcon';
-import { classColor, shortName, spellName } from '../overview/players';
+import { classColor, spellName } from '../overview/players';
 import { AuraTip, useAuraTip } from './AuraTip';
 import { type HudIndex, unitLabel } from './hudIndex';
 import { stacksAt } from './playback';
@@ -16,7 +16,7 @@ function shortRemaining(ms: number): string {
 
 function sourceOf(hud: HudIndex, aura: ReplayAura): { name: string; color?: string } | null {
   const player = aura.sourcePlayer === null ? undefined : hud.roster.get(aura.sourcePlayer);
-  if (player) return { name: shortName(player.name), color: classColor(player.classToken) };
+  if (player) return { name: player.name, color: classColor(player.classToken) };
   const unit = hud.units.get(aura.source);
   return unit ? { name: unitLabel(unit) } : null;
 }
